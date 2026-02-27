@@ -6,6 +6,8 @@ Accepted
 ## Context
 Several features were identified as potentially valuable but excluded from the initial schema to keep the design focused and the implementation scope manageable for the demo phase.
 
+A broader principle governs deferral decisions throughout Armature: **the schema should not pre-design structure that real usage hasn't yet revealed.** Text fields on rationale-bearing documents (e.g., `LearningNeed.rationale`, `PrerequisiteRecord.rationale`) are intentionally provisional — they preserve semantic content in a queryable, portable form while the graph accumulates enough real design process data to reveal what structure is actually warranted. When patterns emerge, those text fields can be progressively formalized into enums, structured types, or junction documents. The infrastructure is designed to support that migration path: optional fields can be added alongside existing ones without breaking existing records, and junction documents can be introduced to carry new structure without touching the connected artifact types. This is a deliberate epistemological position: collect first, structure when you understand.
+
 ## Decision
 The following are intentionally absent from the current schema:
 
