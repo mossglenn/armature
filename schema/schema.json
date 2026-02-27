@@ -127,17 +127,49 @@
   },
 
   {
+    "@comment": "=== USER ===",
+    "@type": "Class",
+    "@id": "User",
+    "@documentation": {
+      "@comment": "A person or system agent who participates in the design process. Intentionally minimal — Armature does not manage authentication or access control. Those concerns belong to the external auth system (identity) and TerminusDB (database access). User is a domain document: it represents who someone is as a design process participant, not whether they are allowed to operate the database. externalId is the stable identifier from the auth system (e.g., OIDC sub claim) — the API uses this to resolve an authenticated identity to a User document at write time. email and institution make the record self-describing in exports and across deployments, where the original auth system may not be available. User does not inherit ArmatureDocument — it is infrastructure for the design process, not an instructional design artifact, and should not be a valid subject of a DesignNote. See ADR-0015."
+    },
+    "displayName": "xsd:string",
+    "externalId": "xsd:string",
+    "email": {
+      "@type": "Optional",
+      "@class": "xsd:string",
+      "@documentation": {
+        "@comment": "The user's email address. Optional — may not be available in all deployments or for system agents. In many deployments this will match externalId, but the two serve different purposes: externalId is for machine resolution, email is for human-readable identity in UIs and exports."
+      }
+    },
+    "institution": {
+      "@type": "Optional",
+      "@class": "xsd:string",
+      "@documentation": {
+        "@comment": "The user's organizational affiliation. Makes the User record meaningful in exported graphs and collaborative contexts where participants come from different organizations."
+      }
+    }
+  },
+
+  {
     "@comment": "=== ABSTRACT BASE TYPES ===",
     "@type": "Class",
     "@id": "ArmatureDocument",
     "@abstract": [],
     "@documentation": {
-      "@comment": "Abstract base class for all primary artifact types in the Armature graph. Carries the two fields shared by every named artifact: a required label and an optional description. Junction documents and structural types (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields, not a human-readable name. When authorship fields are added (createdBy, updatedBy), they will be added here and propagate to all inheriting types in a single change. DesignNote.subject types to Set<ArmatureDocument>, enabling typed reference to any primary artifact regardless of type — this is the mechanism that replaces the xsd:anyURI stopgap. See ADR-0014."
+      "@comment": "Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Junction documents and structural types (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, a system agent for API-generated records. Optional to accommodate the demo context and deployments without a full auth system. See ADR-0014, ADR-0015."
     },
     "label": "xsd:string",
     "description": {
       "@type": "Optional",
       "@class": "xsd:string"
+    },
+    "createdBy": {
+      "@type": "Optional",
+      "@class": "User",
+      "@documentation": {
+        "@comment": "The User responsible for this record entering the graph. Set by the API at document creation using the authenticated identity — not authored directly. Optional to accommodate single-user and demo contexts without a full auth system. Never updated after creation — change history is tracked at the TerminusDB commit level, not via schema fields. See ADR-0015."
+      }
     }
   },
 

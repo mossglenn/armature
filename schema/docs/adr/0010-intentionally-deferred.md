@@ -13,7 +13,8 @@ The following are intentionally absent from the current schema:
 No `version`, `createdAt`, or `updatedAt` fields on any document type. TerminusDB provides built-in branch and commit history at the database level — every write is recorded with a timestamp and can be traversed. This may be sufficient for Armature's needs without per-document version fields. Revisit when branching and diffing use cases become concrete.
 
 ### Authorship and provenance
-No `createdBy` or `updatedBy` fields. These would require a `User` or `Agent` type and an authentication model. Deferred until the multi-user collaboration use case is defined. When added, the cleanest approach is a shared abstract base class (`ArmatureDocument`) that all primary artifact types inherit, rather than adding fields individually.
+~~No `createdBy` or `updatedBy` fields. These would require a `User` or `Agent` type and an authentication model. Deferred until the multi-user collaboration use case is defined. When added, the cleanest approach is a shared abstract base class (`ArmatureDocument`) that all primary artifact types inherit, rather than adding fields individually.~~
+**Implemented. See ADR-0015 (Accepted). `User` type added as standalone document. `createdBy: Optional<User>` added to `ArmatureDocument`, propagating to all 13 inheriting types. `updatedBy` deliberately omitted — change history tracked at TerminusDB commit level.**
 
 ### ArmatureDocument abstract base class
 ~~Defining `ArmatureDocument` as a shared abstract base for `label`/`description` fields (and eventually `createdBy`/`updatedBy`) is architecturally correct but deferred to keep the current change set focused. Nine artifact types currently duplicate the same `label: xsd:string` and `description: Optional<xsd:string>` pattern. When authorship fields become concrete, introduce `ArmatureDocument` and migrate all nine types to inherit from it in a single commit.~~
