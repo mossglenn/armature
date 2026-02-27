@@ -14,12 +14,12 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ### Schema
 - TerminusDB schema fully designed and documented (`schema/schema.json`)
-- 11 enums, 20 document types (10 concrete artifacts, 1 abstract base, 4 junction documents, 5 structural types)
+- 12 enums, 22 document types (13 primary artifacts inheriting ArmatureDocument, 1 standalone User type, 1 abstract base, 6 junction/structural types)
 - All types and non-obvious fields have inline `@documentation` comments
 - API constraints documented directly on affected fields
 
 ### Architecture Decision Records
-- 10 ADRs written covering every significant schema design decision (`schema/docs/adr/`)
+- 15 ADRs written covering every significant schema design decision (`schema/docs/adr/`)
 - Nygard format: Status / Context / Decision / Consequences
 - Each ADR cross-referenced in relevant schema `@documentation` comments
 
@@ -75,6 +75,23 @@ These are in-progress or recently made — not yet captured as ADRs.
 
 ## Recent Sessions
 
+### 2026-02-26
+- Implemented ArmatureDocument abstract base class (ADR-0014)
+  - 13 primary artifact types now inherit from ArmatureDocument
+  - label and description defined once, inherited by all
+  - DesignNote.subject retyped from Set<xsd:anyURI> to Set<ArmatureDocument> — TerminusDB now enforces referential integrity natively
+  - xsd:anyURI stopgap fully removed
+- Implemented User type and createdBy authorship field (ADR-0015)
+  - User is standalone — does not inherit ArmatureDocument
+  - Fields: displayName, externalId, email (Optional), institution (Optional)
+  - createdBy: Optional<User> on ArmatureDocument, propagates to all 13 inheriting types
+  - createdBy-only model — change history tracked at TerminusDB commit level, not via schema fields
+  - User deletion handling flagged as deferred in ADR-0015
+- Captured progressive formalization principle (CLAUDE.md Principle 6, ADR-0010 framing)
+  - Text fields on rationale-bearing documents are intentionally provisional
+  - Schema collects data before designing structure; real usage reveals what formalization is warranted
+  - Migration path is clean by design: optional fields alongside existing ones, junction documents without touching endpoints
+
 ### 2026-02-22
 - Designed and finalized TerminusDB schema
 - Added semantic enrichments beyond base Mermaid diagram (ADR-0009)
@@ -90,3 +107,4 @@ These are in-progress or recently made — not yet captured as ADRs.
 - Check whether Express or Fastify has better TerminusDB client examples before committing to a framework
 - Seed data domain: consider a topic that's relatable but not too shallow — something with real prerequisite structure (e.g., a statistics or programming fundamentals course)
 - The schema loader script is the quickest win — unlocks testing the schema against a real TerminusDB instance
+- ADR-0010 deferred list: DesignDecision structured type, NeedObjectiveDerivation, knowledge components, xAPI/LTI/QTI remain open
