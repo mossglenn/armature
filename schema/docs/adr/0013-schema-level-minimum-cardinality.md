@@ -1,7 +1,7 @@
 # ADR-0013: Schema-Level Minimum Cardinality (Conditional)
 
 ## Status
-Proposed
+Accepted. Supersedes ADR-0006.
 
 ## Context
 ADR-0006 established that minimum cardinality constraints on `Set` fields — specifically `AssessmentItem.assesses` and `LearningActivity.targets` must each contain at least one element — are enforced by the API because TerminusDB's `Set` type does not support minimum cardinality at the schema level.

@@ -1,7 +1,7 @@
 # ADR-0006: Minimum Cardinality Constraints Enforced by API, Not Schema
 
 ## Status
-Accepted
+Superseded by ADR-0013
 
 ## Context
 Two relationships in the diagram have mandatory minimum cardinality:

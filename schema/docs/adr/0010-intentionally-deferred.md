@@ -18,8 +18,9 @@ No `createdBy` or `updatedBy` fields. These would require a `User` or `Agent` ty
 ### ArmatureDocument abstract base class
 Defining `ArmatureDocument` as a shared abstract base for `label`/`description` fields (and eventually `createdBy`/`updatedBy`) is architecturally correct but deferred to keep the current change set focused. Nine artifact types currently duplicate the same `label: xsd:string` and `description: Optional<xsd:string>` pattern. When authorship fields become concrete, introduce `ArmatureDocument` and migrate all nine types to inherit from it in a single commit.
 
-### Schema-level minimum cardinality (conditional)
-`@min_cardinality: 1` on `AssessmentItem.assesses` and `LearningActivity.targets` is the intended next step for ADR-0006. Implementation is gated on verifying TerminusDB support in the installed version — see ADR-0013 (proposed) and ADR-0006 Note.
+### Schema-level minimum cardinality
+~~`@min_cardinality: 1` on `AssessmentItem.assesses` and `LearningActivity.targets` is the intended next step for ADR-0006. Implementation is gated on verifying TerminusDB support in the installed version — see ADR-0013 (proposed) and ADR-0006 Note.~~
+**Implemented. See ADR-0013 (Accepted). ADR-0006 superseded.**
 
 ### DesignDecision structured type
 `DesignNote` (added) provides free-form rationale capture. A structured `DesignDecision` type — with fields for alternatives considered, tradeoffs, and affected artifacts — is the intended second layer when real usage patterns in `DesignNote.category` indicate what structure is needed. A forward pointer slot (`relatesToDecision`) is reserved on `DesignNote` for when this type is implemented. See ADR-0012.

@@ -313,8 +313,9 @@
     "assesses": {
       "@type": "Set",
       "@class": "LearningObjective",
+      "@min_cardinality": 1,
       "@documentation": {
-        "@comment": "The LearningObjectives this item provides evidence of. API CONSTRAINT: must contain at least one element — an item that assesses no objective has no place in the artifact graph. The API rejects any create or update that would leave this set empty."
+        "@comment": "The LearningObjectives this item provides evidence of. Minimum 1 enforced at the schema level. An item that assesses no objective has no place in the artifact graph. See ADR-0013."
       }
     },
     "difficultyIndex": {
@@ -436,8 +437,9 @@
     "targets": {
       "@type": "Set",
       "@class": "LearningObjective",
+      "@min_cardinality": 1,
       "@documentation": {
-        "@comment": "The LearningObjectives this activity addresses. API CONSTRAINT: must contain at least one element — an activity that targets no objective has no place in the artifact graph. The API rejects any create or update that would leave this set empty."
+        "@comment": "The LearningObjectives this activity addresses. Minimum 1 enforced at the schema level. An activity that targets no objective has no place in the artifact graph. See ADR-0013."
       }
     }
   },
