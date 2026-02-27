@@ -27,6 +27,8 @@ For the two-layer question: `DesignNote` handles narrative rationale well. A mor
 Add `DesignNote` as a universal free-form rationale type. Key design choices:
 
 - `subject: Set<xsd:anyURI>` — references any document(s) in the graph by URI, enabling a single note to span multiple artifact types (e.g., a rationale connecting an objective, an assessment item, and a module decision)
+
+**Update (ADR-0014):** `subject` has been retyped to `Set<ArmatureDocument>` with `@min_cardinality: 1`. The `xsd:anyURI` approach was a stopgap pending the `ArmatureDocument` base class. TerminusDB now enforces referential integrity natively. The API-layer validation and deletion handling questions raised in the Consequences section below are resolved by ADR-0014.
 - `rationale: xsd:string` — markdown-capable text field for the free-form explanation
 - `category: Optional<DesignNoteCategory>` — optional categorization using a controlled vocabulary (BloomsLevelChoice, AssessmentStrategyChoice, SequencingDecision, PrioritizationDecision, ScopeDecision, AlignmentDecision, PrerequisiteIntent, Other)
 - API constraint: `subject` must contain at least one element — an orphaned note is not useful

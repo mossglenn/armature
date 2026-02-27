@@ -16,7 +16,8 @@ No `version`, `createdAt`, or `updatedAt` fields on any document type. TerminusD
 No `createdBy` or `updatedBy` fields. These would require a `User` or `Agent` type and an authentication model. Deferred until the multi-user collaboration use case is defined. When added, the cleanest approach is a shared abstract base class (`ArmatureDocument`) that all primary artifact types inherit, rather than adding fields individually.
 
 ### ArmatureDocument abstract base class
-Defining `ArmatureDocument` as a shared abstract base for `label`/`description` fields (and eventually `createdBy`/`updatedBy`) is architecturally correct but deferred to keep the current change set focused. Nine artifact types currently duplicate the same `label: xsd:string` and `description: Optional<xsd:string>` pattern. When authorship fields become concrete, introduce `ArmatureDocument` and migrate all nine types to inherit from it in a single commit.
+~~Defining `ArmatureDocument` as a shared abstract base for `label`/`description` fields (and eventually `createdBy`/`updatedBy`) is architecturally correct but deferred to keep the current change set focused. Nine artifact types currently duplicate the same `label: xsd:string` and `description: Optional<xsd:string>` pattern. When authorship fields become concrete, introduce `ArmatureDocument` and migrate all nine types to inherit from it in a single commit.~~
+**Implemented. See ADR-0014 (Accepted). All 13 primary artifact types now inherit from ArmatureDocument. `DesignNote.subject` retyped from `xsd:anyURI` to `Set<ArmatureDocument>`.**
 
 ### Schema-level minimum cardinality
 ~~`@min_cardinality: 1` on `AssessmentItem.assesses` and `LearningActivity.targets` is the intended next step for ADR-0006. Implementation is gated on verifying TerminusDB support in the installed version — see ADR-0013 (proposed) and ADR-0006 Note.~~
