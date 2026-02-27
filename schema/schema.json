@@ -109,6 +109,24 @@
   },
 
   {
+    "@type": "Enum",
+    "@id": "DesignNoteCategory",
+    "@documentation": {
+      "@comment": "Categories of design decisions captured by DesignNote. Enables filtering and querying of rationale by decision type. PrerequisiteIntent covers cases where a designer knows a prerequisite relationship exists but hasn't yet identified or created the prerequisite objective — use this category with a DesignNote rather than creating an incomplete PrerequisiteRecord. See ADR-0011, ADR-0012."
+    },
+    "@value": [
+      "BloomsLevelChoice",
+      "AssessmentStrategyChoice",
+      "SequencingDecision",
+      "PrioritizationDecision",
+      "ScopeDecision",
+      "AlignmentDecision",
+      "PrerequisiteIntent",
+      "Other"
+    ]
+  },
+
+  {
     "@comment": "=== ABSTRACT BASE TYPES ===",
     "@type": "Class",
     "@id": "LearningEvidence",
@@ -160,7 +178,7 @@
     "@type": "Class",
     "@id": "LearningDataset",
     "@documentation": {
-      "@comment": "A named collection of learning performance data, typically produced when an Assessment is administered to a cohort. Serves as the source for LearningMetrics derived from that administration. The link from LearningMetric.derivedFrom back to this document preserves the data provenance chain."
+      "@comment": "A named collection of learning performance data, typically produced when an Assessment is administered to a cohort. Serves as the source for LearningMetrics derived from that administration. producedBy links back to the Assessment that generated this dataset, closing the provenance chain: Assessment → LearningDataset → LearningMetric. Optional because a dataset may come from an external source or a pre-Armature assessment not yet modeled in the graph. API CONSTRAINT: producedBy is required when a dataset is created by an Armature-administered assessment."
     },
     "label": "xsd:string",
     "description": {
@@ -180,6 +198,13 @@
       "@documentation": {
         "@comment": "A label identifying the learner group (e.g., 'Q3 2024 Onboarding Cohort'). Optional — not all datasets have a named cohort."
       }
+    },
+    "producedBy": {
+      "@type": "Optional",
+      "@class": "Assessment",
+      "@documentation": {
+        "@comment": "The Assessment whose administration produced this dataset. Optional at the schema level to accommodate externally-imported datasets. API enforces as required when the dataset is created by an Armature-administered assessment. Completes the provenance chain: Assessment → LearningDataset → LearningMetric → (item analysis back to AssessmentItem)."
+      }
     }
   },
 
@@ -187,7 +212,7 @@
     "@type": "Class",
     "@id": "LearningNeed",
     "@documentation": {
-      "@comment": "A documented gap between current and desired learner performance, grounded in evidence. Informed by one or more LearningEvidence instances via NeedEvidenceLink. Generates zero or one LearningObjective — the generates link preserves the traceability from evidence through need to objective. priority captures triage decisions when a needs analysis produces more needs than a course can address."
+      "@comment": "A documented gap between current and desired learner performance, grounded in evidence. Informed by one or more LearningEvidence instances via NeedEvidenceLink. One need may generate multiple LearningObjectives — objectives reference back to their originating need via LearningObjective.generatedBy (ADR-0004 back-reference pattern). priority captures triage decisions when a needs analysis produces more needs than a course can address."
     },
     "label": "xsd:string",
     "rationale": "xsd:string",
@@ -197,13 +222,6 @@
       "@documentation": {
         "@comment": "Triage priority when multiple needs compete for limited course scope. Optional — not all projects require formal prioritization, but when the decision is made it should be recorded here."
       }
-    },
-    "generates": {
-      "@type": "Optional",
-      "@class": "LearningObjective",
-      "@documentation": {
-        "@comment": "The LearningObjective this need produced. Optional because a need may be identified before an objective is written, or may result in a non-training intervention rather than a learning objective."
-      }
     }
   },
 
@@ -211,6 +229,10 @@
     "@comment": "Junction document for LearningNeed <-> LearningEvidence (M:M). See ADR-0003.",
     "@type": "Class",
     "@id": "NeedEvidenceLink",
+    "@key": {
+      "@type": "Hash",
+      "@fields": ["need", "evidence"]
+    },
     "@documentation": {
       "@comment": "Reifies the many-to-many relationship between a LearningNeed and the LearningEvidence that informs it. A first-class graph node — the relationship itself carries data. The evidence field accepts any LearningEvidence subtype (LearningMetric or DescriptiveEvidence) at runtime via TerminusDB polymorphism. confidence records how much weight the designer gave this piece of evidence during analysis. See ADR-0003, ADR-0009."
     },
@@ -230,7 +252,7 @@
     "@type": "Class",
     "@id": "LearningObjective",
     "@documentation": {
-      "@comment": "A measurable statement of intended learning outcome. The central node in the Armature artifact graph — connected upstream to LearningNeeds (via LearningNeed.generates), laterally to prerequisites (via PrerequisiteRecord), and downstream to AssessmentItems (via AssessmentItem.assesses), LearningActivities (via LearningActivity.targets), and Modules (via ModuleObjective). No outbound relationship fields are stored on this document — all connections are held on the related documents. See ADR-0004."
+      "@comment": "A measurable statement of intended learning outcome. The central node in the Armature artifact graph — connected upstream to LearningNeeds (via generatedBy), laterally to prerequisites (via PrerequisiteRecord), and downstream to AssessmentItems (via AssessmentItem.assesses), LearningActivities (via LearningActivity.targets), and Modules (via ModuleObjective). The back-reference pattern (ADR-0004) is used throughout: connection fields live on related documents, not here, except for generatedBy which follows ADR-0004 by placing the foreign key on the child."
     },
     "label": "xsd:string",
     "description": {
@@ -244,26 +266,31 @@
         "@comment": "The cognitive level this objective targets. Optional to allow drafting objectives before the cognitive level is determined. When set, enables alignment queries with AssessmentItem.bloomsLevel — items should assess at the same or higher cognitive level as the objective they target."
       }
     },
-    "state": "ObjectiveState"
+    "state": "ObjectiveState",
+    "generatedBy": {
+      "@type": "Optional",
+      "@class": "LearningNeed",
+      "@documentation": {
+        "@comment": "The LearningNeed that produced this objective. Optional because an objective may be created independently of a formal needs analysis (e.g., a regulatory requirement or organizational standard). When present, preserves the traceability chain from evidence through need to objective. Multiple objectives may reference the same LearningNeed — this is the correct way to express one need generating multiple objectives (ADR-0004 back-reference pattern)."
+      }
+    }
   },
 
   {
     "@type": "Class",
     "@id": "PrerequisiteRecord",
+    "@key": {
+      "@type": "Hash",
+      "@fields": ["objective", "prerequisite"]
+    },
     "@documentation": {
-      "@comment": "Junction document that reifies the prerequisite relationship between two LearningObjectives. A first-class graph node — the relationship carries rationale and type, making it a design decision preserved in the graph. 'objective' has the requirement; 'prerequisite' must be met first (or alongside, for Corequisite). prerequisiteType is required — a prerequisite relationship without a type is underspecified. rationale is required — this is the core Armature value proposition: design decisions are explicit, not implicit. See ADR-0003, ADR-0009."
+      "@comment": "Junction document that reifies the prerequisite relationship between two LearningObjectives. A first-class graph node — the relationship carries rationale and type, making it a design decision preserved in the graph. 'objective' has the requirement; 'prerequisite' must be met first (or alongside, for Corequisite). prerequisiteType is required — a prerequisite relationship without a type is underspecified. rationale is required — this is the core Armature value proposition: design decisions are explicit, not implicit. prerequisite is required — a PrerequisiteRecord must connect two real objectives. If the specific prerequisite objective hasn't been written yet, create it as a Draft LearningObjective first, then create this record (the 'create prerequisite objective' button workflow). If the prerequisite relationship is suspected but the specific objective is unknown, use a DesignNote with category: PrerequisiteIntent instead. See ADR-0003, ADR-0009, ADR-0011."
     },
     "label": "xsd:string",
     "rationale": "xsd:string",
     "prerequisiteType": "PrerequisiteType",
     "objective": "LearningObjective",
-    "prerequisite": {
-      "@type": "Optional",
-      "@class": "LearningObjective",
-      "@documentation": {
-        "@comment": "The objective that must be met before (or alongside) 'objective'. Optional to allow recording a partial prerequisite relationship during authoring before the specific prerequisite has been identified or created."
-      }
-    }
+    "prerequisite": "LearningObjective"
   },
 
   {
@@ -309,6 +336,10 @@
   {
     "@type": "Class",
     "@id": "Response",
+    "@key": {
+      "@type": "Hash",
+      "@fields": ["item", "label"]
+    },
     "@documentation": {
       "@comment": "One answer option for an AssessmentItem. A back-reference pattern is used: Response holds the foreign key to its item rather than AssessmentItem holding an array of responses. This keeps AssessmentItem documents lean regardless of the number of responses. See ADR-0004."
     },
@@ -327,22 +358,24 @@
   {
     "@type": "Class",
     "@id": "ItemInstance",
+    "@key": {
+      "@type": "Hash",
+      "@fields": ["assessment", "implements"]
+    },
     "@documentation": {
-      "@comment": "Places an AssessmentItem into a specific Assessment with assessment-context configuration. The same AssessmentItem can appear in multiple Assessments (e.g., a pre-test and post-test) as separate ItemInstance documents with different sequence, pointValue, or randomize settings. All fields are required — there is no reasonable default for sequence, point value, or review status when placing an item in a formal assessment."
-    },
-    "sequence": {
-      "@type": "xsd:integer",
-      "@documentation": {
-        "@comment": "The position of this item within the Assessment. API CONSTRAINT: sequence values must be unique within an Assessment. Gaps are permitted."
+      "@comment": "Places an AssessmentItem into a specific Assessment with assessment-context configuration. The same AssessmentItem can appear in multiple Assessments (e.g., a pre-test and post-test) as separate ItemInstance documents with different sequence, pointValue, or randomize settings. All fields are required — there is no reasonable default for sequence, point value, or review status when placing an item in a formal assessment.",
+      "@properties": {
+        "sequence": "The position of this item within the Assessment. API CONSTRAINT: sequence values must be unique within an Assessment. Gaps are permitted.",
+        "pointValue": "Integer point value awarded for a correct response.",
+        "randomize": "Whether the responses for this item should be presented in random order when the Assessment is administered.",
+        "status": "Review lifecycle state of this item within this assessment.",
+        "assessment": "The Assessment this item is placed in.",
+        "implements": "The reusable AssessmentItem this instance is drawn from."
       }
     },
+    "sequence": "xsd:integer",
     "pointValue": "xsd:integer",
-    "randomize": {
-      "@type": "xsd:boolean",
-      "@documentation": {
-        "@comment": "Whether the responses for this item should be presented in random order when the Assessment is administered."
-      }
-    },
+    "randomize": "xsd:boolean",
     "status": "ItemStatus",
     "assessment": "Assessment",
     "implements": "AssessmentItem"
@@ -352,19 +385,18 @@
     "@type": "Class",
     "@id": "Assessment",
     "@documentation": {
-      "@comment": "A named collection of ItemInstances for a specific instructional purpose within a Module. Contained by exactly one Module (back-reference pattern — see ADR-0004). When administered, produces a LearningDataset. LearningDatasets are linked back to this Assessment, enabling outcome-to-design traceability."
+      "@comment": "A named collection of ItemInstances for a specific instructional purpose within a Module. Contained by exactly one Module (back-reference pattern — see ADR-0004). When administered, produces a LearningDataset. LearningDatasets are linked back to this Assessment via LearningDataset.producedBy, enabling outcome-to-design traceability.",
+      "@properties": {
+        "randomize": "Whether the items in this assessment should be presented in random order. Applies at the assessment level; ItemInstance.randomize controls response-level randomization.",
+        "module": "The Module this assessment belongs to."
+      }
     },
     "label": "xsd:string",
     "description": {
       "@type": "Optional",
       "@class": "xsd:string"
     },
-    "randomize": {
-      "@type": "xsd:boolean",
-      "@documentation": {
-        "@comment": "Whether the items in this assessment should be presented in random order. Applies at the assessment level; ItemInstance.randomize controls response-level randomization."
-      }
-    },
+    "randomize": "xsd:boolean",
     "passingScore": {
       "@type": "Optional",
       "@class": "xsd:decimal",
@@ -427,6 +459,10 @@
     "@comment": "Junction document for ActivityGroup <-> LearningActivity (M:M). See ADR-0003, ADR-0005.",
     "@type": "Class",
     "@id": "ActivityGroupMember",
+    "@key": {
+      "@type": "Hash",
+      "@fields": ["group", "activity"]
+    },
     "@documentation": {
       "@comment": "Places a LearningActivity into an ActivityGroup with a sub-sequence position. sequence is the activity's position within the group only — it is independent of the module-level sequence on ModuleActivityGroupLink and must never be combined with it. See ADR-0005."
     },
@@ -444,6 +480,10 @@
   {
     "@type": "Class",
     "@id": "ModuleObjective",
+    "@key": {
+      "@type": "Hash",
+      "@fields": ["module", "references"]
+    },
     "@documentation": {
       "@comment": "Reifies the relationship between a Module and a LearningObjective it declares. A first-class graph node that carries both design intent (role, roleRationale) and computed graph intelligence (coverageStatus). Created programmatically by the API when a designer assigns an objective to a module — not directly created or edited through the UI. coverageStatus is recomputed by the API after any change that affects coverage: modifications to AssessmentItem.assesses, ItemInstance additions/removals, or ModuleObjective role changes. See ADR-0007."
     },
@@ -492,6 +532,10 @@
     "@comment": "Junction document for Module <-> LearningActivity (M:M). See ADR-0003, ADR-0005.",
     "@type": "Class",
     "@id": "ModuleActivityLink",
+    "@key": {
+      "@type": "Hash",
+      "@fields": ["module", "activity"]
+    },
     "@documentation": {
       "@comment": "Places a standalone LearningActivity into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityGroupLink.sequence — both are sorted together to produce the module's ordered content list. API CONSTRAINT: sequence values must be unique across both ModuleActivityLink and ModuleActivityGroupLink for a given Module. See ADR-0005."
     },
@@ -510,6 +554,10 @@
     "@comment": "Junction document for Module <-> ActivityGroup (M:M). See ADR-0003, ADR-0005.",
     "@type": "Class",
     "@id": "ModuleActivityGroupLink",
+    "@key": {
+      "@type": "Hash",
+      "@fields": ["module", "group"]
+    },
     "@documentation": {
       "@comment": "Places an ActivityGroup into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityLink.sequence — both are sorted together to produce the module's ordered content list. The activities within the group are sub-sequenced via ActivityGroupMember.sequence, which is independent of this module-level sequence. See ADR-0005."
     },
@@ -520,6 +568,31 @@
       "@class": "xsd:integer",
       "@documentation": {
         "@comment": "Module-level position. Shares the same integer space as ModuleActivityLink.sequence for this module. Gaps are permitted to allow insertion without renumbering."
+      }
+    }
+  },
+
+  {
+    "@comment": "=== DESIGN RATIONALE ===",
+    "@type": "Class",
+    "@id": "DesignNote",
+    "@documentation": {
+      "@comment": "A free-form rationale record attached to any artifact in the Armature graph. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). Consistent with Armature's core principle: design decisions should be explicit, inspectable, and queryable — not buried in email threads or meeting notes. The subject field references any document(s) in the graph by URI. A forward pointer to DesignDecision (relatesToDecision) is included now to establish the link slot for when that structured type is implemented — the DesignDecision type itself is deferred. See ADR-0012."
+    },
+    "label": "xsd:string",
+    "rationale": "xsd:string",
+    "subject": {
+      "@type": "Set",
+      "@class": "xsd:anyURI",
+      "@documentation": {
+        "@comment": "The Armature document(s) this note pertains to, referenced by URI. Uses xsd:anyURI because a single note may span documents of different types (e.g., a rationale explaining why an objective was paired with a particular assessment strategy references both LearningObjective and AssessmentItem). API CONSTRAINT: must contain at least one element — a note without a subject is orphaned."
+      }
+    },
+    "category": {
+      "@type": "Optional",
+      "@class": "DesignNoteCategory",
+      "@documentation": {
+        "@comment": "Optional categorization of the design decision type. Enables queries like 'show all rationale related to Bloom's level choices' or 'show all prerequisite intent notes'. Not all notes fit neatly into a category."
       }
     }
   },
