@@ -13,7 +13,7 @@ The question is whether enums should be defined inline on the field or as top-le
 ## Decision
 All controlled vocabularies are defined as top-level `Enum` types in the schema. Fields reference these types by name rather than defining values inline.
 
-The schema currently defines eleven enums: `BloomsLevel`, `ObjectiveState`, `ItemType`, `ItemStatus`, `EvidenceMethod`, `ObjectiveRole`, `CoverageStatus`, `ActivityType`, `PrerequisiteType`, `ConfidenceLevel`, `NeedPriority`.
+The schema currently defines thirteen enums: `BloomsLevel`, `ObjectiveState`, `ItemType`, `ItemStatus`, `EvidenceMethod`, `ObjectiveRole`, `CoverageStatus`, `ActivityType`, `PrerequisiteType`, `ConfidenceLevel`, `NeedPriority`, `DesignNoteCategory`.
 
 ## Consequences
 - Enum types are reusable. `BloomsLevel` is referenced by both `LearningObjective` and `AssessmentItem` — they share the same vocabulary, enabling Bloom's alignment queries across both types.

@@ -25,4 +25,4 @@ Both constraints are documented in the schema via `@documentation` comments and 
 - The constraint is documented in the schema itself so contributors understand it is intentional, not an oversight.
 
 ## Note
-If a future version of TerminusDB supports minimum cardinality on `Set` or `List` types, these constraints should be migrated to the schema level.
+TerminusDB now supports `@min_cardinality` on `Set` types in recent versions. Migrating these constraints to schema-level enforcement is the intended next step — see ADR-0013 (proposed). The migration is conditional on verifying support in the installed TerminusDB version before applying the schema change. API enforcement remains in place regardless and will continue to provide descriptive error messages.

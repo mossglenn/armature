@@ -18,6 +18,7 @@ For all one-to-many relationships with a clear parent/child direction, the forei
 - `Assessment.module → Module`
 - `Module.course → Course`
 - `ModuleObjective.module → Module`
+- `LearningObjective.generatedBy → LearningNeed` (one need generates zero or more objectives; each objective optionally references its originating need)
 
 Parent documents contain no arrays of child references.
 
