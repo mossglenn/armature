@@ -45,21 +45,18 @@ async function main() {
   console.log(`  → ${schema.length} schema entries found`);
 
   // 2. Create the client
-  //    WOQLClient takes the server URL and an options object.
-  //    We pass the database name here so the client knows where to operate.
+  //    WOQLClient takes the server URL and credentials.
+  //    client.db() sets the active database for subsequent operations.
+  //    connect() is deprecated — the client is ready to use immediately.
   const client = new WOQLClient(TERMINUS_URL, {
     user: TERMINUS_USER,
     key:  TERMINUS_PASS,
-    db:   TERMINUS_DB,
     organization: "admin",  // local TerminusDB always uses "admin" as the org
   });
+  client.db(TERMINUS_DB);
+  console.log(`\nUsing TerminusDB at ${TERMINUS_URL}`);
 
-  // 3. Connect — verifies credentials and server availability
-  console.log(`\nConnecting to TerminusDB at ${TERMINUS_URL}...`);
-  await client.connect();
-  console.log("  → Connected");
-
-  // 4. Create the database if it doesn't exist
+  // 3. Create the database if it doesn't exist
   //    We check the list of existing databases first to make this idempotent.
   console.log(`\nChecking for database "${TERMINUS_DB}"...`);
   const databases = await client.getDatabases();
@@ -77,7 +74,7 @@ async function main() {
     console.log(`  → Database created`);
   }
 
-  // 5. Load the schema
+  // 4. Load the schema
   //    The schema array has two kinds of entries:
   //      - The @context entry (type "@context") — must be loaded via replaceDocument
   //        with full_replace: true. This sets the namespace prefixes for the whole schema.
