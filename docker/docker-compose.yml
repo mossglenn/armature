@@ -1,0 +1,13 @@
+services:
+  terminusdb:
+    image: terminusdb/terminusdb-server:latest
+    ports:
+      - "6363:6363"
+    volumes:
+      - terminusdb-data:/app/terminusdb/storage
+    environment:
+      - TERMINUSDB_ADMIN_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
+      - TERMINUSDB_SERVER_NAME=${TERMINUSDB_SERVER_NAME:-localhost}
+
+volumes:
+  terminusdb-data:
