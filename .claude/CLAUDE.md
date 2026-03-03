@@ -33,13 +33,25 @@ The API is the boundary. Plugins never talk to TerminusDB directly. This is arch
 ### Repository Structure
 ```
 schema/
-  schema.json              # TerminusDB schema — source of truth
+  schema.json              # TerminusDB schema — single source of truth for all types
   docs/adr/                # Architecture Decision Records
 api/                       # Armature API (Express/Fastify) — to be built
-docker/                    # Docker Compose configuration — to be built
-scripts/                   # Utility scripts (schema loading, seed data)
+docker/                    # Docker Compose configuration
+scripts/
+  generate-types.js        # Derives app/lib/types.ts from schema.json — run after schema changes
+  generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
+  load_schema.js           # Loads schema into local TerminusDB instance
+  seed_data.js             # Inserts demo artifact graph (69 documents)
+  migrate_schema_docs.js   # Reproduces past schema documentation migrations
+app/
+  app/api/                 # Next.js API routes (GET endpoints live, POST in progress)
+  lib/
+    terminusdb.ts          # Shared WOQLClient singleton
+    routeHelpers.ts        # createGetHandler factory for boilerplate GET routes
+    types.ts               # GENERATED — do not edit; run npm run generate:types
 docs/
   schema-guide.md          # Conceptual guide (in progress)
+  SCHEMA_APPENDIX.md       # GENERATED — do not edit; run node scripts/generate-schema-appendix.js
 .claude/
   CLAUDE.md                # This file
   PROJECT_CONTEXT.md       # Problem space, audiences, demo goals
@@ -51,7 +63,24 @@ docs/
 
 ## The Schema
 
-The schema is the source of truth for everything. Read `schema/schema.json` before working on the API or any data-related code. The inline `@documentation` comments on every type and field are authoritative.
+The schema is the single source of truth for everything. Read `schema/schema.json` before working on the API or any data-related code. The inline `@documentation` comments on every type and field are authoritative.
+
+### Types are generated, not hand-maintained
+
+`app/lib/types.ts` is **generated** from `schema/schema.json` by `scripts/generate-types.js`. Never edit it directly.
+
+After any change to `schema/schema.json`:
+```bash
+# From armature/app/
+npm run generate:types
+
+# Verify (also runs in CI)
+npm run check:types
+```
+
+The generator handles: xsd primitives → TS primitives, `Optional<T>` → optional fields, `Set<T>`/`List<T>` → arrays, Class references → `string` (@id), enum references → union types, `@abstract` → JSDoc comment, junction types → `extends TerminusDocument`.
+
+To add a new type: (1) update `schema.json` (with ADR), (2) add `@id` to `JUNCTION_IDS` if it's a junction, (3) add `@id` to `CLASS_ORDER` in the generator, (4) run `generate:types`, (5) commit both files together.
 
 ### Key types and their roles
 
@@ -102,7 +131,7 @@ TerminusDB enforces type safety. Business logic constraints (minimum cardinality
 Every non-obvious decision should have a rationale — in code comments, in ADRs, or in the schema documentation. This is Armature practicing what it preaches.
 
 ### 4. Schema changes require an ADR
-Any modification to `schema/schema.json` that changes existing types or adds new ones warrants an ADR. Adding an ADR first, then implementing, is the preferred order.
+Any modification to `schema/schema.json` that changes existing types or adds new ones warrants an ADR. Adding an ADR first, then implementing, is the preferred order. After schema changes, always regenerate `app/lib/types.ts` (see The Schema section above) and commit both files together.
 
 ### 5. Framework vs. plugin boundary
 Ask before adding anything: "Does this belong in the graph infrastructure, or in a specific tool's UX?" System-of-record concerns (artifact typing, relationships, schema versioning) belong here. Editing workflows, import/export formats, and UI patterns belong in plugins.
@@ -138,6 +167,13 @@ Say "update session" and follow the prompt in `.claude/prompts/update-session.md
 ### Commits
 Follow the guide in `.claude/prompts/commit-message-guide.md`. Descriptive, conventional commit format. Show the message for approval before committing.
 
+### After schema changes
+1. Write or update the ADR in `schema/docs/adr/`
+2. Update `schema/schema.json`
+3. Run `npm run generate:types` from `armature/app/`
+4. Run `npm run check:types` to verify output
+5. Commit `schema.json` and `app/lib/types.ts` together in the same commit
+
 ### Adding an ADR
 1. Find the next available number in `schema/docs/adr/`
 2. Use the format: `NNNN-short-decision-title.md`
@@ -152,4 +188,5 @@ Follow the guide in `.claude/prompts/commit-message-guide.md`. Descriptive, conv
 - **Don't** add owned subdocuments — all relationships use references (ADR-0002)
 - **Don't** put UI logic, import/export formats, or plugin-specific code in this repo
 - **Don't** change `schema.json` without an ADR
+- **Don't** edit `app/lib/types.ts` manually — it's generated; change `schema.json` and run `generate:types`
 - **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will

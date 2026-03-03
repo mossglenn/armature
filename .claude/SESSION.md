@@ -6,7 +6,7 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Implementation** → Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Next: Decide types generation, then POST endpoints + UI
+**Implementation** → Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → Next: POST /needs (first multi-document atomic op)
 
 ---
 
@@ -58,56 +58,69 @@ This file tracks current work state across sessions. Update it at the end of eve
 - Root `.gitignore` cleaned up — Next.js paths unanchored (no leading `/`), duplicates removed, `.vscode/` exclusion removed (intentionally committed)
 - `app/.env.local` — TerminusDB connection vars (not committed)
 
-### Key Learnings This Phase
+### Types Generation
 
-- TerminusDB GraphQL back-reference syntax: `_fieldName_of_TypeName` (not `_TypeName_fieldName`)
-- `_path_to_*` fields require arguments — use direct field traversal instead where possible
-- Abstract types (LearningEvidence) not accessible via inline GraphQL fragments — use `_path_to_ConcreteType` or query concrete type directly
-- Hash-keyed types cannot have explicit `@id` in insert documents — TerminusDB generates from field values
-- TerminusDB dashboard deprecated as of v11.2 — use GraphQL playground or DFRNT instead
-- Next.js API routes run server-side — TerminusDB credentials never exposed to browser
-- `addDocument` is transactional per call — bundle related documents for atomic commits
-- WOQLClient constructor: `new WOQLClient(url, { user, key, organization: "admin" })` — `organization` is required for local TerminusDB
-- Next.js 15: `params` in dynamic route handlers is a `Promise` — must be `await`ed
-- `ModuleObjective` junction field is `references` (not `objective`) — always verify field names against schema, not assumptions
-- Junction documents do not extend ArmatureDocument — no `label`, `description`, or `createdBy`
+- `scripts/generate-types.js` — generates `app/lib/types.ts` from `schema/schema.json`
+- `app/lib/types.ts` is now **generated**, not hand-maintained — do not edit directly
+- Two npm scripts in `app/package.json`: `generate:types` (write) and `check:types` (drift check, CI-ready)
+- Enums emit `VALID_*` const arrays + derived union types (`type X = typeof VALID_X[number]`) — arrays are runtime source of truth, types derived from them
+- Type mapping: xsd primitives → TS primitives, `Optional<T>` → optional fields, `Set<T>`/`List<T>` → arrays, Class references → `string` (@id), enum refs → union types, junction types → `extends TerminusDocument`
+- `JUNCTION_IDS` and `CLASS_ORDER` in the generator are the two places to update when adding new schema types
+- Generator fully documented inline — file header covers mapping decisions, extension guide, Zod deferral note
+
+### Validation Layer (`app/lib/validate.ts`)
+
+- `validateString(val, name, maxLength?)` — required string, trims, rejects empty, enforces limit (default 500)
+- `validateOptionalString(val, name, maxLength?)` — optional string, returns `undefined` if absent (default 5000)
+- `validateEnum(val, name, VALID_*, required?)` — validates against `VALID_*` arrays from `types.ts`; error includes valid options
+- `validateReference(val, name)` — required `@id` string; format only, not existence
+- `validatePositiveInt(val, name)` — optional positive integer; used for all `sequence` fields
+- `ValidationError` class — distinguishes user errors (400) from system errors (500) in catch blocks
+- `MAX_LENGTH` constants: `label: 500`, `description: 5000`, `rationale: 10000`
+
+### TerminusDB Error Handling (`app/lib/routeHelpers.ts`)
+
+- `handleTerminusError(error, context)` — maps known TerminusDB error `@type` strings to structured HTTP responses
+- Matches on `@type` substrings (e.g. `api:InsertDocumentErrorResponse`) not `api:message` text — more stable
+- Known patterns: insert schema failure → 400, delete missing target → 404, auth failure → 500 (logs env var warning)
+- Unknown errors log full message with context string for pattern discovery
+- `createGetHandler` factory now uses `handleTerminusError` internally
+
+### POST Endpoints
+
+- `POST /api/courses` — creates Course; validates label (required), description (optional)
+- `POST /api/modules` — creates Module; validates label, description, courseId (required reference), sequence (optional positive int)
 
 ---
 
 ## What's Next
 
-**Immediate: Decide types generation approach**
+**Immediate: POST /needs** — first multi-document atomic operation
 
-`app/lib/types.ts` is currently hand-maintained — a single-source-of-truth problem. Two options:
-
-1. **Generator script** (`scripts/generate-types.js`) — reads `schema/schema.json`, writes `app/lib/types.ts`; add `generate:types` to scripts/package.json; mark `types.ts` as generated
-2. **Committed build artifact with drift check** — generate but commit `types.ts`; add pre-commit hook or CI check that runs generator and fails if output differs
-
-Option 2 preferred: types available without running generator, drift caught automatically.
-
-**Then:**
-1. Implement POST endpoints (atomic multi-document operations)
-2. Build demo tool UI pages (Coverage View first — read-only, visually interesting)
-3. Wire UI to API
+1. `POST /api/needs` — create LearningNeed + optional DescriptiveEvidence + NeedEvidenceLink in one `addDocument` call
+2. `POST /api/objectives` — create LearningObjective, optional link to need, optional ModuleObjective
+3. `POST /api/prerequisites` — create PrerequisiteRecord between two objectives (rationale required)
+4. Coverage View UI — first frontend page; read-only, visually demonstrates graph value
 
 **App structure (current):**
 ```
 armature/app/
   app/
     api/
-      courses/route.ts
-      modules/route.ts
-      needs/route.ts
-      objectives/route.ts
-      items/route.ts
-      assessments/route.ts
-      prerequisites/route.ts
-      notes/route.ts
-      coverage/[moduleId]/route.ts
+      courses/route.ts     ← GET + POST ✓
+      modules/route.ts     ← GET + POST ✓
+      needs/route.ts       ← GET only
+      objectives/route.ts  ← GET only
+      items/route.ts       ← GET only
+      assessments/route.ts ← GET only
+      prerequisites/route.ts ← GET only
+      notes/route.ts       ← GET only
+      coverage/[moduleId]/route.ts ← GET only
   lib/
     terminusdb.ts
-    routeHelpers.ts
-    types.ts          ← hand-maintained for now; generation TBD
+    routeHelpers.ts    ← createGetHandler + handleTerminusError
+    types.ts           ← GENERATED — VALID_* arrays + interfaces
+    validate.ts        ← validation utilities
   package.json
 ```
 
@@ -121,7 +134,11 @@ armature/app/
 - No auth system in demo scope — TerminusDB credentials in environment variables only
 - `createGetHandler` factory for simple GET routes — deviations stand out by contrast
 - ModuleObjectives filtered in JS not WOQL — acceptable at demo scale, noted as tech debt
-- **OPEN: `types.ts` generation from `schema.json`** — options documented in What's Next
+- `app/lib/types.ts` is generated from `schema/schema.json` via `scripts/generate-types.js` — committed artifact, drift caught by `npm run check:types`
+- `VALID_*` arrays in `types.ts` are the runtime source of truth for enums — union types derived from them, never duplicated
+- `handleTerminusError` matches on `@type` substrings, not `api:message` text — more stable across TerminusDB versions
+- JS client retained over raw HTTP API — client quirks are absorbed, switching cost exceeds benefit at demo stage
+- `deleteDocument({ id: string | string[] })` — object with `id` key, not a bare array
 
 ---
 
@@ -133,15 +150,39 @@ None currently.
 
 ## Notes for Next Session
 
-Start with the types generation decision. Key context:
-- `scripts/generate-schema-appendix.js` is the existing precedent for schema → doc generation
-- TerminusDB schema shape to handle: `@abstract`, `@inherits`, `Optional` wrappers, `Set`, `Hash` keys, enum `@value` arrays, `xsd:*` type mapping
-- Recommended approach: generator script + committed output + drift check
-- After decision is made and implemented, move to POST endpoints
+Start with `POST /needs` — the first endpoint that creates multiple documents atomically.
+
+Key context:
+- Request shape: `{ label, rationale, priority?, evidence?: { label, method, finding, collectedAt, source, confidence } }`
+- Three documents to create in one `addDocument([...])` call: LearningNeed + DescriptiveEvidence + NeedEvidenceLink
+- `evidence` is optional — need can be created alone and linked later
+- NeedEvidenceLink is a junction document (no label/description/createdBy) — extends TerminusDocument
+- DescriptiveEvidence extends LearningEvidence extends ArmatureDocument — needs `collectedAt` (xsd:dateTime) and `source`
+- Validate: `rationale` against `MAX_LENGTH.rationale`, `priority` against `VALID_NeedPriority`, `method` against `VALID_EvidenceMethod`, `confidence` against `VALID_ConfidenceLevel`
+- Zod for input validation is deferred — hand-validate per field using `validate.ts` helpers
+- Response shape per spec: return created need with evidence and link if provided
 
 ---
 
 ## Recent Sessions
+
+### 2026-03-03 (afternoon)
+
+- Built `app/lib/validate.ts` — `validateString`, `validateOptionalString`, `validateEnum`, `validateReference`, `validatePositiveInt`, `ValidationError`, `MAX_LENGTH`
+- Updated `generate-types.js` to emit `VALID_*` const arrays alongside union types — arrays are runtime source of truth, types derived from them
+- Added `handleTerminusError(error, context)` to `routeHelpers.ts` — maps TerminusDB `@type` substrings to structured HTTP responses; unknown errors log for pattern discovery
+- Implemented and tested `POST /courses` and `POST /modules` with full validation
+- Confirmed `deleteDocument({ id: [...] })` signature (not bare array) — documented in Active Decisions
+- Decided: keep JS client, not worth switching to raw HTTP API mid-project
+
+### 2026-03-03 (morning)
+
+- Implemented `scripts/generate-types.js` — derives `app/lib/types.ts` from `schema/schema.json`
+- Added `generate:types` and `check:types` npm scripts to `app/package.json`
+- `app/lib/types.ts` is now a committed generated artifact — not hand-maintained
+- Fully documented generator inline: file header covers mapping decisions, extension guide, and Zod deferral note; all functions have JSDoc
+- Updated CLAUDE.md: repo structure, types workflow section, schema change procedure, What Not To Do
+- Updated SESSION.md: resolved open decision, types generation added to What's Done
 
 ### 2026-03-02
 

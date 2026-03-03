@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate:types": "node ../scripts/generate-types.js",
+    "check:types": "node ../scripts/generate-types.js --check"
   },
   "dependencies": {
     "@terminusdb/terminusdb-client": "^12.0.0",
