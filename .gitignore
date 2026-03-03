@@ -1,13 +1,17 @@
 # Node
 node_modules/
-npm-debug.log*
 .npm
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
-.env
 venv/
 .venv/
 
@@ -19,13 +23,23 @@ venv/
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
 *.swp
 
 # Environment
-.env
-.env.local
-.env.*.local
+.env*
 
+# Next.js
+.next/
+out/
+build/
+.vercel
+next-env.d.ts
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Misc
+*.pem
 .files/

@@ -6,7 +6,7 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Implementation** → Schema loaded → Seed data inserted → Demo API documented → Next: Scaffold Next.js app
+**Implementation** → Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Next: Decide types generation, then POST endpoints + UI
 
 ---
 
@@ -46,6 +46,18 @@ This file tracks current work state across sessions. Update it at the end of eve
 - Request/response shapes defined for all endpoints
 - Deferred scope documented (LearningActivity, LearningDataset, User, etc.)
 
+### Next.js App (`armature/app/`)
+
+- Scaffolded with `create-next-app` — TypeScript, Tailwind CSS, App Router, React Compiler enabled
+- Node 23.5 in use; `eslint-visitor-keys` engine warning is cosmetic — Node 23 works fine
+- `app/lib/terminusdb.ts` — shared WOQLClient singleton; requires `organization: "admin"` in constructor
+- `app/lib/routeHelpers.ts` — `createGetHandler(type)` factory for boilerplate GET routes
+- `app/lib/types.ts` — TypeScript interfaces for all schema types, hand-derived from `schema/schema.json`
+- All 8 simple GET routes implemented via factory: courses, objectives, modules, needs, assessments, items, prerequisites, notes
+- Custom GET `/api/coverage/[moduleId]` — fetches ModuleObjective junctions, joins LearningObjective labels, returns merged coverage data with coverageStatus
+- Root `.gitignore` cleaned up — Next.js paths unanchored (no leading `/`), duplicates removed, `.vscode/` exclusion removed (intentionally committed)
+- `app/.env.local` — TerminusDB connection vars (not committed)
+
 ### Key Learnings This Phase
 
 - TerminusDB GraphQL back-reference syntax: `_fieldName_of_TypeName` (not `_TypeName_fieldName`)
@@ -55,21 +67,30 @@ This file tracks current work state across sessions. Update it at the end of eve
 - TerminusDB dashboard deprecated as of v11.2 — use GraphQL playground or DFRNT instead
 - Next.js API routes run server-side — TerminusDB credentials never exposed to browser
 - `addDocument` is transactional per call — bundle related documents for atomic commits
+- WOQLClient constructor: `new WOQLClient(url, { user, key, organization: "admin" })` — `organization` is required for local TerminusDB
+- Next.js 15: `params` in dynamic route handlers is a `Promise` — must be `await`ed
+- `ModuleObjective` junction field is `references` (not `objective`) — always verify field names against schema, not assumptions
+- Junction documents do not extend ArmatureDocument — no `label`, `description`, or `createdBy`
 
 ---
 
 ## What's Next
 
-**Immediate: Scaffold Next.js app**
+**Immediate: Decide types generation approach**
 
-1. Run `create-next-app` inside `armature/app/`
-2. Configure TypeScript, Tailwind, App Router
-3. Set up shared TerminusDB client (`app/lib/terminusdb.ts`)
-4. Implement GET endpoints first (reads only, no side effects)
-5. Implement POST endpoints
-6. Build demo tool UI pages
+`app/lib/types.ts` is currently hand-maintained — a single-source-of-truth problem. Two options:
 
-**App structure:**
+1. **Generator script** (`scripts/generate-types.js`) — reads `schema/schema.json`, writes `app/lib/types.ts`; add `generate:types` to scripts/package.json; mark `types.ts` as generated
+2. **Committed build artifact with drift check** — generate but commit `types.ts`; add pre-commit hook or CI check that runs generator and fails if output differs
+
+Option 2 preferred: types available without running generator, drift caught automatically.
+
+**Then:**
+1. Implement POST endpoints (atomic multi-document operations)
+2. Build demo tool UI pages (Coverage View first — read-only, visually interesting)
+3. Wire UI to API
+
+**App structure (current):**
 ```
 armature/app/
   app/
@@ -83,19 +104,11 @@ armature/app/
       prerequisites/route.ts
       notes/route.ts
       coverage/[moduleId]/route.ts
-    (demo tool pages)
   lib/
-    terminusdb.ts     ← shared client instance
-    ids.ts            ← ID generation utilities
+    terminusdb.ts
+    routeHelpers.ts
+    types.ts          ← hand-maintained for now; generation TBD
   package.json
-```
-
-**Environment variables needed:**
-```
-TERMINUS_URL=http://localhost:6363
-TERMINUS_USER=admin
-TERMINUS_PASS=admin
-TERMINUS_DB=armature
 ```
 
 ---
@@ -106,6 +119,9 @@ TERMINUS_DB=armature
 - Next.js runs locally (not containerized) — TerminusDB stays in Docker
 - Containerizing Next.js deferred until demo deployment is needed
 - No auth system in demo scope — TerminusDB credentials in environment variables only
+- `createGetHandler` factory for simple GET routes — deviations stand out by contrast
+- ModuleObjectives filtered in JS not WOQL — acceptable at demo scale, noted as tech debt
+- **OPEN: `types.ts` generation from `schema.json`** — options documented in What's Next
 
 ---
 
@@ -115,7 +131,30 @@ None currently.
 
 ---
 
+## Notes for Next Session
+
+Start with the types generation decision. Key context:
+- `scripts/generate-schema-appendix.js` is the existing precedent for schema → doc generation
+- TerminusDB schema shape to handle: `@abstract`, `@inherits`, `Optional` wrappers, `Set`, `Hash` keys, enum `@value` arrays, `xsd:*` type mapping
+- Recommended approach: generator script + committed output + drift check
+- After decision is made and implemented, move to POST endpoints
+
+---
+
 ## Recent Sessions
+
+### 2026-03-02
+
+- Scaffolded Next.js app (`armature/app/`) — TypeScript, Tailwind, App Router, React Compiler
+- Installed and configured `@terminusdb/terminusdb-client` (WOQLClient, not TerminusDBClient)
+- Built shared TerminusDB client singleton (`app/lib/terminusdb.ts`)
+- Built `createGetHandler` factory (`app/lib/routeHelpers.ts`) — eliminates boilerplate GET routes
+- Implemented all 8 simple GET API routes via factory
+- Implemented custom Coverage View route (`/api/coverage/[moduleId]`) with junction join
+- Debugged: missing `organization: "admin"`, wrong field name (`references` not `objective`), Next.js 15 async params
+- Created `app/lib/types.ts` — full TypeScript interfaces derived from schema
+- Identified types drift problem — `types.ts` is a manual copy of `schema.json`; generation approach deferred to next session
+- Cleaned up root `.gitignore` for Next.js compatibility
 
 ### 2026-02-27
 
