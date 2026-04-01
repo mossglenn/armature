@@ -1,0 +1,2251 @@
+<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="generator" content="quarto-1.8.27" />
+
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, user-scalable=yes"
+        />
+
+        <meta name="author" content="Amos Glenn" />
+        <meta name="dcterms.date" content="2026-03-31" />
+        <meta
+            name="keywords"
+            content="Instructional Design, Learning Engineering, Design Data"
+        />
+
+        <title>Armature: Infrastructure for Design Data</title>
+        <style>
+            code {
+                white-space: pre-wrap;
+            }
+            span.smallcaps {
+                font-variant: small-caps;
+            }
+            div.columns {
+                display: flex;
+                gap: min(4vw, 1.5em);
+            }
+            div.column {
+                flex: auto;
+                overflow-x: auto;
+            }
+            div.hanging-indent {
+                margin-left: 1.5em;
+                text-indent: -1.5em;
+            }
+            ul.task-list {
+                list-style: none;
+            }
+            ul.task-list li input[type='checkbox'] {
+                width: 0.8em;
+                margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */
+                vertical-align: middle;
+            }
+            /* CSS for citations */
+            div.csl-bib-body {
+            }
+            div.csl-entry {
+                clear: both;
+                margin-bottom: 0em;
+            }
+            .hanging-indent div.csl-entry {
+                margin-left: 2em;
+                text-indent: -2em;
+            }
+            div.csl-left-margin {
+                min-width: 2em;
+                float: left;
+            }
+            div.csl-right-inline {
+                margin-left: 2em;
+                padding-left: 1em;
+            }
+            div.csl-indent {
+                margin-left: 2em;
+            }
+        </style>
+
+        <script src="Armature Position Paper Drafts_files/libs/clipboard/clipboard.min.js"></script>
+        <script
+            src="Armature Position Paper Drafts_files/libs/quarto-html/quarto.js"
+            type="module"
+        ></script>
+        <script
+            src="Armature Position Paper Drafts_files/libs/quarto-html/tabsets/tabsets.js"
+            type="module"
+        ></script>
+        <script
+            src="Armature Position Paper Drafts_files/libs/quarto-html/axe/axe-check.js"
+            type="module"
+        ></script>
+        <script src="Armature Position Paper Drafts_files/libs/quarto-html/popper.min.js"></script>
+        <script src="Armature Position Paper Drafts_files/libs/quarto-html/tippy.umd.min.js"></script>
+        <script src="Armature Position Paper Drafts_files/libs/quarto-html/anchor.min.js"></script>
+        <link
+            href="Armature Position Paper Drafts_files/libs/quarto-html/tippy.css"
+            rel="stylesheet"
+        />
+        <link
+            href="Armature Position Paper Drafts_files/libs/quarto-html/quarto-syntax-highlighting-4711a9c5645ea7bef0850688b668343a.css"
+            rel="stylesheet"
+            class="quarto-color-scheme"
+            id="quarto-text-highlighting-styles"
+        />
+        <link
+            href="Armature Position Paper Drafts_files/libs/quarto-html/quarto-syntax-highlighting-dark-1578f313420fe876b0cee9aa9dbd3f15.css"
+            rel="stylesheet"
+            class="quarto-color-scheme quarto-color-alternate"
+            id="quarto-text-highlighting-styles"
+        />
+        <link
+            href="Armature Position Paper Drafts_files/libs/quarto-html/quarto-syntax-highlighting-4711a9c5645ea7bef0850688b668343a.css"
+            rel="stylesheet"
+            class="quarto-color-scheme-extra"
+            id="quarto-text-highlighting-styles"
+        />
+        <script src="Armature Position Paper Drafts_files/libs/bootstrap/bootstrap.min.js"></script>
+        <link
+            href="Armature Position Paper Drafts_files/libs/bootstrap/bootstrap-icons.css"
+            rel="stylesheet"
+        />
+        <link
+            href="Armature Position Paper Drafts_files/libs/bootstrap/bootstrap-12b5f8850248e9148e2735cf4707791b.min.css"
+            rel="stylesheet"
+            append-hash="true"
+            class="quarto-color-scheme"
+            id="quarto-bootstrap"
+            data-mode="light"
+        />
+        <link
+            href="Armature Position Paper Drafts_files/libs/bootstrap/bootstrap-dark-d3416d43c37c3edb43b0d6b238b974a6.min.css"
+            rel="stylesheet"
+            append-hash="true"
+            class="quarto-color-scheme quarto-color-alternate"
+            id="quarto-bootstrap"
+            data-mode="dark"
+        />
+        <link
+            href="Armature Position Paper Drafts_files/libs/bootstrap/bootstrap-12b5f8850248e9148e2735cf4707791b.min.css"
+            rel="stylesheet"
+            append-hash="true"
+            class="quarto-color-scheme-extra"
+            id="quarto-bootstrap"
+            data-mode="light"
+        />
+        <link
+            href="Armature Position Paper Drafts_files/libs/quarto-contrib/bookup_fonts_gwf-0.0/fonts-embed.css"
+            rel="stylesheet"
+        />
+    </head>
+
+    <body class="quarto-light">
+        <script id="quarto-html-before-body" type="application/javascript">
+            const toggleBodyColorMode = (bsSheetEl) => {
+                const mode = bsSheetEl.getAttribute('data-mode');
+                const bodyEl = window.document.querySelector('body');
+                if (mode === 'dark') {
+                    bodyEl.classList.add('quarto-dark');
+                    bodyEl.classList.remove('quarto-light');
+                } else {
+                    bodyEl.classList.add('quarto-light');
+                    bodyEl.classList.remove('quarto-dark');
+                }
+            };
+            const toggleBodyColorPrimary = () => {
+                const bsSheetEl = window.document.querySelector(
+                    'link#quarto-bootstrap:not([rel=disabled-stylesheet])'
+                );
+                if (bsSheetEl) {
+                    toggleBodyColorMode(bsSheetEl);
+                }
+            };
+            const setColorSchemeToggle = (alternate) => {
+                const toggles = window.document.querySelectorAll(
+                    '.quarto-color-scheme-toggle'
+                );
+                for (let i = 0; i < toggles.length; i++) {
+                    const toggle = toggles[i];
+                    if (toggle) {
+                        if (alternate) {
+                            toggle.classList.add('alternate');
+                        } else {
+                            toggle.classList.remove('alternate');
+                        }
+                    }
+                }
+            };
+            const toggleColorMode = (alternate) => {
+                // Switch the stylesheets
+                const primaryStylesheets = window.document.querySelectorAll(
+                    'link.quarto-color-scheme:not(.quarto-color-alternate)'
+                );
+                const alternateStylesheets = window.document.querySelectorAll(
+                    'link.quarto-color-scheme.quarto-color-alternate'
+                );
+                manageTransitions('#quarto-margin-sidebar .nav-link', false);
+                if (alternate) {
+                    // note: dark is layered on light, we don't disable primary!
+                    enableStylesheet(alternateStylesheets);
+                    for (const sheetNode of alternateStylesheets) {
+                        if (sheetNode.id === 'quarto-bootstrap') {
+                            toggleBodyColorMode(sheetNode);
+                        }
+                    }
+                } else {
+                    disableStylesheet(alternateStylesheets);
+                    enableStylesheet(primaryStylesheets);
+                    toggleBodyColorPrimary();
+                }
+                manageTransitions('#quarto-margin-sidebar .nav-link', true);
+                // Switch the toggles
+                setColorSchemeToggle(alternate);
+                // Hack to workaround the fact that safari doesn't
+                // properly recolor the scrollbar when toggling (#1455)
+                if (
+                    navigator.userAgent.indexOf('Safari') > 0 &&
+                    navigator.userAgent.indexOf('Chrome') == -1
+                ) {
+                    manageTransitions('body', false);
+                    window.scrollTo(0, 1);
+                    setTimeout(() => {
+                        window.scrollTo(0, 0);
+                        manageTransitions('body', true);
+                    }, 40);
+                }
+            };
+            const disableStylesheet = (stylesheets) => {
+                for (let i = 0; i < stylesheets.length; i++) {
+                    const stylesheet = stylesheets[i];
+                    stylesheet.rel = 'disabled-stylesheet';
+                }
+            };
+            const enableStylesheet = (stylesheets) => {
+                for (let i = 0; i < stylesheets.length; i++) {
+                    const stylesheet = stylesheets[i];
+                    if (stylesheet.rel !== 'stylesheet') {
+                        // for Chrome, which will still FOUC without this check
+                        stylesheet.rel = 'stylesheet';
+                    }
+                }
+            };
+            const manageTransitions = (selector, allowTransitions) => {
+                const els = window.document.querySelectorAll(selector);
+                for (let i = 0; i < els.length; i++) {
+                    const el = els[i];
+                    if (allowTransitions) {
+                        el.classList.remove('notransition');
+                    } else {
+                        el.classList.add('notransition');
+                    }
+                }
+            };
+            const isFileUrl = () => {
+                return window.location.protocol === 'file:';
+            };
+            const hasAlternateSentinel = () => {
+                let styleSentinel = getColorSchemeSentinel();
+                if (styleSentinel !== null) {
+                    return styleSentinel === 'alternate';
+                } else {
+                    return false;
+                }
+            };
+            const setStyleSentinel = (alternate) => {
+                const value = alternate ? 'alternate' : 'default';
+                if (!isFileUrl()) {
+                    window.localStorage.setItem('quarto-color-scheme', value);
+                } else {
+                    localAlternateSentinel = value;
+                }
+            };
+            const getColorSchemeSentinel = () => {
+                if (!isFileUrl()) {
+                    const storageValue = window.localStorage.getItem(
+                        'quarto-color-scheme'
+                    );
+                    return storageValue != null
+                        ? storageValue
+                        : localAlternateSentinel;
+                } else {
+                    return localAlternateSentinel;
+                }
+            };
+            const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+                const baseTheme =
+                    document.querySelector('#giscus-base-theme')?.value ??
+                    'light';
+                const alternateTheme =
+                    document.querySelector('#giscus-alt-theme')?.value ??
+                    'dark';
+                let newTheme = '';
+                if (authorPrefersDark) {
+                    newTheme = isAlternate ? baseTheme : alternateTheme;
+                } else {
+                    newTheme = isAlternate ? alternateTheme : baseTheme;
+                }
+                const changeGiscusTheme = () => {
+                    // From: https://github.com/giscus/giscus/issues/336
+                    const sendMessage = (message) => {
+                        const iframe = document.querySelector(
+                            'iframe.giscus-frame'
+                        );
+                        if (!iframe) return;
+                        iframe.contentWindow.postMessage(
+                            { giscus: message },
+                            'https://giscus.app'
+                        );
+                    };
+                    sendMessage({
+                        setConfig: {
+                            theme: newTheme,
+                        },
+                    });
+                };
+                const isGiscussLoaded =
+                    window.document.querySelector('iframe.giscus-frame') !==
+                    null;
+                if (isGiscussLoaded) {
+                    changeGiscusTheme();
+                }
+            };
+            const authorPrefersDark = false;
+            const darkModeDefault = authorPrefersDark;
+            document.querySelector(
+                'link#quarto-text-highlighting-styles.quarto-color-scheme-extra'
+            ).rel = 'disabled-stylesheet';
+            document.querySelector(
+                'link#quarto-bootstrap.quarto-color-scheme-extra'
+            ).rel = 'disabled-stylesheet';
+            let localAlternateSentinel = darkModeDefault
+                ? 'alternate'
+                : 'default';
+            // Dark / light mode switch
+            window.quartoToggleColorScheme = () => {
+                // Read the current dark / light value
+                let toAlternate = !hasAlternateSentinel();
+                toggleColorMode(toAlternate);
+                setStyleSentinel(toAlternate);
+                toggleGiscusIfUsed(toAlternate, darkModeDefault);
+                window.dispatchEvent(new Event('resize'));
+            };
+            // Switch to dark mode if need be
+            if (hasAlternateSentinel()) {
+                toggleColorMode(true);
+            } else {
+                toggleColorMode(false);
+            }
+        </script>
+
+        <div
+            id="quarto-content"
+            class="page-columns page-rows-contents page-layout-article"
+        >
+            <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+                <nav id="TOC" role="doc-toc" class="toc-active">
+                    <h2 id="toc-title">Table of contents</h2>
+
+                    <ul>
+                        <li>
+                            <a
+                                href="#the-problem"
+                                id="toc-the-problem"
+                                class="nav-link active"
+                                data-scroll-target="#the-problem"
+                                >1. The Problem</a
+                            >
+                        </li>
+                        <li>
+                            <a
+                                href="#what-design-data-is"
+                                id="toc-what-design-data-is"
+                                class="nav-link"
+                                data-scroll-target="#what-design-data-is"
+                                >2. What Design Data Is</a
+                            >
+                            <ul class="collapse">
+                                <li>
+                                    <a
+                                        href="#design-artifacts-and-design-relations"
+                                        id="toc-design-artifacts-and-design-relations"
+                                        class="nav-link"
+                                        data-scroll-target="#design-artifacts-and-design-relations"
+                                        >Design Artifacts and Design
+                                        Relations</a
+                                    >
+                                </li>
+                                <li>
+                                    <a
+                                        href="#design-process-data"
+                                        id="toc-design-process-data"
+                                        class="nav-link"
+                                        data-scroll-target="#design-process-data"
+                                        >Design Process Data</a
+                                    >
+                                </li>
+                            </ul>
+                        </li>
+                        <li>
+                            <a
+                                href="#what-armature-is"
+                                id="toc-what-armature-is"
+                                class="nav-link"
+                                data-scroll-target="#what-armature-is"
+                                >3. What Armature Is</a
+                            >
+                            <ul class="collapse">
+                                <li>
+                                    <a
+                                        href="#collaboration-and-version-control"
+                                        id="toc-collaboration-and-version-control"
+                                        class="nav-link"
+                                        data-scroll-target="#collaboration-and-version-control"
+                                        >Collaboration and Version Control</a
+                                    >
+                                </li>
+                                <li>
+                                    <a
+                                        href="#what-armature-is-not"
+                                        id="toc-what-armature-is-not"
+                                        class="nav-link"
+                                        data-scroll-target="#what-armature-is-not"
+                                        >What Armature Is Not</a
+                                    >
+                                </li>
+                            </ul>
+                        </li>
+                        <li>
+                            <a
+                                href="#what-a-design-graph-makes-possible"
+                                id="toc-what-a-design-graph-makes-possible"
+                                class="nav-link"
+                                data-scroll-target="#what-a-design-graph-makes-possible"
+                                >4. What a Design Graph makes Possible</a
+                            >
+                            <ul class="collapse">
+                                <li>
+                                    <a
+                                        href="#alignment-becomes-inspectable"
+                                        id="toc-alignment-becomes-inspectable"
+                                        class="nav-link"
+                                        data-scroll-target="#alignment-becomes-inspectable"
+                                        >Alignment Becomes Inspectable</a
+                                    >
+                                </li>
+                                <li>
+                                    <a
+                                        href="#iteration-becomes-optimized"
+                                        id="toc-iteration-becomes-optimized"
+                                        class="nav-link"
+                                        data-scroll-target="#iteration-becomes-optimized"
+                                        >Iteration Becomes Optimized</a
+                                    >
+                                </li>
+                                <li>
+                                    <a
+                                        href="#design-intelligence-at-design-time"
+                                        id="toc-design-intelligence-at-design-time"
+                                        class="nav-link"
+                                        data-scroll-target="#design-intelligence-at-design-time"
+                                        >Design Intelligence at Design-Time</a
+                                    >
+                                </li>
+                                <li>
+                                    <a
+                                        href="#ai-becomes-a-design-aware-collaborator"
+                                        id="toc-ai-becomes-a-design-aware-collaborator"
+                                        class="nav-link"
+                                        data-scroll-target="#ai-becomes-a-design-aware-collaborator"
+                                        >AI Becomes a Design-Aware
+                                        Collaborator</a
+                                    >
+                                </li>
+                                <li>
+                                    <a
+                                        href="#from-craft-to-engineering"
+                                        id="toc-from-craft-to-engineering"
+                                        class="nav-link"
+                                        data-scroll-target="#from-craft-to-engineering"
+                                        >From Craft to Engineering</a
+                                    >
+                                </li>
+                            </ul>
+                        </li>
+                        <li>
+                            <a
+                                href="#how-armature-fits-the-existing-ecosystem"
+                                id="toc-how-armature-fits-the-existing-ecosystem"
+                                class="nav-link"
+                                data-scroll-target="#how-armature-fits-the-existing-ecosystem"
+                                >5. How Armature Fits the Existing Ecosystem</a
+                            >
+                        </li>
+                        <li>
+                            <a
+                                href="#adoption-paths"
+                                id="toc-adoption-paths"
+                                class="nav-link"
+                                data-scroll-target="#adoption-paths"
+                                >6. Adoption Paths</a
+                            >
+                            <ul class="collapse">
+                                <li>
+                                    <a
+                                        href="#instructional-designers"
+                                        id="toc-instructional-designers"
+                                        class="nav-link"
+                                        data-scroll-target="#instructional-designers"
+                                        >Instructional Designers</a
+                                    >
+                                </li>
+                                <li>
+                                    <a
+                                        href="#learning-scientists"
+                                        id="toc-learning-scientists"
+                                        class="nav-link"
+                                        data-scroll-target="#learning-scientists"
+                                        >Learning Scientists</a
+                                    >
+                                </li>
+                                <li>
+                                    <a
+                                        href="#mutually-reinforcing-paths"
+                                        id="toc-mutually-reinforcing-paths"
+                                        class="nav-link"
+                                        data-scroll-target="#mutually-reinforcing-paths"
+                                        >Mutually Reinforcing Paths</a
+                                    >
+                                </li>
+                            </ul>
+                        </li>
+                        <li>
+                            <a
+                                href="#conclusion"
+                                id="toc-conclusion"
+                                class="nav-link"
+                                data-scroll-target="#conclusion"
+                                >Conclusion</a
+                            >
+                        </li>
+                    </ul>
+                    <div class="quarto-alternate-formats">
+                        <h2>Other Formats</h2>
+                        <ul>
+                            <li>
+                                <a href="Armature Position Paper Drafts.pdf"
+                                    ><i class="bi bi-file-pdf"></i>Typst
+                                    (academic)</a
+                                >
+                            </li>
+                        </ul>
+                    </div>
+                </nav>
+            </div>
+            <main class="content" id="quarto-document-content">
+                <header
+                    id="title-block-header"
+                    class="quarto-title-block default"
+                >
+                    <div class="quarto-title">
+                        <h1 class="title">
+                            Armature: Infrastructure for Design Data
+                        </h1>
+                        <p class="subtitle lead">
+                            Expanding Learning Engineering by Modeling
+                            Instructional Design as a Graph of Artifacts and
+                            Relations
+                        </p>
+                    </div>
+
+                    <div class="quarto-title-meta-author">
+                        <div class="quarto-title-meta-heading">Author</div>
+                        <div class="quarto-title-meta-heading">Affiliation</div>
+
+                        <div class="quarto-title-meta-contents">
+                            <p class="author">
+                                Amos Glenn
+                                <a
+                                    href="mailto:amos@amosglenn.com"
+                                    class="quarto-title-author-email"
+                                    ><i class="bi bi-envelope"></i
+                                ></a>
+                                <a
+                                    href="https://orcid.org/0000-0003-3820-1943"
+                                    class="quarto-title-author-orcid"
+                                >
+                                    <img
+                                        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo1N0NEMjA4MDI1MjA2ODExOTk0QzkzNTEzRjZEQTg1NyIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDozM0NDOEJGNEZGNTcxMUUxODdBOEVCODg2RjdCQ0QwOSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDozM0NDOEJGM0ZGNTcxMUUxODdBOEVCODg2RjdCQ0QwOSIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M1IE1hY2ludG9zaCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkZDN0YxMTc0MDcyMDY4MTE5NUZFRDc5MUM2MUUwNEREIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjU3Q0QyMDgwMjUyMDY4MTE5OTRDOTM1MTNGNkRBODU3Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+84NovQAAAR1JREFUeNpiZEADy85ZJgCpeCB2QJM6AMQLo4yOL0AWZETSqACk1gOxAQN+cAGIA4EGPQBxmJA0nwdpjjQ8xqArmczw5tMHXAaALDgP1QMxAGqzAAPxQACqh4ER6uf5MBlkm0X4EGayMfMw/Pr7Bd2gRBZogMFBrv01hisv5jLsv9nLAPIOMnjy8RDDyYctyAbFM2EJbRQw+aAWw/LzVgx7b+cwCHKqMhjJFCBLOzAR6+lXX84xnHjYyqAo5IUizkRCwIENQQckGSDGY4TVgAPEaraQr2a4/24bSuoExcJCfAEJihXkWDj3ZAKy9EJGaEo8T0QSxkjSwORsCAuDQCD+QILmD1A9kECEZgxDaEZhICIzGcIyEyOl2RkgwAAhkmC+eAm0TAAAAABJRU5ErkJggg=="
+                                /></a>
+                            </p>
+                        </div>
+                        <div class="quarto-title-meta-contents">
+                            <p class="affiliation">University of Pittsburgh</p>
+                        </div>
+                    </div>
+
+                    <div class="quarto-title-meta">
+                        <div>
+                            <div class="quarto-title-meta-heading">
+                                Published
+                            </div>
+                            <div class="quarto-title-meta-contents">
+                                <p class="date">March 31, 2026</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="abstract">
+                            <div class="block-title">Abstract</div>
+                            <p>
+                                Learning engineering has built sophisticated
+                                infrastructure for capturing what happens during
+                                learning experiences. It lacks equivalent
+                                infrastructure for capturing the instructional
+                                design that produces them. Instructional
+                                designers have ways of recording design
+                                artifacts. The missing piece is a structured,
+                                queryable record of the relations between them
+                                and the reasoning behind them: which learning
+                                needs generated which objectives, how activities
+                                target them, and which assessments measure them.
+                                Without these relations, design reasoning
+                                remains fragmented within projects and
+                                disconnected from the learning data that could
+                                inform revision. Armature proposes to fill this
+                                gap by treating instructional design as a graph
+                                of versioned artifacts and meaningfully named
+                                relations. Its goal is to make alignment
+                                inspectable, design evolution traceable, and a
+                                new class of design intelligence possible before
+                                delivery.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="keywords">
+                            <div class="block-title">Keywords</div>
+                            <p>
+                                Instructional Design, Learning Engineering,
+                                Design Data
+                            </p>
+                        </div>
+                    </div>
+                </header>
+
+                <section id="the-problem" class="level1">
+                    <h1>1. The Problem</h1>
+                    <p>
+                        Here is a common scenario: a university identifies that
+                        students consistently struggle with a concept on a
+                        biology course assessment and asks a learning engineer
+                        for help. The engineer’s first questions are
+                        predictable:
+                        <em
+                            >Where in the course are students supposed to
+                            develop these skills? Are the learning activities
+                            for those skills still aligned with the course
+                            objectives? Does the assessment still measure what
+                            it was designed to measure?</em
+                        >
+                    </p>
+                    <p>
+                        Answering these questions means digging through
+                        curriculum committee documents, syllabi updated by
+                        instructors with varying levels of familiarity with the
+                        original objectives, assessment keys maintained by
+                        technologists, and emails that someone remembers but
+                        cannot find. The information exists, but in pieces
+                        scattered across documents, inboxes, and institutional
+                        memory. What’s gone are the connections between them.
+                        These internal gaps form because there is no system for
+                        capturing <em>design data</em>: the evolving structure
+                        of design artifacts and the relationships between them
+                        that produce a learning experience.
+                    </p>
+                    <p>
+                        There are also external gaps between that design data
+                        and the associated <em>learning data</em>: the structure
+                        of the meaningful connections between a learner and
+                        their interaction with the learning experience. Learning
+                        management systems, xAPI logs, and analytic platforms
+                        like OLI/Torus and DataShop capture and analyze learning
+                        data in powerful ways. But there is little upstream of
+                        learning data; no equivalent system for capturing design
+                        data.
+                    </p>
+                    <p>
+                        The external gap becomes clear when considering where
+                        popular and research-based frameworks for using learning
+                        and design data fit into learning engineering. This is
+                        illustrated in
+                        <a href="#fig-framework-map" class="quarto-xref"
+                            >Figure&nbsp;1</a
+                        >
+                        by placing the names of data frameworks on a diagram of
+                        the learning engineering process where they would be
+                        used. The parts of the cycle that need
+                        <em>learning</em> data–the section after Creation,
+                        through Implementation, and to Investigation—are filled
+                        with well-established and widely adopted frameworks and
+                        tools. The mostly empty space between Investigation and
+                        Creation is where <em>design</em> data is needed.
+                    </p>
+                    <div
+                        id="fig-framework-map"
+                        class="quarto-float quarto-figure quarto-figure-center anchored"
+                    >
+                        <figure class="quarto-float quarto-float-fig figure">
+                            <div
+                                aria-describedby="fig-framework-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca"
+                            >
+                                <img
+                                    src="img/mappingframeworks.png"
+                                    class="img-fluid figure-img"
+                                    style="width: 50%"
+                                />
+                            </div>
+                            <figcaption
+                                class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig"
+                                id="fig-framework-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca"
+                            >
+                                Figure&nbsp;1: Mapping frameworks for learning
+                                data and design data: Established frameworks
+                                cluster around Implementation and Investigation.
+                                The space between Investigation and
+                                Creation—where design data belongs— is
+                                conspicuously empty. Frameworks for using
+                                learning and design data, represented by black
+                                labels, are mapped onto a diagram of the
+                                learning engineering process
+                                <span
+                                    class="citation"
+                                    data-cites="kessler2022learning"
+                                    >(<a
+                                        href="#ref-kessler2022learning"
+                                        role="doc-biblioref"
+                                        >Kessler et al., 2022</a
+                                    >)</span
+                                >, CC BY Aaron Kessler.
+                            </figcaption>
+                        </figure>
+                    </div>
+                    <p>
+                        Practitioners have recognized this gap. The LEED tracker
+                        <span class="citation" data-cites="totinoWhyDidWe2024"
+                            >(<a
+                                href="#ref-totinoWhyDidWe2024"
+                                role="doc-biblioref"
+                                >Totino &amp; Kessler, 2024</a
+                            >)</span
+                        >
+                        is a structured approach to recording design decisions
+                        and their justifications in tables throughout the
+                        learning engineering process. It is a valuable tool for
+                        capturing design reasoning that otherwise evaporates,
+                        partly because it is low-tech and low-overhead. But its
+                        architecture is also its limitation. A table can
+                        efficiently record that a decision was made and why, but
+                        it remains isolated from other design data (the internal
+                        gap) and disconnected from learning data (the external
+                        gap). Addressing the gaps within and around design data
+                        requires additional infrastructure.
+                    </p>
+                    <p>
+                        Both gaps point to the same problem: the reasoning that
+                        connects problems to objectives to content to
+                        outcomes-—-the instructional design process-—-has no
+                        system of record.
+                    </p>
+                </section>
+                <section id="what-design-data-is" class="level1">
+                    <h1>2. What Design Data Is</h1>
+                    <p>
+                        These gaps are not caused by careless practitioners;
+                        they are architectural. Every tool in the current
+                        ecosystem competently manages its own type of artifact:
+                        survey platforms are good at compiling datasets,
+                        authoring tools are good at creating content bundles,
+                        and learning management systems are good at building
+                        quizzes. None of them were designed to model the
+                        relationships between those artifacts across the full
+                        design process.
+                    </p>
+                    <p>
+                        What’s missing is <em>design data</em>: a structured,
+                        queryable, versioned record of the instructional design
+                        process that produces a learning experience. Design data
+                        differs from learning data in who is producing the data,
+                        when it is being produced, and what the data represent
+                        (see
+                        <a href="#tbl-design-learning" class="quarto-xref"
+                            >Table&nbsp;1</a
+                        >). Design data is produced by the designer’s work
+                        during the design process and capture the design
+                        artifacts created and the relationships between them.
+                    </p>
+                    <div
+                        id="tbl-design-learning"
+                        class="quarto-float quarto-figure quarto-figure-center anchored"
+                    >
+                        <figure class="quarto-float quarto-float-tbl figure">
+                            <div
+                                aria-describedby="tbl-design-learning-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca"
+                            >
+                                <table class="table">
+                                    <colgroup>
+                                        <col style="width: 30%" />
+                                        <col style="width: 36%" />
+                                        <col style="width: 33%" />
+                                    </colgroup>
+                                    <thead>
+                                        <tr class="header">
+                                            <th style="text-align: left"></th>
+                                            <th style="text-align: left">
+                                                <strong>Design data</strong>
+                                            </th>
+                                            <th style="text-align: left">
+                                                <strong>Learning data</strong>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="odd">
+                                            <td style="text-align: left">
+                                                <em>Who</em> records it
+                                            </td>
+                                            <td style="text-align: left">
+                                                Designers
+                                            </td>
+                                            <td style="text-align: left">
+                                                Learners
+                                            </td>
+                                        </tr>
+                                        <tr class="even">
+                                            <td style="text-align: left">
+                                                <em>When</em> it is recorded
+                                            </td>
+                                            <td style="text-align: left">
+                                                Accumulated across design
+                                            </td>
+                                            <td style="text-align: left">
+                                                Snapshot at learning
+                                            </td>
+                                        </tr>
+                                        <tr class="odd">
+                                            <td style="text-align: left">
+                                                <em>What</em> it captures
+                                            </td>
+                                            <td style="text-align: left">
+                                                Artifacts and relations
+                                            </td>
+                                            <td style="text-align: left">
+                                                Actions and performance
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <figcaption
+                                class="quarto-float-caption-bottom quarto-float-caption quarto-float-tbl"
+                                id="tbl-design-learning-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca"
+                            >
+                                Table&nbsp;1: Design data and learning data
+                                operate at different times and capture related
+                                processes.
+                            </figcaption>
+                        </figure>
+                    </div>
+                    <p>
+                        Both kinds of data are valuable on their own. Learning
+                        data answers questions about what happened in the
+                        learning experience. Design data answers questions about
+                        how and why the experience was built. When connected,
+                        each becomes more valuable in the context of the other.
+                        Outcomes change from a measurement of performance to a
+                        diagnosis of the design that produced them. Design
+                        decisions change from heuristic decisions grounded in
+                        principles to accountable actions based on data
+                        <span
+                            class="citation"
+                            data-cites="jonassenInstrDesigDesig2008a"
+                            >(<a
+                                href="#ref-jonassenInstrDesigDesig2008a"
+                                role="doc-biblioref"
+                                >Jonassen, 2008</a
+                            >)</span
+                        >. Neither can close the loop without the other.
+                    </p>
+                    <section
+                        id="design-artifacts-and-design-relations"
+                        class="level2"
+                    >
+                        <h2
+                            class="anchored"
+                            data-anchor-id="design-artifacts-and-design-relations"
+                        >
+                            Design Artifacts and Design Relations
+                        </h2>
+                        <p>
+                            Design data has two components.
+                            <strong>Design artifacts</strong> are the concrete
+                            elements produced during design: needs assessment
+                            findings, learning objectives, learning activities,
+                            assessment items, etc. These are familiar; every
+                            designer already works with them.
+                        </p>
+                        <p>
+                            <strong>Design relations</strong> are what’s
+                            currently missing. A design relation is a
+                            meaningfully named connection between artifacts that
+                            expresses a design decision. For example:
+                        </p>
+                        <ul>
+                            <li>
+                                A learning need <em>produces</em> a learning
+                                objective
+                            </li>
+                            <li>
+                                An objective <em>is targeted by</em> an activity
+                            </li>
+                            <li>
+                                An objective <em>is measured by</em> an
+                                assessment item
+                            </li>
+                        </ul>
+                        <p>
+                            Relations are equally important to the design
+                            structure as artifacts. In instructional design
+                            practice today, relations are presumed or implicit
+                            connections fractured by documentation. When a
+                            designer builds a course, they know which activity
+                            targets which objective. Others might be able to
+                            infer those connections from context, but when
+                            designers leave and courses are revised, those
+                            connections evaporate if that relation is not
+                            explicitly recorded in ways that can be queried,
+                            verified, or analyzed.
+                        </p>
+                    </section>
+                    <section id="design-process-data" class="level2">
+                        <h2
+                            class="anchored"
+                            data-anchor-id="design-process-data"
+                        >
+                            Design Process Data
+                        </h2>
+                        <p>
+                            Design data also includes history. When a learning
+                            objective is revised, a special type of relation
+                            becomes part of the structure: how and why the
+                            objective changed. With this historical data, the
+                            design structure expresses not just the finished
+                            state of the design, but the evolution of the design
+                            throughout the process.
+                        </p>
+                        <p>
+                            These special relations are
+                            <em>design process data</em>: the record of how
+                            artifacts and relations changed over time as the
+                            design reached its current state. It answers
+                            essential questions about why something was built
+                            this way and how it got here. This is deliberately
+                            modeled on version control in software engineering,
+                            especially the way a git repository records not only
+                            the current state of a codebase but every decision
+                            that produced it.
+                        </p>
+                    </section>
+                </section>
+                <section id="what-armature-is" class="level1">
+                    <h1>3. What Armature Is</h1>
+                    <p>
+                        Armature is an infrastructure for instructional design.
+                        The name comes from the internal framework artists use
+                        to support complex sculptures. The unseen structure
+                        within the artwork prevents it from deforming as it
+                        grows and maintains its resilience when complete. The
+                        armature doesn’t replace the artist’s tools or the
+                        artist’s vision; it makes more ambitious sculptures
+                        possible. Armature does the same for instructional
+                        design.
+                    </p>
+                    <p>
+                        Armature is not an app or a service, but a framework for
+                        encoding instructional design work as design data that
+                        is queryable, verifiable, and analyzable. At its core,
+                        Armature stores every design artifact and design
+                        relation as structured data in a connected graph.
+                        Spreadsheets can describe simple relationships between
+                        entities: this activity exists and targets that
+                        objective. A document or a wiki can describe
+                        relationships with prose that cannot be queried: this
+                        activity was designed with those principles in mind.
+                        Relational databases, commonly the base for LMS data,
+                        can capture only predefined relationships that carry no
+                        information themselves: this activity targets these
+                        objectives and refers to those principles. A graph can
+                        describe complex data in queryable ways by treating
+                        relationships as first-class entities with their own
+                        properties: this activity targets those objectives by
+                        applying those principles.
+                    </p>
+                    <p>
+                        In Armature’s design graph, both artifacts and relations
+                        are entities with their own names, properties, and
+                        history. A simplified illustration of a design graph is
+                        shown in
+                        <a href="#fig-design-graph" class="quarto-xref"
+                            >Figure&nbsp;2</a
+                        >. Each dot (or <em>node</em>) represents an artifact
+                        and each arrow (or <em>edge</em>) represents a relation.
+                        The structure of the graph represents the instructional
+                        design process in a way that can be queried and
+                        analyzed.
+                    </p>
+                    <div
+                        id="fig-design-graph"
+                        class="quarto-float quarto-figure quarto-figure-center anchored"
+                    >
+                        <figure class="quarto-float quarto-float-fig figure">
+                            <div
+                                aria-describedby="fig-design-graph-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca"
+                            >
+                                <img
+                                    src="img/simplifieddesigngraph.png"
+                                    class="img-fluid figure-img"
+                                    style="width: 80%"
+                                />
+                            </div>
+                            <figcaption
+                                class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig"
+                                id="fig-design-graph-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca"
+                            >
+                                Figure&nbsp;2: Simplified Design Graph: Each
+                                circle represents an artifact, and each arrow
+                                represents a relation with a meaningful name.
+                                Both are first-class entities in the graph.
+                            </figcaption>
+                        </figure>
+                    </div>
+                    <p>
+                        This makes it possible to record, for a single learning
+                        objective, not just its text but:
+                    </p>
+                    <ul>
+                        <li>What needs assessment data produced it</li>
+                        <li>Which activities were designed to address it</li>
+                        <li>Which assessment items measure it</li>
+                        <li>
+                            How those alignments were established and whether
+                            they have since changed
+                        </li>
+                        <li>
+                            The full history of how the objective itself has
+                            evolved
+                        </li>
+                    </ul>
+                    <p>
+                        The graph can be traversed in any direction. If outcomes
+                        data reveal a gap, you can trace backward to find which
+                        activities were designed to build that skill. If an
+                        objective changes, you can immediately see what
+                        activities and assessments need to be reviewed. A
+                        spreadsheet, directory, or wiki will store artifacts and
+                        notes. A graph models the reasoning that connects them.
+                    </p>
+                    <section
+                        id="collaboration-and-version-control"
+                        class="level2"
+                    >
+                        <h2
+                            class="anchored"
+                            data-anchor-id="collaboration-and-version-control"
+                        >
+                            Collaboration and Version Control
+                        </h2>
+                        <p>
+                            Armature supports capturing design process data
+                            through distributed version control modeled on Git.
+                            Everything stored in the graph is immutable and
+                            cannot be edited in place. All changes are actually
+                            additions to the graph. Creating a new objective
+                            creates a new artifact in the graph. Editing that
+                            existing objective doesn’t change the artifact, but
+                            adds a new artifact with a “<em>new version of</em>”
+                            relation to the existing artifact.
+                        </p>
+                        <p>
+                            Preserving design process data this way allows
+                            branching and merging of design graphs. Designers
+                            can copy the design graph to create their own branch
+                            for exploring and experimenting without affecting
+                            the main design. Teams can work in parallel on
+                            different branches without overwriting each other’s
+                            changes. When an addition or revision is ready, the
+                            project lead can safely merge the branches back into
+                            the main design. Every merge is an addition to the
+                            design graph inscribed with its author, the time,
+                            and the reason for the change.
+                        </p>
+                        <p>
+                            This model of capturing design process data makes
+                            design evolution auditable. It also makes it
+                            possible for an institution to maintain a clear
+                            record of who made each design decision, in response
+                            to what evidence, and what it replaced, valuable
+                            information usually lost between revisions.
+                        </p>
+                    </section>
+                    <section id="what-armature-is-not" class="level2">
+                        <h2
+                            class="anchored"
+                            data-anchor-id="what-armature-is-not"
+                        >
+                            What Armature Is Not
+                        </h2>
+                        <p>
+                            Armature operates at design time, not delivery time.
+                            It is not a learning management system, an object
+                            repository, or a learning record store. Armature is
+                            designer-facing, not student-facing. It is not an
+                            adaptive learning engine, an assessment platform, or
+                            a content delivery system. Armature is an
+                            infrastructure, not a tool. It isn’t a
+                            content-authoring app, a quiz builder, or a
+                            curriculum-mapping tool. It is not a replacement for
+                            any existing tool in the design workflow, but new
+                            connective tissue supporting all of these things to
+                            enable new capabilities that are currently
+                            impossible.
+                        </p>
+                    </section>
+                </section>
+                <section id="what-a-design-graph-makes-possible" class="level1">
+                    <h1>4. What a Design Graph makes Possible</h1>
+                    <section id="alignment-becomes-inspectable" class="level2">
+                        <h2
+                            class="anchored"
+                            data-anchor-id="alignment-becomes-inspectable"
+                        >
+                            Alignment Becomes Inspectable
+                        </h2>
+                        <p>
+                            Currently, alignment is a set of judgment calls made
+                            at design time and invisible to everyone afterward.
+                            A learning engineer believes their objectives align
+                            with assessed needs, and that assessments align with
+                            objectives, but there is no mechanism to verify
+                            this, especially after multiple people have revised
+                            a course over several years.
+                        </p>
+                        <p>
+                            When design relations are explicit and queryable,
+                            alignment is no longer an assertion, but is a
+                            property of the design graph that can be inspected.
+                            The shape of the graph can tell you about the
+                            symmetry between objectives and activities targeting
+                            them and the distribution of assessment items. You
+                            can identify gaps before delivery rather than
+                            diagnosing them from outcomes data afterward.
+                        </p>
+                    </section>
+                    <section id="iteration-becomes-optimized" class="level2">
+                        <h2
+                            class="anchored"
+                            data-anchor-id="iteration-becomes-optimized"
+                        >
+                            Iteration Becomes Optimized
+                        </h2>
+                        <p>
+                            When outcomes data reveal a problem, the learning
+                            engineer currently faces a manual audit: which
+                            objectives relate to this outcome, which activities
+                            target those objectives, and how have those
+                            activities already been changed. Answering these
+                            questions requires collating documents from
+                            different systems and relying on whoever remembers.
+                        </p>
+                        <p>
+                            The design graph turns this into a simple query. The
+                            meaningfully named relations trace outcome evidence
+                            from the learning experience through every decision
+                            anywhere in the design process that contributed to
+                            the production of that outcome. Iteration is faster
+                            and more precise. Plus the rationale for each
+                            revision is preserved, accumulating to aid future
+                            diagnostics.
+                        </p>
+                    </section>
+                    <section
+                        id="design-intelligence-at-design-time"
+                        class="level2"
+                    >
+                        <h2
+                            class="anchored"
+                            data-anchor-id="design-intelligence-at-design-time"
+                        >
+                            Design Intelligence at Design-Time
+                        </h2>
+                        <p>
+                            Most feedback in instructional design arrives too
+                            late. Outcomes data show that students struggled
+                            with a concept only after the course was delivered.
+                            The learning engineer then works backward to
+                            diagnose what went wrong.
+                            <em>Design intelligence</em> inverts this. When the
+                            design graph accumulates artifacts and relations as
+                            designers work, some analyses that currently require
+                            post-delivery learning data become available during
+                            the design process using design data. This means
+                            that the current design structure, and possibly the
+                            implications of a section being askew, becomes
+                            visible to designers as they work.
+                        </p>
+                        <p>
+                            Consider what a quiz authoring tool built on the
+                            design graph can do that a conventional quiz
+                            authoring tool cannot:
+                        </p>
+                        <ul>
+                            <li>
+                                Show the designer which objectives currently
+                                lack assessment coverage
+                            </li>
+                            <li>
+                                Flag when a new item is redundant in a question
+                                bank
+                            </li>
+                            <li>
+                                Surface the needs assessment data that generated
+                                the objective being assessed, giving the
+                                designer the context of the original problem
+                                beyond the abstracted objective
+                            </li>
+                            <li>
+                                Identify when the Bloom’s level of a proposed
+                                item is inconsistent with the level specified
+                                for the objective it measures
+                            </li>
+                        </ul>
+                        <p>
+                            <strong
+                                >None of this requires AI. It requires
+                                structured data.</strong
+                            >
+                        </p>
+                        <p>
+                            Design intelligence provides practical value
+                            immediately. Where learning analytics tells you what
+                            happened in a learning experience, design
+                            intelligence tells you what the current design
+                            structure suggests about the resulting learning
+                            experience
+                            <span
+                                class="citation"
+                                data-cites="jonassenInstrDesigDesig2008a"
+                                >(<a
+                                    href="#ref-jonassenInstrDesigDesig2008a"
+                                    role="doc-biblioref"
+                                    >Jonassen, 2008</a
+                                >)</span
+                            >. It provides the designer with the information and
+                            insights needed to make better design decisions in
+                            real time. A designer who can see coverage gaps
+                            while writing assessments closes them before
+                            delivery. A designer who can trace an activity back
+                            to the evidence of need that generated the objective
+                            it targets creates more effective activities. These
+                            are workflow improvements that instructional
+                            designers will recognize and want. Design
+                            intelligence is what makes them possible.
+                        </p>
+                    </section>
+                    <section
+                        id="ai-becomes-a-design-aware-collaborator"
+                        class="level2"
+                    >
+                        <h2
+                            class="anchored"
+                            data-anchor-id="ai-becomes-a-design-aware-collaborator"
+                        >
+                            AI Becomes a Design-Aware Collaborator
+                        </h2>
+                        <p>
+                            Design intelligence is also usable by AI as a source
+                            of contextual information. AI is already being used
+                            in instructional design. Without access to
+                            structured design data, it remains oblivious to the
+                            design context and can only contribute generic
+                            content. With access to the design graph, a generic
+                            prompt becomes a bespoke request. A broad prompt
+                            like this:
+                        </p>
+                        <pre><code>Write a quiz about epigenetics.</code></pre>
+                        <p>becomes highly specialized:</p>
+                        <pre><code>Generate assessment items that measure this specific objective at this Bloom's level, targeting this known misconception, and avoid overlap with existing items in the question bank.</code></pre>
+                        <p>
+                            The graph and the design intelligence it produces
+                            turn AI from a content generator into a collaborator
+                            that knows what the design requires.
+                        </p>
+                        <p>
+                            Equally important, AI contributions are subject to
+                            the same structural review as human contributions.
+                            Every relation added to the design graph must have a
+                            meaningful structure and is reviewable, auditable,
+                            and reversible regardless of its source. This
+                            sidesteps the main barrier to using AI in education:
+                            the opacity of AI makes it difficult to trust. When
+                            the reason for a decision is modeled in the
+                            structure, trust is no longer the basis for
+                            acceptance.
+                        </p>
+                    </section>
+                    <section id="from-craft-to-engineering" class="level2">
+                        <h2
+                            class="anchored"
+                            data-anchor-id="from-craft-to-engineering"
+                        >
+                            From Craft to Engineering
+                        </h2>
+                        <p>
+                            Engineering disciplines improve by studying the
+                            relationship between process and outcome. Learning
+                            engineering is rigorously studying what works (which
+                            learning experiences produce which outcomes). What
+                            it cannot yet study is what design practices produce
+                            things that work. Until design artifacts and their
+                            relations are captured in a common format, it is
+                            structurally impossible to ask questions like:
+                        </p>
+                        <ul>
+                            <li>
+                                Are there design patterns that predict poor
+                                learning outcomes?
+                            </li>
+                            <li>
+                                Do certain approaches to needs assessment
+                                produce more durable learning objectives?
+                            </li>
+                            <li>
+                                When AI proposes a design artifact and relation,
+                                and a human accepts it without modification, is
+                                it as reliable as a human-authored artifact and
+                                relation?
+                            </li>
+                        </ul>
+                        <p>
+                            These questions are currently unanswerable at scale.
+                            Design graphs make them possible.
+                        </p>
+                    </section>
+                </section>
+                <section
+                    id="how-armature-fits-the-existing-ecosystem"
+                    class="level1"
+                >
+                    <h1>5. How Armature Fits the Existing Ecosystem</h1>
+                    <p>
+                        Armature is designed to complement existing
+                        infrastructure, not compete with it.
+                    </p>
+                    <ul>
+                        <li>
+                            <p>
+                                <strong>OLI/Torus</strong> is the most
+                                sophisticated existing system for linking design
+                                artifacts to learner data. Armature expands on
+                                this by modeling the full design process and
+                                supports comparison across institutions that may
+                                not use the same delivery platform.
+                            </p>
+                        </li>
+                        <li>
+                            <p>
+                                <strong>LearnSphere/DataShop</strong> provides
+                                powerful tools for analyzing learner behavior by
+                                linking knowledge components to interaction
+                                data. Armature operates upstream, modeling the
+                                decisions that create the learning activities
+                                these systems analyze. Together, they could
+                                close the full loop from design decision through
+                                learner outcomes and back to informed design
+                                revision.
+                            </p>
+                        </li>
+                        <li>
+                            <p>
+                                <strong>Existing standards</strong> handle
+                                delivery (LTI, QTI, SCORM), learner data (xAPI,
+                                Caliper), and competency frameworks (CASE). None
+                                of them model design relations and artifacts.
+                                Armature operates in this unoccupied space,
+                                referencing these standards without duplicating
+                                them. A learning objective in the design graph
+                                can link to a CASE competency, and an assessment
+                                item can reference its QTI representation.
+                            </p>
+                        </li>
+                    </ul>
+                    <p>
+                        Design data and learning data are complementary.
+                        Learning data tells you what happened. Design data tells
+                        you why the experience was built that way. Neither is
+                        sufficient without the other. Armature is the missing
+                        infrastructure for design data that learning engineering
+                        needs to close the loop between design and outcomes.
+                    </p>
+                </section>
+                <section id="adoption-paths" class="level1">
+                    <h1>6. Adoption Paths</h1>
+                    <p>
+                        Armature will only be adopted if it provides real-world
+                        value to adopters. Two natural entry points for adoption
+                        are instructional designers and learning scientists.
+                        These two groups can have different but supportive
+                        adoption paths.
+                    </p>
+                    <section id="instructional-designers" class="level2">
+                        <h2
+                            class="anchored"
+                            data-anchor-id="instructional-designers"
+                        >
+                            Instructional Designers
+                        </h2>
+                        <p>
+                            Instructional designers will not adopt
+                            infrastructure that demands more work before
+                            delivering any benefit, and populating a design
+                            graph manually would be a significant burden. The
+                            best adoption path will satisfy two conditions:
+                            design data should accumulate as a byproduct of the
+                            designer’s existing work, and the tools that produce
+                            design data must provide immediate, recognizable
+                            value on their own terms.
+                        </p>
+                        <p>
+                            Satisfying these conditions means addressing one of
+                            Armature’s biggest adoption challenges: the lack of
+                            open standards in instructional design. Many
+                            instructional design tools use proprietary formats
+                            that are often undocumented and legally protected
+                            against reverse engineering. If artifacts created
+                            elsewhere cannot be exported, Armature cannot rely
+                            on easy import or migration pipelines as part of the
+                            adoption strategy.
+                        </p>
+                        <p>
+                            These constraints point toward a tools-first
+                            strategy: design new tools that solve real workflow
+                            problems for instructional designers, deliver design
+                            intelligence they can see and use, and quietly
+                            encode their work into the design graph as a
+                            consequence of normal use. For example, a quiz
+                            authoring tool that shows which objectives lack
+                            assessment coverage, flags redundant items, or
+                            surfaces the needs assessment data behind an
+                            objective might be a good place to start. The
+                            designer gets a better authoring experience; the
+                            graph gets richer without additional effort.
+                        </p>
+                        <p>
+                            Git was adopted in software development along
+                            similar lines. Developers were not adopting an
+                            immutable history of their code. They adopted Git
+                            because it made collaboration easier. The deeper
+                            structural benefits of the immutable history (e.g.,
+                            auditability, branching, and distributed
+                            contribution) became possible once data had
+                            accumulated simply by using Git.
+                        </p>
+                        <p>
+                            The same logic can apply to Armature. Individual
+                            designers adopt a tool because it improves their
+                            immediate work. Over time, teams using tools on the
+                            same graph gain something new: a shared, queryable
+                            record of design decisions they can inspect,
+                            question, and build on together. As adoption grows,
+                            institutions and researchers gain something new:
+                            comparable design data across courses and programs
+                            alongside the learning data that’s been available
+                            for some time, closing the learning engineering
+                            loop.
+                        </p>
+                        <p>
+                            Each stage depends on the previous one generating
+                            data worth having. That dependency and the lack of
+                            open standards argue for starting with genuinely
+                            useful tools that are not just thin graph
+                            interfaces, and letting the infrastructure prove its
+                            value over time.
+                        </p>
+                    </section>
+                    <section id="learning-scientists" class="level2">
+                        <h2
+                            class="anchored"
+                            data-anchor-id="learning-scientists"
+                        >
+                            Learning Scientists
+                        </h2>
+                        <p>
+                            The tool-first path is not the only entry point.
+                            Answering a specific research question around
+                            instructional design practices may not need a
+                            complete implementation of Armature, only the
+                            relevant slice of the graph. Take, for example,
+                            scientists investigating whether the quality of a
+                            needs assessment predicts the durability of learning
+                            outcomes. That study requires structured data that
+                            connects learning needs to objectives and objectives
+                            to outcomes, but it does not require data on
+                            learning activities, assessments, coverage, or
+                            alignment. A lightweight data-collection instrument
+                            and a constrained graph schema could be sufficient
+                            to generate comparable design data for a small set
+                            of courses.
+                        </p>
+                        <p>
+                            Again, both the scientist and the design graph
+                            benefit from this strategy. The scientist gets a
+                            comparable structure for their data that others can
+                            replicate, extend, or challenge. The graph gets
+                            evidence to inform the development of its schema and
+                            to improve its model of relationships between design
+                            artifacts.
+                        </p>
+                    </section>
+                    <section id="mutually-reinforcing-paths" class="level2">
+                        <h2
+                            class="anchored"
+                            data-anchor-id="mutually-reinforcing-paths"
+                        >
+                            Mutually Reinforcing Paths
+                        </h2>
+                        <p>
+                            These two adoption paths do not conflict, but
+                            reinforce each other. The tool-first path uses
+                            infrastructure to produce data as a byproduct of
+                            design work, while the data-first path inverts this
+                            by using data to produce infrastructure as a
+                            byproduct of research. Both paths lead to the same
+                            place: a growing body of structured design data that
+                            can be studied alongside learning data. Neither
+                            depends on the other going first. A researcher’s
+                            schema becomes a precedent that informs tool design.
+                            A tool’s accumulated data becomes a population that
+                            researchers can study. Any progress on one path
+                            advances the other.
+                        </p>
+                    </section>
+                </section>
+                <section id="conclusion" class="level1">
+                    <h1>Conclusion</h1>
+                    <p>
+                        Learning engineering has focused on understanding what
+                        happens during learning experiences. The infrastructure
+                        for capturing learning data is mature and continuing to
+                        develop. What does not yet exist is comparable
+                        infrastructure for capturing design data, the structure
+                        of design artifacts and design relations that produce
+                        learning experiences.
+                    </p>
+                    <p>
+                        Without design data, the impact of design on outcomes
+                        remains opaque. We can measure what happened, but we
+                        cannot systematically study why experiences were
+                        designed the way they were, trace an outcome back to the
+                        design decision that shaped it, or accumulate design
+                        knowledge in a form that improves future practice.
+                    </p>
+                    <p>
+                        Armature proposes to fill this gap by treating
+                        instructional design as structured data: versioned
+                        artifacts and the meaningfully named connections between
+                        them. The result is not a new authoring tool or a
+                        replacement for existing systems. It is the missing
+                        infrastructure for capturing the design data that
+                        learning engineering currently overlooks.
+                    </p>
+                </section>
+
+                <div id="quarto-appendix" class="default">
+                    <section
+                        class="quarto-appendix-contents"
+                        role="doc-bibliography"
+                        id="quarto-bibliography"
+                    >
+                        <h2 class="anchored quarto-appendix-heading">
+                            References
+                        </h2>
+                        <div
+                            id="refs"
+                            class="references csl-bib-body hanging-indent"
+                            data-entry-spacing="0"
+                            data-line-spacing="2"
+                            role="list"
+                        >
+                            <div
+                                id="ref-jonassenInstrDesigDesig2008a"
+                                class="csl-entry"
+                                role="listitem"
+                            >
+                                Jonassen, D. H. (2008). Instructional
+                                <span>Design</span> as
+                                <span>Design Problem Solving</span>:
+                                <span>An Iterative Process</span>.
+                                <em>Educational Technology</em>, <em>48</em>(3),
+                                21–26.
+                                <a href="https://www.jstor.org/stable/44429574"
+                                    >https://www.jstor.org/stable/44429574</a
+                                >
+                            </div>
+                            <div
+                                id="ref-kessler2022learning"
+                                class="csl-entry"
+                                role="listitem"
+                            >
+                                Kessler, A., Craig, S. D., Goodell, J.,
+                                Kurzweil, D., &amp; Greenwald, S. W. (2022).
+                                Learning engineering is a process. In J. Goodell
+                                &amp; J. Kolodner (Eds.),
+                                <em
+                                    >Learning engineering toolkit:
+                                    <span class="nocase">Evidence-based</span>
+                                    practices from the learning sciences,
+                                    instructional design, and beyond</em
+                                >
+                                (1st ed., pp. 29–44). Routledge.
+                                <a href="https://doi.org/10.4324/9781003276579"
+                                    >https://doi.org/10.4324/9781003276579</a
+                                >
+                            </div>
+                            <div
+                                id="ref-totinoWhyDidWe2024"
+                                class="csl-entry"
+                                role="listitem"
+                            >
+                                Totino, L., &amp; Kessler, A. (2024).
+                                <span>“<span>Why</span> did we do that?”</span>
+                                <span>A Systematic Approach</span> to
+                                <span>Tracking Decisions</span> in the
+                                <span>Design</span> and
+                                <span>Iteration</span> of
+                                <span>Learning Experiences</span>.
+                                <em
+                                    >The Journal of Applied Instructional
+                                    Design</em
+                                >.
+                                <a href="https://doi.org/10.59668/1269.15630"
+                                    >https://doi.org/10.59668/1269.15630</a
+                                >
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+            <!-- /main column -->
+            <script id="quarto-html-after-body" type="application/javascript">
+                window.document.addEventListener(
+                    'DOMContentLoaded',
+                    function (event) {
+                        // Ensure there is a toggle, if there isn't float one in the top right
+                        if (
+                            window.document.querySelector(
+                                '.quarto-color-scheme-toggle'
+                            ) === null
+                        ) {
+                            const a = window.document.createElement('a');
+                            a.classList.add('top-right');
+                            a.classList.add('quarto-color-scheme-toggle');
+                            a.href = '';
+                            a.onclick = function () {
+                                try {
+                                    window.quartoToggleColorScheme();
+                                } catch {}
+                                return false;
+                            };
+                            const i = window.document.createElement('i');
+                            i.classList.add('bi');
+                            a.appendChild(i);
+                            window.document.body.appendChild(a);
+                        }
+                        setColorSchemeToggle(hasAlternateSentinel());
+                        const icon = '';
+                        const anchorJS = new window.AnchorJS();
+                        anchorJS.options = {
+                            placement: 'right',
+                            icon: icon,
+                        };
+                        anchorJS.add('.anchored');
+                        const isCodeAnnotation = (el) => {
+                            for (const clz of el.classList) {
+                                if (clz.startsWith('code-annotation-')) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        };
+                        const onCopySuccess = function (e) {
+                            // button target
+                            const button = e.trigger;
+                            // don't keep focus
+                            button.blur();
+                            // flash "checked"
+                            button.classList.add('code-copy-button-checked');
+                            var currentTitle = button.getAttribute('title');
+                            button.setAttribute('title', 'Copied!');
+                            let tooltip;
+                            if (window.bootstrap) {
+                                button.setAttribute(
+                                    'data-bs-toggle',
+                                    'tooltip'
+                                );
+                                button.setAttribute(
+                                    'data-bs-placement',
+                                    'left'
+                                );
+                                button.setAttribute('data-bs-title', 'Copied!');
+                                tooltip = new bootstrap.Tooltip(button, {
+                                    trigger: 'manual',
+                                    customClass: 'code-copy-button-tooltip',
+                                    offset: [0, -8],
+                                });
+                                tooltip.show();
+                            }
+                            setTimeout(function () {
+                                if (tooltip) {
+                                    tooltip.hide();
+                                    button.removeAttribute('data-bs-title');
+                                    button.removeAttribute('data-bs-toggle');
+                                    button.removeAttribute('data-bs-placement');
+                                }
+                                button.setAttribute('title', currentTitle);
+                                button.classList.remove(
+                                    'code-copy-button-checked'
+                                );
+                            }, 1000);
+                            // clear code selection
+                            e.clearSelection();
+                        };
+                        const getTextToCopy = function (trigger) {
+                            const outerScaffold =
+                                trigger.parentElement.cloneNode(true);
+                            const codeEl = outerScaffold.querySelector('code');
+                            for (const childEl of codeEl.children) {
+                                if (isCodeAnnotation(childEl)) {
+                                    childEl.remove();
+                                }
+                            }
+                            return codeEl.innerText;
+                        };
+                        const clipboard = new window.ClipboardJS(
+                            '.code-copy-button:not([data-in-quarto-modal])',
+                            {
+                                text: getTextToCopy,
+                            }
+                        );
+                        clipboard.on('success', onCopySuccess);
+                        if (
+                            window.document.getElementById(
+                                'quarto-embedded-source-code-modal'
+                            )
+                        ) {
+                            const clipboardModal = new window.ClipboardJS(
+                                '.code-copy-button[data-in-quarto-modal]',
+                                {
+                                    text: getTextToCopy,
+                                    container: window.document.getElementById(
+                                        'quarto-embedded-source-code-modal'
+                                    ),
+                                }
+                            );
+                            clipboardModal.on('success', onCopySuccess);
+                        }
+                        var localhostRegex = new RegExp(
+                            /^(?:http|https):\/\/localhost\:?[0-9]*\//
+                        );
+                        var mailtoRegex = new RegExp(/^mailto:/);
+                        var filterRegex = new RegExp(
+                            '/' + window.location.host + '/'
+                        );
+                        var isInternal = (href) => {
+                            return (
+                                filterRegex.test(href) ||
+                                localhostRegex.test(href) ||
+                                mailtoRegex.test(href)
+                            );
+                        };
+                        // Inspect non-navigation links and adorn them if external
+                        var links = window.document.querySelectorAll(
+                            'a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)'
+                        );
+                        for (var i = 0; i < links.length; i++) {
+                            const link = links[i];
+                            if (!isInternal(link.href)) {
+                                // undo the damage that might have been done by quarto-nav.js in the case of
+                                // links that we want to consider external
+                                if (link.dataset.originalHref !== undefined) {
+                                    link.href = link.dataset.originalHref;
+                                }
+                            }
+                        }
+                        function tippyHover(
+                            el,
+                            contentFn,
+                            onTriggerFn,
+                            onUntriggerFn
+                        ) {
+                            const config = {
+                                allowHTML: true,
+                                maxWidth: 500,
+                                delay: 100,
+                                arrow: false,
+                                appendTo: function (el) {
+                                    return el.parentElement;
+                                },
+                                interactive: true,
+                                interactiveBorder: 10,
+                                theme: 'quarto',
+                                placement: 'bottom-start',
+                            };
+                            if (contentFn) {
+                                config.content = contentFn;
+                            }
+                            if (onTriggerFn) {
+                                config.onTrigger = onTriggerFn;
+                            }
+                            if (onUntriggerFn) {
+                                config.onUntrigger = onUntriggerFn;
+                            }
+                            window.tippy(el, config);
+                        }
+                        const noterefs = window.document.querySelectorAll(
+                            'a[role="doc-noteref"]'
+                        );
+                        for (var i = 0; i < noterefs.length; i++) {
+                            const ref = noterefs[i];
+                            tippyHover(ref, function () {
+                                // use id or data attribute instead here
+                                let href =
+                                    ref.getAttribute('data-footnote-href') ||
+                                    ref.getAttribute('href');
+                                try {
+                                    href = new URL(href).hash;
+                                } catch {}
+                                const id = href.replace(/^#\/?/, '');
+                                const note = window.document.getElementById(id);
+                                if (note) {
+                                    return note.innerHTML;
+                                } else {
+                                    return '';
+                                }
+                            });
+                        }
+                        const xrefs =
+                            window.document.querySelectorAll('a.quarto-xref');
+                        const processXRef = (id, note) => {
+                            // Strip column container classes
+                            const stripColumnClz = (el) => {
+                                el.classList.remove(
+                                    'page-full',
+                                    'page-columns'
+                                );
+                                if (el.children) {
+                                    for (const child of el.children) {
+                                        stripColumnClz(child);
+                                    }
+                                }
+                            };
+                            stripColumnClz(note);
+                            if (id === null || id.startsWith('sec-')) {
+                                // Special case sections, only their first couple elements
+                                const container = document.createElement('div');
+                                if (note.children && note.children.length > 2) {
+                                    container.appendChild(
+                                        note.children[0].cloneNode(true)
+                                    );
+                                    for (
+                                        let i = 1;
+                                        i < note.children.length;
+                                        i++
+                                    ) {
+                                        const child = note.children[i];
+                                        if (
+                                            child.tagName === 'P' &&
+                                            child.innerText === ''
+                                        ) {
+                                            continue;
+                                        } else {
+                                            container.appendChild(
+                                                child.cloneNode(true)
+                                            );
+                                            break;
+                                        }
+                                    }
+                                    if (window.Quarto?.typesetMath) {
+                                        window.Quarto.typesetMath(container);
+                                    }
+                                    return container.innerHTML;
+                                } else {
+                                    if (window.Quarto?.typesetMath) {
+                                        window.Quarto.typesetMath(note);
+                                    }
+                                    return note.innerHTML;
+                                }
+                            } else {
+                                // Remove any anchor links if they are present
+                                const anchorLink =
+                                    note.querySelector('a.anchorjs-link');
+                                if (anchorLink) {
+                                    anchorLink.remove();
+                                }
+                                if (window.Quarto?.typesetMath) {
+                                    window.Quarto.typesetMath(note);
+                                }
+                                if (note.classList.contains('callout')) {
+                                    return note.outerHTML;
+                                } else {
+                                    return note.innerHTML;
+                                }
+                            }
+                        };
+                        for (var i = 0; i < xrefs.length; i++) {
+                            const xref = xrefs[i];
+                            tippyHover(
+                                xref,
+                                undefined,
+                                function (instance) {
+                                    instance.disable();
+                                    let url = xref.getAttribute('href');
+                                    let hash = undefined;
+                                    if (url.startsWith('#')) {
+                                        hash = url;
+                                    } else {
+                                        try {
+                                            hash = new URL(url).hash;
+                                        } catch {}
+                                    }
+                                    if (hash) {
+                                        const id = hash.replace(/^#\/?/, '');
+                                        const note =
+                                            window.document.getElementById(id);
+                                        if (note !== null) {
+                                            try {
+                                                const html = processXRef(
+                                                    id,
+                                                    note.cloneNode(true)
+                                                );
+                                                instance.setContent(html);
+                                            } finally {
+                                                instance.enable();
+                                                instance.show();
+                                            }
+                                        } else {
+                                            // See if we can fetch this
+                                            fetch(url.split('#')[0])
+                                                .then((res) => res.text())
+                                                .then((html) => {
+                                                    const parser =
+                                                        new DOMParser();
+                                                    const htmlDoc =
+                                                        parser.parseFromString(
+                                                            html,
+                                                            'text/html'
+                                                        );
+                                                    const note =
+                                                        htmlDoc.getElementById(
+                                                            id
+                                                        );
+                                                    if (note !== null) {
+                                                        const html =
+                                                            processXRef(
+                                                                id,
+                                                                note
+                                                            );
+                                                        instance.setContent(
+                                                            html
+                                                        );
+                                                    }
+                                                })
+                                                .finally(() => {
+                                                    instance.enable();
+                                                    instance.show();
+                                                });
+                                        }
+                                    } else {
+                                        // See if we can fetch a full url (with no hash to target)
+                                        // This is a special case and we should probably do some content thinning / targeting
+                                        fetch(url)
+                                            .then((res) => res.text())
+                                            .then((html) => {
+                                                const parser = new DOMParser();
+                                                const htmlDoc =
+                                                    parser.parseFromString(
+                                                        html,
+                                                        'text/html'
+                                                    );
+                                                const note =
+                                                    htmlDoc.querySelector(
+                                                        'main.content'
+                                                    );
+                                                if (note !== null) {
+                                                    // This should only happen for chapter cross references
+                                                    // (since there is no id in the URL)
+                                                    // remove the first header
+                                                    if (
+                                                        note.children.length >
+                                                            0 &&
+                                                        note.children[0]
+                                                            .tagName ===
+                                                            'HEADER'
+                                                    ) {
+                                                        note.children[0].remove();
+                                                    }
+                                                    const html = processXRef(
+                                                        null,
+                                                        note
+                                                    );
+                                                    instance.setContent(html);
+                                                }
+                                            })
+                                            .finally(() => {
+                                                instance.enable();
+                                                instance.show();
+                                            });
+                                    }
+                                },
+                                function (instance) {}
+                            );
+                        }
+                        let selectedAnnoteEl;
+                        const selectorForAnnotation = (cell, annotation) => {
+                            let cellAttr = 'data-code-cell="' + cell + '"';
+                            let lineAttr =
+                                'data-code-annotation="' + annotation + '"';
+                            const selector =
+                                'span[' + cellAttr + '][' + lineAttr + ']';
+                            return selector;
+                        };
+                        const selectCodeLines = (annoteEl) => {
+                            const doc = window.document;
+                            const targetCell =
+                                annoteEl.getAttribute('data-target-cell');
+                            const targetAnnotation = annoteEl.getAttribute(
+                                'data-target-annotation'
+                            );
+                            const annoteSpan = window.document.querySelector(
+                                selectorForAnnotation(
+                                    targetCell,
+                                    targetAnnotation
+                                )
+                            );
+                            const lines = annoteSpan
+                                .getAttribute('data-code-lines')
+                                .split(',');
+                            const lineIds = lines.map((line) => {
+                                return targetCell + '-' + line;
+                            });
+                            let top = null;
+                            let height = null;
+                            let parent = null;
+                            if (lineIds.length > 0) {
+                                //compute the position of the single el (top and bottom and make a div)
+                                const el = window.document.getElementById(
+                                    lineIds[0]
+                                );
+                                top = el.offsetTop;
+                                height = el.offsetHeight;
+                                parent = el.parentElement.parentElement;
+                                if (lineIds.length > 1) {
+                                    const lastEl =
+                                        window.document.getElementById(
+                                            lineIds[lineIds.length - 1]
+                                        );
+                                    const bottom =
+                                        lastEl.offsetTop + lastEl.offsetHeight;
+                                    height = bottom - top;
+                                }
+                                if (
+                                    top !== null &&
+                                    height !== null &&
+                                    parent !== null
+                                ) {
+                                    // cook up a div (if necessary) and position it
+                                    let div = window.document.getElementById(
+                                        'code-annotation-line-highlight'
+                                    );
+                                    if (div === null) {
+                                        div =
+                                            window.document.createElement(
+                                                'div'
+                                            );
+                                        div.setAttribute(
+                                            'id',
+                                            'code-annotation-line-highlight'
+                                        );
+                                        div.style.position = 'absolute';
+                                        parent.appendChild(div);
+                                    }
+                                    div.style.top = top - 2 + 'px';
+                                    div.style.height = height + 4 + 'px';
+                                    div.style.left = 0;
+                                    let gutterDiv =
+                                        window.document.getElementById(
+                                            'code-annotation-line-highlight-gutter'
+                                        );
+                                    if (gutterDiv === null) {
+                                        gutterDiv =
+                                            window.document.createElement(
+                                                'div'
+                                            );
+                                        gutterDiv.setAttribute(
+                                            'id',
+                                            'code-annotation-line-highlight-gutter'
+                                        );
+                                        gutterDiv.style.position = 'absolute';
+                                        const codeCell =
+                                            window.document.getElementById(
+                                                targetCell
+                                            );
+                                        const gutter = codeCell.querySelector(
+                                            '.code-annotation-gutter'
+                                        );
+                                        gutter.appendChild(gutterDiv);
+                                    }
+                                    gutterDiv.style.top = top - 2 + 'px';
+                                    gutterDiv.style.height = height + 4 + 'px';
+                                }
+                                selectedAnnoteEl = annoteEl;
+                            }
+                        };
+                        const unselectCodeLines = () => {
+                            const elementsIds = [
+                                'code-annotation-line-highlight',
+                                'code-annotation-line-highlight-gutter',
+                            ];
+                            elementsIds.forEach((elId) => {
+                                const div =
+                                    window.document.getElementById(elId);
+                                if (div) {
+                                    div.remove();
+                                }
+                            });
+                            selectedAnnoteEl = undefined;
+                        };
+                        // Handle positioning of the toggle
+                        window.addEventListener(
+                            'resize',
+                            throttle(() => {
+                                elRect = undefined;
+                                if (selectedAnnoteEl) {
+                                    selectCodeLines(selectedAnnoteEl);
+                                }
+                            }, 10)
+                        );
+                        function throttle(fn, ms) {
+                            let throttle = false;
+                            let timer;
+                            return (...args) => {
+                                if (!throttle) {
+                                    // first call gets through
+                                    fn.apply(this, args);
+                                    throttle = true;
+                                } else {
+                                    // all the others get throttled
+                                    if (timer) clearTimeout(timer); // cancel #2
+                                    timer = setTimeout(() => {
+                                        fn.apply(this, args);
+                                        timer = throttle = false;
+                                    }, ms);
+                                }
+                            };
+                        }
+                        // Attach click handler to the DT
+                        const annoteDls = window.document.querySelectorAll(
+                            'dt[data-target-cell]'
+                        );
+                        for (const annoteDlNode of annoteDls) {
+                            annoteDlNode.addEventListener('click', (event) => {
+                                const clickedEl = event.target;
+                                if (clickedEl !== selectedAnnoteEl) {
+                                    unselectCodeLines();
+                                    const activeEl =
+                                        window.document.querySelector(
+                                            'dt[data-target-cell].code-annotation-active'
+                                        );
+                                    if (activeEl) {
+                                        activeEl.classList.remove(
+                                            'code-annotation-active'
+                                        );
+                                    }
+                                    selectCodeLines(clickedEl);
+                                    clickedEl.classList.add(
+                                        'code-annotation-active'
+                                    );
+                                } else {
+                                    // Unselect the line
+                                    unselectCodeLines();
+                                    clickedEl.classList.remove(
+                                        'code-annotation-active'
+                                    );
+                                }
+                            });
+                        }
+                        const findCites = (el) => {
+                            const parentEl = el.parentElement;
+                            if (parentEl) {
+                                const cites = parentEl.dataset.cites;
+                                if (cites) {
+                                    return {
+                                        el,
+                                        cites: cites.split(' '),
+                                    };
+                                } else {
+                                    return findCites(el.parentElement);
+                                }
+                            } else {
+                                return undefined;
+                            }
+                        };
+                        var bibliorefs = window.document.querySelectorAll(
+                            'a[role="doc-biblioref"]'
+                        );
+                        for (var i = 0; i < bibliorefs.length; i++) {
+                            const ref = bibliorefs[i];
+                            const citeInfo = findCites(ref);
+                            if (citeInfo) {
+                                tippyHover(citeInfo.el, function () {
+                                    var popup =
+                                        window.document.createElement('div');
+                                    citeInfo.cites.forEach(function (cite) {
+                                        var citeDiv =
+                                            window.document.createElement(
+                                                'div'
+                                            );
+                                        citeDiv.classList.add('hanging-indent');
+                                        citeDiv.classList.add('csl-entry');
+                                        var biblioDiv =
+                                            window.document.getElementById(
+                                                'ref-' + cite
+                                            );
+                                        if (biblioDiv) {
+                                            citeDiv.innerHTML =
+                                                biblioDiv.innerHTML;
+                                        }
+                                        popup.appendChild(citeDiv);
+                                    });
+                                    return popup.innerHTML;
+                                });
+                            }
+                        }
+                    }
+                );
+            </script>
+        </div>
+        <!-- /content -->
+    </body>
+</html>
