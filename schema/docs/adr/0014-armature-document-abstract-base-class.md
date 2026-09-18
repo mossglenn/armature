@@ -15,8 +15,11 @@ Define `ArmatureDocument` as an abstract base class carrying two fields:
 - `label: xsd:string` — required human-readable name
 - `description: Optional<xsd:string>` — optional elaboration
 
-Thirteen types inherit from `ArmatureDocument`:
-`LearningEvidence` (abstract), `LearningDataset`, `LearningNeed`, `LearningObjective`, `PrerequisiteRecord`, `AssessmentItem`, `Response`, `Assessment`, `LearningActivity`, `ActivityGroup`, `Module`, `DesignNote`, `Course`
+~~Thirteen types inherit from `ArmatureDocument`:
+`LearningEvidence` (abstract), `LearningDataset`, `LearningNeed`, `LearningObjective`, `PrerequisiteRecord`, `AssessmentItem`, `Response`, `Assessment`, `LearningActivity`, `ActivityGroup`, `Module`, `DesignNote`, `Course`~~
+**Twelve types inherit from `ArmatureDocument` as of ADR-0022 (Accepted):
+`LearningEvidence` (abstract), `LearningDataset`, `LearningNeed`, `LearningObjective`, `PrerequisiteRecord`, `AssessmentItem`, `Assessment`, `LearningActivity`, `ActivityGroup`, `Module`, `DesignNote`, `Course`.
+`Response` removed — item stem and options are embedded on `AssessmentItem`, not modeled as a standalone document.**
 
 `LearningMetric` and `DescriptiveEvidence` inherit `label`/`description` transitively through `LearningEvidence -> ArmatureDocument`.
 

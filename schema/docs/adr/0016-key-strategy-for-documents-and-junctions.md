@@ -1,7 +1,9 @@
 # ADR-0016: Key Strategy for Documents and Junctions
 
 ## Status
-Proposed
+Superseded by ADR-0022
+
+> **Superseded.** This ADR's `Response`-specific decisions (points 3 and, for `Response`, the spirit of point 4) are moot: ADR-0022 removes `Response` as a standalone document entirely, embedding item stem and options directly on `AssessmentItem`. An embedded structure has no `@key` to get right or wrong. The general decisions this ADR reached for *other* types — junction documents keep Hash keys over endpoint references (point 1), no key may include a mutable field (point 2), primary artifacts should declare their key strategy explicitly rather than relying on an undocumented default (point 4), and identifier assignment should follow one convention (point 5) — remain valid and are unaffected by this supersession. Retained for historical context and because points 1, 2, 4, and 5 still apply to every type other than `Response`.
 
 ## Context
 

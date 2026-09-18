@@ -13,7 +13,8 @@ Storing the parent reference on the child (e.g., `ItemInstance.assessment: Asses
 ## Decision
 For all one-to-many relationships with a clear parent/child direction, the foreign key lives on the child document:
 
-- `Response.item → AssessmentItem`
+- ~~`Response.item → AssessmentItem`~~
+  **Removed. See ADR-0022 (Accepted). `Response` is no longer a standalone document — item stem and options are embedded directly on `AssessmentItem`, so there is no child document to hold a back-reference.**
 - `ItemInstance.assessment → Assessment`
 - `Assessment.module → Module`
 - `Module.course → Course`
