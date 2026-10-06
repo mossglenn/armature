@@ -91,8 +91,12 @@ adopted into the hub when at least two reference clients would need the same cap
 | **Needs-analysis intake** | Record evidence, needs, priorities; the LEED-tracker decision log as a graph | Evidence and need writes; NeedEvidenceLink confidence; DesignNote and a future DesignDecision; provenance trace from objective back to evidence |
 | **Activity and strategy designer** | Plan activities and groups per module; see strategy coverage | Sequenced module content (ADR-0005); "which objectives have no Practice activity" queries; ActivityGroup flatness enforced |
 | **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistic write-back; xAPI and QTI references; bulk atomic writes |
-| **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description |
+| **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description; attachments resolvable or deliberately excluded per profile |
 | **AI design assistant** | Propose items, objectives or alignments inside another tool | Agent `User` provenance; design-intelligence reads for context; the same write path and constraints as humans |
+
+Three of these also need **binary attachments**: the needs-analysis intake tool (evidence
+documents), CoQui (item media, eventually), and the outcomes importer (raw dataset exports). See
+the note below the CoQui table.
 
 **Applying the test to CoQui's asks.** The table below is the heart of the plan's answer to
 "how do we not over-fit."
@@ -113,6 +117,18 @@ adopted into the hub when at least two reference clients would need the same cap
 Three CoQui concepts never enter the hub: the **round**, the **craft grid**, and CoQui's
 **review workflow states**. Each is workflow vocabulary (P2). They map onto branches, claim
 references and `ItemStatus` at CoQui's boundary, exactly as ADR-0018 §5 prescribes.
+
+**A need no single client raised: binary attachments.** Applying the same test to the reference
+clients surfaces one capability CoQui has not asked for but three clients would need: a place for
+files that are not graph documents. The needs-analysis intake tool holds evidence documents
+(survey instruments, interview transcripts, PDFs). CoQui will eventually hold item media (an
+image in a stem, an audio prompt). The outcomes importer holds raw dataset exports. Three clients
+pass the test, so the capability belongs in the hub. Its shape follows from the position paper
+and PROJECT_CONTEXT, which both say Armature is not a content repository: the graph holds a
+**reference** to a binary, carrying a content hash so the graph can detect a missing or altered
+file, and the bytes live in a pluggable content-addressed store behind the Armature API. The
+graph never embeds blobs, and the backend is a deployment choice, not a schema fact. The
+reference shape is decided in Phase 6 (ADR-0030); the backend is an open question (§6).
 
 ---
 
@@ -429,10 +445,27 @@ and data-first adoption by learning scientists.
 **Serves:** P6, P7, P8.
 
 Work:
-- [ ] **ADR-0030: External references.** An optional `externalRefs: Set<ExternalRef>`
-      subdocument on `ArmatureDocument` with `system` (an enum seeded with `CASE`, `QTI`,
-      `xAPI`, `LTI`, `Other`) and `identifier` (URI or string). Nothing is duplicated; the graph
-      points outward. This is deliberately the minimum P9 permits.
+- [ ] **ADR-0030: External references and attachments.** Two optional subdocument sets on
+      `ArmatureDocument`, both pointing outward so nothing is duplicated in the graph.
+      `externalRefs: Set<ExternalRef>` with `system` (an enum seeded with `CASE`, `QTI`, `xAPI`,
+      `LTI`, `Other`) and `identifier` (URI or string). `attachments: Set<Attachment>` with
+      `store` (an enum of backend kinds, seeded with `S3` and `Other`, extended as backends are
+      adopted), `locator` (the store's own address for the bytes: bucket and key, or repository,
+      revision and path), `contentHash` and `hashAlgorithm` (mandatory, so integrity does not
+      depend on the backend), `mediaType`, `byteSize`, and an optional `label`. Subdocuments
+      take `@key: Random`. The ADR records why attachments are references and not blobs (the
+      paper's "not a content repository"), why the content hash is mandatory (P3: an attachment
+      coordinate must be as unforgeable as a commit id), and that the first backend is chosen in
+      a separate ADR when a reference client needs it (§6). This is deliberately the minimum P9
+      permits.
+- [ ] **Attachment endpoints, when the first client needs them.** `POST /api/v1/attachments`
+      streams bytes to the configured store, computes the hash, and returns an `Attachment`
+      subdocument for the caller to place on its artifact; `GET /api/v1/attachments/:hash/url`
+      returns a short-lived URL the plugin's browser can fetch directly, or proxies when the
+      store cannot presign. The store adapter is one module behind one interface, so swapping
+      backends does not touch routes or schema. Not built until a reference client has a
+      concrete file to attach; recorded here so the routes are designed with the reference
+      shape rather than after it.
 - [ ] **ADR-0031: Export profiles and schema slices.** A `GET /api/v1/export?ref=&profile=`
       route producing JSON-LD (the store's native shape) for the whole graph or a declared
       slice. The documentation lists Turtle and RDF/XML content negotiation under enterprise
@@ -490,7 +523,7 @@ reading TerminusDB documentation.
 | 0027 | Schema self-description via `@metadata` | 1 | Replaces `JUNCTION_IDS` |
 | 0028 | Attestation | 5 | Generic form of CoQui's proposal |
 | 0029 | Coverage algorithm | 4 | Closes PROJECT_CONTEXT's open question |
-| 0030 | External references | 6 | P6 |
+| 0030 | External references and attachments | 6 | P6; attachment references with mandatory content hash, backend left open |
 | 0031 | Export profiles and schema slices | 6 | P7, P8; implements ADR-0021's deferred section |
 | 0032 | Identity resolution | 3 | Implements ADR-0015's boundary |
 
@@ -527,6 +560,31 @@ what evidence would be enough.
 - **Separate API service.** When Phase 7's container and client package exist, the move is
   mechanical. Evidence: a plugin that cannot or should not depend on a Next.js deployment, or
   the hosted demo needing independent scaling.
+- **Which content-addressed store backs attachments.** The reference shape (ADR-0030) is
+  backend-neutral on purpose. The default when a client first needs one is the cheapest store
+  that satisfies the shape: an S3-compatible bucket (MinIO locally) keyed by content hash, behind
+  the two attachment endpoints. Instructional design media is mostly write-once, so immutability
+  and integrity matter more than edit-time deduplication.
+
+  **Epic's Lore was evaluated on 2026-10-06** (v0.10, [github.com/EpicGames/lore](https://github.com/EpicGames/lore))
+  as a candidate backend, and set aside for now rather than rejected. For: BLAKE3
+  content addressing and full-hash revision ids give unforgeable coordinates (P3); commits carry
+  author and message, so a blob write can be inscribed like a graph write; presigned URL minting
+  is restricted to service accounts, which is exactly the hub's position; a stable per-file
+  identity that survives moves mirrors the fragment-id idea; a repository is a hard access
+  partition, which bears on the project-boundary question above. Against: three of the last
+  four releases carried breaking API changes and the roadmap places 1.0 after 2026; the server
+  needs QUIC and gRPC ports, TLS certificates, and OIDC whenever auth is enabled, with no
+  published container image and S3 backends compiled into a custom binary; the npm SDK is a
+  native FFI addon on four platforms; its differentiators (content-defined chunking, sparse
+  working copies, file locks) pay off for large files edited in place, not write-once media; and
+  it is a second version-control system next to TerminusDB, so attachments must not branch in
+  it or every graph branch needs a mirrored blob branch. It is not a TerminusDB replacement
+  under any reading: it has no data model, schema, referential integrity or query language, and
+  merges files rather than fields. Evidence to revisit: Lore reaching 1.0; a plugin that needs a
+  working copy or sparse reads of large files; a deployment that already runs Lore; or an
+  institution that stores course media in it. If adopted, it runs one append-only branch per
+  deployment and the graph alone expresses branching.
 
 ---
 
@@ -565,6 +623,10 @@ Recorded so the decisions are inherited rather than rediscovered.
 - No structured replacement for any free-text rationale field without usage evidence (ADR-0010).
 - No import or export *format* work beyond JSON-LD. QTI, CASE and xAPI are referenced, not
   implemented; translating to them is plugin work.
+- No binary content in the graph. Files are referenced by content hash and live in a
+  content-addressed store behind the API; the store is a backend, never a schema fact.
+- No second version-control system. If a blob store with its own branches is ever adopted, it
+  runs append-only and the graph alone expresses branching and merging.
 
 ---
 
