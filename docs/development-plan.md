@@ -26,8 +26,11 @@ letter codes are used throughout the rest of the document.
 **P1. Design data is artifacts, named relations, and process data.** The paper defines design data
 as "a structured, queryable, versioned record" with three parts: artifacts, meaningfully named
 relations that express decisions, and the history of how both changed. The schema already models
-the first two well. The third is almost entirely unexposed. *Constraint:* every phase must leave
-history more inspectable than it found it, not just the current state.
+the first two well. The third is almost entirely unexposed. Artifacts include complex learning
+objects such as simulations, whose bytes and development history will live outside the graph;
+the hub must be able to name an exact revision of such an object and the reason it changed.
+*Constraint:* every phase must leave history more inspectable than it found it, not just the
+current state, and nothing may assume an artifact is a single document or a single file.
 
 **P2. Armature is infrastructure, not a tool.** "Armature is not an app or a service, but a
 framework." Tools adopt it because they solve a designer's workflow problem; the graph fills as a
@@ -93,10 +96,13 @@ adopted into the hub when at least two reference clients would need the same cap
 | **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistic write-back; xAPI and QTI references; bulk atomic writes |
 | **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description; attachments resolvable or deliberately excluded per profile |
 | **AI design assistant** | Propose items, objectives or alignments inside another tool | Agent `User` provenance; design-intelligence reads for context; the same write path and constraints as humans |
+| **Rich item authoring tool** | Author drag-and-drop, hotspot and media-bearing items on a shared item bank | Items as a tree of addressable fragments, typed or generic; attachment references on fragments; interaction types with versioned renderers; impact analysis when a renderer or an image changes; the same review surface CoQui uses |
+| **Complex learning object designer** (distant) | Develop simulations and other multi-file learning objects, with their own asset store or the hub's | References to a revision of an asset tree, with hash and reason; impact analysis when an asset revision moves; attestations and findings against a revision; the asset store's history reachable, not replayed |
 
-Three of these also need **binary attachments**: the needs-analysis intake tool (evidence
-documents), CoQui (item media, eventually), and the outcomes importer (raw dataset exports). See
-the note below the CoQui table.
+Three of these need **binary attachments** today or soon: the needs-analysis intake tool
+(evidence documents), CoQui (item media, eventually), and the outcomes importer (raw dataset
+exports). The last row needs **versioned asset references**, and is the reason the reference
+shape is versioned-tree-capable from the start. See the note below the CoQui table.
 
 **Applying the test to CoQui's asks.** The table below is the heart of the plan's answer to
 "how do we not over-fit."
@@ -118,17 +124,36 @@ Three CoQui concepts never enter the hub: the **round**, the **craft grid**, and
 **review workflow states**. Each is workflow vocabulary (P2). They map onto branches, claim
 references and `ItemStatus` at CoQui's boundary, exactly as ADR-0018 §5 prescribes.
 
-**A need no single client raised: binary attachments.** Applying the same test to the reference
-clients surfaces one capability CoQui has not asked for but three clients would need: a place for
-files that are not graph documents. The needs-analysis intake tool holds evidence documents
-(survey instruments, interview transcripts, PDFs). CoQui will eventually hold item media (an
-image in a stem, an audio prompt). The outcomes importer holds raw dataset exports. Three clients
-pass the test, so the capability belongs in the hub. Its shape follows from the position paper
-and PROJECT_CONTEXT, which both say Armature is not a content repository: the graph holds a
-**reference** to a binary, carrying a content hash so the graph can detect a missing or altered
-file, and the bytes live in a pluggable content-addressed store behind the Armature API. The
-graph never embeds blobs, and the backend is a deployment choice, not a schema fact. The
-reference shape is decided in Phase 6 (ADR-0030); the backend is an open question (§6).
+**A need no single client raised: binary attachments and externally versioned assets.** Applying
+the same test to the reference clients surfaces a capability CoQui has not asked for but three
+clients would need: a place for files that are not graph documents. The needs-analysis intake
+tool holds evidence documents (survey instruments, interview transcripts, PDFs). CoQui will
+eventually hold item media (an image in a stem, an audio prompt). The outcomes importer holds raw
+dataset exports. Three clients pass the test, so the capability belongs in the hub.
+
+The near-term files are write-once. The paper's scope is not. Design process data is "the record
+of how artifacts and relations changed over time," and the artifacts Armature expects to describe
+include complex learning objects such as simulations: trees of large binaries, edited in place by
+several people over many revisions, built by a future tool that may well carry its own asset
+store. The reference shape must therefore address a **revision of a tree**, not only a single
+immutable file, and it must do so for stores the hub does not operate. If it cannot, a simulation
+authoring tool would need a schema and API redo on arrival.
+
+The shape follows from the position paper and PROJECT_CONTEXT, which both say Armature is not a
+content repository: the graph holds a **reference** carrying a content hash and, where the source
+is versioned, the revision coordinate, so the graph can name an exact state of the asset and
+detect a missing or altered one. The bytes and their fine-grained history live in a
+content-addressed store behind the Armature API, or in a store the tool manages. The graph never
+embeds blobs, and the backend is a deployment choice, not a schema fact. The reference shape is
+decided in Phase 6 (ADR-0030); the hub-managed backend is an open question (§6).
+
+What crosses from an asset store into the graph follows the lesson CoQui taught about review
+exhaust: a **projection, not a replay**. The graph records the coordinates that matter to design
+(the revision a module was built against, the revision a reviewer attested, the revision whose
+change prompted a finding), each in a graph commit carrying the author and the reason. The full
+revision log stays in the asset store, reachable through the reference. A tool that can do so
+writes the graph commit id into its own revision message, so the two histories cross-reference
+each other without either duplicating the other.
 
 ---
 
@@ -186,6 +211,73 @@ TerminusDB
 - **The schema describes itself.** `@metadata.armature.category` on every class; a `GET /schema`
   route; generated types and a typed client derived from the same file. Tools discover types
   from the hub, not from a hand-maintained list.
+
+### Rich artifacts: four layers with different homes
+
+CoQui can review any item in the graph, however it got there, because three things hold for a
+text item: its design structure is in the graph in a shape CoQui did not define; every part has a
+stable address (item id plus `fragmentId`) CoQui did not mint; and everything that is not
+structure is reachable. None of these depend on the parts being text. The complexity of richer
+items comes from content, behaviour and structure separating: an image separates content from
+structure; drag-and-drop separates behaviour from both; an animation library or a simulation
+gives behaviour its own development history. Each step adds a layer. None changes the three
+requirements. The hub keeps them true by giving each layer a different home.
+
+**Structure lives in the graph, always.** For drag-and-drop: instruction text, draggables, drop
+zones, the correct mapping, the objectives assessed. For a simulation: the manifest of scenarios,
+parameters and what each measures. Structure is what design intelligence reads and what every
+tool needs to interoperate. Underneath the typed shapes sits a **generic part model**: an item is
+a tree of fragments, each with a `fragmentId`, a `kind`, and inline text, an attachment reference,
+or both. Multiple-choice options are a typed specialisation carrying `isCorrect`; a new item type
+begins as generic fragments with a validated JSON payload (TerminusDB's `sys:JSON` subdocument is
+stored but not schema-checked) and is promoted to typed subdocuments once its shape settles. This
+is ADR-0010's progressive formalisation applied to item types. A review tool that has never seen
+drag-and-drop still sees a tree of addressable parts with text and images, which is enough to
+review against and attach findings to. (ADR-0033.)
+
+**Content lives in a store, referenced from a fragment.** The `fragmentId` identifies the slot;
+the attachment reference identifies what fills it. Replacing an image is an ordinary graph write:
+the reference inside the item changes, the commit carries author and reason, a `DesignNote` can
+elaborate. Because the reference is inside the item document, the item's commit changes when the
+image does, so attestation staleness works for images with no new mechanism. The presign path on
+the attachment endpoints is how a reviewer sees it. (ADR-0030.)
+
+**Behaviour is a property of the item type, not the item, and is a versioned artifact of its
+own.** Drag-and-drop logic is shared by every drag-and-drop item; what varies per item is data.
+So an item declares "an instance of interaction type X at version N" and carries only data. The
+graph holds the registry entry, an `InteractionType` with its version, the data shape it expects,
+and an attachment reference to its renderer at a revision; the renderer's code is a developed
+asset in an asset store. This is the H5P model (content JSON plus a versioned library) and the
+QTI Portable Custom Interaction model (a contract between item data and interaction code), and
+it lets Armature reference those ecosystems rather than reinvent them. Three consequences: a
+renderer change is an impact-analysis event across every item of that type; a review tool
+renders an unfamiliar item by loading the registered renderer in a sandboxed frame, falling back
+to the generic fragment tree; and the hub **never serves executable content from a graph
+document**. Code reaches a tool only through a registered, hashed, versioned reference loaded
+under a content security policy. The eight values of today's `ItemType` enum become the built-in
+interaction types. (ADR-0034.)
+
+**Rationale stays where it is**: commits with author and reason, design notes, findings,
+attestations. Richer items force one addition: notes and findings need the compound target
+(document plus `fragmentId`) that ADR-0023 §5 reserved for attestations, because "why did we
+replace this image" points at a part, not an item. (Folded into ADR-0028.)
+
+The simulation case then differs in scale, not in kind. It is an activity whose structure is a
+manifest in the graph, whose content and behaviour are an asset tree referenced at a revision,
+and whose rationale is the commits that moved the reference plus the notes on them. The asset
+store keeps the development history; the graph keeps the projection designers and researchers
+need.
+
+**The exhaust test, restated for rich artifacts.** A reviewer's comment on an image is exhaust
+and stays in the tool. The decision to replace the image, and why, is data: a reference move in
+a graph commit with a reason. A hundred renderer commits are exhaust kept in the asset store. The
+decision to adopt renderer version 3 for a module's items, and why, is data. The graph records
+state transitions a designer chose and could explain; everything else is reachable, not
+replicated.
+
+**What Phase 1 must not do**: make `ItemOption` the only way an item can have parts. The typed
+option list lands as planned, but as a specialisation of a fragment, so that the generic model
+can sit beside it without a second migration.
 
 ---
 
@@ -249,7 +341,12 @@ Work:
       from other documents, which is why `fragmentId` exists (ADR-0023). The v12.0.6 `@shared`
       annotation was considered and rejected: options are never shared across items (ADR-0022).
       Verify on the running store whether subdocuments return inline by default or need the
-      `unfold` read parameter (the ADR-0013 gating discipline).
+      `unfold` read parameter (the ADR-0013 gating discipline). Model `ItemOption` as a
+      specialisation of an abstract `Fragment` subdocument (`fragmentId`, `kind`, optional
+      `text`, optional attachment) so that §3's generic part model and the `sys:JSON` payload for
+      new item types can sit beside typed options later without re-keying anything. Verify first
+      that a `List` of subdocuments accepts subtypes polymorphically on the running store; if it
+      does not, record the fallback (one list per kind) in ADR-0033 before landing the shape.
 - [ ] **Decide reload versus migration for removing `Response`.** TerminusDB v12 has a schema
       migration endpoint with `DeleteClass`, `CreateClassProperty`, `ChangeKey` and a dry-run
       mode that rewrites instance data with the schema. At demo scale a reload of the seed is
@@ -425,7 +522,9 @@ Work:
       `claimRef`, `attestedBy`, so "the latest live attestation per claim per reviewer" is a
       store guarantee, not an API lookup. Staleness is derived from commits since `asOf`, not
       stored. The ADR states the compound-target pattern from ADR-0023 §5 as the general rule
-      for any future part-level type.
+      for any part-level reference, and applies it immediately: `DesignNote` and `DesignFinding`
+      gain an optional `fragmentId` beside their existing `subject`, so "why did we replace this
+      image" and "this drop zone is ambiguous" point at a part rather than a whole item.
 - [ ] **Non-aggregation guard (ADR-0021).** The generic list route refuses `attestedBy` and
       `createdBy` as filter keys, and the ADR records why this one restriction lives in the
       generic layer.
@@ -448,24 +547,51 @@ Work:
 - [ ] **ADR-0030: External references and attachments.** Two optional subdocument sets on
       `ArmatureDocument`, both pointing outward so nothing is duplicated in the graph.
       `externalRefs: Set<ExternalRef>` with `system` (an enum seeded with `CASE`, `QTI`, `xAPI`,
-      `LTI`, `Other`) and `identifier` (URI or string). `attachments: Set<Attachment>` with
-      `store` (an enum of backend kinds, seeded with `S3` and `Other`, extended as backends are
-      adopted), `locator` (the store's own address for the bytes: bucket and key, or repository,
-      revision and path), `contentHash` and `hashAlgorithm` (mandatory, so integrity does not
-      depend on the backend), `mediaType`, `byteSize`, and an optional `label`. Subdocuments
-      take `@key: Random`. The ADR records why attachments are references and not blobs (the
-      paper's "not a content repository"), why the content hash is mandatory (P3: an attachment
-      coordinate must be as unforgeable as a commit id), and that the first backend is chosen in
-      a separate ADR when a reference client needs it (§6). This is deliberately the minimum P9
-      permits.
-- [ ] **Attachment endpoints, when the first client needs them.** `POST /api/v1/attachments`
-      streams bytes to the configured store, computes the hash, and returns an `Attachment`
-      subdocument for the caller to place on its artifact; `GET /api/v1/attachments/:hash/url`
-      returns a short-lived URL the plugin's browser can fetch directly, or proxies when the
-      store cannot presign. The store adapter is one module behind one interface, so swapping
-      backends does not touch routes or schema. Not built until a reference client has a
-      concrete file to attach; recorded here so the routes are designed with the reference
-      shape rather than after it.
+      `LTI`, `Other`) and `identifier` (URI or string). `attachments: Set<Attachment>`, a
+      reference to bytes or to a revision of a tree of bytes, in a store the hub may or may not
+      operate, with:
+      - `store`: the backend kind, an enum seeded with `S3`, `Lore`, `Git`, `Other`, extended
+        as backends appear. Naming a kind the hub does not operate is allowed; it tells a reader
+        how to interpret the locator.
+      - `storeUri`: which instance of that store (an endpoint or bucket), so references survive a
+        deployment with more than one.
+      - `container`: the repository, bucket or dataset within the store.
+      - `revision`: optional, the store's own immutable version identifier for the state
+        referenced (a Lore revision hash, a Git commit, an S3 version id). Present whenever the
+        source is versioned.
+      - `path`: optional, the file or subtree within the container at that revision. Absent for
+        a reference to the whole tree at a revision.
+      - `contentHash` and `hashAlgorithm`: mandatory. For a single file, the file's hash. For a
+        tree, the store's root hash for that revision (Lore and Git both expose one). This is
+        what makes the reference an unforgeable coordinate (P3) regardless of backend.
+      - `mediaType` and `byteSize`: optional, meaningful for single files.
+      - `role`: optional free text for what the reference is to the artifact (source, rendered,
+        evidence, export), left as text per P9 until usage shows the categories.
+      - `label`: optional.
+      Subdocuments take `@key: Random`. The ADR records why attachments are references and not
+      blobs (the paper's "not a content repository"), why the hash is mandatory, why `revision`
+      and `path` are in the shape from day one (a simulation authoring tool must be able to say
+      "this module was built against revision X of this asset tree" without a schema change),
+      and that the hub-managed backend is chosen in a separate ADR when a reference client needs
+      one (§6). This is the minimum P9 permits that does not foreclose versioned assets.
+- [ ] **ADR-0025 amendment: externally versioned artifacts.** Design process data for an
+      artifact whose bytes live in an asset store is carried by the graph commits that move its
+      `Attachment.revision`, each with author and reason, plus the asset store's own log reached
+      through the reference. The graph is a projection of the asset history, not a replay of it
+      (§2). The amendment also states the cross-reference convention: a tool that controls the
+      asset store writes the graph commit id into the asset revision message when it can.
+- [ ] **Attachment endpoints, in two modes.** For a **hub-managed** store:
+      `POST /api/v1/attachments` streams bytes, computes the hash, and returns an `Attachment`
+      for the caller to place on its artifact; `GET /api/v1/attachments/url` takes a reference
+      and returns a short-lived URL the plugin's browser can fetch, or proxies when the store
+      cannot presign. For a **tool-managed** store: the tool places the reference on the artifact
+      through the ordinary write path, and the hub validates the shape, verifies the hash when
+      it has read access to that store, and otherwise records the reference as unverified. The
+      invariants engine enforces that `revision` is present when `store` is a versioned kind.
+      The store adapter is one module behind one interface, so adding a backend does not touch
+      routes or schema. The hub-managed endpoints are not built until a reference client has a
+      concrete file to attach; the tool-managed path costs nothing beyond the validator and
+      lands with ADR-0030.
 - [ ] **ADR-0031: Export profiles and schema slices.** A `GET /api/v1/export?ref=&profile=`
       route producing JSON-LD (the store's native shape) for the whole graph or a declared
       slice. The documentation lists Turtle and RDF/XML content negotiation under enterprise
@@ -518,7 +644,7 @@ reading TerminusDB documentation.
 | 0020 | DesignFinding | 1 | Promote to Accepted |
 | 0022, 0023 | Embedded parts, fragmentId | 1 | Already Accepted; implement |
 | 0024 | Client-supplied identifiers | 1 | Resolves 0016 decision 5 and 0023's open question |
-| 0025 | Design process data lives in the commit graph | 2 | Reconciles the paper's model with the store |
+| 0025 | Design process data lives in the commit graph | 2 | Reconciles the paper's model with the store; amended in Phase 6 for externally versioned artifacts |
 | 0026 | API host and route versioning | 0 | Resolves the PROJECT_CONTEXT contradiction |
 | 0027 | Schema self-description via `@metadata` | 1 | Replaces `JUNCTION_IDS` |
 | 0028 | Attestation | 5 | Generic form of CoQui's proposal |
@@ -526,6 +652,8 @@ reading TerminusDB documentation.
 | 0030 | External references and attachments | 6 | P6; attachment references with mandatory content hash, backend left open |
 | 0031 | Export profiles and schema slices | 6 | P7, P8; implements ADR-0021's deferred section |
 | 0032 | Identity resolution | 3 | Implements ADR-0015's boundary |
+| 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Abstract `Fragment` subdocument; `ItemOption` as a specialisation; generic kinds with `sys:JSON` payload and per-kind validation; promotion path to typed subdocuments. Verify polymorphic subdocument lists first |
+| 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI as precedents); the hub never serves executable content from a graph document, renderers load sandboxed under CSP |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded.
@@ -560,31 +688,43 @@ what evidence would be enough.
 - **Separate API service.** When Phase 7's container and client package exist, the move is
   mechanical. Evidence: a plugin that cannot or should not depend on a Next.js deployment, or
   the hosted demo needing independent scaling.
-- **Which content-addressed store backs attachments.** The reference shape (ADR-0030) is
-  backend-neutral on purpose. The default when a client first needs one is the cheapest store
-  that satisfies the shape: an S3-compatible bucket (MinIO locally) keyed by content hash, behind
-  the two attachment endpoints. Instructional design media is mostly write-once, so immutability
-  and integrity matter more than edit-time deduplication.
+- **Which store the hub operates for attachments, and when.** The reference shape (ADR-0030) is
+  backend-neutral and versioned-tree-capable on purpose, so this question is about operations
+  and timing, not about what the graph can express. Two workloads are in view and they want
+  different stores:
+  - *Write-once media* (evidence PDFs, item images, dataset exports) from the first three
+    reference clients. Immutability and integrity are what matter. An S3-compatible bucket
+    (MinIO locally) keyed by content hash satisfies the reference and is the cheapest thing to
+    run next to one TerminusDB container. Likely first.
+  - *Developed assets* (simulations and other complex learning objects): trees of large binaries
+    edited in place by several people over many revisions, where the development history is
+    itself design process data. This is a version-control workload. A content-hash bucket cannot
+    express a tree at a revision, who changed it, or why; a versioned asset store can. The tool
+    building such objects may bring its own store, which the tool-managed reference path
+    accepts. Whether the hub should *also* operate a versioned asset store, so that tools without
+    one can still get their assets under version control through Armature, is the real decision
+    here. Evidence: the first tool that develops multi-file assets on Armature, or a partner
+    institution that already keeps course assets in a VCS.
 
   **Epic's Lore was evaluated on 2026-10-06** (v0.10, [github.com/EpicGames/lore](https://github.com/EpicGames/lore))
-  as a candidate backend, and set aside for now rather than rejected. For: BLAKE3
-  content addressing and full-hash revision ids give unforgeable coordinates (P3); commits carry
-  author and message, so a blob write can be inscribed like a graph write; presigned URL minting
-  is restricted to service accounts, which is exactly the hub's position; a stable per-file
-  identity that survives moves mirrors the fragment-id idea; a repository is a hard access
-  partition, which bears on the project-boundary question above. Against: three of the last
-  four releases carried breaking API changes and the roadmap places 1.0 after 2026; the server
-  needs QUIC and gRPC ports, TLS certificates, and OIDC whenever auth is enabled, with no
-  published container image and S3 backends compiled into a custom binary; the npm SDK is a
-  native FFI addon on four platforms; its differentiators (content-defined chunking, sparse
-  working copies, file locks) pay off for large files edited in place, not write-once media; and
-  it is a second version-control system next to TerminusDB, so attachments must not branch in
-  it or every graph branch needs a mirrored blob branch. It is not a TerminusDB replacement
-  under any reading: it has no data model, schema, referential integrity or query language, and
-  merges files rather than fields. Evidence to revisit: Lore reaching 1.0; a plugin that needs a
-  working copy or sparse reads of large files; a deployment that already runs Lore; or an
-  institution that stores course media in it. If adopted, it runs one append-only branch per
-  deployment and the graph alone expresses branching.
+  and is the leading candidate for the developed-assets store. Its design matches that workload
+  closely: BLAKE3 content addressing and full-hash revision ids give unforgeable coordinates
+  (P3) and a Merkle root per revision, which is exactly what `Attachment.contentHash` needs for
+  a tree; commits carry author and message, so an asset revision can be inscribed like a graph
+  write; content-defined chunking and sparse working copies are built for large binaries edited
+  in place; a stable per-file identity that survives moves mirrors the fragment-id idea; a
+  repository is a hard access partition, which bears on the project-boundary question above;
+  presigned URL minting is restricted to service accounts, which is the hub's position; and
+  there is an npm SDK. Reasons not to operate it *yet*: three of the last four releases carried
+  breaking API changes and the roadmap places 1.0 after 2026; the server needs QUIC and gRPC
+  ports, TLS certificates, and OIDC whenever auth is enabled, with no published container image
+  and S3 backends compiled into a custom binary; and the npm SDK is a native FFI addon on four
+  platforms. None of these affect the reference shape, which is why the shape lands now and the
+  operation waits. It is not a TerminusDB replacement under any reading: it has no data model,
+  schema, referential integrity or query language, and merges files rather than fields. If
+  adopted as a hub-managed store, branching and merging of *design relations* stay in the graph;
+  the asset store's branches, if used, belong to the asset tool's workflow and are named in the
+  reference like any other revision coordinate.
 
 ---
 
@@ -623,10 +763,18 @@ Recorded so the decisions are inherited rather than rediscovered.
 - No structured replacement for any free-text rationale field without usage evidence (ADR-0010).
 - No import or export *format* work beyond JSON-LD. QTI, CASE and xAPI are referenced, not
   implemented; translating to them is plugin work.
-- No binary content in the graph. Files are referenced by content hash and live in a
-  content-addressed store behind the API; the store is a backend, never a schema fact.
-- No second version-control system. If a blob store with its own branches is ever adopted, it
-  runs append-only and the graph alone expresses branching and merging.
+- No binary content in the graph. Files and asset trees are referenced by content hash and
+  revision coordinate and live in a content-addressed store behind the API or in a store the
+  tool manages; the store is a backend, never a schema fact.
+- No replay of an asset store's history into the graph. The graph records the revisions that
+  matter to design, with author and reason; the asset store keeps the rest, reachable through
+  the reference. Branching and merging of design relations happen only in the graph.
+- No executable content served from a graph document. Behaviour reaches a tool only as a
+  registered, hashed, versioned reference, loaded sandboxed. Item documents carry data, never
+  code.
+- No item type whose parts cannot be enumerated generically. A tool that does not know an item
+  type must still be able to list its fragments, read their text, fetch their media, and attach a
+  finding or attestation to one.
 
 ---
 
