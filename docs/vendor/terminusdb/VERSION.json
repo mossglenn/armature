@@ -1,0 +1,22 @@
+{
+  "fetched": "2026-10-06",
+  "docsRepo": "dfrnt-labs/terminusdb-docs-static",
+  "docsCommit": "2c05cb93a0bafd8cbc74f5efe5fc66005745ab5e",
+  "docsCommitDate": "2026-08-04",
+  "terminusdbRelease": {
+    "tag": "v12.0.7",
+    "date": "2026-08-10"
+  },
+  "pagesUpstream": 243,
+  "curatedPages": 50,
+  "vendoredPages": 243,
+  "htmlFallbackPages": [
+    "javascript",
+    "openapi",
+    "python",
+    "whats-new"
+  ],
+  "markdocResidue": [],
+  "failures": [],
+  "generator": "scripts/sync-terminusdb-docs.js"
+}

@@ -43,3 +43,6 @@ coverage/
 # Misc
 *.pem
 .files/
+
+# Vendored TerminusDB docs — only the curated set is committed
+docs/vendor/terminusdb/_all/

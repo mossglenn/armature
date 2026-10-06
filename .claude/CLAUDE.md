@@ -43,6 +43,7 @@ scripts/
   load_schema.js           # Loads schema into local TerminusDB instance
   seed_data.js             # Inserts demo artifact graph (69 documents)
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
+  sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill)
 app/
   app/api/                 # Next.js API routes (GET endpoints live, POST in progress)
   lib/
@@ -52,12 +53,24 @@ app/
 docs/
   schema-guide.md          # Conceptual guide (in progress)
   SCHEMA_APPENDIX.md       # GENERATED — do not edit; run node scripts/generate-schema-appendix.js
+  development-plan.md      # Phased plan; §9 lists verified TerminusDB platform facts
+  vendor/terminusdb/       # GENERATED — vendored TerminusDB docs; INDEX.md, VERSION.json, 50 curated pages
 .claude/
   CLAUDE.md                # This file
   PROJECT_CONTEXT.md       # Problem space, audiences, demo goals
   SESSION.md               # Current state and next steps
   prompts/                 # Reusable workflow prompts
+  skills/terminusdb/       # How to answer TerminusDB questions: which vendored page, what to trust, when to re-sync
 ```
+
+### TerminusDB documentation
+
+Questions about what the store does (schema language, document API, branches and merge,
+history, access control, the JS client) are answered from the vendored docs in
+`docs/vendor/terminusdb/`, following the `terminusdb` skill in `.claude/skills/`. The installed
+client source under `app/node_modules` is authoritative for client behaviour; the running Docker
+container is authoritative for server behaviour. Re-run `node scripts/sync-terminusdb-docs.js`
+after a TerminusDB release; `docs/vendor/terminusdb/VERSION.json` records the last sync.
 
 ---
 
