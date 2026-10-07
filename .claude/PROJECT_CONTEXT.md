@@ -150,7 +150,7 @@ These are settled. Don't re-open them without a strong reason.
 - **Shared integer sequence space for module content** (ADR-0005)
 - **API enforces minimum cardinality** (ADR-0006)
 - **ModuleObjective is programmatic, not UI-editable** (ADR-0007)
-- **The API is a boundary CoQui never crosses** — plugins talk to Armature routes, never to TerminusDB. For the current phase those routes are the Next.js handlers in this repo under `/api/v1`; a separate API service remains the destination and the triggers for the move are recorded in ADR-0026
+- **The API is a boundary CoQui never crosses** — plugins talk to Armature routes, never to TerminusDB. The API is a host-neutral Hono application under `/api/v1` (ADR-0054), served by the Next.js app in this repo for the current phase (ADR-0026); a separate process serving the same application remains the destination and the triggers for the move are recorded in ADR-0026
 
 ---
 

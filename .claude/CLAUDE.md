@@ -18,7 +18,7 @@ The core insight: current instructional design tools capture *what was built* bu
 
 ### Stack
 - **TerminusDB** — graph database storing the artifact graph
-- **Armature API** — Next.js route handlers in `app/app/api/`, the API host for the current phase (ADR-0026). New routes mount under `/api/v1/`; the unversioned routes are legacy until Phase 3. A separate service remains the long-term destination
+- **Armature API** — a Hono application in `app/lib/api/` (ADR-0054), host-neutral: nothing under that directory imports from `next`. Mounted under `/api/v1/` by the one catch-all route `app/app/api/[[...route]]/route.ts`; Next.js is the host for the current phase (ADR-0026). The unversioned routes in `app/app/api/*/route.ts` are legacy Next.js handlers until Phase 3 retires them. A separate process serving the same app with `@hono/node-server` remains the long-term destination
 - **CoQui** — first plugin; an assessment authoring tool built on top of the Armature API (separate repo, not here)
 - **Docker Compose** — orchestrates TerminusDB + API for local development and deployment
 
@@ -45,11 +45,17 @@ scripts/
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill)
 app/
-  app/api/                 # Next.js API routes — the Armature API (ADR-0026); legacy unversioned routes live, /api/v1 routes land per docs/development-plan.md
+  app/api/
+    [[...route]]/route.ts  # The ONLY file that knows Next.js hosts the API: exports handle(app) per method (ADR-0054)
+    */route.ts             # Legacy unversioned Next.js handlers (courses, coverage, ...) — retired in Phase 3; write no new ones
   lib/
-    terminusdb.ts          # Shared WOQLClient singleton
-    routeHelpers.ts        # createGetHandler factory for boilerplate GET routes
+    api/
+      app.ts               # The Armature API: Hono app, basePath /api/v1, routes, onError mapping. Never imports from next
+      app.test.ts          # In-process Vitest tests via app.request(); need the TerminusDB container running
+    terminusdb.ts          # Shared WOQLClient singleton (per-request client replaces it in Phase 2)
+    routeHelpers.ts        # Legacy: createGetHandler + handleTerminusError for the unversioned routes only
     types.ts               # GENERATED — do not edit; run npm run generate:types
+  vitest.config.mts        # Vitest: '@' alias, reads .env.local so tests hit the same store as the app
 docs/
   schema-guide.md          # Conceptual guide (in progress)
   SCHEMA_APPENDIX.md       # GENERATED — do not edit; run node scripts/generate-schema-appendix.js
@@ -137,6 +143,8 @@ Every junction document follows the same pattern:
 ### 1. The API is the boundary
 Plugins never touch TerminusDB directly. All reads and writes go through Armature API endpoints. This is both an architectural principle and a demo narrative requirement.
 
+The API is also host-neutral (ADR-0054). Every `/api/v1` route is a Hono route in `app/lib/api/`, written against Web-standard `Request` and `Response`. Nothing under `app/lib/api/` imports from `next`; the one catch-all route file is the only place the host appears. This is what makes moving to a separate process a deployment change rather than a rewrite.
+
 ### 2. Constraints belong in the API
 TerminusDB enforces type safety. Business logic constraints (minimum cardinality, sequence uniqueness, coverageStatus recomputation) belong in the API layer. See ADR-0006.
 
@@ -178,6 +186,9 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 2. Check git log for recent commits
 3. Read any files relevant to today's work
 
+### Tests
+`npm test` in `app/` runs Vitest. The tests under `app/lib/api/` call the Hono app in-process with `app.request()` and read from the TerminusDB container, so the container must be up with the seed loaded. They are integration tests and are not in CI until Phase 7 adds a TerminusDB service container; CI runs lint and the types drift check only.
+
 ### Session end
 Say "update session" and follow the prompt in `.claude/prompts/update-session.md`.
 
@@ -206,4 +217,7 @@ Follow the guide in `.claude/prompts/commit-message-guide.md`. Descriptive, conv
 - **Don't** put UI logic, import/export formats, or plugin-specific code in this repo
 - **Don't** change `schema.json` without an ADR
 - **Don't** edit `app/lib/types.ts` manually — it's generated; change `schema.json` and run `generate:types`
+- **Don't** write new API routes as Next.js route handlers — new routes are Hono routes in `app/lib/api/` under `/api/v1` (ADR-0054); the files under `app/app/api/*/route.ts` are legacy
+- **Don't** import from `next` anywhere under `app/lib/api/` — the host appears only in `app/app/api/[[...route]]/route.ts`
+- **Don't** forward store-internal tokens into the API contract without deciding their shape — the `TerminusDB-Data-Version` value is the store's `branch:<commit>` token today; Phase 2 decides what `/api/v1` exposes (ADR-0054 consequences)
 - **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will
