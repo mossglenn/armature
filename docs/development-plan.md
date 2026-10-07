@@ -726,6 +726,17 @@ what evidence would be enough.
   the asset store's branches, if used, belong to the asset tool's workflow and are named in the
   reference like any other revision coordinate.
 
+  **slash-builder/bitchain was evaluated on 2026-10-07** and is not a candidate: a one-person,
+  local-first Rust CLI aligned to Lore's storage format with no server, no HTTP or S3 path, no
+  revisions or history, a private-registry dependency, and no releases. One thing from it is
+  worth keeping. Its `context`, a 16-byte logical identity assigned once at ingest and kept
+  separate from the content hash so the slot stays stable while its bytes change, is the same
+  split as Armature's `fragmentId` plus attachment reference, and Lore's per-file identity is a
+  third instance. Three independent content-addressed designs reaching the same separation of
+  stable identity from content is evidence that ADR-0023's `fragmentId` and ADR-0030's reference
+  shape are the right pair, and that `fragmentId` must never be derived from content or
+  position.
+
 ---
 
 ## 7. Sequencing against CoQui's outbox plan
