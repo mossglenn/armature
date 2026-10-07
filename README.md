@@ -57,17 +57,30 @@ Every significant schema design decision is documented as an [Architecture Decis
 
 ## Getting Started
 
-The schema is designed for [TerminusDB](https://terminusdb.com). To load it:
+The schema is designed for [TerminusDB](https://terminusdb.com) v12. The repository runs the store in Docker and the API as a Next.js app on the host.
 
 ```bash
-# Start TerminusDB (Docker)
-docker run -p 6363:6363 terminusdb/terminusdb-server
+# 1. Start TerminusDB (pinned to v12.0.7 in docker/docker-compose.yml)
+cd docker && docker compose up -d && cd ..
 
-# Load the schema (using the TerminusDB Python client)
-python3 scripts/load_schema.py  # coming soon
+# 2. Install dependencies for the scripts and the app
+(cd scripts && npm install)
+(cd app && npm install)
+
+# 3. Configure the app's connection (not committed)
+#    app/.env.local needs TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS, TERMINUS_DB.
+#    TERMINUS_PASS must match TERMINUSDB_ADMIN_PASS given to the container (default: admin).
+
+# 4. Load the schema and the demo seed data
+node scripts/load_schema.js
+node scripts/seed_data.js
+
+# 5. Run the API
+cd app && npm run dev
+# GET http://localhost:3000/api/objectives, /api/coverage/<moduleId>, ...
 ```
 
-Full setup instructions will be added when the Docker Compose configuration and API are ready.
+The current routes are the demo-era API described in `docs/demo-api.md`. The generic, versioned API under `/api/v1/` is specified in `docs/development-plan.md` (see ADR-0026). After any change to `schema/schema.json`, run `npm run generate:types` in `app/`; CI fails if the generated types drift.
 
 ## Contributing
 
