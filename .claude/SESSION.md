@@ -106,7 +106,7 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 **Phase 0 is done locally but uncommitted.** First action next session: review and commit the Phase 0 changes (proposed commit sequence in the 2026-10-07 entry under Recent Sessions), push, and confirm the CI workflow goes green on `main`. That is the phase's exit criterion.
 
-**Before Phase 2 (can run alongside Phase 1):** the ADR-0054 verification spike (one session, on a branch): mount a Hono app from `app/app/api/[[...route]]/route.ts` with one `GET /api/v1/documents/:type/:id` route; confirm legacy routes still answer, response headers pass through the adapter, `npm run build` works, and the same app serves under `@hono/node-server`. Accept or reject ADR-0054 on the result. The first Hono routes are Phase 2's.
+**ADR-0054 accepted (2026-10-07) on the spike result; the spike branch is a PR against `main`.** Once merged, the API skeleton exists: `app/lib/api/app.ts` with one read route, mounted at `/api/v1`, with in-process tests. Phase 2's routes go into `app/lib/api/routes/`.
 
 **Then Phase 1 of `docs/development-plan.md` — schema catch-up (2 to 3 sessions):**
 
@@ -132,7 +132,9 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 - Design process data lives in the commit graph; the graph is a projection of any asset store's history, never a replay (ADR-0025)
 - Document writes that must carry an Armature `User` as author go over the HTTP document API (`author`, `message` params); the JS client is retained for reads and version-control calls only — narrows the earlier "JS client over raw HTTP" decision
 - Next.js routes remain the API host for this phase under `/api/v1` (ADR-0026); separate service stays the destination
-- **Proposed (ADR-0054):** the API is a Hono app in `app/lib/api/`, mounted in Next.js through one catch-all route via `@hono/vercel`; nothing under `app/lib/api/` imports from `next`. Gated on a spike. If accepted, ADR-0026 decision 1 reads "Next.js is the host, Hono is the API"; existing routes are not ported early; Zod request validation derives from `schema.json` via the generator
+- **ADR-0054 (Accepted 2026-10-07):** the API is a Hono app in `app/lib/api/`, mounted in Next.js through one catch-all route via `@hono/vercel`; nothing under `app/lib/api/` imports from `next`. ADR-0026 decision 1 now reads "Next.js is the host, Hono is the API". New routes are Hono routes only; the legacy Next.js handlers are not ported and die in Phase 3; Zod request validation derives from `schema.json` via the generator (Phase 3)
+- Two ADR-0054 knock-ons to decide later: the data-version token shape (`branch:<commit>` is the store's; Phase 2 decides what `/api/v1` exposes) and the standalone build step that resolves the `@/` alias (Phase 7)
+- `npm test` is Vitest, integration-only against the running container; not in CI until Phase 7's service container
 - TerminusDB docs are vendored, dated and pinned by `scripts/sync-terminusdb-docs.js`; never hand-copied; the `terminusdb` skill governs their use
 - Next.js app lives inside the Armature repo (`armature/app/`) — demo is part of the project
 - Next.js runs locally (not containerized) — TerminusDB stays in Docker; containerizing deferred to Phase 7
@@ -171,6 +173,16 @@ Key context:
 ---
 
 ## Recent Sessions
+
+### 2026-10-07 (ADR-0054 spike)
+
+- Phase 0 merged via PR #1 (rebase merge, ten commits); CI green on `main`
+- Ran the six-check Hono spike on `spike/adr-0054-hono`: route inside Next via `@hono/vercel`, legacy routes coexist with the catch-all, `TerminusDB-Data-Version` header passes through, build and all checks clean, same app served by `@hono/node-server`, three in-process Vitest tests. All pass; results in ADR-0054
+- Added Vitest (`npm test`, `vitest.config.mts` reading `.env.local`, `@/` alias); tests are integration tests against the running container and are not in CI until Phase 7
+- `@types/node` bumped 20 → 22 to satisfy Vitest's peer range (matches CI's Node 22). Local Node is now 24.21
+- One tooling note: Node cannot resolve the `@/` alias on its own; serving the app standalone for the check used `npx tsx`. Phase 7's container entry needs a real build step or relative imports
+- ADR-0054 accepted on the result. Amended ADR-0026 (decision 1), CLAUDE.md (stack, repo tree, Principle 1, Tests workflow, three What-Not-To-Do rules), PROJECT_CONTEXT.md, README, and the development plan (§3 host bullet, Phase 2 data-version decision and Hono routes, Phase 3 middleware and `onError`, Phase 7 container entry and build step, ADR queue row 0054, Phase 0 checkboxes marked done). The two unanticipated consequences are recorded in ADR-0054 §Consequences and as Phase 2 and Phase 7 work items
+- Committed on `spike/adr-0054-hono` and opened as a PR against `main`
 
 ### 2026-10-07 (Phase 0)
 
