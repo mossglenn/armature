@@ -526,12 +526,18 @@ async function main() {
   console.log(`Seeding "${TERMINUS_DB}" at ${TERMINUS_URL}`);
   console.log(`  → ${documents.length} documents to insert\n`);
 
-  // Clear existing instance data so re-runs are clean
-  // replaceDocument with full_replace on the instance graph wipes and reinserts
-  console.log("Inserting documents...");
-  await client.addDocument(documents, {
-    commit_info: { message: "Seed demo data: Introduction to AI for Instructional Designers" },
-  }, null, "replace");
+  // full_replace on the instance graph deletes every existing instance document
+  // and inserts the seed in one transaction, so re-runs are clean and idempotent.
+  // The commit message is addDocument's fourth positional argument; the client has
+  // no commit_info parameter (an earlier version passed one, which was ignored, and
+  // the string "replace" became the commit message).
+  console.log("Replacing instance data with the seed...");
+  await client.addDocument(
+    documents,
+    { full_replace: true },
+    null,
+    "Seed demo data: Introduction to AI for Instructional Designers",
+  );
 
   console.log(`  → Done.\n`);
   console.log(`GraphQL endpoint: http://127.0.0.1:6363/api/graphql/admin/armature`);
