@@ -239,18 +239,14 @@ export interface LearningActivity extends ArmatureDocument {
   targets: string[];  // LearningObjective @id[]
 }
 
-export interface ActivityGroup extends ArmatureDocument {
-  // no additional fields
-}
+export type ActivityGroup = ArmatureDocument;  // no additional fields
 
 export interface Module extends ArmatureDocument {
   sequence?: number;
   course: string;  // Course @id
 }
 
-export interface Course extends ArmatureDocument {
-  // no additional fields
-}
+export type Course = ArmatureDocument;  // no additional fields
 
 export interface DesignNote extends ArmatureDocument {
   rationale: string;
