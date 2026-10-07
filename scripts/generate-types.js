@@ -404,6 +404,16 @@ for (const id of CLASS_ORDER) {
   const base       = baseInterface(entry);
 
   if (isAbstract) line(`/** @abstract */`);
+
+  // A class with no own properties is emitted as a type alias, not an empty
+  // interface. `interface X extends Y {}` is equivalent to `type X = Y` and is
+  // rejected by @typescript-eslint/no-empty-object-type in the app's lint config.
+  if (getFields(entry).length === 0) {
+    line(`export type ${id} = ${base};  // no additional fields`);
+    line();
+    continue;
+  }
+
   line(`export interface ${id} extends ${base} {`);
   renderClassFields(entry);
   line(`}`);
