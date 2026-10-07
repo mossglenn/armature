@@ -11,7 +11,7 @@
 //   TERMINUS_PASS   - Admin password          (default: admin)
 //   TERMINUS_DB     - Database name           (default: armature)
 
-import { WOQLClient } from "@terminusdb/terminusdb-client";
+import { WOQLClient } from "terminusdb";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";

@@ -25,7 +25,7 @@
  *   TERMINUS_DB     - Database name           (default: armature)
  */
 
-import { WOQLClient } from "@terminusdb/terminusdb-client";
+import { WOQLClient } from "terminusdb";
 
 const TERMINUS_URL  = process.env.TERMINUS_URL  || "http://localhost:6363";
 const TERMINUS_USER = process.env.TERMINUS_USER || "admin";

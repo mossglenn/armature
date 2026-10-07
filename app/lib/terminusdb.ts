@@ -1,4 +1,4 @@
-import { WOQLClient } from '@terminusdb/terminusdb-client';
+import { WOQLClient } from 'terminusdb';
 
 const client = new WOQLClient(process.env.TERMINUS_URL!, {
     user: process.env.TERMINUS_USER!,
