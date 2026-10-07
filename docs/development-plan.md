@@ -205,9 +205,13 @@ TerminusDB
   as query parameters. The hub therefore issues document writes over HTTP directly, with the
   resolved Armature `User` as author, and keeps the client for everything else. SESSION.md's
   "JS client retained over raw HTTP" decision is narrowed to reads and version-control calls.
-- **Next.js stays the host for now.** PROJECT_CONTEXT's "separate API service" is reaffirmed as
-  the long-term goal and the Next.js routes are declared the API for this phase, under a
-  versioned prefix so moving hosts later is a deployment change, not a client change.
+- **Next.js stays the host for now; the API is a Hono app.** PROJECT_CONTEXT's "separate API
+  service" is reaffirmed as the long-term goal (ADR-0026). The API itself is a Hono application in
+  `app/lib/api/` that imports nothing from Next.js; a single catch-all route mounts it under the
+  versioned prefix (ADR-0054, accepted 2026-10-07 after a six-check spike). Moving hosts later is
+  a deployment change plus a build configuration that resolves the `@/` alias, never a handler
+  change. Every route Phases 2 to 6 add is a Hono route; the legacy Next.js handlers die in
+  Phase 3.
 - **The schema describes itself.** `@metadata.armature.category` on every class; a `GET /schema`
   route; generated types and a typed client derived from the same file. Tools discover types
   from the hub, not from a hand-maintained list.
@@ -287,30 +291,30 @@ Each phase lists its goal, the principles it serves, the work, the ADRs, an exit
 what CoQui's outbox plan receives from it. Session estimates assume sessions like those in
 `SESSION.md`.
 
-### Phase 0: Ground truth (1 session)
+### Phase 0: Ground truth (1 session) — done 2026-10-07, PR #1
 
 **Goal.** Make the repository say true things about itself before building on it.
 **Serves:** P2 (a credible infrastructure project), and every later phase.
 
 Work:
-- [ ] Fix `app/app/api/coverage/[moduleId]/route.ts`: status `5000`, three debug logs, error
+- [x] Fix `app/app/api/coverage/[moduleId]/route.ts`: status `5000`, three debug logs, error
       handling not routed through `handleTerminusError`, one round trip per objective.
-- [ ] Reconcile documents: README setup section (Python loader "coming soon"); SESSION.md counts
+- [x] Reconcile documents: README setup section (Python loader "coming soon"); SESSION.md counts
       ("15 ADRs", "24 document types") and its `Response` mentions; CLAUDE.md stack line
       ("Express or Fastify"); `docs/demo-api.md` coverage response shape and item shape.
-- [ ] Add CI: a GitHub Actions workflow running `npm run lint` and `npm run check:types` in
+- [x] Add CI: a GitHub Actions workflow running `npm run lint` and `npm run check:types` in
       `app/`. CLAUDE.md currently claims the drift check runs in CI; make it true.
-- [ ] Pin the store and update the client. `docker/docker-compose.yml` uses the `latest` tag;
+- [x] Pin the store and update the client. `docker/docker-compose.yml` uses the `latest` tag;
       pin `terminusdb/terminusdb-server:v12.0.7`, which is the build the local container already
       runs. Replace `@terminusdb/terminusdb-client@12.0.0` in `app/` and `scripts/` with the
       renamed `terminusdb@12.0.5` package, which is the same client under its current name and
       ships TypeScript types. Confirm the server-side `TERMINUSDB_ADMIN_PASS` and the credentials
       in `app/.env.local` agree: on 2026-10-05 the running container rejected the values in that
       file, so the app cannot currently connect.
-- [ ] Write **ADR-0026: API host and route versioning**. Next.js routes are the API for this
+- [x] Write **ADR-0026: API host and route versioning**. Next.js routes are the API for this
       phase under `/api/v1`; separate service remains the destination; what would trigger the
       move.
-- [ ] Add a "Reference clients" section to `.claude/PROJECT_CONTEXT.md` with the table from §2,
+- [x] Add a "Reference clients" section to `.claude/PROJECT_CONTEXT.md` with the table from §2,
       and the two-client test as a rule in CLAUDE.md's Development Principles.
 - [x] Vendor the TerminusDB documentation reproducibly. Done 2026-10-06:
       `scripts/sync-terminusdb-docs.js` pulls the Markdoc sources from the public
@@ -402,6 +406,14 @@ Work:
       and whether some document types merge without approval (CoQui's O-P). Change requests
       exist only as an unmaintained dashboard feature, so a review workflow above the merge is
       hub or plugin product work.
+- [ ] **Routes are Hono routes.** Branch, merge, read-at-ref, history and diff land in
+      `app/lib/api/routes/` and are mounted on the app from ADR-0054's spike; the data-version
+      header is read and echoed by middleware, not per handler.
+- [ ] **Decide the shape of the data-version token.** The client returns the branch head as
+      `branch:<commit-id>` and the spike route forwards it verbatim, which leaks the store's token
+      format into the contract. Decide whether `/api/v1` exposes the raw token or the bare commit
+      id that history and diff return, before CoQui's `httpHub` round-trips the header. Record in
+      ADR-0025 (ADR-0054 consequences).
 - [ ] **Per-request client and an HTTP write path.** Replace the singleton with
       `getClient({ branch?, ref? })`. Every handler receives it. Document writes go over the HTTP
       document API with `author` and `message` set from the resolved identity (see §3). The
@@ -461,6 +473,10 @@ Work:
       for local and demo use, OIDC later. `createdBy` and the commit author are set by the hub
       from the resolved identity, never from the body. Agent users are ordinary `User` documents
       with a documented naming convention.
+- [ ] Identity resolution and request validation are Hono middleware and validators on the
+      generic routes; the TerminusDB error mapping lives in the app's `onError`, replacing
+      `handleTerminusError` (ADR-0054 decision 4). Zod request schemas are emitted by
+      `scripts/generate-types.js` from `schema.json`, never hand-written.
 - [ ] Retire or alias the per-type routes. Keep `createGetHandler` only if it survives as the
       alias layer.
 
@@ -624,8 +640,13 @@ Work:
 - [ ] **Contract test owned by Armature.** A test suite that starts TerminusDB as a CI service
       container, loads the schema, seeds, and exercises every v1 route and every invariant.
       CoQui's planned `armature:check` becomes a second opinion, not the only one.
-- [ ] Containerize the app; a compose file that runs store and hub together; deploy one hosted
-      instance for the public demo so CoQui's recorded hub is a fallback rather than the source.
+- [ ] Containerize the hub: an entry file that serves the Hono app with `@hono/node-server`,
+      behind a build or transpile step that resolves the `@/` path alias (Node cannot; the
+      ADR-0054 spike needed `tsx` for the standalone check). A compose file that runs store and hub
+      together; deploy one hosted instance for the public demo so CoQui's recorded hub is a
+      fallback rather than the source. The Next.js app becomes the demo UI only, deployed
+      separately or not at all. The contract test above runs through `app.request()` against the
+      service container, so `npm test` joins CI here.
 - [ ] `docs/schema-guide.md` written at last, from the reference-client perspective: what a tool
       author needs to know to write and read the graph.
 
@@ -655,8 +676,10 @@ reading TerminusDB documentation.
 | 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Abstract `Fragment` subdocument; `ItemOption` as a specialisation; generic kinds with `sys:JSON` payload and per-kind validation; promotion path to typed subdocuments. Verify polymorphic subdocument lists first |
 | 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI as precedents); the hub never serves executable content from a graph document, renderers load sandboxed under CSP |
 
+| 0054 | The API is a Hono application | 0 (accepted 2026-10-07) | Amends ADR-0026 decision 1; host-neutral app in `app/lib/api/`, one catch-all mount; numbered past the reserved and candidate blocks |
+
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
-superseded.
+superseded. ADR-0026 is amended by ADR-0054.
 
 ---
 

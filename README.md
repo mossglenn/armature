@@ -80,7 +80,9 @@ cd app && npm run dev
 # GET http://localhost:3000/api/objectives, /api/coverage/<moduleId>, ...
 ```
 
-The current routes are the demo-era API described in `docs/demo-api.md`. The generic, versioned API under `/api/v1/` is specified in `docs/development-plan.md` (see ADR-0026). After any change to `schema/schema.json`, run `npm run generate:types` in `app/`; CI fails if the generated types drift.
+The API is a [Hono](https://hono.dev) application in `app/lib/api/`, mounted under `/api/v1/` by one catch-all Next.js route (ADR-0054); the Next.js app is its host for now and a standalone process is the destination (ADR-0026). The unversioned routes (`/api/courses`, `/api/coverage/...`) are the demo-era API described in `docs/demo-api.md` and are retired in Phase 3 of `docs/development-plan.md`, which specifies the full `/api/v1/` surface.
+
+After any change to `schema/schema.json`, run `npm run generate:types` in `app/`; CI fails if the generated types drift. `npm test` in `app/` runs the in-process API tests against the running TerminusDB container.
 
 ## Contributing
 
