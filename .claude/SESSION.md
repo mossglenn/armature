@@ -6,13 +6,25 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Planning complete → Phase 0 of `docs/development-plan.md` is next.** The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
+**Phase 0 (ground truth) complete on 2026-10-07 → Phase 1 of `docs/development-plan.md` (schema catch-up) is next.** The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
 
-History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey (October 2026).
+History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 (October 2026).
 
 ---
 
 ## What's Done
+
+### Phase 0: ground truth (2026-10-07)
+
+- `app/app/api/coverage/[moduleId]/route.ts` rewritten: HTTP 500 via `handleTerminusError` (was status `5000`), debug logs removed, two round trips regardless of module size (server-side document template query for the module's ModuleObjectives, one list read of LearningObjectives joined in memory). Verified on seed data: `how-ai-works` returns three objectives, one `Uncovered`
+- **The coverage route had never been committed.** The root `.gitignore`'s unanchored `coverage/` (a Jest pattern) ignored `app/app/api/coverage/`. Anchored to `/app/coverage/`; the route is now tracked
+- Generator fix: a class with no own properties emits `export type X = Base` instead of an empty interface, which `@typescript-eslint/no-empty-object-type` rejected. `npm run lint` is clean for the first time; `check:types` and `tsc --noEmit` pass
+- CI: `.github/workflows/ci.yml` runs `npm ci`, `npm run lint`, `npm run check:types` in `app/` on push to `main` and on pull requests (Node 22)
+- Store pinned: `docker/docker-compose.yml` uses `terminusdb/terminusdb-server:v12.0.7`. Client renamed: `terminusdb@12.0.5` replaces `@terminusdb/terminusdb-client@12.0.0` in `app/` and `scripts/`; the renamed package ships its own TypeScript types; imports updated in `app/lib/terminusdb.ts`, `scripts/load_schema.js`, `scripts/seed_data.js`
+- Credentials blocker resolved: recreating the container from compose (default `TERMINUSDB_ADMIN_PASS=admin`) made `app/.env.local` authenticate; the data volume and all 69 seed documents survived
+- `scripts/load_schema.js` was not idempotent on a database with data: it full-replaced the schema graph with the `@context` alone, which wiped every class and failed the schema check. Now one `full_replace` POST of context plus all types. `scripts/seed_data.js` now actually does the `full_replace` its comment claimed. Both passed an unsupported `commit_info` option and the string `"replace"` as the commit message; both now set real commit messages (verified in the store's log). Both re-run cleanly
+- **ADR-0026: API host and route versioning** (Accepted). Next.js routes are the API for this phase; new routes under `/api/v1/`; unversioned routes are legacy until Phase 3; triggers for moving to a separate service recorded
+- Documents reconciled: README setup section rewritten for the real stack; CLAUDE.md stack line and repo tree (no `api/`, CI added), two-client test added as Development Principle 6; PROJECT_CONTEXT.md gained the reference-clients table, the "separate API service" decision now points at ADR-0026, and the resolved open questions (API framework, seed domain) are closed; `docs/demo-api.md` carries a status banner and in-place "stale shape" notes on the item and coverage sections; `docs/terminusdb-schema-doc.md` removed (the vendored `schema-reference-guide.md` supersedes it); the `terminusdb` skill updated accordingly
 
 ### Planning and research (October 2026)
 
@@ -35,8 +47,8 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ### Infrastructure
 
-- TerminusDB running locally via Docker Compose (`docker/docker-compose.yml`); the local container is the v12.0.7 build under the `v12` tag
-- Schema loader script (`scripts/load_schema.js`) — idempotent, JS client, replace semantics
+- TerminusDB running locally via Docker Compose (`docker/docker-compose.yml`), image pinned to `v12.0.7`
+- Schema loader script (`scripts/load_schema.js`) — idempotent: one `full_replace` POST of the whole schema graph; safe to re-run against a database holding data
 - Schema documentation migration script (`scripts/migrate_schema_docs.js`) — reproducible for future migrations
 - Schema loaded and verified in local TerminusDB instance
 - GraphQL endpoint confirmed working: `http://127.0.0.1:6363/api/graphql/admin/armature`
@@ -63,8 +75,8 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 - `app/lib/routeHelpers.ts` — `createGetHandler(type)` factory for boilerplate GET routes
 - `app/lib/types.ts` — generated from `schema/schema.json`
 - All 8 simple GET routes implemented via factory: courses, objectives, modules, needs, assessments, items, prerequisites, notes
-- Custom GET `/api/coverage/[moduleId]` — fetches ModuleObjective junctions, joins LearningObjective labels. Known defects: returns status `5000` on error (invalid), leaves debug logs in, bypasses `handleTerminusError`, one round trip per objective (Phase 0)
-- Root `.gitignore` cleaned up — Next.js paths unanchored, duplicates removed, `.vscode/` exclusion removed (intentionally committed); `docs/vendor/terminusdb/_all/` ignored
+- Custom GET `/api/coverage/[moduleId]` — server-side template query for the module's ModuleObjective junctions, one list read of LearningObjectives, joined in memory; errors go through `handleTerminusError`. Returns a flat array; the summary shape arrives with `GET /api/v1/intelligence/coverage/:moduleId` in Phase 4
+- Root `.gitignore` — Next.js paths unanchored, `.vscode/` intentionally committed, `docs/vendor/terminusdb/_all/` ignored, test-coverage output anchored as `/app/coverage/` so API routes named `coverage` are tracked
 - `app/.env.local` — TerminusDB connection vars (not committed)
 
 ### Types Generation
@@ -92,17 +104,21 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ## What's Next
 
-**Phase 0 of `docs/development-plan.md` — ground truth (1 session):**
+**Phase 0 is done locally but uncommitted.** First action next session: review and commit the Phase 0 changes (proposed commit sequence in the 2026-10-07 entry under Recent Sessions), push, and confirm the CI workflow goes green on `main`. That is the phase's exit criterion.
 
-1. Fix `app/app/api/coverage/[moduleId]/route.ts` (status `5000`, debug logs, error handling, N+1 reads)
-2. Reconcile documents: README setup section; CLAUDE.md stack line ("Express or Fastify"); `docs/demo-api.md` item and coverage shapes; remove `docs/terminusdb-schema-doc.md` (superseded by `docs/vendor/terminusdb/schema-reference-guide.md`)
-3. Add CI: GitHub Actions running `npm run lint` and `npm run check:types` in `app/`
-4. Pin `terminusdb/terminusdb-server:v12.0.7` in compose; replace `@terminusdb/terminusdb-client@12.0.0` with `terminusdb@12.0.5` in `app/` and `scripts/`
-5. Resolve the `app/.env.local` credentials mismatch (see Blockers)
-6. Write ADR-0026 (API host and route versioning: Next.js under `/api/v1`)
-7. Add the reference-clients table to PROJECT_CONTEXT.md and the two-client test to CLAUDE.md's Development Principles
+**Before Phase 2 (can run alongside Phase 1):** the ADR-0054 verification spike (one session, on a branch): mount a Hono app from `app/app/api/[[...route]]/route.ts` with one `GET /api/v1/documents/:type/:id` route; confirm legacy routes still answer, response headers pass through the adapter, `npm run build` works, and the same app serves under `@hono/node-server`. Accept or reject ADR-0054 on the result. The first Hono routes are Phase 2's.
 
-**Then Phase 1 — schema catch-up.** Before any schema change, read `docs/research/adr-candidates.md` items 0035 (lossless writes under replace semantics) and 0036 (immutable shared history), which the research flags as data-loss risks; and run the platform checks the plan names (subdocument keys and inline return, polymorphic subdocument lists, four-level inheritance, `@metadata` survival).
+**Then Phase 1 of `docs/development-plan.md` — schema catch-up (2 to 3 sessions):**
+
+1. Read `docs/research/adr-candidates.md` items 0035 (lossless writes under replace semantics) and 0036 (immutable shared history) before touching the schema; both are data-loss risks the research flags
+2. Run the platform checks on the running v12.0.7 store: do subdocuments return inline by default or need `unfold`; does a `List` of subdocuments accept subtypes polymorphically; four-level inheritance; `@metadata` survival through load and read
+3. Land ADR-0022 and ADR-0023 in `schema.json`: remove `Response`; add `Fragment` (abstract subdocument, `@key: Random`) with `ItemOption` as its specialisation; `stem`, `correctFeedback`, `incorrectFeedback` with `fragmentId`
+4. Decide reload versus migration endpoint for removing `Response`; record in the ADR
+5. Generator and appendix support for subdocuments (inline the type instead of `string`)
+6. ADR-0017 to Accepted and implemented (`DesignRecord`); ADR-0018 (`AssessmentItem.status`); ADR-0020 (`DesignFinding`, `FindingStatus`)
+7. ADR-0027 schema self-description: `@metadata.armature.category` on every class; generator derives `JUNCTION_IDS` and `CLASS_ORDER` from it
+8. ADR-0024 client-supplied identifiers
+9. Seed data rewrite (real option text and fragment ids, varied `status`, one `DesignFinding`, one `DesignNote` on a junction); regenerate `types.ts` and `SCHEMA_APPENDIX.md`
 
 ---
 
@@ -115,7 +131,8 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 - Items are a tree of fragments; `ItemOption` is a `Fragment` specialisation so generic kinds can sit beside it (ADR-0033); behaviour is a versioned `InteractionType`, and the hub never serves executable content from a graph document (ADR-0034)
 - Design process data lives in the commit graph; the graph is a projection of any asset store's history, never a replay (ADR-0025)
 - Document writes that must carry an Armature `User` as author go over the HTTP document API (`author`, `message` params); the JS client is retained for reads and version-control calls only — narrows the earlier "JS client over raw HTTP" decision
-- Next.js routes remain the API host for this phase under `/api/v1` (ADR-0026 to record it); separate service stays the destination
+- Next.js routes remain the API host for this phase under `/api/v1` (ADR-0026); separate service stays the destination
+- **Proposed (ADR-0054):** the API is a Hono app in `app/lib/api/`, mounted in Next.js through one catch-all route via `@hono/vercel`; nothing under `app/lib/api/` imports from `next`. Gated on a spike. If accepted, ADR-0026 decision 1 reads "Next.js is the host, Hono is the API"; existing routes are not ported early; Zod request validation derives from `schema.json` via the generator
 - TerminusDB docs are vendored, dated and pinned by `scripts/sync-terminusdb-docs.js`; never hand-copied; the `terminusdb` skill governs their use
 - Next.js app lives inside the Armature repo (`armature/app/`) — demo is part of the project
 - Next.js runs locally (not containerized) — TerminusDB stays in Docker; containerizing deferred to Phase 7
@@ -130,13 +147,19 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ## Blockers
 
-- **App cannot connect to the local TerminusDB.** On 2026-10-05 the credentials in `app/.env.local` were rejected by the running container (`api:IncorrectAuthenticationError`); the documented default and the compose default were also rejected. Likely the container was started with a different `TERMINUSDB_ADMIN_PASS`. Diagnose before any route work (Phase 0, item 5).
+None. The 2026-10-05 credentials failure was the previously running container having been started with a different `TERMINUSDB_ADMIN_PASS`; `docker compose up -d` recreated it from the compose defaults and `app/.env.local` authenticates. If it recurs, recreate the container rather than editing `.env.local`.
 
 ---
 
 ## Notes for Next Session
 
-Start Phase 0 of `docs/development-plan.md`. It is one session of hygiene with no design decisions in it, and everything after it depends on CI existing and the documents agreeing with each other.
+Commit and push Phase 0 first (see the 2026-10-07 entry below for the proposed commit sequence), confirm CI is green, then start Phase 1. Phase 1 is schema work: every change needs an ADR first, and `types.ts` plus `SCHEMA_APPENDIX.md` are regenerated and committed with `schema.json`.
+
+Phase 0 facts worth carrying forward:
+- Anything under a directory named `coverage` was silently ignored by git until 2026-10-07. Check `git ls-files` when a route seems to exist locally but not in history.
+- `addDocument(json, params, dbId, message)`: the commit message is the fourth positional argument. There is no `commit_info` parameter. `full_replace: true` replaces a whole graph atomically and is the right way to reload the schema or the seed.
+- The client passes URL parameters through unvalidated. A document template query (`query: { '@type': ..., field: value }`) filters server-side and is used by the coverage route. The HTTP API's `ids` list parameter has not been verified on the store; verify before relying on it.
+- TerminusDB is running in Docker (container recreated 2026-10-07); the app connects with `app/.env.local` as is.
 
 Key context:
 - The plan's §9 lists every TerminusDB platform fact relied on, with two corrections to what the CoQui handoff assumed (merge exists; JS client cannot set commit author). The CoQui handoff's "no three-way merge" line should be corrected on CoQui's side when PR 6 is picked up.
@@ -148,6 +171,26 @@ Key context:
 ---
 
 ## Recent Sessions
+
+### 2026-10-07 (Phase 0)
+
+- Report on project state, then executed Phase 0 of the development plan end to end
+- Found two defects no document recorded: `npm run lint` failed on generated empty interfaces (generator now emits type aliases), and the coverage route was never tracked by git because of an unanchored `coverage/` ignore pattern
+- Rewrote the coverage route (status 500, `handleTerminusError`, two round trips via a template query); verified against seed data through the running app
+- Swapped the client to `terminusdb@12.0.5`, pinned the store to `v12.0.7`, recreated the container, confirmed `.env.local` authenticates and the 69 seed documents survived
+- Fixed `load_schema.js` (full replace of the whole schema graph; it previously wiped the classes and failed on a database with data) and `seed_data.js` (real `full_replace`, real commit message); both re-run cleanly
+- Added CI, ADR-0026, the reference-clients table, the two-client test, and reconciled README, CLAUDE.md, PROJECT_CONTEXT.md, demo-api.md; removed the hand-copied TerminusDB page
+- Discussed API hosts: no prior document compared them; the risk is the absence of a host-neutral seam growing with each route. Wrote **ADR-0054 (Proposed): the API as a Hono app** mounted inside Next.js via `@hono/vercel`, with a one-session verification spike as the acceptance gate; cross-referenced from ADR-0026
+- Nothing committed yet. Proposed commit sequence, one logical change each (add `docs(adr): propose ADR-0054, the API as a Hono app` after item 7):
+  1. `chore(app): emit type aliases for property-less classes so lint passes` (generate-types.js, types.ts)
+  2. `fix(app): track and repair the coverage route` (.gitignore, coverage route)
+  3. `chore(docker): pin terminusdb-server to v12.0.7` (compose)
+  4. `chore(deps): replace @terminusdb/terminusdb-client with terminusdb@12.0.5` (both package.json, lockfiles, three imports)
+  5. `fix(scripts): make schema loader and seed idempotent with real commit messages` (load_schema.js, seed_data.js)
+  6. `chore(ci): add lint and generated-types drift check` (.github/workflows/ci.yml)
+  7. `docs(adr): add ADR-0026 API host and route versioning`
+  8. `docs: reconcile README, CLAUDE.md, PROJECT_CONTEXT, demo-api with the actual stack; remove hand-copied TerminusDB page` (README, .claude/*, docs/demo-api.md, docs/terminusdb-schema-doc.md, skill)
+  9. `docs(.claude): update session state for 2026-10-07`
 
 ### 2026-10-05 to 2026-10-07
 
