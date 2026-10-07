@@ -103,6 +103,26 @@ This demonstrates Armature as pre-delivery design-time intelligence.
 
 ---
 
+## Reference Clients
+
+CoQui is the only real client, and a hub shaped to fit one client is a backend, not infrastructure. To keep the hub generic, every ask is tested against the tools below (the two-client test, CLAUDE.md Development Principle 6): a capability enters the hub only when at least two of these clients would need it, and only in the generic form they share. The table is a checklist, not a commitment to build anything. `docs/development-plan.md` §2 applies it to each of CoQui's asks.
+
+| Reference client | What it does | What it needs from the hub |
+|---|---|---|
+| **CoQui** (real) | SME review of assessment items in rounds | Read by id at a commit; branch per round; replace-by-id writes; findings; attestations on item parts; users; history |
+| **Objective and curriculum mapper** | Author objectives, prerequisites, module declarations; link to CASE competencies | Transitive prerequisite queries; objective history and impact analysis; external competency references; ModuleObjective writes with coverage recompute |
+| **Needs-analysis intake** | Record evidence, needs, priorities; a decision log as a graph | Evidence and need writes; NeedEvidenceLink confidence; DesignNote and a future DesignDecision; provenance trace from objective back to evidence |
+| **Activity and strategy designer** | Plan activities and groups per module; see strategy coverage | Sequenced module content (ADR-0005); "which objectives have no Practice activity" queries; ActivityGroup flatness enforced |
+| **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistic write-back; xAPI and QTI references; bulk atomic writes |
+| **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description |
+| **AI design assistant** | Propose items, objectives or alignments inside another tool | Agent `User` provenance; design-intelligence reads for context; the same write path and constraints as humans |
+| **Rich item authoring tool** | Author drag-and-drop, hotspot and media-bearing items on a shared item bank | Items as a tree of addressable fragments; attachment references on fragments; interaction types with versioned renderers; impact analysis when a renderer or an image changes |
+| **Complex learning object designer** (distant) | Develop simulations and other multi-file learning objects, with their own asset store or the hub's | References to a revision of an asset tree, with hash and reason; impact analysis when an asset revision moves; attestations and findings against a revision |
+
+Three CoQui concepts fail the test and never enter the hub: the **round**, the **craft grid**, and CoQui's **review workflow states**. They map onto branches, `claimRef`, `ItemStatus` and `User` at CoQui's boundary.
+
+---
+
 ## CoQui
 
 CoQui is the first plugin built on Armature. It is an assessment authoring tool — specifically, it addresses the SME review bottleneck in instructional design workflows.
@@ -130,7 +150,7 @@ These are settled. Don't re-open them without a strong reason.
 - **Shared integer sequence space for module content** (ADR-0005)
 - **API enforces minimum cardinality** (ADR-0006)
 - **ModuleObjective is programmatic, not UI-editable** (ADR-0007)
-- **Separate API service** (not Next.js API routes in CoQui) — the separation demonstrates the hub-plugin architecture
+- **The API is a boundary CoQui never crosses** — plugins talk to Armature routes, never to TerminusDB. For the current phase those routes are the Next.js handlers in this repo under `/api/v1`; a separate API service remains the destination and the triggers for the move are recorded in ADR-0026
 
 ---
 
@@ -138,7 +158,8 @@ These are settled. Don't re-open them without a strong reason.
 
 These are not yet decided. Treat them as design questions to explore, not gaps to fill arbitrarily.
 
-- **API framework:** Express vs. Fastify. No strong reason to prefer one yet.
-- **Seed data content domain:** What is the demo course about? Should be realistic enough to be convincing, simple enough to build quickly.
-- **Coverage computation algorithm:** What exactly makes a `CoverageStatus` value "FullyAssessed" vs. "PartiallyAssessed"? Needs definition before the API can implement it.
-- **Authentication model:** Not needed for the demo. Deferred per ADR-0010.
+- **Coverage computation algorithm:** What exactly makes a `CoverageStatus` value "FullyAssessed" vs. "PartiallyAssessed"? To be defined in ADR-0029 (Phase 4 of `docs/development-plan.md`).
+- **Authentication model:** Not needed for the demo. Deferred per ADR-0010; identity resolution is ADR-0032 (Phase 3).
+- **Merge policy, project boundaries, AI provenance beyond `createdBy`:** see `docs/development-plan.md` §6 for each question and the evidence that would settle it.
+
+Resolved since this list was written: the API framework question (ADR-0026: Next.js routes are the API host; no Express or Fastify service) and the seed data content domain ("Introduction to AI for Instructional Designers", `scripts/seed_data.js`).

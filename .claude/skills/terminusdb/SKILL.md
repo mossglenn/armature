@@ -105,8 +105,9 @@ Recorded in `docs/development-plan.md` §9 as of v12.0.7. The ones most often ne
 
 ## Do not
 
-- Do not quote `docs/terminusdb-schema-doc.md`; it is a March 2026 hand copy superseded by
-  `docs/vendor/terminusdb/schema-reference-guide.md`.
+- Do not hand-copy documentation pages into `docs/`. The March 2026 hand copy
+  `docs/terminusdb-schema-doc.md` was removed on 2026-10-07; its content is
+  `docs/vendor/terminusdb/schema-reference-guide.md`, kept current by the sync script.
 - Do not edit anything under `docs/vendor/terminusdb/` by hand; the next sync overwrites it.
 - Do not treat the docs as authoritative about the JavaScript client when the source is one
   file away.

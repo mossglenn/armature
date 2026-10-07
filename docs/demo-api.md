@@ -1,6 +1,6 @@
 # Armature Demo API
 
-> **Status: Planned.** This document defines the API surface for the Armature demo application. The demo API is not a general-purpose data API — it is a purpose-built interface layer that exposes Armature's artifact graph through a small set of instructional design tools.
+> **Status: Partly implemented, partly superseded (2026-10-07).** This document defined the demo-era API: per-type routes shaped around demo tools. Of it, the eight simple GET list routes, `GET /coverage/:moduleId`, `POST /courses` and `POST /modules` exist today, unversioned, as legacy routes (ADR-0026). The rest was never built and will not be built in this form: `docs/development-plan.md` replaces per-type POST routes with a generic document API under `/api/v1/` (Phase 3) and replaces the coverage route with `GET /api/v1/intelligence/coverage/:moduleId` (Phase 4). Two shapes below are stale and are flagged in place: the item shape (superseded by ADR-0022 and ADR-0023) and the coverage response (not what the current route returns). The demo-tool framing and the "narrow domain layer" idea remain useful context for what the generic API must still make possible.
 
 ## Purpose
 
@@ -209,6 +209,8 @@ Creates a learning objective. Optionally links to a LearningNeed and creates a M
 
 ### Assessment Items
 
+> **Stale shape.** The `responses` array below reflects the pre-ADR-0022 schema, in which options were separate `Response` documents. ADR-0022 (Accepted) embeds options in the item as `ItemOption` subdocuments, and ADR-0023 gives the stem, each option and both general feedbacks a client-assigned `fragmentId`. The schema change itself lands in Phase 1 of `docs/development-plan.md`; until then the running store still holds `Response` documents and `GET /items` returns raw item documents without joined objective labels. Treat the shapes in this section as historical.
+
 #### `GET /items`
 Returns all assessment items with their objective alignments. Used by the Coverage View and item builder review state.
 
@@ -386,7 +388,9 @@ Attaches a DesignNote to one or more artifacts.
 #### `GET /coverage/:moduleId`
 Returns coverage analysis for a module — which declared objectives are covered, partially covered, uncovered, or over-assessed. This is the primary demo of Armature's graph intelligence.
 
-**Response:**
+> **Stale shape.** The response below is the target for `GET /api/v1/intelligence/coverage/:moduleId` (Phase 4, ADR-0029), not what the current route returns. Today `GET /api/coverage/:moduleId` returns a flat array, one entry per ModuleObjective: `{ id, label, coverageStatus, role, sequence }`, where `id` and `label` are the LearningObjective's, and `coverageStatus` is the seeded value, not a computed one. The `summary` block and the `assessedBy` items arrive with the recompute in Phase 4.
+
+**Target response:**
 ```json
 {
   "module": {

@@ -18,7 +18,7 @@ The core insight: current instructional design tools capture *what was built* bu
 
 ### Stack
 - **TerminusDB** — graph database storing the artifact graph
-- **Armature API** — Node.js (Express or Fastify) service exposing domain endpoints; translates REST calls to WOQL queries
+- **Armature API** — Next.js route handlers in `app/app/api/`, the API host for the current phase (ADR-0026). New routes mount under `/api/v1/`; the unversioned routes are legacy until Phase 3. A separate service remains the long-term destination
 - **CoQui** — first plugin; an assessment authoring tool built on top of the Armature API (separate repo, not here)
 - **Docker Compose** — orchestrates TerminusDB + API for local development and deployment
 
@@ -35,8 +35,8 @@ The API is the boundary. Plugins never talk to TerminusDB directly. This is arch
 schema/
   schema.json              # TerminusDB schema — single source of truth for all types
   docs/adr/                # Architecture Decision Records
-api/                       # Armature API (Express/Fastify) — to be built
-docker/                    # Docker Compose configuration
+docker/                    # Docker Compose configuration (TerminusDB pinned to v12.0.7)
+.github/workflows/ci.yml   # CI: npm run lint + npm run check:types in app/
 scripts/
   generate-types.js        # Derives app/lib/types.ts from schema.json — run after schema changes
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
@@ -45,7 +45,7 @@ scripts/
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill)
 app/
-  app/api/                 # Next.js API routes (GET endpoints live, POST in progress)
+  app/api/                 # Next.js API routes — the Armature API (ADR-0026); legacy unversioned routes live, /api/v1 routes land per docs/development-plan.md
   lib/
     terminusdb.ts          # Shared WOQLClient singleton
     routeHelpers.ts        # createGetHandler factory for boilerplate GET routes
@@ -149,7 +149,10 @@ Any modification to `schema/schema.json` that changes existing types or adds new
 ### 5. Framework vs. plugin boundary
 Ask before adding anything: "Does this belong in the graph infrastructure, or in a specific tool's UX?" System-of-record concerns (artifact typing, relationships, schema versioning) belong here. Editing workflows, import/export formats, and UI patterns belong in plugins.
 
-### 6. Text fields on rationale-bearing documents are intentionally provisional
+### 6. The two-client test
+A capability requested by one client enters the hub only in the generic form a second reference client would also need. Test every ask against the reference-clients table in PROJECT_CONTEXT.md: if at least two clients need it, adopt the generic form; if only one does, it stays in that plugin. CoQui's round, craft grid, claim version and workflow states are the standing examples of asks that fail the test and map onto branches, `claimRef`, `ItemStatus` and `User` at CoQui's boundary. See `docs/development-plan.md` §2.
+
+### 7. Text fields on rationale-bearing documents are intentionally provisional
 Fields like `LearningNeed.rationale`, `PrerequisiteRecord.rationale`, and `DesignNote.rationale` are free-text placeholders, not design failures. The schema cannot pre-design structure for design decisions it doesn't yet understand — real usage patterns in the graph will reveal what structure is warranted. When those patterns emerge, text fields can be progressively formalized: add an optional enum alongside the existing text field, introduce a structured type, or reify the relationship as a junction document. Do not suggest replacing text fields with structured types without concrete evidence from real usage. The migration path is intentionally clean: optional field additions don't break existing records, and TerminusDB schema migration supports incremental formalization. See ADR-0010.
 
 ---
@@ -164,6 +167,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0005** — Module content sequencing (affects activity ordering logic)
 - **ADR-0006** — Minimum cardinality enforced by API (affects all create/update validators)
 - **ADR-0007** — ModuleObjective as programmatic junction (affects coverage computation)
+- **ADR-0026** — API host and route versioning (Next.js routes are the API; new routes under `/api/v1`)
 
 ---
 
