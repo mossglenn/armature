@@ -75,38 +75,35 @@ async function main() {
   }
 
   // 4. Load the schema
-  //    The schema array has two kinds of entries:
-  //      - The @context entry (type "@context") — must be loaded via replaceDocument
-  //        with full_replace: true. This sets the namespace prefixes for the whole schema.
-  //      - All other entries (Enum and Class definitions) — loaded via addDocument
-  //        with graph_type: "schema" and replace semantics.
+  //    One POST to the schema graph with full_replace: true. The server deletes the
+  //    existing schema and inserts the posted one in a single transaction, then runs
+  //    the schema check against the instance data that is already there.
+  //
+  //    Why one call: an earlier version posted the @context alone with full_replace
+  //    and then the classes without it. On an empty database that worked. On a
+  //    database holding seed data the first call replaced the whole schema with just
+  //    the context, every instance document failed the schema check, and the loader
+  //    died with "Schema check failure". Replacing the whole schema atomically is the
+  //    documented purpose of full_replace and is idempotent against existing data as
+  //    long as the data still conforms to the new schema.
+  //
+  //    The commit message is the fourth positional argument of addDocument; the
+  //    client does not accept a commit_info parameter.
   console.log(`\nLoading schema...`);
-
-  const contextEntry = schema.find(entry => entry["@type"] === "@context");
 
   // Strip top-level @comment keys from each entry — TerminusDB rejects @-prefixed
   // properties that aren't part of its schema language. Our @comment entries are
   // human-readable section dividers that don't need to be sent to the database.
-  const schemaEntries = schema
-    .filter(entry => entry["@type"] !== "@context")
-    .map(({ "@comment": _comment, ...rest }) => rest);
+  const schemaDocuments = schema.map(({ "@comment": _comment, ...rest }) => rest);
+  const typeCount = schemaDocuments.filter(entry => entry["@type"] !== "@context").length;
 
-  // Load the context first using full replace
-  if (contextEntry) {
-    console.log(`  → Loading @context...`);
-    await client.addDocument([contextEntry], {
-      graph_type: "schema",
-      full_replace: true,
-      commit_info: { message: "Load Armature schema context" },
-    });
-  }
-
-  // Load all type definitions
-  console.log(`  → Loading ${schemaEntries.length} type definitions...`);
-  await client.addDocument(schemaEntries, {
-    graph_type: "schema",
-    commit_info: { message: "Load Armature schema from schema.json" },
-  }, null, "replace");
+  console.log(`  → Replacing schema graph: @context + ${typeCount} type definitions...`);
+  await client.addDocument(
+    schemaDocuments,
+    { graph_type: "schema", full_replace: true },
+    null,
+    "Load Armature schema from schema.json",
+  );
 
   console.log(`  → Schema loaded`);
 
