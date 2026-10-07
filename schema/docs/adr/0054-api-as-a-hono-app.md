@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed (2026-10-07). Amends ADR-0026 decision 1 if accepted. Acceptance is gated on the
-verification spike in §Verification before acceptance.
+Accepted (2026-10-07). Proposed and verified the same day: the six-check spike in §Verification
+before acceptance passed in full (results recorded there). Amends ADR-0026 decision 1.
 
 Numbering note: ADR-0027 to ADR-0034 are reserved by `docs/development-plan.md` §5 and ADR-0035 to
 ADR-0053 are provisional candidates in `docs/research/adr-candidates.md`. This is the first free
@@ -122,7 +122,57 @@ A one-session spike, on a branch, that:
 
 If step 2, 3 or 5 fails, the ADR is revised or rejected and ADR-0026 stands as written.
 
+### Spike results (2026-10-07, branch `spike/adr-0054-hono`)
+
+All six checks passed against the running v12.0.7 store with the seed loaded.
+
+| Check | Result | Evidence |
+|---|---|---|
+| 1. Route works inside Next.js | Pass | `GET /api/v1/documents/Module/how-ai-works` returns the document, HTTP 200; missing id returns `{"error":"Document not found"}`, HTTP 404 |
+| 2. Legacy routes coexist with the catch-all | Pass | `/api/courses` and `/api/coverage/how-ai-works` still answer 200 beside `app/api/[[...route]]/route.ts`; unknown paths under `/api/v1` and bare `/api` return Hono's 404 |
+| 3. Response header passes through the adapter | Pass | `terminusdb-data-version: branch:<commit>` reaches curl through `@hono/vercel`, so the Phase 2 data-version contract is viable |
+| 4. Build, lint, types | Pass | `npm run build` lists `ƒ /api/[[...route]]` beside the legacy routes; `npm run lint`, `npm run check:types`, `tsc --noEmit` clean |
+| 5. Same app under `@hono/node-server` | Pass | A six-line scratch entry served `app.fetch` on port 3100 with identical 200 and 404 responses and the same header; entry deleted afterward |
+| 6. In-process test | Pass | Three Vitest tests through `app.request()`: seeded module with data version, missing id, id under another type. No HTTP server started |
+
+What the spike added to the repository (the only Hono code until Phase 2):
+`app/lib/api/app.ts` (the app, one route, `onError` mapping), `app/app/api/[[...route]]/route.ts`
+(the host mount), `app/lib/api/app.test.ts`, `app/vitest.config.mts`, and an `npm test` script.
+Dependencies pinned exactly: `hono` 4.13.13, `@hono/vercel` 1.0.0, `@hono/node-server` 2.1.3 (dev),
+`vitest` 5.0.3 (dev). `@types/node` moved from 20 to 22 to satisfy Vitest's peer range, matching
+CI's Node 22.
+
+Two things learned that the decision did not anticipate:
+- The client's `getDocument(..., getDataVersion = true)` returns `{ result, dataVersion }` with the
+  branch head as `branch:<commit>`. The route forwards it unchanged. Phase 2 should decide whether
+  to expose the raw store token or a hub-shaped one.
+- Vitest with Next's `@/` path alias needs one line of alias config, and `.env.local` is read by
+  the config so tests hit the same store the app does. The tests are integration tests and need the
+  container; they are not in CI until Phase 7 adds a TerminusDB service container.
+
+The gate is satisfied; the ADR was accepted on the result.
+
 ## Consequences
+
+Two consequences the decision did not anticipate, found by the spike:
+
+- **The data-version token is the store's, not the hub's.** The client returns the branch head as
+  `branch:<commit-id>`, and the spike route forwards it verbatim in `TerminusDB-Data-Version`.
+  That leaks the store's token format into the API contract. Phase 2's read-at-ref and
+  optimistic-concurrency work must decide whether `/api/v1` exposes the raw token or a hub-shaped
+  one (for example the bare commit id, which is also what history and diff routes return), and
+  must decide it before CoQui's `httpHub` starts round-tripping the header. Recorded as a Phase 2
+  work item and in ADR-0025's scope.
+- **Standalone serving needs a build step.** `app/lib/api/` uses the Next.js `@/` path alias,
+  which Node cannot resolve on its own; the spike served the app standalone through `tsx`, which
+  reads `tsconfig.json`. Phase 7's container entry for `@hono/node-server` therefore needs either
+  a bundling or transpile step that resolves the alias, or relative imports inside `app/lib/api/`.
+  The former is preferred so that the module keeps one import convention with the rest of the
+  app; the choice is made in Phase 7 with the `packages/` split. Until then, "the move is a
+  deployment change" means "a deployment change plus a build configuration", which is still not a
+  handler change.
+
+Everything else as anticipated:
 
 - The host move is a deployment change in fact, not only in intent. Every route written from
   Phase 2 onward is portable on the day it is written.
