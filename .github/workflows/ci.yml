@@ -1,0 +1,32 @@
+# Armature CI
+#
+# Guards the two contracts the repository relies on without a running store:
+#   1. `schema/schema.json` and the generated `app/lib/types.ts` agree (check:types)
+#   2. the Next.js app lints clean
+#
+# A contract suite that starts TerminusDB as a service container, loads the schema
+# and exercises every route is Phase 7 of docs/development-plan.md.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    name: Lint and generated-types drift check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check:types
