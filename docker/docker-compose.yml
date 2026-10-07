@@ -1,6 +1,6 @@
 services:
   terminusdb:
-    image: terminusdb/terminusdb-server:latest
+    image: terminusdb/terminusdb-server:v12.0.7
     ports:
       - "6363:6363"
     volumes:
