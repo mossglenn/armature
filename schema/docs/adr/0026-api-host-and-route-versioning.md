@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted (2026-10-07). Decision 1 is proposed for amendment by ADR-0054 (the API as a Hono
-application mounted inside Next.js); decisions 2 to 4 are unaffected by that proposal.
+Accepted (2026-10-07). Decision 1 amended the same day by ADR-0054 (the API is a Hono
+application; Next.js is its host). Decisions 2 to 4 are unchanged.
 
 ## Context
 
@@ -20,10 +20,15 @@ not follow is that the boundary must be a separate process today. The boundary i
 
 ## Decision
 
-1. **The Next.js route handlers in `app/app/api/` are the Armature API for the current phase of
-   development** (Phases 0 to 6 of `docs/development-plan.md`). There is no `api/` directory and no
-   Express or Fastify service. That open question is closed: neither is chosen, because no separate
-   process exists to need one.
+1. **The Next.js app is the host of the Armature API for the current phase of development**
+   (Phases 0 to 6 of `docs/development-plan.md`). There is no `api/` directory and no Express or
+   Fastify service. That open question is closed: neither is chosen, because no separate process
+   exists to need one.
+
+   *As originally written, this decision said the Next.js route handlers themselves were the API.
+   ADR-0054 amends it: the API is a Hono application in `app/lib/api/`, and Next.js serves it
+   through a single catch-all route handler. The legacy unversioned routes in decision 3 remain
+   Next.js handlers until Phase 3 retires them.*
 
 2. **All new routes are mounted under a versioned prefix, `/api/v1/`.** The generic document API,
    branch, history, diff, user and intelligence routes the plan describes all land there. The
