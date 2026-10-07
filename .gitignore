@@ -38,7 +38,7 @@ next-env.d.ts
 *.tsbuildinfo
 
 # Coverage
-coverage/
+/app/coverage/
 
 # Misc
 *.pem
