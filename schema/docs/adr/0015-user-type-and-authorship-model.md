@@ -45,4 +45,4 @@ Fields:
 - `externalId` values may not resolve in a new deployment's auth system after export/re-import. The `User` document is intact and human-readable via `displayName`, `email`, and `institution`; only the API's identity-resolution lookup is affected.
 
 ## Related
-ADR-0010 (authorship deferred, now implemented), ADR-0014 (ArmatureDocument base class)
+ADR-0010 (authorship deferred, now implemented), ADR-0014 (ArmatureDocument base class), ADR-0032 (identity resolution: implements this boundary; `main` is the `User` registry; first-encounter creation only when the claims carry a `displayName`; `createdBy` set on create and preserved on replace)
