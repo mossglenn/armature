@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { CLASS_CATEGORY } from '@/lib/types';
+import { hasCreatedBy, isKnownType, isWritable } from '../classes';
 import { ApiError } from '../errors';
 import {
   branchFromQuery,
@@ -10,7 +10,7 @@ import {
   requireCommit,
   setEtag,
 } from '../http';
-import { resolveAuthor } from '../identity';
+import { resolveUser, userCopyFor } from '../identity';
 import { createStore, isRecord, StoreError, type TerminusDocument } from '../store';
 
 /**
@@ -26,17 +26,16 @@ import { createStore, isRecord, StoreError, type TerminusDocument } from '../sto
  * with the route, that the id is not held by another type (ADR-0024), and
  * that an author and a reason are present. Writable classes are the artifact
  * and relationship categories: fragments are parts of a document, and
- * infrastructure (`User`, the abstract roots) is not written here. In
- * particular a caller cannot mint the `User` it then names as author; users
- * arrive with `POST /users` and identity resolution in Phase 3 (ADR-0032).
+ * infrastructure (`User`, the abstract roots) is not written here; users are
+ * registered through /users and identity resolution (ADR-0032).
+ *
+ * Identity (ADR-0032 decisions 4 and 5): the commit author is the resolved
+ * User. On a class that carries createdBy, a create sets it to the resolved
+ * User and a replace keeps the stored value; the body's value is ignored. When
+ * the branch lacks the User that createdBy names, main's copy is written in
+ * the same commit so the reference is valid.
  */
 export const documents = new Hono();
-
-const isKnownType = (type: string): boolean => Object.prototype.hasOwnProperty.call(CLASS_CATEGORY, type);
-const isWritable = (type: string): boolean => {
-  const category = (CLASS_CATEGORY as Record<string, string>)[type];
-  return category === 'artifact' || category === 'relationship';
-};
 
 documents.get('/:type/:id', async (c) => {
   const { type, id } = c.req.param();
@@ -76,21 +75,38 @@ documents.put('/:type/:id', async (c) => {
   const document: TerminusDocument = { ...input, '@id': docId, '@type': type };
 
   const store = createStore(ref);
-  const author = await resolveAuthor(c, store);
+  const who = await resolveUser(c);
 
   // An id held by another type is a conflict, never a replace (ADR-0024).
+  let existing: TerminusDocument | undefined;
   try {
-    const existing = await store.getDocument(docId);
-    if (existing.document['@type'] !== type) {
-      throw new ApiError(409, 'type_conflict', `${docId} already exists as ${existing.document['@type']}`);
+    existing = (await store.getDocument(docId)).document;
+    if (existing['@type'] !== type) {
+      throw new ApiError(409, 'type_conflict', `${docId} already exists as ${existing['@type']}`);
     }
   } catch (err) {
     if (!(err instanceof StoreError && err.type === 'api:DocumentNotFound')) throw err;
   }
 
+  // createdBy comes from the resolved identity, never from the body (ADR-0032
+  // decision 4); a User the branch lacks is carried in the same commit
+  // (decision 5).
+  const batch: TerminusDocument[] = [];
+  if (hasCreatedBy(type)) {
+    if (existing) {
+      if (existing.createdBy === undefined) delete document.createdBy;
+      else document.createdBy = existing.createdBy;
+    } else {
+      document.createdBy = who.id;
+      const copy = await userCopyFor(store, who);
+      if (copy) batch.push(copy);
+    }
+  }
+  batch.push(document);
+
   const ifMatch = ifMatchFrom(c);
   try {
-    const { commit } = await store.putDocument(document, { author, message: envelope.message, ifMatch });
+    const { commit } = await store.putDocuments(batch, { author: who.id, message: envelope.message, ifMatch });
     setEtag(c, commit);
     return c.json({ id: docId, commit });
   } catch (err) {
