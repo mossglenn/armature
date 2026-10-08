@@ -327,14 +327,14 @@ Work:
 Exit: CI green on `main`; no document in the repo contradicts another about the stack or the
 schema's contents.
 
-### Phase 1: Schema catch-up (2 to 3 sessions)
+### Phase 1: Schema catch-up (2 to 3 sessions) — done 2026-10-07
 
 **Goal.** Land every accepted or proposed ADR that the schema does not yet reflect, so that the
 schema file is again the single source of truth it claims to be.
 **Serves:** P1 (relations and parts modeled correctly), P9 (the item shape follows real usage).
 
 Work:
-- [ ] **ADR-0022 and ADR-0023 in `schema.json`.** Remove `Response`. Add `ItemOption` as a
+- [x] **ADR-0022 and ADR-0023 in `schema.json`.** Remove `Response`. Add `ItemOption` as a
       `@subdocument` with `fragmentId`, `text`, `isCorrect`, optional `feedback`, optional
       `purpose`. Add `stem` as a subdocument with `fragmentId` and `text`; `correctFeedback` and
       `incorrectFeedback` as optional item-level fields with their own `fragmentId`. Use CoQui's
@@ -351,35 +351,35 @@ Work:
       new item types can sit beside typed options later without re-keying anything. Verify first
       that a `List` of subdocuments accepts subtypes polymorphically on the running store; if it
       does not, record the fallback (one list per kind) in ADR-0033 before landing the shape.
-- [ ] **Decide reload versus migration for removing `Response`.** TerminusDB v12 has a schema
+- [x] **Decide reload versus migration for removing `Response`.** TerminusDB v12 has a schema
       migration endpoint with `DeleteClass`, `CreateClassProperty`, `ChangeKey` and a dry-run
       mode that rewrites instance data with the schema. At demo scale a reload of the seed is
       simpler, but the ADR should record that the migration path exists for any deployment that
       holds real data. Note that `Cardinality` is deprecated in v12 in favour of `Set` with
       `@min_cardinality`, which is what the schema already uses.
-- [ ] **Generator support for subdocuments.** `scripts/generate-types.js` maps class references
+- [x] **Generator support for subdocuments.** `scripts/generate-types.js` maps class references
       to `string`; subdocument references must inline the type. Same change in
       `generate-schema-appendix.js`.
-- [ ] **ADR-0017 to Accepted and implemented.** Run its three verification checks first
+- [x] **ADR-0017 to Accepted and implemented.** Run its three verification checks first
       (four-level inheritance, `@metadata` survival, empty abstract root). Add `DesignRecord`;
       retype `DesignNote.subject`.
-- [ ] **ADR-0027: Schema self-description.** `@metadata.armature.category` on every class
+- [x] **ADR-0027: Schema self-description.** `@metadata.armature.category` on every class
       (`artifact`, `relationship`, `infrastructure`); generator derives `JUNCTION_IDS` and
       `CLASS_ORDER` sections from it; the hand-maintained constants are deleted. This is the
       change CoQui's toolkit notes call the highest-leverage one.
-- [ ] **ADR-0018 to Accepted and implemented.** `AssessmentItem.status: ItemStatus`, required;
+- [x] **ADR-0018 to Accepted and implemented.** `AssessmentItem.status: ItemStatus`, required;
       `ItemInstance.status` documentation narrowed.
-- [ ] **ADR-0020 to Accepted and implemented.** `DesignFinding`, `FindingStatus`.
-- [ ] **ADR-0024: Client-supplied identifiers.** Accept `@id` on first write for any artifact;
+- [x] **ADR-0020 to Accepted and implemented.** `DesignFinding`, `FindingStatus`.
+- [x] **ADR-0024: Client-supplied identifiers.** Accept `@id` on first write for any artifact;
       later writes under the same id are replacements; a write whose id exists under a different
       `@type` is rejected with 409; the hub never deletes a plugin-written document on a
       plugin's behalf (status changes replace deletion). Retire the seed script's slug convention
       or redeclare it as a client choice. Closes ADR-0016 decision 5 and ADR-0023's open
       question. Record the ADR-0016 rule that keys never include mutable fields as still binding.
-- [ ] **Seed data rewrite.** Items with real option text and fragment ids; varied `status` values
+- [x] **Seed data rewrite.** Items with real option text and fragment ids; varied `status` values
       so Phase 4's coverage story has something to show; one `DesignFinding`; one `DesignNote`
       on a junction document to prove ADR-0017 works.
-- [ ] Regenerate `types.ts` and `SCHEMA_APPENDIX.md`; commit with the schema.
+- [x] Regenerate `types.ts` and `SCHEMA_APPENDIX.md`; commit with the schema.
 
 Exit: `schema.json`, the ADR index, the seed, and the generated files agree. ADRs 0017, 0018,
 0020, 0022, 0023, 0024, 0027 are Accepted and implemented. ADR-0019 stays Proposed.
@@ -863,8 +863,21 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   exclusivity is therefore a hub convention, as the CoQui handoff assumed.
 
 **Schema** (Phase 1)
+- *Corrected (2026-10-07):* the store does **not** check the class of a referenced document. A
+  field typed `X` accepts any existing document; only a reference to a missing document is
+  rejected (`references_untyped_object`). `scripts/platform_checks.js` check L reproduces it.
+  Typed references are documentation and generator input; the API enforces the class as a generic
+  invariant on every write (ADR-0014 and ADR-0017 amended, CLAUDE.md constraint 0). The earlier
+  statement that typing `DesignNote.subject` gave "schema-enforced referential integrity" was true
+  only of existence.
 - `@subdocument` classes must use `@key` `Random` or `ValueHash`; their IRIs nest under the
-  parent; they cannot be retrieved, updated or referenced independently.
+  parent; they cannot be retrieved, updated or referenced independently. Verified: they return
+  inline by default (no `unfold` needed); a `List` typed to an abstract subdocument accepts
+  subclasses polymorphically; `sys:JSON` on a subdocument round-trips; a replace of the parent
+  regenerates every subdocument id (checks D to J, `scripts/platform_checks.js`).
+- A client-supplied `@id` is honoured under an explicit `@key: Random`; `POST` under an existing
+  id fails with `api:DocumentIdAlreadyExists`; `PUT` replaces; `@capture` and `@ref` resolve
+  intra-batch references including to Hash-keyed junctions (check K; the seed uses it).
 - `@shared` (v12.0.6) is a regular document with reference-counted cascade deletion. Not needed
   by this plan.
 - `@metadata` accepts arbitrary JSON; the documentation recommends nesting it one level deep,
