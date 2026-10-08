@@ -1,7 +1,8 @@
 # ADR-0017: DesignRecord Abstract Root, and Category as Metadata
 
 ## Status
-Proposed
+Accepted and implemented (2026-10-07). Verification results are in the §Verification section below;
+one finding amends the enforcement claim in Decision 1.
 
 ## Context
 
@@ -149,6 +150,16 @@ Before applying, confirm on the installed TerminusDB version:
 3. An abstract class with no properties is valid as an inheritance root.
 
 Same gating discipline ADR-0013 applied to `@min_cardinality`: verify platform behaviour before encoding a decision that depends on it.
+
+### Results (2026-10-07, TerminusDB v12.0.7, `scripts/platform_checks.js`)
+
+1. **Four-level inheritance: pass.** `L1 (abstract) → L2 (abstract) → L3 (abstract) → L4` loads; an `L4` instance inserts with inherited and own fields; a `Set<L1>` field accepts the `L4` (checks A, B1–B3). In the real schema, a `DesignNote` whose subject is a `ModuleObjective` (which now inherits `DesignRecord`) was written by the seed.
+2. **`@metadata` survives: pass.** Read back from the schema graph on concrete and abstract classes (checks C, C2). ADR-0027 builds on this.
+3. **Empty abstract root: pass.** `DesignRecord` with no properties loads and is inheritable (check A).
+
+4. **Not anticipated: the store does not check the class of a referenced document.** A field typed `Artifact` accepted an existing document of class `Other`; a `Set<Artifact>` accepted one too. Only a reference to a *missing* document is rejected (`references_untyped_object`) (checks L1–L3). In the real schema, a `DesignNote` with a `User` as subject was accepted.
+
+   This amends the premise ADR-0014 stated and this ADR repeated: typing `DesignNote.subject` to `DesignRecord` gives referential integrity in the sense that the target must exist, not in the sense that it must be a `DesignRecord`. The typing still does three jobs: it documents intent, it drives the generated types and the appendix, and it tells a tool what the slot is for. The fourth job, rejecting a `User` or any other wrong-class target, is the API's (ADR-0006), as a generic invariant on every write: *every reference field's target must be an instance of the declared class or a subclass*. The invariants engine (Phase 3) implements it once for all types. Until then the exclusion of `User` from `DesignRecord` is a documented rule the seed respects and nothing enforces.
 
 ## Related
 

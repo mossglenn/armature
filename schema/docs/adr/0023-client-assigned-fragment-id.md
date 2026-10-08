@@ -1,7 +1,12 @@
 # ADR-0023: Client-Assigned fragmentId for Addressing Item Parts
 
 ## Status
-Accepted
+Accepted. Implemented in `schema.json` on 2026-10-07 as `Fragment.fragmentId`, inherited by every
+part type (ADR-0033). The open question below is resolved by ADR-0024: a client may supply the item's
+`@id` on first write, so a pre-sync comment can name both the item and the part. Platform evidence
+for decision 3 arrived with the implementation: a replace of the item regenerates every
+subdocument's store id (`scripts/platform_checks.js`, check J4), so the nested `@id` could never have
+served as part identity.
 
 ## Context
 

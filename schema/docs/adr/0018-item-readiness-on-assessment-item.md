@@ -1,7 +1,10 @@
 # ADR-0018: Item Readiness Belongs on AssessmentItem, Not Only on ItemInstance
 
 ## Status
-Proposed
+Accepted and implemented (2026-10-07). `AssessmentItem.status: ItemStatus` is required in
+`schema.json`; `ItemInstance.status` documentation narrowed to placement clearance. The constraint
+in Decision 4 is API-enforced from Phase 3; the seed respects it (the Draft item's placement is
+Draft, the InReview item's placement is InReview).
 
 ## Context
 

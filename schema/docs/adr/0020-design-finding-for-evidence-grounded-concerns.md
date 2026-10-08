@@ -1,7 +1,9 @@
 # ADR-0020: DesignFinding — Evidence-Grounded Concerns About Design Artifacts
 
 ## Status
-Proposed — depends on ADR-0017
+Accepted and implemented (2026-10-07), with ADR-0017. `DesignFinding` and `FindingStatus` are in
+`schema.json`; the seed carries one Open finding on the Draft item. The constraint in Decision 5
+(Dismissed requires `resolutionRationale`) is API-enforced from Phase 3.
 
 ## Context
 

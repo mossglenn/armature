@@ -1,7 +1,11 @@
 # ADR-0019: Coverage Semantics Account for Item Readiness
 
 ## Status
-Proposed — depends on ADR-0018
+Proposed. Its dependency, ADR-0018, was accepted and implemented on 2026-10-07. Promotion is
+scheduled with ADR-0029 (the coverage algorithm) in Phase 4 of `docs/development-plan.md`, when
+coverage stops being hand-seeded. Until then the seeded `coverageStatus` values do not reflect this
+ADR's eligibility rule (the Draft item `hallucination-mc` is the only item assessing
+`identify-ai-limitations`, which the seed still marks FullyAssessed).
 
 ## Context
 
