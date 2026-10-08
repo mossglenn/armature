@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ApiError } from '../errors';
-import { readEnvelope, readJson, requireCommit, setEtag } from '../http';
+import { ifMatchFrom, readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { resolveAuthor } from '../identity';
 import {
   createStore,
@@ -250,6 +250,17 @@ branches.post('/:name/merge', async (c) => {
   });
 });
 
+/**
+ * The store's branch DELETE takes no concurrency token, so the check that
+ * another branch holds the head and the deletion itself are separate calls.
+ * Two things narrow that window: the caller may pin the head it inspected
+ * with If-Match (412 when the branch has moved since), and the head is read
+ * again immediately before the delete (409 branch_moved). A commit landing
+ * between that final read and the store's delete would still be lost; the
+ * window is one request wide and the commit stays readable by id (T2).
+ * Candidates are searched main first, the usual holder, and the walk stops
+ * at the first hit; each log is capped by fullLog.
+ */
 branches.delete('/:name', async (c) => {
   const { name } = c.req.param();
   if (name === 'main') throw new ApiError(400, 'protected_branch', 'main is never deleted (ADR-0025 decision 6)');
@@ -257,10 +268,19 @@ branches.delete('/:name', async (c) => {
   const store = createStore({ branch: 'main' });
   const names = await store.listBranches();
   if (!names.includes(name)) throw new ApiError(404, 'unknown_ref', `No branch ${name}`);
-  const head = await store.at({ branch: name }).head();
+  const target = store.at({ branch: name });
+  const head = await target.head();
+  const ifMatch = ifMatchFrom(c);
+  if (ifMatch && ifMatch !== head?.id) {
+    throw new ApiError(412, 'precondition_failed', `Branch ${name} has moved since commit ${ifMatch}`, {
+      expected: ifMatch,
+      current: head?.id,
+    });
+  }
   let heldBy: string | undefined;
   if (head) {
-    heldBy = await branchHolding(head.id, names.filter((n) => n !== name), store);
+    const candidates = ['main', ...names.filter((n) => n !== name && n !== 'main')];
+    heldBy = await branchHolding(head.id, candidates, store);
     if (!heldBy) {
       throw new ApiError(
         409,
@@ -268,6 +288,13 @@ branches.delete('/:name', async (c) => {
         `Branch ${name} has commits no other branch holds; merge it first, or keep it as the record of that work (ADR-0025 decision 6)`,
         { head: head.id }
       );
+    }
+    const now = await target.head();
+    if (now?.id !== head.id) {
+      throw new ApiError(409, 'branch_moved', `Branch ${name} received commit ${now?.id} during the check; retry`, {
+        checked: head.id,
+        current: now?.id,
+      });
     }
   }
   await store.deleteBranch(name);
