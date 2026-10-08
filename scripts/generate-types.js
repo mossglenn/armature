@@ -405,6 +405,39 @@ for (const id of subdocIds) line(`  "${id}",`);
 line(`] as const;`);
 line();
 
+/**
+ * Every class a given class inherits from, transitively, nearest first.
+ * `@inherits` may be a string or an array; TerminusDB's implicit root is not
+ * a schema class and is not listed. Used by the hub to know which classes
+ * carry ArmatureDocument's createdBy (ADR-0032 decision 4) and to check that
+ * a reference's target is the declared class or a subclass of it (CLAUDE.md
+ * constraint 0, ADR-0027).
+ */
+function ancestorsOf(id) {
+  const out = [];
+  const queue = [id];
+  while (queue.length) {
+    const entry = classes[queue.shift()];
+    if (!entry) continue;
+    const parents = entry['@inherits'] ? [].concat(entry['@inherits']) : [];
+    for (const parent of parents) {
+      if (!out.includes(parent) && classes[parent]) {
+        out.push(parent);
+        queue.push(parent);
+      }
+    }
+  }
+  return out;
+}
+
+line(`/** Every class @id mapped to its transitive @inherits ancestors, nearest first (ADR-0032; CLAUDE.md constraint 0). */`);
+line(`export const CLASS_ANCESTORS = {`);
+for (const entry of Object.values(classes)) {
+  line(`  ${entry['@id']}: [${ancestorsOf(entry['@id']).map((a) => `"${a}"`).join(', ')}],`);
+}
+line(`} as const;`);
+line();
+
 // ── Write / check ─────────────────────────────────────────────────────────────
 
 const output = out.join('\n').trimEnd() + '\n';
