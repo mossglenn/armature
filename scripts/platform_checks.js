@@ -41,6 +41,10 @@
 //   T. Deleting a branch keeps its commits readable at local/commit/<id>
 //   U. A commit can be checked for existence by reading ValidCommit/<id> from the commit graph
 //      (local/_commits); a document read at a commit path that does not exist is a 500
+//   V. The commit schema has metadata: Optional<sys:JSON> and parent: Optional<Commit>. Can a
+//      caller set metadata through the HTTP API (commit_info.metadata on apply; a metadata
+//      query parameter on a document write)? If so, ADR-0025's Merge-Source belongs there
+//      rather than in a message trailer. Also confirms the merge commit has exactly one parent
 //
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
@@ -66,7 +70,7 @@ const docs   = (q) => `/api/document/admin/${DB}?${q}`;
 const commit = (msg) => `author=platform_checks&message=${encodeURIComponent(msg)}`;
 const results = [];
 function record(id, verdict, evidence) { results.push({ id, verdict, evidence }); console.log(`${verdict.padEnd(4)} ${id}: ${evidence}`); }
-const short = (v) => JSON.stringify(v).slice(0, 300);
+const short = (v) => JSON.stringify(v ?? null).slice(0, 300);
 
 const schema = [
   { "@type": "@context", "@base": "terminusdb:///pc/data/", "@schema": "terminusdb:///pc/schema#" },
@@ -375,6 +379,36 @@ async function main() {
   record("U2", r.status === 404 && errType(r) === "api:DocumentNotFound" ? "PASS" : "FAIL", `unknown commit in local/_commits: ${r.status} ${errType(r)}`);
   r = await api("GET", at("commit/nosuchcommit000", "id=Artifact/client-chosen"));
   record("U3", "INFO", `document read at a commit path that does not exist: ${r.status} ${errType(r)} (the hub validates commit ids with U1/U2 first)`);
+
+  // V: commit metadata and parent shape
+  r = await api("GET", `/api/document/admin/${DB}/local/_commits?graph_type=schema&id=Commit`);
+  record("V1", r.json?.parent?.["@type"] === "Optional" && r.json?.parent?.["@class"] === "Commit" ? "PASS" : "INFO",
+    `Commit.parent in the commit-graph schema: ${short(r.json?.parent)}; metadata: ${short(r.json?.metadata)}`);
+  const commitDoc = async (id) => (await api("GET", `/api/document/admin/${DB}/local/_commits?id=ValidCommit/${id}`)).json;
+  r = await api("POST", `/api/branch/admin/${DB}/local/branch/meta`, { origin: `admin/${DB}/local/branch/main` });
+  const metaBase = (await log("main", 1))?.[0]?.identifier;
+  r = await api("POST", at("branch/meta", commit("insert on meta")), { "@type": "Artifact", "@id": "Artifact/meta-doc", label: "meta" });
+  const metaHead = (await log("meta", 1))?.[0]?.identifier;
+  r = await api("POST", applyUrl, { before_commit: metaBase, after_commit: metaHead, commit_info: { author: "merger@example", message: "merge meta", metadata: { "merge-source": metaHead } } });
+  const mergeId = (await log("main", 1))?.[0]?.identifier;
+  const merge = await commitDoc(mergeId);
+  record("V2", r.status === 200 ? (merge?.metadata ? "PASS" : "INFO") : "FAIL",
+    `apply with commit_info.metadata: ${r.status}; merge commit metadata = ${short(merge?.metadata)} (${merge?.metadata ? "stored" : "dropped"})`);
+  record("V3", typeof merge?.parent === "string" ? "PASS" : "INFO", `the merge commit's parent field: ${short(merge?.parent)} (one parent; source commits not linked)`);
+  const mergeLogEntry = (await log("main", 1))?.[0];
+  record("V3b", mergeLogEntry?.metadata ? "PASS" : "INFO", `/api/log entry carries metadata: ${short(mergeLogEntry?.metadata)} (${mergeLogEntry?.metadata ? "yes: the hub can read it from the log" : "no: the hub must read ValidCommit/<id>"})`);
+  r = await api("GET", `/api/history/admin/${DB}/local/branch/main?id=Artifact/meta-doc&count=1`);
+  record("V3c", r.json?.[0]?.metadata ? "PASS" : "INFO", `/api/history entry carries metadata: ${short(r.json?.[0]?.metadata)}`);
+  try {
+    r = await api("PUT", at("branch/main", `${commit("write with metadata param")}&metadata=${encodeURIComponent(JSON.stringify({ via: "query" }))}`), artifact("meta-write"));
+    const writeId = (await log("main", 1))?.[0]?.identifier;
+    const written = r.status === 200 ? await commitDoc(writeId) : null;
+    record("V4", r.status === 200 ? (written?.metadata ? "PASS" : "INFO") : "INFO",
+      `document PUT with a metadata query parameter: ${r.status} ${r.status === 200 ? "" : errType(r)}; commit metadata = ${short(written?.metadata)} (${written?.metadata ? "stored" : "dropped or rejected"})`);
+  } catch (e) {
+    record("V4", "INFO", `document PUT with a metadata query parameter threw: ${e.message}`);
+  }
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/meta`, {});
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
