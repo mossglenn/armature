@@ -525,14 +525,20 @@ quiz tool.
 **Serves:** P4 directly; it is also the demo payoff for both narratives in PROJECT_CONTEXT.
 
 Work:
-- [ ] **ADR-0029: Coverage algorithm.** Defines the verdict: `Uncovered` is zero eligible items,
-      `PartiallyAssessed` is one, `FullyAssessed` is two or more, `OverAssessed` is above a
-      threshold stored on the module or defaulted. Adopts ADR-0019's eligibility rule (Approved
-      only for `coverageStatus`; non-Retired for `projectedCoverageStatus`) and promotes ADR-0019
-      to Accepted. Records that the thresholds are provisional (P9) and where usage will
-      inform them.
-- [ ] **`recomputeCoverage(moduleId | objectiveId, ctx)`** wired into Phase 3's hooks. Coverage
-      stops being hand-seeded.
+- [x] **ADR-0029: Coverage algorithm** (accepted 2026-10-08). Defines the verdict: `Uncovered` is
+      zero eligible items, `PartiallyAssessed` is one, `FullyAssessed` is two to four,
+      `OverAssessed` is above the hub constant `OVER_ASSESSED_ABOVE` (4), not a module field until
+      two clients need modules to differ. Counts distinct items placed in the module's
+      assessments, not the bank. Adopts ADR-0019's eligibility rule (Approved only for
+      `coverageStatus`; non-Retired for `projectedCoverageStatus`) and promotes ADR-0019 to
+      Accepted. The thresholds are provisional (P9); the ADR says what would revise them.
+- [x] **`deriveCoverage(ctx)`** in `app/lib/api/invariants/recompute.ts`, run by the write pipeline
+      after the invariants and before the one PUT, so the recomputed declarations land in the
+      caller's commit (ADR-0029 decision 5). The computed fields are declared in
+      `@metadata.armature.computed`, omitted from the generated request schemas (400 if sent) and
+      exported as `CLASS_COMPUTED`. The seed computes coverage with the same module instead of
+      hand-writing it. Still open from decision 6: the merge route recomputing affected modules
+      after `apply`.
 - [ ] **`GET /api/v1/intelligence/coverage/:moduleId`** replacing the current route, returning
       the summary block `demo-api.md` promised, both coverage figures, and the items behind each.
 - [ ] **`GET /api/v1/intelligence/alignment`**: items whose `bloomsLevel` is below an objective
@@ -694,7 +700,7 @@ reading TerminusDB documentation.
 |---|---|---|---|
 | 0017 | DesignRecord abstract root | 1 | Promote to Accepted after verification |
 | 0018 | Item readiness on AssessmentItem | 1 | Promote to Accepted |
-| 0019 | Coverage accounts for readiness | 4 | Promote with 0029 |
+| 0019 | Coverage accounts for readiness | 4 (accepted 2026-10-08) | Promoted with 0029 |
 | 0020 | DesignFinding | 1 | Promote to Accepted |
 | 0022, 0023 | Embedded parts, fragmentId | 1 | Already Accepted; implement |
 | 0024 | Client-supplied identifiers | 1 | Resolves 0016 decision 5 and 0023's open question |
@@ -702,7 +708,7 @@ reading TerminusDB documentation.
 | 0026 | API host and route versioning | 0 | Resolves the PROJECT_CONTEXT contradiction |
 | 0027 | Schema self-description via `@metadata` | 1 | Replaces `JUNCTION_IDS` |
 | 0028 | Attestation | 5 | Generic form of CoQui's proposal |
-| 0029 | Coverage algorithm | 4 | Closes PROJECT_CONTEXT's open question |
+| 0029 | Coverage algorithm | 4 (accepted 2026-10-08) | Closes PROJECT_CONTEXT's open question; counted over placements; same-commit recompute; computed fields rejected on write |
 | 0030 | External references and attachments | 6 | P6; attachment references with mandatory content hash, backend left open |
 | 0031 | Export profiles and schema slices | 6 | P7, P8; implements ADR-0021's deferred section |
 | 0032 | Identity resolution | 3 (accepted 2026-10-08) | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |

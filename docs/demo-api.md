@@ -388,7 +388,7 @@ Attaches a DesignNote to one or more artifacts.
 #### `GET /coverage/:moduleId`
 Returns coverage analysis for a module — which declared objectives are covered, partially covered, uncovered, or over-assessed. This is the primary demo of Armature's graph intelligence.
 
-> **Stale shape.** The response below is the target for `GET /api/v1/intelligence/coverage/:moduleId` (Phase 4, ADR-0029), not what the current route returns. Today `GET /api/coverage/:moduleId` returns a flat array, one entry per ModuleObjective: `{ id, label, coverageStatus, role, sequence }`, where `id` and `label` are the LearningObjective's, and `coverageStatus` is the seeded value, not a computed one. The `summary` block and the `assessedBy` items arrive with the recompute in Phase 4.
+> **Stale shape.** The response below is the target for `GET /api/v1/intelligence/coverage/:moduleId` (Phase 4), not what any current route returns. Since ADR-0029 (2026-10-08) `coverageStatus` and `projectedCoverageStatus` are computed by the hub in the commit that changes them; until the intelligence route lands, a module's coverage is the two list reads named at the top of this document, and the `summary` block and the `assessedBy` items are still to come.
 
 **Target response:**
 ```json

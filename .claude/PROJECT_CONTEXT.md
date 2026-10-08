@@ -158,8 +158,7 @@ These are settled. Don't re-open them without a strong reason.
 
 These are not yet decided. Treat them as design questions to explore, not gaps to fill arbitrarily.
 
-- **Coverage computation algorithm:** What exactly makes a `CoverageStatus` value "FullyAssessed" vs. "PartiallyAssessed"? To be defined in ADR-0029 (Phase 4 of `docs/development-plan.md`).
 - **Authentication model:** Not needed for the demo. Deferred per ADR-0010; identity resolution is ADR-0032 (Phase 3).
 - **Merge policy, project boundaries, AI provenance beyond `createdBy`:** see `docs/development-plan.md` §6 for each question and the evidence that would settle it.
 
-Resolved since this list was written: the API framework question (ADR-0026: Next.js routes are the API host; no Express or Fastify service) and the seed data content domain ("Introduction to AI for Instructional Designers", `scripts/seed_data.js`).
+Resolved since this list was written: the API framework question (ADR-0026: Next.js routes are the API host; no Express or Fastify service); the seed data content domain ("Introduction to AI for Instructional Designers", `scripts/seed_data.js`); and the coverage computation algorithm (ADR-0029, 2026-10-08: the verdict is by the number of distinct eligible items placed in the module's assessments, `FullyAssessed` at two to four, thresholds provisional).
