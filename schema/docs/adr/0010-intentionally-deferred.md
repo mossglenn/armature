@@ -13,6 +13,7 @@ The following are intentionally absent from the current schema:
 
 ### Versioning and change history
 No `version`, `createdAt`, or `updatedAt` fields on any document type. TerminusDB provides built-in branch and commit history at the database level — every write is recorded with a timestamp and can be traversed. This may be sufficient for Armature's needs without per-document version fields. Revisit when branching and diffing use cases become concrete.
+**Decided, not deferred, by ADR-0025 (2026-10-08): the commit is the unit of design process data. These fields are never added; a document's history is the commits that touched it, exposed by the API's history, changes and diff routes.**
 
 ### Authorship and provenance
 ~~No `createdBy` or `updatedBy` fields. These would require a `User` or `Agent` type and an authentication model. Deferred until the multi-user collaboration use case is defined. When added, the cleanest approach is a shared abstract base class (`ArmatureDocument`) that all primary artifact types inherit, rather than adding fields individually.~~
