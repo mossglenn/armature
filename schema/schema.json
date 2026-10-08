@@ -169,7 +169,7 @@
       {
         "@language": "en",
         "@label": "CoverageStatus",
-        "@comment": "Computed alignment status on ModuleObjective. Reflects whether the module's AssessmentItems adequately cover a declared objective. Set by the Armature API — not authored by designers. Uncovered: no items assess this objective. PartiallyAssessed: some items but insufficient coverage. FullyAssessed: adequate coverage. OverAssessed: more items than needed for the objective's scope.",
+        "@comment": "Computed alignment status on ModuleObjective, set by the Armature API and never authored (ADR-0007, ADR-0029). The verdict is by the number of distinct eligible AssessmentItems placed in the module's assessments that assess the declared objective: Uncovered is 0, PartiallyAssessed is 1, FullyAssessed is 2 to 4, OverAssessed is 5 or more. The thresholds are provisional; the upper bound is the hub constant OVER_ASSESSED_ABOVE. Which items are eligible depends on the field: coverageStatus counts Approved items with Approved placements, projectedCoverageStatus counts every item and placement that is not Retired (ADR-0019).",
         "@values": {
           "Uncovered": "",
           "PartiallyAssessed": "",
@@ -960,10 +960,12 @@
       {
         "@language": "en",
         "@label": "ModuleObjective",
-        "@comment": "Reifies the relationship between a Module and a LearningObjective it declares. A first-class graph node that carries both design intent (role, roleRationale) and computed graph intelligence (coverageStatus). Created programmatically by the API when a designer assigns an objective to a module — not directly created or edited through the UI. coverageStatus is recomputed by the API after any change that affects coverage: modifications to AssessmentItem.assesses, ItemInstance additions/removals, or ModuleObjective role changes. See ADR-0007.",
+        "@comment": "Reifies the relationship between a Module and a LearningObjective it declares. A first-class graph node that carries both design intent (role, roleRationale, sequence) and computed graph intelligence (coverageStatus, projectedCoverageStatus). Clients write the design-intent fields through the generic document API; the two computed fields are the API's alone: they are listed in @metadata.armature.computed, a write that carries one is rejected with 400, and the API computes them in the same commit as any write that affects them — a ModuleObjective, an ItemInstance, an AssessmentItem or an Assessment, including the assessment or module a replace leaves. Coverage counts the distinct AssessmentItems placed in the module's assessments whose assesses names the objective; a bank item nobody has placed covers nothing. See ADR-0007, ADR-0019, ADR-0029.",
         "@properties": {
           "sequence": "The declared order of this objective within the module's list of objectives. Optional — objectives do not always require explicit ordering.",
-          "roleRationale": "Explanation of why this objective was assigned its role in this module. Optional — not every role assignment requires documentation, but preserving the rationale when the decision is non-obvious is consistent with Armature's design rationale philosophy."
+          "roleRationale": "Explanation of why this objective was assigned its role in this module. Optional — not every role assignment requires documentation, but preserving the rationale when the decision is non-obvious is consistent with Armature's design rationale philosophy.",
+          "coverageStatus": "Computed by the API, never authored. Coverage by items that are Approved and placed by an Approved ItemInstance in one of the module's assessments: what has been delivered or is cleared to be (ADR-0019, ADR-0029).",
+          "projectedCoverageStatus": "Computed by the API, never authored. The same count over every placed item that is not Retired and whose placement is not Retired: where coverage is heading once review completes. The gap between the two fields is the review backlog expressed as coverage (ADR-0019, ADR-0029)."
         }
       }
     ],
@@ -977,11 +979,16 @@
       "@class": "xsd:string"
     },
     "coverageStatus": "CoverageStatus",
+    "projectedCoverageStatus": "CoverageStatus",
     "module": "Module",
     "references": "LearningObjective",
     "@metadata": {
       "armature": {
-        "category": "relationship"
+        "category": "relationship",
+        "computed": [
+          "coverageStatus",
+          "projectedCoverageStatus"
+        ]
       }
     },
     "@inherits": "DesignRecord"

@@ -7,7 +7,7 @@
 // Phase 3). Shape only: cross-document rules live in the invariants engine.
 
 import { z } from 'zod';
-import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_CoverageStatus, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus } from './types';
+import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus } from './types';
 
 /**
  * A reference to another document: its id, or { "@ref": "<capture>" } naming a
@@ -37,7 +37,7 @@ export const ItemOptionSchema = z.strictObject({
 /** @abstract: any concrete Fragment */
 export const FragmentSchema = z.discriminatedUnion('@type', [TextFragmentSchema, ItemOptionSchema]);
 
-// ── Documents (concrete classes; the route fills @id and @type) ───────────────
+// ── Documents (concrete classes; the route fills @id and @type; computed fields omitted) ───
 
 export const UserSchema = z.strictObject({
   '@id': z.string().min(1).optional(),
@@ -206,6 +206,7 @@ export const ActivityGroupMemberSchema = z.strictObject({
   sequence: z.number().int().optional(),
 });
 
+/** Without coverageStatus, projectedCoverageStatus: computed by the hub (ADR-0029). */
 export const ModuleObjectiveSchema = z.strictObject({
   '@id': z.string().min(1).optional(),
   '@type': z.literal('ModuleObjective').optional(),
@@ -213,7 +214,6 @@ export const ModuleObjectiveSchema = z.strictObject({
   sequence: z.number().int().optional(),
   role: z.enum(VALID_ObjectiveRole),
   roleRationale: z.string().min(1).max(10_000).optional(),
-  coverageStatus: z.enum(VALID_CoverageStatus),
   module: ReferenceSchema,
   references: ReferenceSchema,
 });
