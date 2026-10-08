@@ -44,7 +44,12 @@ export interface HistoryEntry extends Commit {
  * (platform check P4).
  */
 export interface ConflictWitness {
-  '@id': string;
+  /** The document, when the witness is per-field (`{ field: { @op, @expected, @found } }`). */
+  '@id'?: string;
+  /** `InsertConflict` when both sides inserted the same id with different content (check W2d). */
+  '@op'?: string;
+  /** The full IRI of the twice-inserted document, on an `InsertConflict` witness. */
+  '@id_already_exists'?: string;
   [field: string]: unknown;
 }
 
@@ -59,6 +64,22 @@ export type ApplyResult =
   | { ok: false; witnesses: ConflictWitness[] };
 
 /** A non-2xx response from the store, with the server's error `@type`. */
+/** `If-Match` as the store's token: it compares against the branch head (check M). */
+function dataVersionHeader(ifMatch: string | undefined): Record<string, string> | undefined {
+  return ifMatch ? { 'TerminusDB-Data-Version': `branch:${ifMatch}` } : undefined;
+}
+
+/**
+ * A document id from a full IRI under the database's `@base`, which the
+ * store uses in insert responses and in the `InsertConflict` witness (check
+ * W2d): `http://armature.design/data/User/x` → `User/x`, and likewise under
+ * a `terminusdb:///<db>/data/` base. A value that is not such an IRI is
+ * returned unchanged.
+ */
+export function idFromIri(iri: string): string {
+  return iri.replace(/^[a-z][a-z0-9+.-]*:\/\/.*?\/data\//i, '');
+}
+
 export class StoreError extends Error {
   constructor(
     readonly status: number,
@@ -219,11 +240,76 @@ export class Store {
     document: TerminusDocument,
     opts: { author: string; message: string; ifMatch?: string; create?: boolean }
   ): Promise<{ commit: string }> {
-    const headers = opts.ifMatch ? { 'TerminusDB-Data-Version': `branch:${opts.ifMatch}` } : undefined;
+    return this.putDocuments([document], opts);
+  }
+
+  /**
+   * Replace (or create) several documents in one commit (platform check
+   * W3b). The hub uses this to carry a `User` copy beside the artifact that
+   * references it (ADR-0032 decision 5).
+   */
+  async putDocuments(
+    documents: TerminusDocument[],
+    opts: { author: string; message: string; ifMatch?: string; create?: boolean }
+  ): Promise<{ commit: string }> {
     const r = await this.request('PUT', `/api/document/${this.refPath({ branch: this.branch })}`, {
       query: { author: opts.author, message: opts.message, create: String(opts.create ?? true) },
+      body: documents,
+      headers: dataVersionHeader(opts.ifMatch),
+    });
+    return { commit: r.commit ?? '' };
+  }
+
+  /**
+   * Insert one document with a hub-supplied `@id`; the store rejects an id
+   * that already exists (ADR-0024 decision 4, check K). Used for `User`
+   * registration, where insert semantics are what keep one externalId from
+   * becoming two documents (ADR-0032 decisions 2 and 3).
+   */
+  async insertDocument(
+    document: TerminusDocument & { '@id': string },
+    opts: { author: string; message: string; ifMatch?: string }
+  ): Promise<{ id: string; commit: string }> {
+    const r = await this.request('POST', `/api/document/${this.refPath({ branch: this.branch })}`, {
+      query: { author: opts.author, message: opts.message },
       body: document,
-      headers,
+      headers: dataVersionHeader(opts.ifMatch),
+    });
+    return { id: document['@id'], commit: r.commit ?? '' };
+  }
+
+  /**
+   * The documents of `type` whose fields match `template`, at this store's
+   * ref: the document API's template query in its HTTP form, a POST with
+   * `X-HTTP-Method-Override: GET` (platform check W1). An empty template
+   * lists the type.
+   */
+  async queryDocuments(
+    type: string,
+    template: Record<string, unknown>,
+    opts: { count?: number; skip?: number } = {}
+  ): Promise<{ documents: TerminusDocument[]; commit: string }> {
+    const r = await this.request('POST', `/api/document/${this.refPath()}`, {
+      headers: { 'X-HTTP-Method-Override': 'GET' },
+      body: {
+        type,
+        as_list: true,
+        query: template,
+        ...(opts.count !== undefined ? { count: opts.count } : {}),
+        ...(opts.skip !== undefined ? { skip: opts.skip } : {}),
+      },
+    });
+    return { documents: Array.isArray(r.body) ? (r.body as TerminusDocument[]) : [], commit: r.commit ?? '' };
+  }
+
+  /**
+   * Administrative: delete one document as a commit. No route calls this;
+   * deletion is outside the plugin API (ADR-0024 decision 5). Tests use it to
+   * remove the `User` documents they register on `main` (ADR-0032).
+   */
+  async deleteDocument(id: string, opts: { author: string; message: string }): Promise<{ commit: string }> {
+    const r = await this.request('DELETE', `/api/document/${this.refPath({ branch: this.branch })}`, {
+      query: { author: opts.author, message: opts.message, id },
     });
     return { commit: r.commit ?? '' };
   }
