@@ -102,7 +102,9 @@ Phase 2's routes land (ADR-0054 consequences).
    Until ADR-0032 lands in Phase 3, the hub resolves the author from an `Armature-User` request
    header holding a `User` document id, verifies the document exists and is a `User`, and
    rejects a write without one with 401. This is the interim resolution ADR-0055 anticipated; it
-   keeps the route contract stable while the mechanism changes.
+   keeps the route contract stable while the mechanism changes. *Done (2026-10-08):* ADR-0032
+   replaced it with a pluggable resolver; the header now carries an `externalId`, resolved to a
+   `User` on `main`.
 
 3. **Every read is at a named ref.** Document reads accept `branch` (default `main`) or `ref`
    (a commit id), never both. A read at a commit is read-only by construction. The response
