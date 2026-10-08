@@ -9,7 +9,8 @@
  *   7 LearningObjectives (4 with PrerequisiteRecords)
  *   3 Modules → 3 Assessments → 7 ItemInstances
  *   6 AssessmentItems, each with embedded stem and 4 options (24 options)
- *   7 ModuleObjectives
+ *   7 ModuleObjectives (coverageStatus and projectedCoverageStatus computed below
+ *     with the hub's algorithm, never hand-written: ADR-0029 decision 7)
  *   2 DesignNotes (one on an AssessmentItem, one on a ModuleObjective junction)
  *   1 DesignFinding (on the Draft item)
  *   1 Course
@@ -27,6 +28,7 @@
  */
 
 import { WOQLClient } from "terminusdb";
+import { coverageOf } from "../app/lib/api/intelligence/coverage.ts";
 
 const TERMINUS_URL  = process.env.TERMINUS_URL  || "http://localhost:6363";
 const TERMINUS_USER = process.env.TERMINUS_USER || "admin";
@@ -294,7 +296,6 @@ const documents = [
   {
     "@type": "ModuleObjective",
     "role": "Primary",
-    "coverageStatus": "FullyAssessed",
     "sequence": 1,
     "module": id("Module", "how-ai-works"),
     "references": id("LearningObjective", "distinguish-ai-approaches"),
@@ -303,7 +304,6 @@ const documents = [
     "@type": "ModuleObjective",
     "@capture": "mo-how-ai-works-describe-model-training",
     "role": "Primary",
-    "coverageStatus": "Uncovered",
     "sequence": 2,
     "module": id("Module", "how-ai-works"),
     "references": id("LearningObjective", "describe-model-training"),
@@ -311,7 +311,6 @@ const documents = [
   {
     "@type": "ModuleObjective",
     "role": "Primary",
-    "coverageStatus": "FullyAssessed",
     "sequence": 3,
     "module": id("Module", "how-ai-works"),
     "references": id("LearningObjective", "identify-ai-limitations"),
@@ -321,7 +320,6 @@ const documents = [
   {
     "@type": "ModuleObjective",
     "role": "Primary",
-    "coverageStatus": "FullyAssessed",
     "sequence": 1,
     "module": id("Module", "ai-in-learning-design"),
     "references": id("LearningObjective", "evaluate-ai-objectives"),
@@ -329,7 +327,6 @@ const documents = [
   {
     "@type": "ModuleObjective",
     "role": "Primary",
-    "coverageStatus": "FullyAssessed",
     "sequence": 2,
     "module": id("Module", "ai-in-learning-design"),
     "references": id("LearningObjective", "write-effective-prompts"),
@@ -339,7 +336,6 @@ const documents = [
   {
     "@type": "ModuleObjective",
     "role": "Primary",
-    "coverageStatus": "FullyAssessed",
     "sequence": 1,
     "module": id("Module", "risks-and-ethics"),
     "references": id("LearningObjective", "distinguish-bias-types"),
@@ -347,7 +343,6 @@ const documents = [
   {
     "@type": "ModuleObjective",
     "role": "Primary",
-    "coverageStatus": "FullyAssessed",
     "sequence": 2,
     "module": id("Module", "risks-and-ethics"),
     "references": id("LearningObjective", "evaluate-appropriate-use"),
@@ -573,6 +568,25 @@ async function main() {
 
   console.log(`Seeding "${TERMINUS_DB}" at ${TERMINUS_URL}`);
   console.log(`  → ${documents.length} documents to insert\n`);
+
+  // Coverage is computed, never hand-written (ADR-0029 decision 7): the same
+  // algorithm the API runs on every write, over the seed's own documents. An
+  // item counts for a module's declaration only when an ItemInstance places
+  // it in one of the module's assessments and its `assesses` names the
+  // objective; coverageStatus counts Approved items with Approved placements,
+  // projectedCoverageStatus everything not Retired (ADR-0019).
+  const ofType = (type) => documents.filter((d) => d["@type"] === type);
+  const items = new Map(ofType("AssessmentItem").map((d) => [d["@id"], d]));
+  console.log("Computing coverage for each module declaration...");
+  for (const declaration of ofType("ModuleObjective")) {
+    const assessments = new Set(ofType("Assessment").filter((a) => a.module === declaration.module).map((a) => a["@id"]));
+    const placements = ofType("ItemInstance").filter((p) => assessments.has(p.assessment));
+    const coverage = coverageOf(declaration.references, placements, items);
+    declaration.coverageStatus = coverage.coverageStatus;
+    declaration.projectedCoverageStatus = coverage.projectedCoverageStatus;
+    console.log(`  ${declaration.module.padEnd(30)} ${declaration.references.padEnd(48)} ${coverage.coverageStatus.padEnd(18)} projected ${coverage.projectedCoverageStatus}`);
+  }
+  console.log();
 
   // full_replace on the instance graph deletes every existing instance document
   // and inserts the seed in one transaction, so re-runs are clean and idempotent.
