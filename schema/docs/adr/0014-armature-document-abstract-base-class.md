@@ -1,7 +1,12 @@
 # ADR-0014: ArmatureDocument Abstract Base Class
 
 ## Status
-Accepted
+Accepted. Amended 2026-10-07 by ADR-0017: `ArmatureDocument` now inherits `DesignRecord`, and
+`DesignNote.subject` is typed `Set<DesignRecord>` rather than `Set<ArmatureDocument>`. One premise
+of this ADR is corrected by ADR-0017's verification: TerminusDB v12.0.7 checks that a referenced
+document exists, not that it has the declared class, so the "schema-enforced referential integrity"
+gained by retyping `subject` from `xsd:anyURI` is existence, not type. Type is enforced by the API
+(ADR-0006); the typing remains the documented contract and the generator's input.
 
 ## Context
 Thirteen primary artifact types in the schema independently declared `label: xsd:string` and `description: Optional<xsd:string>`. These fields are structurally identical across all types — every named artifact in the Armature graph has a human-readable label and an optional description. The duplication creates a maintenance problem and, more critically, blocked a typed reference mechanism for `DesignNote.subject`.

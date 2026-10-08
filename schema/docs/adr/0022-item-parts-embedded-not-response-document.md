@@ -1,7 +1,13 @@
 # ADR-0022: AssessmentItem Stem and Options Are Embedded Structure, Not a Separate Response Document
 
 ## Status
-Accepted
+Accepted. Implemented in `schema.json` on 2026-10-07: `Response` removed; `AssessmentItem` carries
+`stem: TextFragment`, `options: List<ItemOption>`, and optional `correctFeedback` and
+`incorrectFeedback: TextFragment`, with `ItemOption` and `TextFragment` as specialisations of an
+abstract `Fragment` subdocument (ADR-0033). Reload rather than migration was chosen for the demo
+store (`load_schema.js --clear-instances` then `seed_data.js`); a deployment holding real data would
+use the store's migration endpoint (`DeleteClass`, `CreateClassProperty`, `CastClassProperty`, with
+`dry_run`) instead.
 
 ## Context
 
