@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-03-03_
+_Schema snapshot · Generated 2026-10-08_
 
 ---
 
@@ -10,10 +10,12 @@ Armature models the full instructional design artifact graph from problem defini
 
 **Key architectural patterns:**
 
-- **Abstract base types** — `ArmatureDocument` and `LearningEvidence` enforce shared field contracts across subtypes. Neither is directly instantiated.
-- **Junction documents** — many-to-many relationships are reified as first-class graph nodes. The relationship itself carries metadata (rationale, role, sequence, confidence) rather than being a bare edge.
-- **Back-reference pattern** — child documents hold foreign keys to their parents (e.g., `Response.item`, `Assessment.module`), keeping parent documents lean regardless of child count.
-- **API constraints** — some constraints (unique sequence values, required fields on creation) are enforced at the API level rather than the schema level and are noted inline.
+- **Abstract roots** — `DesignRecord` is the root of every record of design; `ArmatureDocument` adds label, description and createdBy for the primary artifacts; `LearningEvidence` and `Fragment` are abstract within their families. None is directly instantiated.
+- **Self-description** — every class declares `@metadata.armature.category` (infrastructure, fragment, artifact, relationship); tools and generators read the taxonomy from the schema, not from a hand-maintained list (ADR-0027).
+- **Relationships as documents** — many-to-many relationships are reified as first-class graph nodes that carry data about the relationship itself (rationale, role, sequence, confidence) and can themselves be the subject of a `DesignNote` or `DesignFinding` (ADR-0003, ADR-0017).
+- **Fragments** — an item is a tree of embedded subdocuments (stem, options, feedbacks), each with a client-assigned `fragmentId` so a part can be addressed without having document identity (ADR-0022, ADR-0023, ADR-0033).
+- **Back-reference pattern** — child documents hold foreign keys to their parents (e.g., `Assessment.module`, `Module.course`), keeping parent documents lean regardless of child count (ADR-0004).
+- **API constraints** — TerminusDB checks that a referenced document exists but not its class, and cannot express cross-document or conditional rules. Those constraints (reference class, unique sequences, conditional requirements, coverage recompute) are enforced by the API and are noted inline (ADR-0006).
 
 ---
 
@@ -26,6 +28,10 @@ classDiagram
     +string externalId
     +string? email
     +string? institution
+  }
+
+  class DesignRecord {
+    <<abstract>>
   }
 
   class ArmatureDocument {
@@ -64,7 +70,7 @@ classDiagram
   }
 
   class NeedEvidenceLink {
-    <<junction>>
+    <<relationship>>
     +LearningNeed need
     +LearningEvidence evidence
     +ConfidenceLevel? confidence
@@ -77,31 +83,46 @@ classDiagram
   }
 
   class PrerequisiteRecord {
-    <<junction>>
+    <<relationship>>
     +string rationale
     +PrerequisiteType prerequisiteType
     +LearningObjective objective
     +LearningObjective prerequisite
   }
 
+  class Fragment {
+    <<abstract>>
+    <<subdocument>>
+    +string fragmentId
+    +string text
+  }
+
+  class TextFragment {
+    <<subdocument>>
+  }
+
+  class ItemOption {
+    <<subdocument>>
+    +boolean isCorrect
+    +string? feedback
+    +string? purpose
+  }
+
   class AssessmentItem {
-    +string stem
+    +TextFragment stem
+    +List<ItemOption> options
+    +TextFragment? correctFeedback
+    +TextFragment? incorrectFeedback
     +ItemType itemType
+    +ItemStatus status
     +BloomsLevel? bloomsLevel
     +Set<LearningObjective> assesses
     +decimal? difficultyIndex
     +decimal? discriminationIndex
   }
 
-  class Response {
-    <<junction>>
-    +boolean isCorrect
-    +string? incorrectFeedback
-    +AssessmentItem item
-  }
-
   class ItemInstance {
-    <<junction>>
+    <<relationship>>
     +integer sequence
     +integer pointValue
     +boolean randomize
@@ -125,14 +146,14 @@ classDiagram
   class ActivityGroup
 
   class ActivityGroupMember {
-    <<junction>>
+    <<relationship>>
     +ActivityGroup group
     +LearningActivity activity
     +integer? sequence
   }
 
   class ModuleObjective {
-    <<junction>>
+    <<relationship>>
     +integer? sequence
     +ObjectiveRole role
     +string? roleRationale
@@ -147,14 +168,14 @@ classDiagram
   }
 
   class ModuleActivityLink {
-    <<junction>>
+    <<relationship>>
     +Module module
     +LearningActivity activity
     +integer? sequence
   }
 
   class ModuleActivityGroupLink {
-    <<junction>>
+    <<relationship>>
     +Module module
     +ActivityGroup group
     +integer? sequence
@@ -162,30 +183,49 @@ classDiagram
 
   class DesignNote {
     +string rationale
-    +Set<ArmatureDocument> subject
+    +Set<DesignRecord> subject
     +DesignNoteCategory? category
+  }
+
+  class DesignFinding {
+    +string finding
+    +Set<DesignRecord> subject
+    +DesignRecord? regarding
+    +Set<LearningEvidence> evidence
+    +ConfidenceLevel? confidence
+    +FindingStatus status
+    +string? resolutionRationale
   }
 
   class Course
 
   %% Inheritance
+  DesignRecord <|-- ArmatureDocument : inherits
   ArmatureDocument <|-- LearningEvidence : inherits
   LearningEvidence <|-- LearningMetric : inherits
   LearningEvidence <|-- DescriptiveEvidence : inherits
   ArmatureDocument <|-- LearningDataset : inherits
   ArmatureDocument <|-- LearningNeed : inherits
+  DesignRecord <|-- NeedEvidenceLink : inherits
   ArmatureDocument <|-- LearningObjective : inherits
   ArmatureDocument <|-- PrerequisiteRecord : inherits
+  Fragment <|-- TextFragment : inherits
+  Fragment <|-- ItemOption : inherits
   ArmatureDocument <|-- AssessmentItem : inherits
-  ArmatureDocument <|-- Response : inherits
+  DesignRecord <|-- ItemInstance : inherits
   ArmatureDocument <|-- Assessment : inherits
   ArmatureDocument <|-- LearningActivity : inherits
   ArmatureDocument <|-- ActivityGroup : inherits
+  DesignRecord <|-- ActivityGroupMember : inherits
+  DesignRecord <|-- ModuleObjective : inherits
   ArmatureDocument <|-- Module : inherits
+  DesignRecord <|-- ModuleActivityLink : inherits
+  DesignRecord <|-- ModuleActivityGroupLink : inherits
   ArmatureDocument <|-- DesignNote : inherits
+  ArmatureDocument <|-- DesignFinding : inherits
   ArmatureDocument <|-- Course : inherits
 
-  %% Relationships
+  %% Relationships (solid: reference; dotted: optional; diamond: embedded subdocument)
   ArmatureDocument ..> User : createdBy
   LearningMetric ..> LearningDataset : derivedFrom
   LearningDataset ..> Assessment : producedBy
@@ -194,8 +234,11 @@ classDiagram
   LearningObjective ..> LearningNeed : generatedBy
   PrerequisiteRecord --> LearningObjective : objective
   PrerequisiteRecord --> LearningObjective : prerequisite
+  AssessmentItem *-- TextFragment : stem
+  AssessmentItem *-- ItemOption : options
+  AssessmentItem *-- TextFragment : correctFeedback
+  AssessmentItem *-- TextFragment : incorrectFeedback
   AssessmentItem "0..*" --> LearningObjective : assesses
-  Response --> AssessmentItem : item
   ItemInstance --> Assessment : assessment
   ItemInstance --> AssessmentItem : implements
   Assessment --> Module : module
@@ -209,111 +252,116 @@ classDiagram
   ModuleActivityLink --> LearningActivity : activity
   ModuleActivityGroupLink --> Module : module
   ModuleActivityGroupLink --> ActivityGroup : group
-  DesignNote "0..*" --> ArmatureDocument : subject
+  DesignNote "0..*" --> DesignRecord : subject
+  DesignFinding "0..*" --> DesignRecord : subject
+  DesignFinding ..> DesignRecord : regarding
+  DesignFinding "0..*" --> LearningEvidence : evidence
 ```
 
 ---
 
 ## Type Reference
 
+
 ## Infrastructure
 
-_Non-artifact types that underpin the design process without being instructional design artifacts themselves._
+_Non-artifact types that underpin the design process: the user, and the abstract roots every record inherits._
 
 ### `User`
+_category: infrastructure · key: Random_
 
 > A person or system agent who participates in the design process. Intentionally minimal — Armature does not manage authentication or access control. Those concerns belong to the external auth system (identity) and TerminusDB (database access). User is a domain document: it represents who someone is as a design process participant, not whether they are allowed to operate the database. externalId is the stable identifier from the auth system (e.g., OIDC sub claim) — the API uses this to resolve an authenticated identity to a User document at write time. email and institution make the record self-describing in exports and across deployments, where the original auth system may not be available. User does not inherit ArmatureDocument — it is infrastructure for the design process, not an instructional design artifact, and should not be a valid subject of a DesignNote. See ADR-0015.
 
-| Field         | Type      | Notes    |
-| ------------- | --------- | -------- |
-| `displayName` | `string`  | required |
-| `externalId`  | `string`  | required |
-| `email`       | `string?` | optional |
+| Field | Type | Notes |
+|-------|------|-------|
+| `displayName` | `string` | required |
+| `externalId` | `string` | required |
+| `email` | `string?` | optional |
 | `institution` | `string?` | optional |
 
+### `DesignRecord`
+_category: infrastructure · **abstract**_
+
+> Abstract root of every record of design: the artifacts (via ArmatureDocument) and the reified relationships between them (the junction documents). Carries no fields. Its purpose is to be referenceable: DesignNote.subject and DesignFinding.subject are typed to DesignRecord, so any artifact or relationship can carry design rationale, and whether a relationship can be annotated is a deliberate decision rather than a side effect of whether it has a label. User is deliberately outside this hierarchy (ADR-0015). Category (artifact, relationship, fragment, infrastructure) is declared as @metadata.armature.category on every class, not as a class: a category becomes a class only when something must reference it. See ADR-0017, ADR-0027.
+
+_No additional fields._
+
 ### `ArmatureDocument`
+_category: infrastructure · **abstract** · extends `DesignRecord`_
 
-**_abstract_**
+> Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Junction documents and structural types (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, a system agent for API-generated records. Optional to accommodate the demo context and deployments without a full auth system. See ADR-0014, ADR-0015. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).
 
-> Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Junction documents and structural types (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, a system agent for API-generated records. Optional to accommodate the demo context and deployments without a full auth system. See ADR-0014, ADR-0015.
-
-| Field         | Type      | Notes    |
-| ------------- | --------- | -------- |
-| `label`       | `string`  | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `label` | `string` | required |
 | `description` | `string?` | optional |
-| `createdBy`   | `User?`   | optional |
+| `createdBy` | `User?` | optional |
 
 ## Evidence & Needs Analysis
 
 _Evidence of learning gaps and the needs they inform. The upstream entry point into the artifact graph._
 
 ### `LearningEvidence`
-
-**\*abstract** · extends `ArmatureDocument`\*
+_category: artifact · **abstract** · extends `ArmatureDocument`_
 
 > Abstract base for all evidence of learning need. Cannot be instantiated directly — tools always create LearningMetric or DescriptiveEvidence instances. Inherits label, description from ArmatureDocument. The NeedEvidenceLink.evidence field references this abstract type, accepting either subtype at runtime via TerminusDB polymorphism. See ADR-0001, ADR-0014.
 
-| Field         | Type       | Notes    |
-| ------------- | ---------- | -------- |
+| Field | Type | Notes |
+|-------|------|-------|
 | `collectedAt` | `dateTime` | required |
-| `source`      | `string`   | required |
+| `source` | `string` | required |
 
 ### `LearningMetric`
-
-_extends `LearningEvidence`_
+_category: artifact · extends `LearningEvidence` · key: Random_
 
 > A quantitative measurement of learning performance at a point in time. Inherits label, description, collectedAt, source from LearningEvidence. Typically derived from a LearningDataset produced by an administered Assessment — the derivedFrom link preserves that provenance. Examples: pass rate, average score, completion rate.
 
-| Field         | Type               | Notes    |
-| ------------- | ------------------ | -------- |
-| `value`       | `decimal`          | required |
-| `unit`        | `string`           | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `value` | `decimal` | required |
+| `unit` | `string` | required |
 | `derivedFrom` | `LearningDataset?` | optional |
 
 ### `DescriptiveEvidence`
-
-_extends `LearningEvidence`_
+_category: artifact · extends `LearningEvidence` · key: Random_
 
 > A qualitative finding from a structured needs analysis activity. Inherits label, description, collectedAt, source from LearningEvidence. method records how the data was gathered; finding records what was observed or reported.
 
-| Field     | Type             | Notes    |
-| --------- | ---------------- | -------- |
-| `method`  | `EvidenceMethod` | required |
-| `finding` | `string`         | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `method` | `EvidenceMethod` | required |
+| `finding` | `string` | required |
 
 ### `LearningDataset`
-
-_extends `ArmatureDocument`_
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
 > A named collection of learning performance data, typically produced when an Assessment is administered to a cohort. Inherits label, description from ArmatureDocument. Serves as the source for LearningMetrics derived from that administration. producedBy links back to the Assessment that generated this dataset, closing the provenance chain: Assessment → LearningDataset → LearningMetric. Optional because a dataset may come from an external source or a pre-Armature assessment not yet modeled in the graph. API CONSTRAINT: producedBy is required when a dataset is created by an Armature-administered assessment.
 
-| Field                | Type          | Notes    |
-| -------------------- | ------------- | -------- |
-| `administrationDate` | `date?`       | optional |
-| `cohort`             | `string?`     | optional |
-| `producedBy`         | `Assessment?` | optional |
+| Field | Type | Notes |
+|-------|------|-------|
+| `administrationDate` | `date?` | optional |
+| `cohort` | `string?` | optional |
+| `producedBy` | `Assessment?` | optional |
 
 ### `LearningNeed`
-
-_extends `ArmatureDocument`_
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
 > A documented gap between current and desired learner performance, grounded in evidence. Inherits label, description from ArmatureDocument. Informed by one or more LearningEvidence instances via NeedEvidenceLink. One need may generate multiple LearningObjectives — objectives reference back to their originating need via LearningObjective.generatedBy (ADR-0004 back-reference pattern). priority captures triage decisions when a needs analysis produces more needs than a course can address.
 
-| Field       | Type            | Notes    |
-| ----------- | --------------- | -------- |
-| `rationale` | `string`        | required |
-| `priority`  | `NeedPriority?` | optional |
+| Field | Type | Notes |
+|-------|------|-------|
+| `rationale` | `string` | required |
+| `priority` | `NeedPriority?` | optional |
 
 ### `NeedEvidenceLink`
-
-**_junction_**
+_category: relationship · extends `DesignRecord` · key: Hash(need, evidence)_
 
 > Reifies the many-to-many relationship between a LearningNeed and the LearningEvidence that informs it. A first-class graph node — the relationship itself carries data. The evidence field accepts any LearningEvidence subtype (LearningMetric or DescriptiveEvidence) at runtime via TerminusDB polymorphism. confidence records how much weight the designer gave this piece of evidence during analysis. See ADR-0003, ADR-0009.
 
-| Field        | Type               | Notes    |
-| ------------ | ------------------ | -------- |
-| `need`       | `LearningNeed`     | required |
-| `evidence`   | `LearningEvidence` | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `need` | `LearningNeed` | required |
+| `evidence` | `LearningEvidence` | required |
 | `confidence` | `ConfidenceLevel?` | optional |
 
 ## Objectives
@@ -321,201 +369,218 @@ _extends `ArmatureDocument`_
 _The central node of the Armature graph. All upstream artifacts trace forward to objectives; all downstream artifacts trace back to them._
 
 ### `LearningObjective`
-
-_extends `ArmatureDocument`_
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
 > A measurable statement of intended learning outcome. Inherits label, description from ArmatureDocument. The central node in the Armature artifact graph — connected upstream to LearningNeeds (via generatedBy), laterally to prerequisites (via PrerequisiteRecord), and downstream to AssessmentItems (via AssessmentItem.assesses), LearningActivities (via LearningActivity.targets), and Modules (via ModuleObjective). The back-reference pattern (ADR-0004) is used throughout: connection fields live on related documents, not here, except for generatedBy which follows ADR-0004 by placing the foreign key on the child.
 
-| Field         | Type             | Notes    |
-| ------------- | ---------------- | -------- |
-| `bloomsLevel` | `BloomsLevel?`   | optional |
-| `state`       | `ObjectiveState` | required |
-| `generatedBy` | `LearningNeed?`  | optional |
+| Field | Type | Notes |
+|-------|------|-------|
+| `bloomsLevel` | `BloomsLevel?` | optional |
+| `state` | `ObjectiveState` | required |
+| `generatedBy` | `LearningNeed?` | optional |
 
 ### `PrerequisiteRecord`
-
-\*extends `ArmatureDocument` · **junction\***
+_category: relationship · extends `ArmatureDocument` · key: Hash(objective, prerequisite)_
 
 > Junction document that reifies the prerequisite relationship between two LearningObjectives. Inherits label, description from ArmatureDocument. A first-class graph node — the relationship carries rationale and type, making it a design decision preserved in the graph. 'objective' has the requirement; 'prerequisite' must be met first (or alongside, for Corequisite). prerequisiteType is required — a prerequisite relationship without a type is underspecified. rationale is required — this is the core Armature value proposition: design decisions are explicit, not implicit. prerequisite is required — a PrerequisiteRecord must connect two real objectives. If the specific prerequisite objective hasn't been written yet, create it as a Draft LearningObjective first, then create this record (the 'create prerequisite objective' button workflow). If the prerequisite relationship is suspected but the specific objective is unknown, use a DesignNote with category: PrerequisiteIntent instead. See ADR-0003, ADR-0009, ADR-0011.
 
-| Field              | Type                | Notes    |
-| ------------------ | ------------------- | -------- |
-| `rationale`        | `string`            | required |
-| `prerequisiteType` | `PrerequisiteType`  | required |
-| `objective`        | `LearningObjective` | required |
-| `prerequisite`     | `LearningObjective` | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `rationale` | `string` | required |
+| `prerequisiteType` | `PrerequisiteType` | required |
+| `objective` | `LearningObjective` | required |
+| `prerequisite` | `LearningObjective` | required |
 
 ## Assessment
 
-_Reusable items in an item bank, assembled into assessments via instance documents. Produces datasets that close the evidence loop._
+_Reusable items in an item bank, each a tree of addressable fragments, assembled into assessments via instance documents. Produces datasets that close the evidence loop._
+
+### `Fragment`
+_category: fragment · **abstract** · **subdocument** · key: Random_
+
+> Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a note, finding or attestation can point at a part through the compound reference { document @id, fragmentId } rather than at the whole document. Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (ADR-0030) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `fragmentId` | `string` | required |
+| `text` | `string` | required |
+
+### `TextFragment`
+_category: fragment · **subdocument** · extends `Fragment` · key: Random_
+
+> A fragment that is only text: an item stem, a general correct or incorrect feedback. No fields beyond Fragment. Exists as a concrete type so that stem and feedback slots are typed to text rather than to the abstract Fragment, which would also accept an ItemOption. See ADR-0033.
+
+_No additional fields._
+
+### `ItemOption`
+_category: fragment · **subdocument** · extends `Fragment` · key: Random_
+
+> One answer option of an AssessmentItem, embedded in the item as a subdocument. Replaces the former standalone Response document: options are never shared across items and an option's meaning depends on its stem and siblings, so independent identity bought nothing and made accidental relocation possible. Per-option change history is unaffected: the store diffs into nested structure, so a diff between two commits of the item reports which option changed. API CONSTRAINTS: text is required (inherited as a Fragment field); option text must be unique within one item; fragmentId must be unique within the item. See ADR-0022, ADR-0023.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `isCorrect` | `boolean` | required |
+| `feedback` | `string?` | optional |
+| `purpose` | `string?` | optional |
 
 ### `AssessmentItem`
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
-_extends `ArmatureDocument`_
+> A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). difficultyIndex and discriminationIndex are computed from LearningDataset analysis and written back by the API. API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.
 
-> A single reusable question or task in the item bank. Inherits label, description from ArmatureDocument. Exists independently of any specific Assessment — placed into Assessments via ItemInstance. assesses must contain at least one LearningObjective — enforced at schema level via @min_cardinality (ADR-0013). difficultyIndex and discriminationIndex are computed from LearningDataset analysis and written back by the API, closing the design-to-evidence feedback loop. See ADR-0009, ADR-0013.
-
-| Field                 | Type                     | Notes    |
-| --------------------- | ------------------------ | -------- |
-| `stem`                | `string`                 | required |
-| `itemType`            | `ItemType`               | required |
-| `bloomsLevel`         | `BloomsLevel?`           | optional |
-| `assesses`            | `Set<LearningObjective>` | required |
-| `difficultyIndex`     | `decimal?`               | optional |
-| `discriminationIndex` | `decimal?`               | optional |
-
-### `Response`
-
-\*extends `ArmatureDocument` · **junction\***
-
-> One answer option for an AssessmentItem. Inherits label, description from ArmatureDocument. A back-reference pattern is used: Response holds the foreign key to its item rather than AssessmentItem holding an array of responses. This keeps AssessmentItem documents lean regardless of the number of responses. See ADR-0004.
-
-| Field               | Type             | Notes    |
-| ------------------- | ---------------- | -------- |
-| `isCorrect`         | `boolean`        | required |
-| `incorrectFeedback` | `string?`        | optional |
-| `item`              | `AssessmentItem` | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `stem` | `TextFragment` | required, embedded subdocument |
+| `options` | `List<ItemOption>` | required, embedded subdocument |
+| `correctFeedback` | `TextFragment?` | optional, embedded subdocument |
+| `incorrectFeedback` | `TextFragment?` | optional, embedded subdocument |
+| `itemType` | `ItemType` | required |
+| `status` | `ItemStatus` | required |
+| `bloomsLevel` | `BloomsLevel?` | optional |
+| `assesses` | `Set<LearningObjective>` | required, min 1 |
+| `difficultyIndex` | `decimal?` | optional |
+| `discriminationIndex` | `decimal?` | optional |
 
 ### `ItemInstance`
-
-**_junction_**
+_category: relationship · extends `DesignRecord` · key: Hash(assessment, implements)_
 
 > Places an AssessmentItem into a specific Assessment with assessment-context configuration. The same AssessmentItem can appear in multiple Assessments (e.g., a pre-test and post-test) as separate ItemInstance documents with different sequence, pointValue, or randomize settings. All fields are required — there is no reasonable default for sequence, point value, or review status when placing an item in a formal assessment.
 
-| Field        | Type             | Notes    |
-| ------------ | ---------------- | -------- |
-| `sequence`   | `integer`        | required |
-| `pointValue` | `integer`        | required |
-| `randomize`  | `boolean`        | required |
-| `status`     | `ItemStatus`     | required |
-| `assessment` | `Assessment`     | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `sequence` | `integer` | required |
+| `pointValue` | `integer` | required |
+| `randomize` | `boolean` | required |
+| `status` | `ItemStatus` | required |
+| `assessment` | `Assessment` | required |
 | `implements` | `AssessmentItem` | required |
 
 ### `Assessment`
-
-_extends `ArmatureDocument`_
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
 > A named collection of ItemInstances for a specific instructional purpose within a Module. Inherits label, description from ArmatureDocument. Contained by exactly one Module (back-reference pattern — see ADR-0004). When administered, produces a LearningDataset. LearningDatasets are linked back to this Assessment via LearningDataset.producedBy, enabling outcome-to-design traceability.
 
-| Field          | Type       | Notes    |
-| -------------- | ---------- | -------- |
-| `randomize`    | `boolean`  | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `randomize` | `boolean` | required |
 | `passingScore` | `decimal?` | optional |
-| `retakes`      | `integer?` | optional |
-| `module`       | `Module`   | required |
+| `retakes` | `integer?` | optional |
+| `module` | `Module` | required |
 
 ## Learning Activities & Course Structure
 
 _Instructional activities and the hierarchical containers that organize them into deliverable courses._
 
 ### `LearningActivity`
-
-_extends `ArmatureDocument`_
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
 > A reusable instructional activity that targets one or more LearningObjectives. Inherits label, description from ArmatureDocument. Can appear in multiple Modules (via ModuleActivityLink) and ActivityGroups (via ActivityGroupMember) without duplication. targets must contain at least one LearningObjective — enforced at schema level via @min_cardinality (ADR-0013). activityType makes instructional strategy queryable in the graph. See ADR-0009, ADR-0013.
 
-| Field          | Type                     | Notes    |
-| -------------- | ------------------------ | -------- |
-| `activityType` | `ActivityType?`          | optional |
-| `targets`      | `Set<LearningObjective>` | required |
+| Field | Type | Notes |
+|-------|------|-------|
+| `activityType` | `ActivityType?` | optional |
+| `targets` | `Set<LearningObjective>` | required, min 1 |
 
 ### `ActivityGroup`
-
-_extends `ArmatureDocument`_
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
 > A reusable, named collection of LearningActivities with a defined pedagogical sequence. Inherits label, description from ArmatureDocument. Can appear in multiple Modules via ModuleActivityGroupLink. Intentionally flat — ActivityGroups do not contain other ActivityGroups. Membership and sequence are managed through ActivityGroupMember junction documents. See ADR-0003.
 
 _No additional fields._
 
-### `Module`
+### `ActivityGroupMember`
+_category: relationship · extends `DesignRecord` · key: Hash(group, activity)_
 
-_extends `ArmatureDocument`_
+> Places a LearningActivity into an ActivityGroup with a sub-sequence position. sequence is the activity's position within the group only — it is independent of the module-level sequence on ModuleActivityGroupLink and must never be combined with it. See ADR-0005.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `group` | `ActivityGroup` | required |
+| `activity` | `LearningActivity` | required |
+| `sequence` | `integer?` | optional |
+
+### `ModuleObjective`
+_category: relationship · extends `DesignRecord` · key: Hash(module, references)_
+
+> Reifies the relationship between a Module and a LearningObjective it declares. A first-class graph node that carries both design intent (role, roleRationale) and computed graph intelligence (coverageStatus). Created programmatically by the API when a designer assigns an objective to a module — not directly created or edited through the UI. coverageStatus is recomputed by the API after any change that affects coverage: modifications to AssessmentItem.assesses, ItemInstance additions/removals, or ModuleObjective role changes. See ADR-0007.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `sequence` | `integer?` | optional |
+| `role` | `ObjectiveRole` | required |
+| `roleRationale` | `string?` | optional |
+| `coverageStatus` | `CoverageStatus` | required |
+| `module` | `Module` | required |
+| `references` | `LearningObjective` | required |
+
+### `Module`
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
 > A named instructional unit within a Course. Inherits label, description from ArmatureDocument. Contains LearningActivities (via ModuleActivityLink), ActivityGroups (via ModuleActivityGroupLink), and Assessments (back-reference on Assessment.module). Declares the LearningObjectives it intends to cover via ModuleObjective. Contained by exactly one Course (back-reference pattern — see ADR-0004).
 
-| Field      | Type       | Notes    |
-| ---------- | ---------- | -------- |
+| Field | Type | Notes |
+|-------|------|-------|
 | `sequence` | `integer?` | optional |
-| `course`   | `Course`   | required |
+| `course` | `Course` | required |
+
+### `ModuleActivityLink`
+_category: relationship · extends `DesignRecord` · key: Hash(module, activity)_
+
+> Places a standalone LearningActivity into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityGroupLink.sequence — both are sorted together to produce the module's ordered content list. API CONSTRAINT: sequence values must be unique across both ModuleActivityLink and ModuleActivityGroupLink for a given Module. See ADR-0005.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `module` | `Module` | required |
+| `activity` | `LearningActivity` | required |
+| `sequence` | `integer?` | optional |
+
+### `ModuleActivityGroupLink`
+_category: relationship · extends `DesignRecord` · key: Hash(module, group)_
+
+> Places an ActivityGroup into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityLink.sequence — both are sorted together to produce the module's ordered content list. The activities within the group are sub-sequenced via ActivityGroupMember.sequence, which is independent of this module-level sequence. See ADR-0005.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `module` | `Module` | required |
+| `group` | `ActivityGroup` | required |
+| `sequence` | `integer?` | optional |
 
 ### `Course`
-
-_extends `ArmatureDocument`_
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
 > Top-level container for a complete instructional design project. Inherits label, description from ArmatureDocument. Contains one or more Modules. Intentionally minimal in the current schema — version, status, dates, and authorship fields are deferred. See ADR-0010.
 
 _No additional fields._
 
-## Junction Documents
-
-_Reified many-to-many relationships. Each is a first-class graph node that carries metadata about the relationship itself._
-
-### `ActivityGroupMember`
-
-**_junction_**
-
-> Places a LearningActivity into an ActivityGroup with a sub-sequence position. sequence is the activity's position within the group only — it is independent of the module-level sequence on ModuleActivityGroupLink and must never be combined with it. See ADR-0005.
-
-| Field      | Type               | Notes    |
-| ---------- | ------------------ | -------- |
-| `group`    | `ActivityGroup`    | required |
-| `activity` | `LearningActivity` | required |
-| `sequence` | `integer?`         | optional |
-
-### `ModuleObjective`
-
-**_junction_**
-
-> Reifies the relationship between a Module and a LearningObjective it declares. A first-class graph node that carries both design intent (role, roleRationale) and computed graph intelligence (coverageStatus). Created programmatically by the API when a designer assigns an objective to a module — not directly created or edited through the UI. coverageStatus is recomputed by the API after any change that affects coverage: modifications to AssessmentItem.assesses, ItemInstance additions/removals, or ModuleObjective role changes. See ADR-0007.
-
-| Field            | Type                | Notes    |
-| ---------------- | ------------------- | -------- |
-| `sequence`       | `integer?`          | optional |
-| `role`           | `ObjectiveRole`     | required |
-| `roleRationale`  | `string?`           | optional |
-| `coverageStatus` | `CoverageStatus`    | required |
-| `module`         | `Module`            | required |
-| `references`     | `LearningObjective` | required |
-
-### `ModuleActivityLink`
-
-**_junction_**
-
-> Places a standalone LearningActivity into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityGroupLink.sequence — both are sorted together to produce the module's ordered content list. API CONSTRAINT: sequence values must be unique across both ModuleActivityLink and ModuleActivityGroupLink for a given Module. See ADR-0005.
-
-| Field      | Type               | Notes    |
-| ---------- | ------------------ | -------- |
-| `module`   | `Module`           | required |
-| `activity` | `LearningActivity` | required |
-| `sequence` | `integer?`         | optional |
-
-### `ModuleActivityGroupLink`
-
-**_junction_**
-
-> Places an ActivityGroup into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityLink.sequence — both are sorted together to produce the module's ordered content list. The activities within the group are sub-sequenced via ActivityGroupMember.sequence, which is independent of this module-level sequence. See ADR-0005.
-
-| Field      | Type            | Notes    |
-| ---------- | --------------- | -------- |
-| `module`   | `Module`        | required |
-| `group`    | `ActivityGroup` | required |
-| `sequence` | `integer?`      | optional |
-
 ## Design Rationale
 
-_Free-form rationale records that attach design decisions to any primary artifact._
+_Rationale and review records that attach to any design record: why something was done, and what someone judged to be a problem._
 
 ### `DesignNote`
+_category: artifact · extends `ArmatureDocument` · key: Random_
 
-_extends `ArmatureDocument`_
+> A free-form rationale record attached to any design record in the Armature graph. Inherits label, description, createdBy from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject is typed Set<DesignRecord>: any artifact or any reified relationship (a sequencing decision, an evidence weighting) can carry a note. TerminusDB enforces referential integrity natively. See ADR-0012, ADR-0014, ADR-0017.
 
-> A free-form rationale record attached to any primary artifact in the Armature graph. Inherits label, description from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject types to Set<ArmatureDocument> — any primary artifact can be a subject. TerminusDB enforces referential integrity natively, replacing the earlier xsd:anyURI stopgap. See ADR-0012, ADR-0014.
+| Field | Type | Notes |
+|-------|------|-------|
+| `rationale` | `string` | required |
+| `subject` | `Set<DesignRecord>` | required, min 1 |
+| `category` | `DesignNoteCategory?` | optional |
 
-| Field       | Type                    | Notes    |
-| ----------- | ----------------------- | -------- |
-| `rationale` | `string`                | required |
-| `subject`   | `Set<ArmatureDocument>` | required |
-| `category`  | `DesignNoteCategory?`   | optional |
+### `DesignFinding`
+_category: artifact · extends `ArmatureDocument` · key: Random_
+
+> An evidence-grounded concern about a design record: "this objective is ambiguous", "these two items are redundant", "this prerequisite is unjustified". Where DesignNote records why something was done, DesignFinding records that someone judged something to be a problem, and what became of that judgment. Inherits label, description, createdBy from ArmatureDocument. Evidence is a Set rather than a junction because a finding's confidence is a property of the finding, not of each piece of evidence. Evidence is optional: a finding without it is weaker, and that weakness is visible in the graph, which is more useful than forcing ceremony. API CONSTRAINT: resolutionRationale is required when status is Dismissed. See ADR-0020.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `finding` | `string` | required |
+| `subject` | `Set<DesignRecord>` | required, min 1 |
+| `regarding` | `DesignRecord?` | optional |
+| `evidence` | `Set<LearningEvidence>` | required |
+| `confidence` | `ConfidenceLevel?` | optional |
+| `status` | `FindingStatus` | required |
+| `resolutionRationale` | `string?` | optional |
 
 ---
 
@@ -653,3 +718,11 @@ _extends `ArmatureDocument`_
 - `AlignmentDecision`
 - `PrerequisiteIntent`
 - `Other`
+
+### `FindingStatus`
+
+> Lifecycle of a DesignFinding. Deliberately minimal: a finding that was raised and never addressed is materially different design history from one that was revised, and that difference is what justifies carrying state at all. Richer review lifecycles are plugin concerns and map onto these three at the boundary. API CONSTRAINT: Dismissed requires resolutionRationale. See ADR-0020.
+
+- `Open`
+- `Addressed`
+- `Dismissed`

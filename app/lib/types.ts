@@ -142,17 +142,28 @@ export const VALID_DesignNoteCategory = [
 
 export type DesignNoteCategory = typeof VALID_DesignNoteCategory[number];
 
+export const VALID_FindingStatus = [
+  "Open",
+  "Addressed",
+  "Dismissed",
+] as const;
+
+export type FindingStatus = typeof VALID_FindingStatus[number];
+
 // ────────────────────────────────────────────────────────
-// Base types
+// Base type
 // ────────────────────────────────────────────────────────
 
-/** Every document stored in TerminusDB carries @id and @type. */
+/** Every document and subdocument stored in TerminusDB carries @id and @type. */
 export interface TerminusDocument {
   "@id": string;
   "@type": string;
 }
 
-/** Infrastructure type — not an instructional artifact. Does not extend ArmatureDocument. */
+// ────────────────────────────────────────────────────────
+// Infrastructure — User, and the abstract roots every record inherits
+// ────────────────────────────────────────────────────────
+
 export interface User extends TerminusDocument {
   displayName: string;
   externalId: string;
@@ -160,15 +171,38 @@ export interface User extends TerminusDocument {
   institution?: string;
 }
 
-/** Abstract base for all primary instructional artifacts. */
-export interface ArmatureDocument extends TerminusDocument {
+/** @abstract */
+export type DesignRecord = TerminusDocument;  // no additional fields
+
+/** @abstract */
+export interface ArmatureDocument extends DesignRecord {
   label: string;
   description?: string;
   createdBy?: string;  // User @id
 }
 
 // ────────────────────────────────────────────────────────
-// Document types
+// Fragments — subdocument parts of an artifact, returned inline (ADR-0033)
+// ────────────────────────────────────────────────────────
+
+/** @abstract · @subdocument — returned inline with a nested @id; cannot be referenced from another document */
+export interface Fragment extends TerminusDocument {
+  fragmentId: string;
+  text: string;
+}
+
+/** @subdocument — returned inline with a nested @id; cannot be referenced from another document */
+export type TextFragment = Fragment;  // no additional fields
+
+/** @subdocument — returned inline with a nested @id; cannot be referenced from another document */
+export interface ItemOption extends Fragment {
+  isCorrect: boolean;
+  feedback?: string;
+  purpose?: string;
+}
+
+// ────────────────────────────────────────────────────────
+// Artifacts — primary instructional design documents
 // ────────────────────────────────────────────────────────
 
 /** @abstract */
@@ -205,26 +239,17 @@ export interface LearningObjective extends ArmatureDocument {
   generatedBy?: string;  // LearningNeed @id
 }
 
-export interface PrerequisiteRecord extends ArmatureDocument {
-  rationale: string;
-  prerequisiteType: PrerequisiteType;
-  objective: string;  // LearningObjective @id
-  prerequisite: string;  // LearningObjective @id
-}
-
 export interface AssessmentItem extends ArmatureDocument {
-  stem: string;
+  stem: TextFragment;
+  options: ItemOption[];
+  correctFeedback?: TextFragment;
+  incorrectFeedback?: TextFragment;
   itemType: ItemType;
+  status: ItemStatus;
   bloomsLevel?: BloomsLevel;
   assesses: string[];  // LearningObjective @id[]
   difficultyIndex?: number;
   discriminationIndex?: number;
-}
-
-export interface Response extends ArmatureDocument {
-  isCorrect: boolean;
-  incorrectFeedback?: string;
-  item: string;  // AssessmentItem @id
 }
 
 export interface Assessment extends ArmatureDocument {
@@ -246,25 +271,42 @@ export interface Module extends ArmatureDocument {
   course: string;  // Course @id
 }
 
-export type Course = ArmatureDocument;  // no additional fields
-
 export interface DesignNote extends ArmatureDocument {
   rationale: string;
-  subject: string[];  // ArmatureDocument @id[]
+  subject: string[];  // DesignRecord @id[]
   category?: DesignNoteCategory;
 }
 
+export interface DesignFinding extends ArmatureDocument {
+  finding: string;
+  subject: string[];  // DesignRecord @id[]
+  regarding?: string;  // DesignRecord @id
+  evidence: string[];  // LearningEvidence @id[]
+  confidence?: ConfidenceLevel;
+  status: FindingStatus;
+  resolutionRationale?: string;
+}
+
+export type Course = ArmatureDocument;  // no additional fields
+
 // ────────────────────────────────────────────────────────
-// Junction documents — no label / description / createdBy
+// Relationships — reified junction documents; no label / description / createdBy unless they inherit ArmatureDocument
 // ────────────────────────────────────────────────────────
 
-export interface NeedEvidenceLink extends TerminusDocument {
+export interface NeedEvidenceLink extends DesignRecord {
   need: string;  // LearningNeed @id
   evidence: string;  // LearningEvidence @id
   confidence?: ConfidenceLevel;
 }
 
-export interface ItemInstance extends TerminusDocument {
+export interface PrerequisiteRecord extends ArmatureDocument {
+  rationale: string;
+  prerequisiteType: PrerequisiteType;
+  objective: string;  // LearningObjective @id
+  prerequisite: string;  // LearningObjective @id
+}
+
+export interface ItemInstance extends DesignRecord {
   sequence: number;
   pointValue: number;
   randomize: boolean;
@@ -273,7 +315,13 @@ export interface ItemInstance extends TerminusDocument {
   implements: string;  // AssessmentItem @id
 }
 
-export interface ModuleObjective extends TerminusDocument {
+export interface ActivityGroupMember extends DesignRecord {
+  group: string;  // ActivityGroup @id
+  activity: string;  // LearningActivity @id
+  sequence?: number;
+}
+
+export interface ModuleObjective extends DesignRecord {
   sequence?: number;
   role: ObjectiveRole;
   roleRationale?: string;
@@ -282,20 +330,59 @@ export interface ModuleObjective extends TerminusDocument {
   references: string;  // LearningObjective @id
 }
 
-export interface ActivityGroupMember extends TerminusDocument {
-  group: string;  // ActivityGroup @id
-  activity: string;  // LearningActivity @id
-  sequence?: number;
-}
-
-export interface ModuleActivityLink extends TerminusDocument {
+export interface ModuleActivityLink extends DesignRecord {
   module: string;  // Module @id
   activity: string;  // LearningActivity @id
   sequence?: number;
 }
 
-export interface ModuleActivityGroupLink extends TerminusDocument {
+export interface ModuleActivityGroupLink extends DesignRecord {
   module: string;  // Module @id
   group: string;  // ActivityGroup @id
   sequence?: number;
 }
+
+// ────────────────────────────────────────────────────────
+// Schema self-description (ADR-0027)
+// ────────────────────────────────────────────────────────
+
+/** Every class @id mapped to its @metadata.armature.category. */
+export const CLASS_CATEGORY = {
+  User: "infrastructure",
+  DesignRecord: "infrastructure",
+  ArmatureDocument: "infrastructure",
+  LearningEvidence: "artifact",
+  LearningMetric: "artifact",
+  DescriptiveEvidence: "artifact",
+  LearningDataset: "artifact",
+  LearningNeed: "artifact",
+  NeedEvidenceLink: "relationship",
+  LearningObjective: "artifact",
+  PrerequisiteRecord: "relationship",
+  Fragment: "fragment",
+  TextFragment: "fragment",
+  ItemOption: "fragment",
+  AssessmentItem: "artifact",
+  ItemInstance: "relationship",
+  Assessment: "artifact",
+  LearningActivity: "artifact",
+  ActivityGroup: "artifact",
+  ActivityGroupMember: "relationship",
+  ModuleObjective: "relationship",
+  Module: "artifact",
+  ModuleActivityLink: "relationship",
+  ModuleActivityGroupLink: "relationship",
+  DesignNote: "artifact",
+  DesignFinding: "artifact",
+  Course: "artifact",
+} as const;
+
+export type ClassName = keyof typeof CLASS_CATEGORY;
+export type ClassCategory = typeof CLASS_CATEGORY[ClassName];
+
+/** Subdocument classes: returned inline, never addressable on their own (ADR-0022, ADR-0033). */
+export const SUBDOCUMENT_CLASSES = [
+  "Fragment",
+  "TextFragment",
+  "ItemOption",
+] as const;
