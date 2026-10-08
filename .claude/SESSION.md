@@ -6,13 +6,24 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Phase 0 (ground truth) complete on 2026-10-07 → Phase 1 of `docs/development-plan.md` (schema catch-up) is next.** The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
+**Phases 0 and 1 complete on 2026-10-07 (Phase 1 on branch `phase-1/schema-catch-up`, PR pending) → Phase 2 of `docs/development-plan.md` (the version-control model) is next.** The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
 
 History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 (October 2026).
 
 ---
 
 ## What's Done
+
+### Phase 1: schema catch-up (2026-10-07)
+
+- `scripts/platform_checks.js`: reproducible probes of store behaviour in a scratch database (checks A to L). All Phase 1 platform assumptions verified on v12.0.7: subdocuments inline by default, polymorphic `List<Fragment>`, `sys:JSON` on subdocuments, four-level inheritance, `@metadata` survival, empty abstract root, client-supplied `@id` under `@key Random`, nested diffs
+- **New platform fact, corrected in plan §9:** the store does not check the class of a referenced document, only that it exists. `DesignNote.subject → User` and `Module.course → AssessmentItem` were accepted. Reference class is now CLAUDE.md constraint 0 for the invariants engine; ADR-0014 and ADR-0017 amended
+- `schema/schema.json`: 27 classes, 13 enums. `Response` removed; `Fragment` (abstract subdocument) with `TextFragment` and `ItemOption`; `AssessmentItem` carries `stem`, `options`, `correctFeedback`, `incorrectFeedback` as fragments and a required `status`; `DesignRecord` abstract root above `ArmatureDocument` and the junctions; `DesignNote.subject: Set<DesignRecord>`; `DesignFinding` and `FindingStatus`; `@metadata.armature.category` on every class; explicit `@key Random` on every primary artifact
+- ADRs: 0017, 0018, 0020 Accepted and implemented; 0022, 0023 marked implemented; 0024 (client-supplied identifiers), 0027 (schema self-description), 0033 (items as a tree of fragments) written and Accepted; 0019 stays Proposed until Phase 4; 0014 amended
+- Generators rewritten: `generate-types.js` groups by category, inlines subdocuments, exports `CLASS_CATEGORY` and `SUBDOCUMENT_CLASSES`, fails on a missing category; `JUNCTION_IDS` and `CLASS_ORDER` deleted from both generators. `generate-schema-appendix.js` badges subdocuments and relationships from metadata and renders unplaced classes rather than dropping them
+- `load_schema.js --clear-instances` for breaking schema changes (reload chosen over the migration endpoint at demo scale; recorded in ADR-0022)
+- Seed rewritten: 47 documents; items with real option text and fragment ids, one with general incorrect feedback and two options with `purpose`; statuses Approved ×4, InReview, Draft with matching ItemInstance statuses; one `DesignFinding` on the Draft item; one `DesignNote` on a `ModuleObjective` via `@capture`/`@ref`
+- Live store reloaded and re-seeded; `npm run lint`, `check:types`, `tsc`, `npm test` all pass
 
 ### Phase 0: ground truth (2026-10-07)
 
@@ -39,11 +50,11 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 ### Schema
 
 - TerminusDB schema fully designed and documented (`schema/schema.json`)
-- 12 enums, 23 classes (including ArmatureDocument base, User, DesignNote, Response, junction documents)
+- 13 enums, 27 classes: `User`; abstract roots `DesignRecord` and `ArmatureDocument`; subdocument fragments `Fragment`, `TextFragment`, `ItemOption`; 14 artifacts including `DesignNote` and `DesignFinding`; 7 relationship (junction) documents. Every class carries `@metadata.armature.category` and an explicit `@key`
 - All types documented in TerminusDB-compliant multi-language array format (`@documentation: [{@language: "en", ...}]`)
 - Field-level documentation consolidated into `@properties` on each type
 - API constraints documented directly on affected fields
-- 23 ADRs (`schema/docs/adr/`). ADRs 0017, 0018, 0019, 0020 are Proposed; 0022 and 0023 are Accepted but not yet implemented in `schema.json` (`Response` still exists; embedded options and `fragmentId` do not). Phase 1 of the plan lands them.
+- 29 ADR files (`schema/docs/adr/`, 0001–0024, 0026, 0027, 0033, 0054). All Accepted and implemented except ADR-0019 (Proposed; promoted with the coverage algorithm in Phase 4). Reserved by the plan and not yet written: 0025, 0028–0032, 0034. Numbers 0035–0053 are research candidates, not ADRs.
 
 ### Infrastructure
 
@@ -57,9 +68,10 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 - Complete demo artifact graph inserted (`scripts/seed_data.js`)
 - Course: "Introduction to AI for Instructional Designers"
-- 69 documents across all major schema types
-- Covers: 2 LearningNeeds + evidence, 7 LearningObjectives, 4 PrerequisiteRecords, 3 Modules, 3 Assessments, 6 AssessmentItems, 24 Responses (to be replaced by embedded options in Phase 1), 7 ItemInstances (item reuse demonstrated), 7 ModuleObjectives, 1 DesignNote
-- One objective intentionally Uncovered in ModuleObjective.coverageStatus for demo interest
+- 47 documents across all major schema types (was 69 before `Response` was embedded)
+- Covers: 2 LearningNeeds + evidence, 7 LearningObjectives, 4 PrerequisiteRecords, 3 Modules, 3 Assessments, 6 AssessmentItems each with a stem fragment and 4 embedded options (real option text, fragment ids, one general feedback, two `purpose` notes), 7 ItemInstances (item reuse demonstrated), 7 ModuleObjectives, 2 DesignNotes (one on a ModuleObjective junction via `@capture`/`@ref`), 1 DesignFinding
+- Item statuses: 4 Approved, 1 InReview (`appropriate-use-mc`), 1 Draft (`hallucination-mc`, the finding's subject); ItemInstance statuses match (ADR-0018)
+- One objective intentionally Uncovered in ModuleObjective.coverageStatus for demo interest. Coverage values are hand-seeded until Phase 4 recomputes them; `identify-ai-limitations` is seeded FullyAssessed although its only item is Draft (ADR-0019 will change that)
 
 ### Demo API
 
@@ -83,10 +95,10 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 - `scripts/generate-types.js` — generates `app/lib/types.ts` from `schema/schema.json`
 - `app/lib/types.ts` is **generated**, not hand-maintained — do not edit directly
-- Two npm scripts in `app/package.json`: `generate:types` (write) and `check:types` (drift check, CI-ready; CI itself does not exist yet — Phase 0)
+- Two npm scripts in `app/package.json`: `generate:types` (write) and `check:types` (drift check, runs in CI)
 - Enums emit `VALID_*` const arrays + derived union types — arrays are runtime source of truth
-- Type mapping: xsd primitives → TS primitives, `Optional<T>` → optional fields, `Set<T>`/`List<T>` → arrays, Class references → `string` (@id), enum refs → union types, junction types → `extends TerminusDocument`. Subdocument support still to be added (Phase 1)
-- `JUNCTION_IDS` and `CLASS_ORDER` in the generator are the two places to update when adding new schema types — to be replaced by `@metadata.armature.category` (ADR-0027, Phase 1)
+- Type mapping: xsd primitives → TS primitives, `sys:JSON` → `unknown`, `Optional<T>` → optional fields, `Set<T>`/`List<T>` → arrays, document Class references → `string` (@id), `@subdocument` references → the inline interface, enum refs → union types, inheritance as declared (`@inherits` or `TerminusDocument`), property-less classes → type aliases
+- Output grouped by `@metadata.armature.category` (infrastructure, fragment, artifact, relationship); no hand-maintained type lists remain. Exports `CLASS_CATEGORY` and `SUBDOCUMENT_CLASSES` for runtime use. A class with no category fails generation (ADR-0027)
 
 ### Validation Layer (`app/lib/validate.ts`)
 
@@ -106,19 +118,16 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 **Phase 0 is done locally but uncommitted.** First action next session: review and commit the Phase 0 changes (proposed commit sequence in the 2026-10-07 entry under Recent Sessions), push, and confirm the CI workflow goes green on `main`. That is the phase's exit criterion.
 
-**ADR-0054 accepted (2026-10-07) on the spike result; the spike branch is a PR against `main`.** Once merged, the API skeleton exists: `app/lib/api/app.ts` with one read route, mounted at `/api/v1`, with in-process tests. Phase 2's routes go into `app/lib/api/routes/`.
+**Merge the Phase 1 PR, then Phase 2 of `docs/development-plan.md` — the version-control model (2 to 3 sessions):**
 
-**Then Phase 1 of `docs/development-plan.md` — schema catch-up (2 to 3 sessions):**
+1. Read research candidate 0036 (immutable shared history and durable pins) before writing ADR-0025; attestations and findings will store commit ids, so the no-rewrite rule on shared branches belongs in the ADR
+2. **ADR-0025: design process data lives in the commit graph.** Includes the merge model (`apply` is a three-way merge with field-level conflict reports), the no-history-rewrite rule, and the data-version token decision ADR-0054 left open (`branch:<commit>` raw, or the bare commit id)
+3. Per-request client `getClient({ branch?, ref? })` replacing the singleton; HTTP write path with `author` and `message` from the resolved identity (JS client cannot set author)
+4. Hono routes in `app/lib/api/routes/`: `POST/GET /api/v1/branches`, `GET /branches/:name`, `POST /branches/:name/merge` (409 with the store's witnesses on conflict), read-at-ref on every document read (`?branch=`, `?ref=`), `GET /documents/:type/:id/history` (with `diff=true`), `GET /branches/:name/changes?since=`, `GET /documents/:type/:id/diff?from=&to=`
+5. Middleware reading and echoing `TerminusDB-Data-Version`
+6. Exit: a scripted walkthrough creates a branch from a commit, writes as a named author, reads one document at two commits, lists history with diffs, merges, and provokes one conflict, all through `/api/v1`
 
-1. Read `docs/research/adr-candidates.md` items 0035 (lossless writes under replace semantics) and 0036 (immutable shared history) before touching the schema; both are data-loss risks the research flags
-2. Run the platform checks on the running v12.0.7 store: do subdocuments return inline by default or need `unfold`; does a `List` of subdocuments accept subtypes polymorphically; four-level inheritance; `@metadata` survival through load and read
-3. Land ADR-0022 and ADR-0023 in `schema.json`: remove `Response`; add `Fragment` (abstract subdocument, `@key: Random`) with `ItemOption` as its specialisation; `stem`, `correctFeedback`, `incorrectFeedback` with `fragmentId`
-4. Decide reload versus migration endpoint for removing `Response`; record in the ADR
-5. Generator and appendix support for subdocuments (inline the type instead of `string`)
-6. ADR-0017 to Accepted and implemented (`DesignRecord`); ADR-0018 (`AssessmentItem.status`); ADR-0020 (`DesignFinding`, `FindingStatus`)
-7. ADR-0027 schema self-description: `@metadata.armature.category` on every class; generator derives `JUNCTION_IDS` and `CLASS_ORDER` from it
-8. ADR-0024 client-supplied identifiers
-9. Seed data rewrite (real option text and fragment ids, varied `status`, one `DesignFinding`, one `DesignNote` on a junction); regenerate `types.ts` and `SCHEMA_APPENDIX.md`
+Phase 3 follows with the generic write path and the invariants engine; CLAUDE.md now lists thirteen constraints for it, including the generic reference-class check the store does not perform.
 
 ---
 
@@ -135,6 +144,12 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 - **ADR-0054 (Accepted 2026-10-07):** the API is a Hono app in `app/lib/api/`, mounted in Next.js through one catch-all route via `@hono/vercel`; nothing under `app/lib/api/` imports from `next`. ADR-0026 decision 1 now reads "Next.js is the host, Hono is the API". New routes are Hono routes only; the legacy Next.js handlers are not ported and die in Phase 3; Zod request validation derives from `schema.json` via the generator (Phase 3)
 - Two ADR-0054 knock-ons to decide later: the data-version token shape (`branch:<commit>` is the store's; Phase 2 decides what `/api/v1` exposes) and the standalone build step that resolves the `@/` alias (Phase 7)
 - `npm test` is Vitest, integration-only against the running container; not in CI until Phase 7's service container
+- **The store does not check reference class.** Typed references in `schema.json` are the contract and the generator's input; the invariants engine enforces class on every write (CLAUDE.md constraint 0). Never claim "schema-enforced" for a reference's type
+- **Part identity is `fragmentId`, never a nested store id.** A replace regenerates every subdocument `@id`. Nothing may store `AssessmentItem/x/options/0/ItemOption/...`
+- **Client-supplied `@id` on primary artifacts; `@key Random` declared on each; junctions keep Hash keys and are reached in a batch via `@capture`/`@ref`** (ADR-0024)
+- **Breaking schema changes at demo scale are a reload:** `load_schema.js --clear-instances` then `seed_data.js`. Real data would use the migration endpoint (ADR-0022)
+- **Platform assumptions get a check in `scripts/platform_checks.js` before an ADR depends on them.** The script owns a scratch database and never touches `armature`
+- `ItemType` is the built-in interaction-type registry until ADR-0034; no type-version field until then (ADR-0033 §6)
 - TerminusDB docs are vendored, dated and pinned by `scripts/sync-terminusdb-docs.js`; never hand-copied; the `terminusdb` skill governs their use
 - Next.js app lives inside the Armature repo (`armature/app/`) — demo is part of the project
 - Next.js runs locally (not containerized) — TerminusDB stays in Docker; containerizing deferred to Phase 7
@@ -155,7 +170,14 @@ None. The 2026-10-05 credentials failure was the previously running container ha
 
 ## Notes for Next Session
 
-Commit and push Phase 0 first (see the 2026-10-07 entry below for the proposed commit sequence), confirm CI is green, then start Phase 1. Phase 1 is schema work: every change needs an ADR first, and `types.ts` plus `SCHEMA_APPENDIX.md` are regenerated and committed with `schema.json`.
+Merge the Phase 1 PR, then start Phase 2 with ADR-0025. Phase 2 is the first phase that writes Hono routes; put them in `app/lib/api/routes/` and mount them on the app in `app/lib/api/app.ts`. Read research candidate 0036 first: the no-history-rewrite rule and content-hash pins belong in ADR-0025 because attestations will store commit ids.
+
+Phase 1 facts worth carrying forward:
+- `scripts/platform_checks.js` is the place to prove a store behaviour before an ADR relies on it. Checks A–L exist; add a lettered check, run it, cite it in the ADR.
+- The store accepts wrong-class references. Phase 3's invariants engine must implement the generic reference-class check (CLAUDE.md constraint 0) before anything else, because every other typed slot in the schema depends on it.
+- `load_schema.js --clear-instances` then `seed_data.js` is the reload procedure for any breaking schema change at demo scale.
+- Subdocument store ids are not stable across replaces. Routes and tests must address parts by `fragmentId`.
+- `@capture`/`@ref` work in a `full_replace` batch, including for Hash-keyed junctions; the seed's junction note shows the pattern Phase 3's atomic multi-document write will expose.
 
 Phase 0 facts worth carrying forward:
 - Anything under a directory named `coverage` was silently ignored by git until 2026-10-07. Check `git ls-files` when a route seems to exist locally but not in history.
@@ -173,6 +195,16 @@ Key context:
 ---
 
 ## Recent Sessions
+
+### 2026-10-07 (Phase 1)
+
+- Merged PR #2 (ADR-0054); started Phase 1 on `phase-1/schema-catch-up`
+- Wrote `scripts/platform_checks.js` and ran it: every Phase 1 platform assumption holds on v12.0.7. Found one the repo had wrong since ADR-0014: the store does not check the class of a referenced document. Recorded in plan §9, CLAUDE.md constraint 0, ADR-0014 and ADR-0017
+- Applied ADRs 0017, 0018, 0020, 0022, 0023, 0024, 0027, 0033 to `schema.json` via a transform script (kept in the scratchpad; the result and the ADRs are the record); validated the new schema in a scratch database before loading it
+- Rewrote both generators to derive everything from `@metadata.armature.category` and inline subdocuments; deleted `JUNCTION_IDS` and `CLASS_ORDER`
+- Rewrote the seed to the fragment shape with real option text, varied statuses, a `DesignFinding`, and a `DesignNote` on a junction via `@capture`/`@ref`; added `load_schema.js --clear-instances`; reloaded and re-seeded the live store (47 documents)
+- Wrote ADR-0024, ADR-0027, ADR-0033; promoted 0017, 0018, 0020; annotated 0014, 0019, 0022, 0023; regenerated `types.ts` and `SCHEMA_APPENDIX.md`; updated CLAUDE.md (constraints 0 and 8–12, key types, add-a-type procedure, repo tree) and the plan (Phase 1 checkboxes, §9 facts)
+- Verified: lint, `check:types`, `tsc`, `npm test`, coverage route and generic read against the re-seeded store
 
 ### 2026-10-07 (ADR-0054 spike)
 
