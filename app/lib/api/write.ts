@@ -1,4 +1,4 @@
-import { CLASS_KEY } from '@/lib/types';
+import { CLASS_COMPUTED, CLASS_KEY } from '@/lib/types';
 import { DOCUMENT_SCHEMAS } from '@/lib/schemas';
 import { hasCreatedBy, isWritable } from './classes';
 import { ApiError } from './errors';
@@ -62,7 +62,20 @@ export function parseDocuments(inputs: unknown[]): TerminusDocument[] {
     const schema = (DOCUMENT_SCHEMAS as Record<string, (typeof DOCUMENT_SCHEMAS)[keyof typeof DOCUMENT_SCHEMAS]>)[type];
     const result = schema.safeParse(input);
     if (!result.success) {
+      const computed = (CLASS_COMPUTED as Record<string, readonly string[]>)[type] ?? [];
       for (const issue of result.error.issues) {
+        if (issue.code === 'unrecognized_keys') {
+          // One issue per key, at the key's path, so a client learns which
+          // field was refused; a computed field says why (ADR-0029 decision 4).
+          for (const key of issue.keys) {
+            const path = [...issue.path, key].map(String).join('.');
+            const message = issue.path.length === 0 && computed.includes(key)
+              ? `${key} is computed by the hub and may not be written`
+              : `${key} is not a field of ${issue.path.length ? issue.path.map(String).join('.') : type}`;
+            issues.push({ index, path, message });
+          }
+          continue;
+        }
         issues.push({ index, path: issue.path.map(String).join('.'), message: issue.message });
       }
       return;
