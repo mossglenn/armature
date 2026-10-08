@@ -8,9 +8,10 @@
  *   2 LearningNeeds → 2 DescriptiveEvidence (via NeedEvidenceLink)
  *   7 LearningObjectives (4 with PrerequisiteRecords)
  *   3 Modules → 3 Assessments → 7 ItemInstances
- *   6 AssessmentItems → 24 Responses
+ *   6 AssessmentItems, each with embedded stem and 4 options (24 options)
  *   7 ModuleObjectives
- *   1 DesignNote (on AssessmentItem 6)
+ *   2 DesignNotes (one on an AssessmentItem, one on a ModuleObjective junction)
+ *   1 DesignFinding (on the Draft item)
  *   1 Course
  *
  * Safe to re-run: clears existing instance data before inserting.
@@ -286,6 +287,7 @@ const documents = [
   },
   {
     "@type": "ModuleObjective",
+    "@capture": "mo-how-ai-works-describe-model-training",
     "role": "Primary",
     "coverageStatus": "Uncovered",
     "sequence": 2,
@@ -382,7 +384,15 @@ const documents = [
     "@type": "AssessmentItem",
     "@id": id("AssessmentItem", "distinguish-ai-mc"),
     "label": "Rule-based vs. ML distinction",
-    "stem": "Which of the following best describes the difference between a rule-based system and a machine learning model?",
+    "stem": { "@type": "TextFragment", "fragmentId": "distinguish-ai-mc-stem", "text": "Which of the following best describes the difference between a rule-based system and a machine learning model?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "distinguish-ai-mc-opt-a", "text": "A rule-based system learns patterns from data; a machine learning model follows hand-written logic.", "isCorrect": false, "feedback": "This reverses the two — rule-based systems use explicit logic, not learned patterns.", "purpose": "Targets the common reversal of which paradigm learns from data." },
+      { "@type": "ItemOption", "fragmentId": "distinguish-ai-mc-opt-b", "text": "A rule-based system follows explicit, hand-written logic; a machine learning model learns patterns from data.", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "distinguish-ai-mc-opt-c", "text": "Both learn from data, but rule-based systems need less of it.", "isCorrect": false, "feedback": "Rule-based systems do not learn from data at all — their logic is hand-coded." },
+      { "@type": "ItemOption", "fragmentId": "distinguish-ai-mc-opt-d", "text": "Machine learning models are always more accurate than rule-based systems.", "isCorrect": false, "feedback": "Accuracy depends on the task and data, not the paradigm itself." },
+    ],
+    "incorrectFeedback": { "@type": "TextFragment", "fragmentId": "distinguish-ai-mc-fb-incorrect", "text": "Revisit the Module 1 reading on paradigms: the key difference is where the logic comes from." },
+    "status": "Approved",
     "itemType": "MultipleChoice",
     "bloomsLevel": "Understand",
     "assesses": [id("LearningObjective", "distinguish-ai-approaches")],
@@ -392,7 +402,14 @@ const documents = [
     "@type": "AssessmentItem",
     "@id": id("AssessmentItem", "hallucination-mc"),
     "label": "AI hallucination definition",
-    "stem": "What term describes an AI system confidently producing factually incorrect information?",
+    "stem": { "@type": "TextFragment", "fragmentId": "hallucination-mc-stem", "text": "What term describes an AI system confidently producing factually incorrect information?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "hallucination-mc-opt-a", "text": "Hallucination", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "hallucination-mc-opt-b", "text": "Overfitting", "isCorrect": false, "feedback": "Overfitting describes a model that performs well on training data but poorly on new data." },
+      { "@type": "ItemOption", "fragmentId": "hallucination-mc-opt-c", "text": "Bias", "isCorrect": false, "feedback": "Bias refers to systematic errors from flawed assumptions — distinct from confident fabrication." },
+      { "@type": "ItemOption", "fragmentId": "hallucination-mc-opt-d", "text": "Underfitting", "isCorrect": false, "feedback": "Underfitting describes a model that fails to capture patterns in its training data." },
+    ],
+    "status": "Draft",
     "itemType": "MultipleChoice",
     "bloomsLevel": "Remember",
     "assesses": [id("LearningObjective", "identify-ai-limitations")],
@@ -402,7 +419,14 @@ const documents = [
     "@type": "AssessmentItem",
     "@id": id("AssessmentItem", "evaluate-objective-mc"),
     "label": "Identifying an unmeasurable objective",
-    "stem": "An AI tool generates this objective: 'Learners will understand AI.' Which criterion does it most clearly violate?",
+    "stem": { "@type": "TextFragment", "fragmentId": "evaluate-objective-mc-stem", "text": "An AI tool generates this objective: 'Learners will understand AI.' Which criterion does it most clearly violate?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "evaluate-objective-mc-opt-a", "text": "It is not measurable: no observable behaviour is named.", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "evaluate-objective-mc-opt-b", "text": "Its Bloom level is too low for a professional audience.", "isCorrect": false, "feedback": "'Understand' is a mid-level Bloom's verb — the problem is that it is not measurable, not that the level is wrong.", "purpose": "Targets confusing Bloom level with measurability." },
+      { "@type": "ItemOption", "fragmentId": "evaluate-objective-mc-opt-c", "text": "Its scope is too broad to cover in one course.", "isCorrect": false, "feedback": "The objective covers only one concept (AI) — scope is not the primary issue here." },
+      { "@type": "ItemOption", "fragmentId": "evaluate-objective-mc-opt-d", "text": "It states no conditions under which the behaviour is performed.", "isCorrect": false, "feedback": "Missing conditions are a concern, but the more fundamental problem is the unmeasurable verb." },
+    ],
+    "status": "Approved",
     "itemType": "MultipleChoice",
     "bloomsLevel": "Apply",
     "assesses": [id("LearningObjective", "evaluate-ai-objectives")],
@@ -412,7 +436,14 @@ const documents = [
     "@type": "AssessmentItem",
     "@id": id("AssessmentItem", "effective-prompt-mc"),
     "label": "Identifying an effective prompt",
-    "stem": "Which prompt is most likely to produce a measurable learning objective from an AI tool?",
+    "stem": { "@type": "TextFragment", "fragmentId": "effective-prompt-mc-stem", "text": "Which prompt is most likely to produce a measurable learning objective from an AI tool?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "effective-prompt-mc-opt-a", "text": "\"Write a learning objective about machine learning.\"", "isCorrect": false, "feedback": "This prompt specifies a topic but provides no cognitive level, audience, or context for the AI to work with." },
+      { "@type": "ItemOption", "fragmentId": "effective-prompt-mc-opt-b", "text": "\"Write a learning objective for a corporate training course.\"", "isCorrect": false, "feedback": "Naming a course type adds some context but still leaves cognitive level and audience unspecified." },
+      { "@type": "ItemOption", "fragmentId": "effective-prompt-mc-opt-c", "text": "\"Write a measurable learning objective at the Apply level for instructional designers new to machine learning, using an observable verb.\"", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "effective-prompt-mc-opt-d", "text": "\"Write a document.\"", "isCorrect": false, "feedback": "This provides no constraints — the AI has nothing to work with beyond the document type." },
+    ],
+    "status": "Approved",
     "itemType": "MultipleChoice",
     "bloomsLevel": "Apply",
     "assesses": [id("LearningObjective", "write-effective-prompts")],
@@ -422,7 +453,14 @@ const documents = [
     "@type": "AssessmentItem",
     "@id": id("AssessmentItem", "bias-type-mc"),
     "label": "Identifying training data bias",
-    "stem": "A facial recognition system trained primarily on images of light-skinned faces performs poorly on darker-skinned faces. What type of bias does this best illustrate?",
+    "stem": { "@type": "TextFragment", "fragmentId": "bias-type-mc-stem", "text": "A facial recognition system trained primarily on images of light-skinned faces performs poorly on darker-skinned faces. What type of bias does this best illustrate?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "bias-type-mc-opt-a", "text": "Training data bias", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "bias-type-mc-opt-b", "text": "Output bias", "isCorrect": false, "feedback": "Output bias refers to systematic skew in what the model produces, not in what it was trained on." },
+      { "@type": "ItemOption", "fragmentId": "bias-type-mc-opt-c", "text": "Confirmation bias", "isCorrect": false, "feedback": "Confirmation bias is a human cognitive pattern — not an AI system characteristic." },
+      { "@type": "ItemOption", "fragmentId": "bias-type-mc-opt-d", "text": "Automation bias", "isCorrect": false, "feedback": "Automation bias describes human over-reliance on automated systems — not a property of the system itself." },
+    ],
+    "status": "Approved",
     "itemType": "MultipleChoice",
     "bloomsLevel": "Analyze",
     "assesses": [id("LearningObjective", "distinguish-bias-types")],
@@ -432,51 +470,18 @@ const documents = [
     "@type": "AssessmentItem",
     "@id": id("AssessmentItem", "appropriate-use-mc"),
     "label": "Evaluating appropriate AI use in sensitive content",
-    "stem": "An instructional designer is developing a sensitive course on workplace harassment. Which task is LEAST appropriate for AI assistance?",
+    "stem": { "@type": "TextFragment", "fragmentId": "appropriate-use-mc-stem", "text": "An instructional designer is developing a sensitive course on workplace harassment. Which task is LEAST appropriate for AI assistance?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "appropriate-use-mc-opt-a", "text": "Drafting the module outline", "isCorrect": false, "feedback": "Generating a structural outline is a low-risk task with no sensitive content generation required." },
+      { "@type": "ItemOption", "fragmentId": "appropriate-use-mc-opt-b", "text": "Suggesting background reading", "isCorrect": false, "feedback": "Source suggestions are low-stakes and easily reviewed — appropriate for AI assistance." },
+      { "@type": "ItemOption", "fragmentId": "appropriate-use-mc-opt-c", "text": "Generating realistic harassment scenarios for the case studies", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "appropriate-use-mc-opt-d", "text": "Formatting the final handout", "isCorrect": false, "feedback": "Formatting is a mechanical task with no content sensitivity — well-suited for AI assistance." },
+    ],
+    "status": "InReview",
     "itemType": "MultipleChoice",
     "bloomsLevel": "Evaluate",
     "assesses": [id("LearningObjective", "evaluate-appropriate-use")],
   },
-
-  // -------------------------------------------------------------------------
-  // Responses
-  // -------------------------------------------------------------------------
-
-  // Item 1: distinguish-ai-mc
-  { "@type": "Response", "label": "A", "isCorrect": false, "incorrectFeedback": "This reverses the two — rule-based systems use explicit logic, not learned patterns.", "item": id("AssessmentItem", "distinguish-ai-mc") },
-  { "@type": "Response", "label": "B", "isCorrect": true,  "item": id("AssessmentItem", "distinguish-ai-mc") },
-  { "@type": "Response", "label": "C", "isCorrect": false, "incorrectFeedback": "Rule-based systems do not learn from data at all — their logic is hand-coded.", "item": id("AssessmentItem", "distinguish-ai-mc") },
-  { "@type": "Response", "label": "D", "isCorrect": false, "incorrectFeedback": "Accuracy depends on the task and data, not the paradigm itself.", "item": id("AssessmentItem", "distinguish-ai-mc") },
-
-  // Item 2: hallucination-mc
-  { "@type": "Response", "label": "A", "isCorrect": true,  "item": id("AssessmentItem", "hallucination-mc") },
-  { "@type": "Response", "label": "B", "isCorrect": false, "incorrectFeedback": "Overfitting describes a model that performs well on training data but poorly on new data.", "item": id("AssessmentItem", "hallucination-mc") },
-  { "@type": "Response", "label": "C", "isCorrect": false, "incorrectFeedback": "Bias refers to systematic errors from flawed assumptions — distinct from confident fabrication.", "item": id("AssessmentItem", "hallucination-mc") },
-  { "@type": "Response", "label": "D", "isCorrect": false, "incorrectFeedback": "Underfitting describes a model that fails to capture patterns in its training data.", "item": id("AssessmentItem", "hallucination-mc") },
-
-  // Item 3: evaluate-objective-mc
-  { "@type": "Response", "label": "A", "isCorrect": true,  "item": id("AssessmentItem", "evaluate-objective-mc") },
-  { "@type": "Response", "label": "B", "isCorrect": false, "incorrectFeedback": "'Understand' is a mid-level Bloom's verb — the problem is that it is not measurable, not that the level is wrong.", "item": id("AssessmentItem", "evaluate-objective-mc") },
-  { "@type": "Response", "label": "C", "isCorrect": false, "incorrectFeedback": "The objective covers only one concept (AI) — scope is not the primary issue here.", "item": id("AssessmentItem", "evaluate-objective-mc") },
-  { "@type": "Response", "label": "D", "isCorrect": false, "incorrectFeedback": "Missing conditions are a concern, but the more fundamental problem is the unmeasurable verb.", "item": id("AssessmentItem", "evaluate-objective-mc") },
-
-  // Item 4: effective-prompt-mc
-  { "@type": "Response", "label": "A", "isCorrect": false, "incorrectFeedback": "This prompt specifies a topic but provides no cognitive level, audience, or context for the AI to work with.", "item": id("AssessmentItem", "effective-prompt-mc") },
-  { "@type": "Response", "label": "B", "isCorrect": false, "incorrectFeedback": "Naming a course type adds some context but still leaves cognitive level and audience unspecified.", "item": id("AssessmentItem", "effective-prompt-mc") },
-  { "@type": "Response", "label": "C", "isCorrect": true,  "item": id("AssessmentItem", "effective-prompt-mc") },
-  { "@type": "Response", "label": "D", "isCorrect": false, "incorrectFeedback": "This provides no constraints — the AI has nothing to work with beyond the document type.", "item": id("AssessmentItem", "effective-prompt-mc") },
-
-  // Item 5: bias-type-mc
-  { "@type": "Response", "label": "A", "isCorrect": true,  "item": id("AssessmentItem", "bias-type-mc") },
-  { "@type": "Response", "label": "B", "isCorrect": false, "incorrectFeedback": "Output bias refers to systematic skew in what the model produces, not in what it was trained on.", "item": id("AssessmentItem", "bias-type-mc") },
-  { "@type": "Response", "label": "C", "isCorrect": false, "incorrectFeedback": "Confirmation bias is a human cognitive pattern — not an AI system characteristic.", "item": id("AssessmentItem", "bias-type-mc") },
-  { "@type": "Response", "label": "D", "isCorrect": false, "incorrectFeedback": "Automation bias describes human over-reliance on automated systems — not a property of the system itself.", "item": id("AssessmentItem", "bias-type-mc") },
-
-  // Item 6: appropriate-use-mc
-  { "@type": "Response", "label": "A", "isCorrect": false, "incorrectFeedback": "Generating a structural outline is a low-risk task with no sensitive content generation required.", "item": id("AssessmentItem", "appropriate-use-mc") },
-  { "@type": "Response", "label": "B", "isCorrect": false, "incorrectFeedback": "Source suggestions are low-stakes and easily reviewed — appropriate for AI assistance.", "item": id("AssessmentItem", "appropriate-use-mc") },
-  { "@type": "Response", "label": "C", "isCorrect": true,  "item": id("AssessmentItem", "appropriate-use-mc") },
-  { "@type": "Response", "label": "D", "isCorrect": false, "incorrectFeedback": "Formatting is a mechanical task with no content sensitivity — well-suited for AI assistance.", "item": id("AssessmentItem", "appropriate-use-mc") },
 
   // -------------------------------------------------------------------------
   // Item Instances
@@ -484,7 +489,7 @@ const documents = [
 
   // Module 1 assessment
   { "@type": "ItemInstance", "sequence": 1, "pointValue": 1, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod1-assessment"), "implements": id("AssessmentItem", "distinguish-ai-mc") },
-  { "@type": "ItemInstance", "sequence": 2, "pointValue": 1, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod1-assessment"), "implements": id("AssessmentItem", "hallucination-mc") },
+  { "@type": "ItemInstance", "sequence": 2, "pointValue": 1, "randomize": true, "status": "Draft", "assessment": id("Assessment", "mod1-assessment"), "implements": id("AssessmentItem", "hallucination-mc") },
 
   // Module 2 assessment
   { "@type": "ItemInstance", "sequence": 1, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod2-assessment"), "implements": id("AssessmentItem", "evaluate-objective-mc") },
@@ -492,7 +497,7 @@ const documents = [
 
   // Module 3 capstone — note item 4 (effective-prompt-mc) reused here
   { "@type": "ItemInstance", "sequence": 1, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod3-assessment"), "implements": id("AssessmentItem", "bias-type-mc") },
-  { "@type": "ItemInstance", "sequence": 2, "pointValue": 3, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod3-assessment"), "implements": id("AssessmentItem", "appropriate-use-mc") },
+  { "@type": "ItemInstance", "sequence": 2, "pointValue": 3, "randomize": true, "status": "InReview", "assessment": id("Assessment", "mod3-assessment"), "implements": id("AssessmentItem", "appropriate-use-mc") },
   { "@type": "ItemInstance", "sequence": 3, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod3-assessment"), "implements": id("AssessmentItem", "effective-prompt-mc") },
 
   // -------------------------------------------------------------------------
@@ -507,6 +512,35 @@ const documents = [
     "rationale": "Unable to find literature on prompting AI to generate descriptions of inappropriate behavior. Scenarios authored manually to ensure accuracy, sensitivity, and instructional appropriateness.",
     "category": "AssessmentStrategyChoice",
     "subject": [id("AssessmentItem", "appropriate-use-mc")],
+  },
+
+  // A note on a relationship, not an artifact: why this objective is declared with no item yet (ADR-0017).
+  // The subject is the ModuleObjective captured above; @ref resolves to the id the store mints for it.
+  {
+    "@type": "DesignNote",
+    "@id": id("DesignNote", "model-training-declared-unassessed"),
+    "label": "Model training declared Primary ahead of its assessment",
+    "description": "Design note on the module declaration of 'Describe Model Training' in How AI Systems Work.",
+    "rationale": "Declared Primary now so the gap is visible in coverage. The item will be authored after the training-loop activity is scoped; writing it first risked assessing the wrong representation.",
+    "category": "SequencingDecision",
+    "subject": [{ "@ref": "mo-how-ai-works-describe-model-training" }],
+  },
+
+  // -------------------------------------------------------------------------
+  // Design Finding
+  // -------------------------------------------------------------------------
+
+  // Why hallucination-mc is still Draft: a reviewer flagged the stem (ADR-0020).
+  {
+    "@type": "DesignFinding",
+    "@id": id("DesignFinding", "hallucination-stem-cues-answer"),
+    "label": "Stem may cue the correct option",
+    "description": "Expert-review finding on assessment item: AI hallucination definition.",
+    "finding": "The stem's phrase 'confidently producing factually incorrect information' is close to the textbook definition the correct option restates, so the item may test recognition of wording rather than the concept.",
+    "subject": [id("AssessmentItem", "hallucination-mc")],
+    "regarding": id("LearningObjective", "identify-ai-limitations"),
+    "confidence": "Medium",
+    "status": "Open",
   },
 
 ];
