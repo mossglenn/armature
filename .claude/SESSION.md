@@ -6,13 +6,25 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Phases 0 and 1 complete and merged on 2026-10-07 (PRs #1, #2, #3; CI green on `main`) → Phase 2 of `docs/development-plan.md` (the version-control model) is next.** The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
+**Phase 2 (the version-control model) complete on `phase-2/version-control`, 2026-10-08; PR open for rebase merge → Phase 3 of `docs/development-plan.md` (generic writes and the invariants engine) is next.** Phases 0 and 1 merged on 2026-10-07 (PRs #1 to #4). The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
 
-History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 (October 2026).
+History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 → ADR-0054 Hono → Phase 1 schema catch-up → ADR-0055, ADR-0025, Phase 2 version control (October 2026).
 
 ---
 
 ## What's Done
+
+### Phase 2: the version-control model (2026-10-08)
+
+- **ADR-0055 (Accepted):** the API layer reaches TerminusDB only through one `fetch`-based adapter, `app/lib/api/store.ts`; the JavaScript client stays in `scripts/`. Decided on a reading of the installed client source: author welded to the connection user, a supplied data version kept in instance headers forever, errors flattened to strings, history `diff` option missing
+- **ADR-0025 (Accepted):** design process data lives in the commit graph. No version fields ever (ADR-0010 amended); every write is a commit with the resolved `User` id as author and a required `message` in a JSON envelope; reads at `?branch=` or `?ref=`; `/api/v1` exposes bare commit ids as `ETag` and accepts `If-Match` (412 when stale), closing ADR-0054's open question; merge wraps `apply` three-way with a hub-computed base; no reset, squash or rebase exposed or called; interim `Armature-User` header until ADR-0032
+- `scripts/platform_checks.js` checks M to V, all passing on v12.0.7, with corrections to the vendored docs: `apply` takes bare commit ids and reports a conflict as HTTP 409 with `@expected`/`@found` witnesses; a stale data version is HTTP 400; rebase runs X onto Y for `POST /api/rebase/X` with `rebase_from: Y`; branch DELETE needs a `{}` body; a read at a non-existent commit path is a 500, so commit ids are validated via `ValidCommit/<id>` in `local/_commits`; `Commit.parent` is single-valued and `apply` stores `commit_info.metadata`
+- Routes, all Hono, all through the adapter: `GET /api/v1/documents/:type/:id?branch=|ref=`, provisional `PUT` (artifact and relationship classes only, until the invariants engine), `/history?branch=` with per-commit diffs, `/diff?from=&to=`, `GET/POST /api/v1/branches`, `GET /branches/:name`, `POST /branches/:name/merge` (409 `merge_conflict` with base, target and source values), `GET /branches/:name/changes?since=`
+- Merge commits carry `{ armature: { mergeSource } }` in commit metadata because an `apply` commit has one parent and does not record the source it merged; the merge-base walk reads it from the log. First built as a `Merge-Source` message trailer, moved to metadata once check V showed the store keeps it
+- `app.onError` maps typed `StoreError` by the server's `@type`; hub errors are `ApiError` with stable codes
+- Seed gains `User/demo-designer` (48 documents); live store re-seeded
+- Phase 2 exit criterion met by the walkthrough in `app/lib/api/app.test.ts` (25 tests, scratch branches, `main` untouched). `tsc`, lint, `check:types`, `next build` clean
+- Security review of the interim header acknowledged: the provisional write cannot mint `User` documents; mutating routes stay local until ADR-0032
 
 ### Phase 1: schema catch-up (2026-10-07)
 
@@ -54,7 +66,7 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 - All types documented in TerminusDB-compliant multi-language array format (`@documentation: [{@language: "en", ...}]`)
 - Field-level documentation consolidated into `@properties` on each type
 - API constraints documented directly on affected fields
-- 29 ADR files (`schema/docs/adr/`, 0001–0024, 0026, 0027, 0033, 0054). All Accepted and implemented except ADR-0019 (Proposed; promoted with the coverage algorithm in Phase 4). Reserved by the plan and not yet written: 0025, 0028–0032, 0034. Numbers 0035–0053 are research candidates, not ADRs.
+- 31 ADR files (`schema/docs/adr/`, 0001–0027, 0033, 0054, 0055). All Accepted and implemented except ADR-0019 (Proposed; promoted with the coverage algorithm in Phase 4). Reserved by the plan and not yet written: 0028–0032, 0034. Numbers 0035–0053 are research candidates, not ADRs.
 
 ### Infrastructure
 
@@ -68,7 +80,7 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 - Complete demo artifact graph inserted (`scripts/seed_data.js`)
 - Course: "Introduction to AI for Instructional Designers"
-- 47 documents across all major schema types (was 69 before `Response` was embedded)
+- 48 documents across all major schema types (was 69 before `Response` was embedded; `User/demo-designer` added 2026-10-08 as the author of Phase 2 writes)
 - Covers: 2 LearningNeeds + evidence, 7 LearningObjectives, 4 PrerequisiteRecords, 3 Modules, 3 Assessments, 6 AssessmentItems each with a stem fragment and 4 embedded options (real option text, fragment ids, one general feedback, two `purpose` notes), 7 ItemInstances (item reuse demonstrated), 7 ModuleObjectives, 2 DesignNotes (one on a ModuleObjective junction via `@capture`/`@ref`), 1 DesignFinding
 - Item statuses: 4 Approved, 1 InReview (`appropriate-use-mc`), 1 Draft (`hallucination-mc`, the finding's subject); ItemInstance statuses match (ADR-0018)
 - One objective intentionally Uncovered in ModuleObjective.coverageStatus for demo interest. Coverage values are hand-seeded until Phase 4 recomputes them; `identify-ai-limitations` is seeded FullyAssessed although its only item is Draft (ADR-0019 will change that)
@@ -116,16 +128,17 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ## What's Next
 
-**Phase 2 of `docs/development-plan.md` — the version-control model (2 to 3 sessions):**
+**First:** merge the Phase 2 PR (rebase merge, delete branch), confirm CI on `main`, then close the session so this file says "merged".
 
-1. Read research candidate 0036 (immutable shared history and durable pins) before writing ADR-0025; attestations and findings will store commit ids, so the no-rewrite rule on shared branches belongs in the ADR
-2. **ADR-0025: design process data lives in the commit graph.** Includes the merge model (`apply` is a three-way merge with field-level conflict reports), the no-history-rewrite rule, and the data-version token decision ADR-0054 left open (`branch:<commit>` raw, or the bare commit id)
-3. Per-request HTTP store adapter under `app/lib/api/` replacing the singleton (ADR-0055, accepted 2026-10-08); rewrite the spike's read route and test against it first; `author` and `message` from the resolved identity on every write; two platform checks before the routes land (stale data-version error body; `diff=true` on history)
-4. Hono routes in `app/lib/api/routes/`: `POST/GET /api/v1/branches`, `GET /branches/:name`, `POST /branches/:name/merge` (409 with the store's witnesses on conflict), read-at-ref on every document read (`?branch=`, `?ref=`), `GET /documents/:type/:id/history` (with `diff=true`), `GET /branches/:name/changes?since=`, `GET /documents/:type/:id/diff?from=&to=`
-5. Middleware reading and echoing `TerminusDB-Data-Version`
-6. Exit: a scripted walkthrough creates a branch from a commit, writes as a named author, reads one document at two commits, lists history with diffs, merges, and provokes one conflict, all through `/api/v1`
+**Phase 3 of `docs/development-plan.md` — generic writes and the invariants engine (2 to 3 sessions):**
 
-Phase 3 follows with the generic write path and the invariants engine; CLAUDE.md now lists thirteen constraints for it, including the generic reference-class check the store does not perform.
+1. **ADR-0032: identity resolution.** Replaces the interim `Armature-User` header in `app/lib/api/identity.ts` with resolution of an authenticated identity to a `User` document (ADR-0015's boundary); `GET /api/v1/users`, `POST /api/v1/users`; agent users are ordinary `User` documents. No route changes
+2. **The generic write path** over the provisional `PUT /api/v1/documents/:type/:id`: the write envelope stays (`{ message, document }`); Zod request schemas generated from `schema.json` by the generator, guarded by `check:types`
+3. **The invariants engine:** per-type validators and recompute hooks keyed by `@type`, run on every write regardless of route. CLAUDE.md lists thirteen constraints; constraint 0 (reference class, which the store does not check) comes first because every typed slot depends on it. `app/lib/validate.ts` is absorbed
+4. Retire the legacy unversioned routes, `app/lib/terminusdb.ts` and `app/lib/routeHelpers.ts`; the client package leaves `app/`
+5. Decide `DELETE /api/v1/branches/:name` (reserved by ADR-0025 decision 6: refuse when another document references the branch's commits)
+
+Carried from Phase 2, not blocking: merge policy (who may merge, per-type filtering, fragment-level conflict view) stays in plan §6; `If-None-Match` unsupported; the merge-base walk is log-based and can move to a commit-graph query if logs grow.
 
 ---
 
@@ -136,11 +149,11 @@ Phase 3 follows with the generic write path and the invariants engine; CLAUDE.md
 - Generic document API (`/api/v1/documents/:type/:id`) with a per-type invariants registry replaces per-type routes (Phase 3); type behaviour is a validator, not a handler
 - Attachments are references with a mandatory content hash and optional revision and path; the graph never embeds binaries; the backend is a deployment choice; tool-managed stores write through the ordinary path (ADR-0030)
 - Items are a tree of fragments; `ItemOption` is a `Fragment` specialisation so generic kinds can sit beside it (ADR-0033); behaviour is a versioned `InteractionType`, and the hub never serves executable content from a graph document (ADR-0034)
-- Design process data lives in the commit graph; the graph is a projection of any asset store's history, never a replay (ADR-0025)
+- **ADR-0025 (Accepted 2026-10-08):** design process data lives in the commit graph; the graph is a projection of any asset store's history, never a replay. No version fields, ever. Author is the resolved `User` id; reason is a required message in a JSON write envelope; reads at a named ref; `ETag`/`If-Match` carry bare commit ids and a stale match is 412; shared history is never rewritten; merge commits record the source head in commit metadata under `armature.mergeSource`
 - **ADR-0055 (Accepted 2026-10-08):** the API layer reaches TerminusDB only through one `fetch`-based adapter under `app/lib/api/` that owns URLs, credentials, `author` and `message`, the data-version header and typed `@type` errors. The JavaScript client stays in `scripts/` and may re-enter the API layer only to build WOQL JSON. Supersedes "keep the JS client" (2026-03-03) and the later "client for reads, HTTP for writes" split. Evidence: the client welds author to the connection user, keeps a supplied data version in instance headers forever, flattens errors to strings, and lacks the history `diff` option
 - Next.js routes remain the API host for this phase under `/api/v1` (ADR-0026); separate service stays the destination
 - **ADR-0054 (Accepted 2026-10-07):** the API is a Hono app in `app/lib/api/`, mounted in Next.js through one catch-all route via `@hono/vercel`; nothing under `app/lib/api/` imports from `next`. ADR-0026 decision 1 now reads "Next.js is the host, Hono is the API". New routes are Hono routes only; the legacy Next.js handlers are not ported and die in Phase 3; Zod request validation derives from `schema.json` via the generator (Phase 3)
-- Two ADR-0054 knock-ons to decide later: the data-version token shape (`branch:<commit>` is the store's; Phase 2 decides what `/api/v1` exposes) and the standalone build step that resolves the `@/` alias (Phase 7)
+- One ADR-0054 knock-on still open: the standalone build step that resolves the `@/` alias (Phase 7). The data-version token shape was decided by ADR-0025 decision 7
 - `npm test` is Vitest, integration-only against the running container; not in CI until Phase 7's service container
 - **The store does not check reference class.** Typed references in `schema.json` are the contract and the generator's input; the invariants engine enforces class on every write (CLAUDE.md constraint 0). Never claim "schema-enforced" for a reference's type
 - **Part identity is `fragmentId`, never a nested store id.** A replace regenerates every subdocument `@id`. Nothing may store `AssessmentItem/x/options/0/ItemOption/...`
@@ -151,7 +164,8 @@ Phase 3 follows with the generic write path and the invariants engine; CLAUDE.md
 - TerminusDB docs are vendored, dated and pinned by `scripts/sync-terminusdb-docs.js`; never hand-copied; the `terminusdb` skill governs their use
 - Next.js app lives inside the Armature repo (`armature/app/`) — demo is part of the project
 - Next.js runs locally (not containerized) — TerminusDB stays in Docker; containerizing deferred to Phase 7
-- No auth system in demo scope — TerminusDB credentials in environment variables only; identity resolution hook comes in Phase 3 (ADR-0032)
+- No auth system in demo scope — TerminusDB credentials in environment variables only; identity resolution hook comes in Phase 3 (ADR-0032). Until then writes name their author in the `Armature-User` header, which trusts the caller; the provisional write refuses `User` documents and the mutating routes stay local
+- **Store facts the vendored docs get wrong** (checks P, Q, T; recorded in plan §9 and the `terminusdb` skill): `apply` wants bare commit ids and returns `@expected`/`@found` witnesses; `POST /api/rebase/X` with `rebase_from: Y` rebases X onto Y; branch DELETE needs a `{}` body. The running store outranks the docs
 - `createGetHandler` factory for simple GET routes until Phase 3 retires them
 - `app/lib/types.ts` is generated from `schema/schema.json` — committed artifact, drift caught by `npm run check:types`
 - `VALID_*` arrays in `types.ts` are the runtime source of truth for enums
@@ -168,7 +182,14 @@ None. The 2026-10-05 credentials failure was the previously running container ha
 
 ## Notes for Next Session
 
-Start Phase 2 with ADR-0025, on a new branch. Phase 2 is the first phase that writes Hono routes; put them in `app/lib/api/routes/` and mount them on the app in `app/lib/api/app.ts`. Read research candidate 0036 first: the no-history-rewrite rule and content-hash pins belong in ADR-0025 because attestations will store commit ids.
+Merge the Phase 2 PR first, then start Phase 3 on a new branch with ADR-0032. Every Phase 3 route is a Hono route in `app/lib/api/routes/` reaching the store only through `createStore(ref)` in `app/lib/api/store.ts`; request conventions (`?branch=|?ref=`, `ETag`/`If-Match`, the write envelope, `requireCommit`) are in `app/lib/api/http.ts`. The provisional `PUT` in `routes/documents.ts` is where the invariants engine attaches.
+
+Phase 2 facts worth carrying forward:
+- Validate any caller-supplied commit id with `requireCommit` before using it as a ref; the store answers a read at a non-existent commit path with a bare 500 (check U).
+- A merge commit has one parent. The source head is in `commit.metadata.armature.mergeSource` (from `/api/log`, not `/api/history`); anything that reasons about merges reads it there (check V).
+- The store's conflict witness is `{ "@op": "Conflict", "@expected", "@found" }` per field; the source value is not in it, so the merge route reads it from the source head.
+- `ETag` is the branch head, not a document hash; a stale `If-Match` means the branch moved, not necessarily this document.
+- Tests write only on scratch branches they create and delete through the adapter; `main` and the seed are never touched by `npm test`.
 
 Phase 1 facts worth carrying forward:
 - `scripts/platform_checks.js` is the place to prove a store behaviour before an ADR relies on it. Checks A–L exist; add a lettered check, run it, cite it in the ADR.
@@ -193,6 +214,16 @@ Key context:
 ---
 
 ## Recent Sessions
+
+### 2026-10-08 (Phase 2)
+
+- Answered how the JS client differs from the HTTP API by reading the installed client source; wrote **ADR-0055** (Accepted): one `fetch` adapter under `app/lib/api/`, client confined to `scripts/`. Merged into the Phase 2 branch rather than a PR of its own
+- Added platform checks M to V and ran them repeatedly against the scratch database; corrected five vendored-doc claims (apply refs and witness shape, stale-token status, rebase direction, DELETE body) and found two store behaviours the ADR had to design around (500 on an unknown commit path; single-parent merge commits)
+- Wrote **ADR-0025** (Accepted) with the verification table; amended ADR-0010; decided `ETag`/`If-Match` bare commit ids, the write envelope, and the no-rewrite rule
+- Built `store.ts`, `http.ts`, `identity.ts`, `errors.ts`, `routes/documents.ts`, `routes/branches.ts`; rewired `app.ts`; rewrote the tests as the Phase 2 walkthrough (25 passing). Seeded `User/demo-designer`
+- Found during the walkthrough that a second merge from the same branch replayed the fork's insert; fixed by recording the merged source head, first as a message trailer, then as commit metadata once check V showed `apply` keeps `commit_info.metadata`
+- Acknowledged the automated security finding on the interim identity header: documented in ADR-0025, `User` writes refused, routes local until ADR-0032
+- Twelve commits on `phase-2/version-control`, pushed; PR opened
 
 ### 2026-10-07 (Phase 1)
 
