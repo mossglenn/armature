@@ -344,7 +344,17 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     const { commit } = await written.json();
     expect((await post(`/api/v1/branches/${TARGET}/merge`, { message: 'Take the work', from: MERGED })).status).toBe(200);
 
-    const res = await app.request(`/api/v1/branches/${MERGED}`, { method: 'DELETE', headers: { 'Armature-User': AUTHOR_EXTERNAL_ID } });
+    const stale = await app.request(`/api/v1/branches/${MERGED}`, {
+      method: 'DELETE',
+      headers: { 'Armature-User': AUTHOR_EXTERNAL_ID, 'If-Match': `"${forkCommit}"` },
+    });
+    expect(stale.status).toBe(412);
+    expect((await stale.json()).current).toBe(commit);
+
+    const res = await app.request(`/api/v1/branches/${MERGED}`, {
+      method: 'DELETE',
+      headers: { 'Armature-User': AUTHOR_EXTERNAL_ID, 'If-Match': `"${commit}"` },
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ deleted: MERGED, head: commit, heldBy: TARGET });
 

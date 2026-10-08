@@ -156,7 +156,10 @@ Phase 2's routes land (ADR-0054 consequences).
    "a branch whose commits another document references is not deleted", is subsumed: a pinned
    commit on an unmerged branch is protected because the branch is, and a pinned commit on a
    merged branch stays reachable. The response carries the deleted branch's head so the last
-   state remains nameable.
+   state remains nameable. The store's branch DELETE takes no concurrency token, so the hub
+   accepts `If-Match` with the head the caller inspected (412 when the branch has moved) and
+   reads the head again just before deleting (409 `branch_moved`); the residual window is one
+   request wide, and a commit lost from branch-reachable history in it stays readable by id.
 
 7. **`/api/v1` exposes the bare commit id, in standard HTTP headers.** Every response that read
    from or wrote to the store carries `ETag: "<commit-id>"`: the commit the read was served from,
