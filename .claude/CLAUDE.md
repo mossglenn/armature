@@ -18,7 +18,7 @@ The core insight: current instructional design tools capture *what was built* bu
 
 ### Stack
 - **TerminusDB** — graph database storing the artifact graph
-- **Armature API** — a Hono application in `app/lib/api/` (ADR-0054), host-neutral: nothing under that directory imports from `next`. Mounted under `/api/v1/` by the one catch-all route `app/app/api/[[...route]]/route.ts`; Next.js is the host for the current phase (ADR-0026). The unversioned routes in `app/app/api/*/route.ts` are legacy Next.js handlers until Phase 3 retires them. A separate process serving the same app with `@hono/node-server` remains the long-term destination
+- **Armature API** — a Hono application in `app/lib/api/` (ADR-0054), host-neutral: nothing under that directory imports from `next`. Mounted under `/api/v1/` by the one catch-all route `app/app/api/[[...route]]/route.ts`, the only route file; Next.js is the host for the current phase (ADR-0026). The demo-era unversioned routes were retired in Phase 3 (2026-10-08). A separate process serving the same app with `@hono/node-server` remains the long-term destination
 - **CoQui** — first plugin; an assessment authoring tool built on top of the Armature API (separate repo, not here)
 - **Docker Compose** — orchestrates TerminusDB + API for local development and deployment
 
@@ -38,7 +38,7 @@ schema/
 docker/                    # Docker Compose configuration (TerminusDB pinned to v12.0.7)
 .github/workflows/ci.yml   # CI: npm run lint + npm run check:types in app/
 scripts/
-  generate-types.js        # Derives app/lib/types.ts from schema.json — run after schema changes
+  generate-types.js        # Derives app/lib/types.ts (types + schema as data) and app/lib/schemas.ts (Zod) from schema.json — run after schema changes
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
   load_schema.js           # Replaces the schema graph in one full_replace; --clear-instances empties data first for breaking changes
   platform_checks.js       # Probes store behaviours the ADRs depend on, in a scratch database it creates and deletes (run before encoding a platform assumption)
@@ -47,24 +47,25 @@ scripts/
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill)
 app/
   app/api/
-    [[...route]]/route.ts  # The ONLY file that knows Next.js hosts the API: exports handle(app) per method (ADR-0054)
-    */route.ts             # Legacy unversioned Next.js handlers (courses, coverage, ...) — retired in Phase 3; write no new ones
+    [[...route]]/route.ts  # The ONLY file that knows Next.js hosts the API: exports handle(app) per method (ADR-0054); the only route file
   lib/
     api/
       app.ts               # The Armature API: Hono app, basePath /api/v1, mounts routes/, onError mapping. Never imports from next
-      app.test.ts          # In-process Vitest tests via app.request(), including the Phase 2 walkthrough; need the container running
+      app.test.ts          # In-process Vitest tests via app.request(): reads, the Phase 2 walkthrough, users and identity; need the container running
+      write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
       store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
       identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
       classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy
+      write.ts             # The one write pipeline: Zod shape → 409 on a foreign id → createdBy → invariants → one commit → afterWrite
+      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), one module per constrained type
       errors.ts            # ApiError: status + stable code + message, rendered by onError
       routes/
-        documents.ts       # GET at ref, provisional PUT (sets createdBy from the resolved User), history, diff
+        documents.ts       # list with field filters, GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit
         users.ts           # list at ref, /me, register on main (ADR-0032)
-    terminusdb.ts          # Legacy WOQLClient singleton for the unversioned routes only; deleted with them in Phase 3. The API layer uses the HTTP store adapter (ADR-0055)
-    routeHelpers.ts        # Legacy: createGetHandler + handleTerminusError for the unversioned routes only
-    types.ts               # GENERATED — do not edit; run npm run generate:types
+    types.ts               # GENERATED — do not edit; run npm run generate:types. Interfaces plus the schema as data: CLASS_CATEGORY, CLASS_ANCESTORS, CLASS_KEY, CLASS_FIELDS
+    schemas.ts             # GENERATED — do not edit; Zod request schemas, one per concrete class, from the same generator
   vitest.config.mts        # Vitest: '@' alias, reads .env.local so tests hit the same store as the app
 docs/
   schema-guide.md          # Conceptual guide (in progress)
@@ -96,7 +97,7 @@ The schema is the single source of truth for everything. Read `schema/schema.jso
 
 ### Types are generated, not hand-maintained
 
-`app/lib/types.ts` is **generated** from `schema/schema.json` by `scripts/generate-types.js`. Never edit it directly.
+`app/lib/types.ts` and `app/lib/schemas.ts` are **generated** from `schema/schema.json` by `scripts/generate-types.js`. Never edit them directly. `types.ts` carries the interfaces and the schema as runtime data (`CLASS_CATEGORY`, `CLASS_ANCESTORS`, `CLASS_KEY`, `CLASS_FIELDS`); `schemas.ts` carries one strict Zod schema per concrete class for the write routes.
 
 After any change to `schema/schema.json`:
 ```bash
@@ -130,7 +131,7 @@ To add a new type: (1) update `schema.json` (with ADR), giving the class `@metad
 
 ### Critical API constraints (not enforced by TerminusDB schema)
 
-These must be enforced by the API on every write (the invariants engine, Phase 3). TerminusDB enforces field types, required fields, `@min_cardinality`, enum values and that a referenced document *exists*. It does **not** check the class of a referenced document (verified 2026-10-07, `scripts/platform_checks.js` check L), and it cannot express cross-document or conditional rules.
+These are enforced by the invariants engine in `app/lib/api/invariants/` on every write, whatever the route; its `index.ts` maps each number below to the module that checks it. TerminusDB enforces field types, required fields, `@min_cardinality`, enum values and that a referenced document *exists*. It does **not** check the class of a referenced document (verified 2026-10-07, `scripts/platform_checks.js` check L), and it cannot express cross-document or conditional rules. Shape (types, required fields, enums, minimum cardinality) is checked first by the generated Zod schemas and answered with 400; the rules below are answered with 422 `invariant_violation`, every violation at once.
 
 0. **Every reference field's target must be an instance of the declared class or a subclass.** Generic, applies to every type. This is what keeps a `User` out of `DesignNote.subject` and an `AssessmentItem` out of `Module.course` (ADR-0014, ADR-0017 amended)
 1. `AssessmentItem.assesses` — must contain at least one `LearningObjective`
@@ -239,9 +240,10 @@ Follow the guide in `.claude/prompts/commit-message-guide.md`. Descriptive, conv
 - **Don't** put UI logic, import/export formats, or plugin-specific code in this repo
 - **Don't** change `schema.json` without an ADR
 - **Don't** edit `app/lib/types.ts` manually — it's generated; change `schema.json` and run `generate:types`
-- **Don't** write new API routes as Next.js route handlers — new routes are Hono routes in `app/lib/api/` under `/api/v1` (ADR-0054); the files under `app/app/api/*/route.ts` are legacy
+- **Don't** write API routes as Next.js route handlers — every route is a Hono route in `app/lib/api/` under `/api/v1` (ADR-0054); the catch-all is the only file under `app/app/api/`
 - **Don't** import from `next` anywhere under `app/lib/api/` — the host appears only in `app/app/api/[[...route]]/route.ts`
-- **Don't** import the `terminusdb` client under `app/lib/api/` — the API layer reaches the store through its HTTP adapter (ADR-0055); the client lives in `scripts/`. The one exception is `lib/woql.js` to build query JSON the adapter posts, and the first such use amends the ADR
+- **Don't** add the `terminusdb` client to `app/` — the API layer reaches the store through its HTTP adapter (ADR-0055); the client is a dependency of `scripts/` only. The one exception would be `lib/woql.js` to build query JSON the adapter posts, and the first such use amends the ADR
+- **Don't** write a per-type route or hand-write a request schema — type behaviour is a validator in `app/lib/api/invariants/`, and request shape comes from the generated `schemas.ts`
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)
 - **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6)
 - **Don't** take the commit author or `createdBy` from a request body — both come from the identity the request resolved to; `User` documents are created on `main` only (ADR-0032)

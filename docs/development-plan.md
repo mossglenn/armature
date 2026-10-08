@@ -464,21 +464,26 @@ CoQui receives: asks 1, 2 and 6, and the merge its PR 6 was deferred for.
 path for humans and agents alike).
 
 Work:
-- [ ] **`PUT /api/v1/documents/:type/:id`** with replace semantics per ADR-0024, on a branch,
-      with author and reason required. The store's `PUT` with `create=true` is an upsert and its
-      `POST` rejects an existing id unless told to overwrite, so both halves of ADR-0024 map to
-      native behaviour; the hub adds only the type check that turns "id exists under another
-      type" into a 409. **`POST /api/v1/documents`** accepting a list for atomic multi-document
-      writes (the `POST /needs` case becomes a client composition, not a special route); the
-      store's `@capture` and `@ref` let one batch reference ids it mints in the same request.
-- [ ] **Invariants registry** in `app/lib/invariants/`: one module per type exporting
-      `validate(doc, ctx)` and `afterWrite(doc, ctx)`. The seven constraints in CLAUDE.md move
-      here, plus: `fragmentId` uniqueness within an item (ADR-0023); dismissal requires rationale
-      (ADR-0020); a placement may not be Approved ahead of its item (ADR-0018); ActivityGroup
-      flatness; sequence uniqueness across the shared module namespace (ADR-0005). Validators
-      read the branch they are writing to, never `main` by default.
-- [ ] **Recompute hooks.** `afterWrite` for `AssessmentItem`, `ItemInstance`, `ModuleObjective`
-      calls the coverage recompute from Phase 4 (stubbed until then).
+- [x] **`PUT /api/v1/documents/:type/:id` and `POST /api/v1/documents`** (2026-10-08), one
+      pipeline in `app/lib/api/write.ts`. Both are the store's `PUT` with `create=true` over a
+      list (checks X1, X2b, X5): Hash-keyed junctions need no `@id`, `@capture` and `@ref` work
+      within the list, the response carries the written ids, and the list fails together. The
+      store's `POST overwrite=true` turned out to merge triples rather than replace (X3a), so the
+      hub never uses it. An existing document is found by `@id`, or for a Hash-keyed class by its
+      key fields (X1c), so a replace is recognised either way; an id held by another type is a
+      409 before the store sees it. `GET /api/v1/documents/:type?field=value&count=&skip=` lists
+      with filters from the template query (W1).
+- [x] **Invariants engine** in `app/lib/api/invariants/` (under the API directory, since it is
+      host-neutral API code): `index.ts` holds the write context, the validator registry and the
+      422 `invariant_violation` response carrying every violation; `references.ts` is constraint
+      0 for every type, walking into subdocuments; one module per constrained type
+      (`assessmentItem`, `itemInstance`, `moduleContent`, `designFinding`). Validators see the
+      whole batch and read the branch being written. Shape is the generated Zod schemas'
+      job (400 `invalid_document`); `@min_cardinality` becomes `.min(n)`, so constraints 1 and 2
+      are shape. Flatness is constraint 0's doing. Every CLAUDE.md constraint has a failing and
+      a passing test in `app/lib/api/write.test.ts`.
+- [x] **Recompute hooks.** `afterWrite` for `AssessmentItem`, `ItemInstance`, `ModuleObjective`
+      in `invariants/recompute.ts` names the affected modules; Phase 4 gives it a body.
 - [x] **Users and ADR-0032: Identity resolution** (proposed and implemented 2026-10-08).
       `app/lib/api/identity.ts`: a pluggable resolver chosen by `ARMATURE_IDENTITY` (`header`
       now, carrying the caller's `externalId`; `oidc` named for later) yields claims; the hub
@@ -491,15 +496,22 @@ Work:
       are `User` documents with an `agent:` `externalId`, registered by a person. The generator
       emits `CLASS_ANCESTORS` so the hub knows which classes carry `createdBy`; the same map
       serves constraint 0. The merge route reports the `InsertConflict` witness (W2d).
-- [ ] Identity resolution and request validation are Hono middleware and validators on the
-      generic routes; the TerminusDB error mapping lives in the app's `onError`, replacing
-      `handleTerminusError` (ADR-0054 decision 4). Zod request schemas are emitted by
-      `scripts/generate-types.js` from `schema.json`, never hand-written.
-- [ ] Retire or alias the per-type routes. Keep `createGetHandler` only if it survives as the
-      alias layer.
+- [x] Identity resolution and request validation are functions the write routes call rather
+      than middleware, because both depend on the ref the route resolved; the TerminusDB error
+      mapping lives in the app's `onError` (ADR-0054 decision 4), which now also maps the store's
+      id-prefix refusal to 400. Zod request schemas are emitted by `scripts/generate-types.js`
+      into `app/lib/schemas.ts` from `schema.json`, strict objects with `@min_cardinality` as
+      `.min(n)`, enums from the same `VALID_*` arrays, and references as an id or `{ "@ref" }`;
+      `check:types` covers both outputs. The generator also emits the schema as data,
+      `CLASS_KEY` and `CLASS_FIELDS`, which the pipeline and the reference check read.
+- [x] Retired the per-type routes, `app/lib/terminusdb.ts`, `app/lib/routeHelpers.ts` and
+      `app/lib/validate.ts` (2026-10-08); the `terminusdb` client package left `app/`. Nothing
+      aliases them: the list route covers the eight GET routes, the write path covers the two
+      POST routes, and the coverage read is two list reads until Phase 4's intelligence route.
 
-Exit: every constraint in CLAUDE.md has a failing test and a passing test against the running
-store. The old per-type POST routes are gone or delegate.
+Exit (met 2026-10-08): every constraint in CLAUDE.md has a failing test and a passing test
+against the running store (`app/lib/api/write.test.ts`). The old per-type routes are gone. Open
+from this phase: `DELETE /api/v1/branches/:name` (reserved by ADR-0025 decision 6).
 
 CoQui receives: asks 3, 4 and 5.
 
@@ -917,6 +929,14 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   "@id_already_exists": "<iri>" }` rather than a per-field witness (W2d). A list body on `POST`,
   and on `PUT` with `create=true`, commits every document in one commit, including a reference
   from one to another (W3, W3b). ADR-0032 rests on these.
+- *Verified (2026-10-08, check X):* a `PUT` list with `create=true` writes a Hash-keyed document
+  that carries no `@id`, deriving the id from the key fields, and a second write with the same
+  key fields replaces it in place (X1, X1c); `@capture` and `@ref` resolve within both a `POST`
+  list and a `PUT` list (X2, X2b); both return the written ids as full IRIs in input order; a
+  list with one bad document writes nothing (X5). **`POST overwrite=true` does not replace: it
+  merged the old and new values of a field into a list (X3a), so the hub never uses it.** `GET`
+  with `ids=[...]`, as a query parameter or in a method-override body, returns the documents
+  that exist and silently drops the rest (X4, X4b). The generic write path rests on these.
 
 **Schema** (Phase 1)
 - *Corrected (2026-10-07):* the store does **not** check the class of a referenced document. A

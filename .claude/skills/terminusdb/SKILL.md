@@ -108,7 +108,12 @@ Recorded in `docs/development-plan.md` §9 as of v12.0.7. The ones most often ne
 - Branch `origin` may be a branch head or a commit path. Reads at `local/commit/<id>` are
   read-only.
 - `POST` inserts and rejects an existing id unless `overwrite=true`; `PUT` replaces and needs
-  `create=true` to upsert.
+  `create=true` to upsert. **`POST overwrite=true` is not a replace: it merged the old and new
+  values of a field into a list (check X3a).** The hub upserts only with `PUT create=true`, which
+  also takes a list, writes a Hash-keyed document without an `@id` by deriving it from the key
+  fields, honours `@capture`/`@ref` within the list, returns the written ids as IRIs, and fails
+  the whole list on one bad document (checks X1, X2b, X5). `GET` with `ids=[...]` reads several
+  documents and silently drops missing ids (X4).
 - The `TerminusDB-Data-Version` header gives optimistic concurrency; without it the server retries
   a write up to three times when the head moved, so blind concurrent writers both succeed.
 - The JavaScript client cannot set the commit author; the HTTP API takes `author` and `message`
