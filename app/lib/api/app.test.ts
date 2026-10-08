@@ -309,6 +309,52 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     expect(head.head.message).toBe('Target edits the rationale');
   });
 
+  it('never deletes main, and 404s an unknown branch', async () => {
+    const main = await app.request('/api/v1/branches/main', { method: 'DELETE', headers: { 'Armature-User': AUTHOR_EXTERNAL_ID } });
+    expect(main.status).toBe(400);
+    expect((await main.json()).error).toBe('protected_branch');
+
+    const missing = await app.request(`/api/v1/branches/no-such-${stamp}`, {
+      method: 'DELETE',
+      headers: { 'Armature-User': AUTHOR_EXTERNAL_ID },
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it('refuses to delete a branch whose head no other branch holds', async () => {
+    // SOURCE's last commit ("Source version") was never merged.
+    const res = await app.request(`/api/v1/branches/${SOURCE}`, { method: 'DELETE', headers: { 'Armature-User': AUTHOR_EXTERNAL_ID } });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe('unmerged_branch');
+    const head = await (await app.request(`/api/v1/branches/${SOURCE}`)).json();
+    expect(body.head).toBe(head.head.commit);
+    expect((await app.request('/api/v1/branches')).status).toBe(200);
+  });
+
+  it('deletes a merged branch and keeps its commits readable by id', async () => {
+    const MERGED = `test-merged-${stamp}`;
+    const doc = `LearningNeed/merged-${stamp}`;
+    expect((await post('/api/v1/branches', { name: MERGED, from: { branch: TARGET } })).status).toBe(201);
+    const written = await write(`/api/v1/documents/${doc}?branch=${MERGED}`, {
+      message: 'Work to merge',
+      document: { label: 'Merged need', rationale: 'Deleted branch, kept history' },
+    });
+    expect(written.status).toBe(200);
+    const { commit } = await written.json();
+    expect((await post(`/api/v1/branches/${TARGET}/merge`, { message: 'Take the work', from: MERGED })).status).toBe(200);
+
+    const res = await app.request(`/api/v1/branches/${MERGED}`, { method: 'DELETE', headers: { 'Armature-User': AUTHOR_EXTERNAL_ID } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ deleted: MERGED, head: commit, heldBy: TARGET });
+
+    const names = (await (await app.request('/api/v1/branches')).json()).map((b: { name: string }) => b.name);
+    expect(names).not.toContain(MERGED);
+    const atCommit = await app.request(`/api/v1/documents/${doc}?ref=${commit}`);
+    expect(atCommit.status).toBe(200);
+    expect((await atCommit.json()).label).toBe('Merged need');
+  });
+
   it('refuses to write User documents through the provisional route', async () => {
     const res = await write(`/api/v1/documents/User/minted-${stamp}?branch=${TARGET}`, {
       message: 'Mint an author',
