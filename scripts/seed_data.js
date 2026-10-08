@@ -50,6 +50,20 @@ const id = (type, key) => `${type}/${key}`;
 const documents = [
 
   // -------------------------------------------------------------------------
+  // User — the demo's designer. Phase 2 writes name their author as a User
+  // document id (ADR-0025 decision 2), so the seed needs at least one.
+  // -------------------------------------------------------------------------
+
+  {
+    "@type": "User",
+    "@id": id("User", "demo-designer"),
+    "displayName": "Demo Designer",
+    "externalId": "demo-designer@example.edu",
+    "email": "demo-designer@example.edu",
+    "institution": "Example University",
+  },
+
+  // -------------------------------------------------------------------------
   // Course
   // -------------------------------------------------------------------------
 
