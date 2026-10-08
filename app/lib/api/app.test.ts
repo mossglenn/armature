@@ -3,20 +3,24 @@
  *
  * Integration tests: they need the TerminusDB container from
  * docker/docker-compose.yml running with the seed loaded (which includes
- * User/demo-designer). No HTTP server is started; `app.request()` invokes
- * the app directly.
+ * User/demo-designer, externalId demo-designer@example.edu). No HTTP server
+ * is started; `app.request()` invokes the app directly.
  *
  * The version-control walkthrough is Phase 2's exit criterion (plan §4):
  * create a branch from a commit, write to it as a named author, read one
  * document at two commits, list its history with diffs, merge, and provoke
  * one conflict, all through /api/v1. It works on scratch branches it creates
- * and deletes, so `main` and the seed are untouched.
+ * and deletes, so the seed is untouched. The one write to `main` is the
+ * users suite (ADR-0032): users live on main, so registering one writes
+ * there; the suite deletes what it registered through the adapter.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './app';
 import { createStore } from './store';
 
+/** The seed's User and the header value that resolves to it (ADR-0032 decision 1). */
 const AUTHOR = 'User/demo-designer';
+const AUTHOR_EXTERNAL_ID = 'demo-designer@example.edu';
 const stamp = Date.now().toString(36);
 const TARGET = `test-target-${stamp}`;
 const SOURCE = `test-source-${stamp}`;
@@ -27,7 +31,7 @@ const etagOf = (res: Response): string | undefined => res.headers.get('etag')?.r
 function write(path: string, body: unknown, headers: Record<string, string> = {}) {
   return app.request(path, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'Armature-User': AUTHOR, ...headers },
+    headers: { 'Content-Type': 'application/json', 'Armature-User': AUTHOR_EXTERNAL_ID, ...headers },
     body: JSON.stringify(body),
   });
 }
@@ -35,9 +39,13 @@ function write(path: string, body: unknown, headers: Record<string, string> = {}
 function post(path: string, body: unknown, headers: Record<string, string> = {}) {
   return app.request(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Armature-User': AUTHOR, ...headers },
+    headers: { 'Content-Type': 'application/json', 'Armature-User': AUTHOR_EXTERNAL_ID, ...headers },
     body: JSON.stringify(body),
   });
+}
+
+function get(path: string, headers: Record<string, string> = {}) {
+  return app.request(path, { headers });
 }
 
 describe('GET /api/v1/documents/:type/:id', () => {
@@ -138,11 +146,11 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     expect((await res.json()).error).toBe('identity_required');
   });
 
-  it('rejects a write whose author is not a User', async () => {
+  it('rejects a write whose identity is not a registered User', async () => {
     const res = await write(
       `/api/v1/documents/${DOC}?branch=${SOURCE}`,
       { message: 'bad author', document: { label: 'x', rationale: 'y' } },
-      { 'Armature-User': 'User/nobody' }
+      { 'Armature-User': `nobody-${stamp}@example.edu` }
     );
     expect(res.status).toBe(401);
     expect((await res.json()).error).toBe('unknown_user');
@@ -165,10 +173,10 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     expect((await res.json()).error).toBe('write_at_commit');
   });
 
-  it('writes to the branch as a named author and returns the commit', async () => {
+  it('writes to the branch as the resolved author and returns the commit', async () => {
     const res = await write(`/api/v1/documents/${DOC}?branch=${SOURCE}`, {
       message: 'Capture the walkthrough need',
-      document: { label: 'Walkthrough need', rationale: 'Phase 2 exit criterion' },
+      document: { label: 'Walkthrough need', rationale: 'Phase 2 exit criterion', createdBy: 'User/ignored' },
     });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -181,16 +189,24 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     expect(headBody.head.commit).toBe(firstWrite);
     expect(headBody.head.author).toBe(AUTHOR);
     expect(headBody.head.message).toBe('Capture the walkthrough need');
+
+    // createdBy is the resolved User, not the body's value (ADR-0032 decision 4)
+    const written = await (await get(`/api/v1/documents/${DOC}?branch=${SOURCE}`)).json();
+    expect(written.createdBy).toBe(AUTHOR);
   });
 
   it('honours If-Match and rejects a stale one with 412', async () => {
     const ok = await write(
       `/api/v1/documents/${DOC}?branch=${SOURCE}`,
-      { message: 'Refine the rationale', document: { label: 'Walkthrough need', rationale: 'Refined' } },
+      { message: 'Refine the rationale', document: { label: 'Walkthrough need', rationale: 'Refined', createdBy: 'User/other' } },
       { 'If-Match': `"${firstWrite}"` }
     );
     expect(ok.status).toBe(200);
     secondWrite = (await ok.json()).commit;
+
+    // a replace keeps the stored createdBy (ADR-0032 decision 4)
+    const replaced = await (await get(`/api/v1/documents/${DOC}?branch=${SOURCE}`)).json();
+    expect(replaced.createdBy).toBe(AUTHOR);
 
     const stale = await write(
       `/api/v1/documents/${DOC}?branch=${SOURCE}`,
@@ -309,5 +325,178 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe('type_mismatch');
+  });
+});
+
+describe('users and identity resolution (ADR-0032)', () => {
+  const REVIEWER_ID = `User/test-reviewer-${stamp}`;
+  const REVIEWER_EXTERNAL_ID = `reviewer-${stamp}@example.edu`;
+  const AGENT_EXTERNAL_ID = `agent:test/drafter-${stamp}`;
+  const EARLY = `test-early-${stamp}`; // forked before the reviewer exists
+  const LATE = `test-late-${stamp}`; // forked after
+  const NEED = `LearningNeed/carried-${stamp}`;
+  const asReviewer = { 'Armature-User': REVIEWER_EXTERNAL_ID };
+  let agentId: string;
+
+  beforeAll(async () => {
+    const res = await post('/api/v1/branches', { name: EARLY, from: { branch: 'main' } });
+    expect(res.status).toBe(201);
+  });
+
+  afterAll(async () => {
+    const main = createStore({ branch: 'main' });
+    for (const name of [EARLY, LATE]) await main.deleteBranch(name).catch(() => undefined);
+    for (const id of [REVIEWER_ID, agentId]) {
+      if (id) await main.deleteDocument(id, { author: AUTHOR, message: `Test cleanup: remove ${id}` }).catch(() => undefined);
+    }
+  });
+
+  it('lists the seeded users at main with an ETag', async () => {
+    const res = await get('/api/v1/users');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('etag')).toMatch(/^"[a-z0-9]+"$/);
+    const ids = (await res.json()).map((u: { '@id': string }) => u['@id']);
+    expect(ids).toContain(AUTHOR);
+  });
+
+  it('answers /users/me with the resolved User, or 401', async () => {
+    const me = await get('/api/v1/users/me', { 'Armature-User': AUTHOR_EXTERNAL_ID });
+    expect(me.status).toBe(200);
+    expect((await me.json())['@id']).toBe(AUTHOR);
+
+    const anonymous = await get('/api/v1/users/me');
+    expect(anonymous.status).toBe(401);
+    expect((await anonymous.json()).error).toBe('identity_required');
+
+    const unknown = await get('/api/v1/users/me', asReviewer);
+    expect(unknown.status).toBe(401);
+    expect((await unknown.json()).error).toBe('unknown_user');
+  });
+
+  it('refuses to register a User anywhere but main', async () => {
+    const res = await post(`/api/v1/users?branch=${EARLY}`, {
+      message: 'Register on a branch',
+      user: { displayName: 'Nope', externalId: REVIEWER_EXTERNAL_ID },
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('users_live_on_main');
+  });
+
+  it('validates the user envelope', async () => {
+    const missing = await post('/api/v1/users', { message: 'No externalId', user: { displayName: 'Nope' } });
+    expect(missing.status).toBe(400);
+    const extra = await post('/api/v1/users', {
+      message: 'Unknown field',
+      user: { displayName: 'Nope', externalId: 'x', role: 'reviewer' },
+    });
+    expect(extra.status).toBe(400);
+    expect((await extra.json()).error).toBe('unknown_field');
+    const badId = await post('/api/v1/users', {
+      message: 'Bad id',
+      user: { '@id': 'Reviewer/x', displayName: 'Nope', externalId: 'x' },
+    });
+    expect(badId.status).toBe(400);
+    expect((await badId.json()).error).toBe('bad_id');
+  });
+
+  it('registers a User on main under a client-supplied id, authored by the caller', async () => {
+    const res = await post('/api/v1/users', {
+      message: 'Register the test reviewer',
+      user: { '@id': REVIEWER_ID, displayName: 'Test Reviewer', externalId: REVIEWER_EXTERNAL_ID, institution: 'Test U' },
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.id).toBe(REVIEWER_ID);
+    expect(etagOf(res)).toBe(body.commit);
+
+    const head = await (await get('/api/v1/branches/main')).json();
+    expect(head.head.commit).toBe(body.commit);
+    expect(head.head.author).toBe(AUTHOR);
+
+    const me = await get('/api/v1/users/me', asReviewer);
+    expect(me.status).toBe(200);
+    expect((await me.json()).displayName).toBe('Test Reviewer');
+  });
+
+  it('refuses a second User for the same externalId', async () => {
+    const res = await post('/api/v1/users', {
+      message: 'Register again',
+      user: { displayName: 'Duplicate', externalId: REVIEWER_EXTERNAL_ID },
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe('user_exists');
+    expect(body.id).toBe(REVIEWER_ID);
+  });
+
+  it('registers an agent as an ordinary User with a hub-minted id', async () => {
+    const res = await post('/api/v1/users', {
+      message: 'Register the drafting agent',
+      user: { displayName: 'Test Drafter', externalId: AGENT_EXTERNAL_ID },
+    });
+    expect(res.status).toBe(201);
+    agentId = (await res.json()).id;
+    expect(agentId).toMatch(/^User\/[0-9a-f-]{36}$/);
+
+    const listed = (await (await get('/api/v1/users')).json()).map((u: { '@id': string }) => u['@id']);
+    expect(listed).toContain(agentId);
+    expect(listed).toContain(REVIEWER_ID);
+  });
+
+  it('carries the User onto a branch forked before it existed, in the same commit as the write', async () => {
+    const before = await get(`/api/v1/documents/User/test-reviewer-${stamp}?branch=${EARLY}`);
+    expect(before.status).toBe(404);
+
+    const res = await write(
+      `/api/v1/documents/${NEED}?branch=${EARLY}`,
+      { message: 'First write by the reviewer', document: { label: 'Carried need', rationale: 'ADR-0032 decision 5' } },
+      asReviewer
+    );
+    expect(res.status).toBe(200);
+    const { commit } = await res.json();
+
+    const need = await (await get(`/api/v1/documents/${NEED}?branch=${EARLY}`)).json();
+    expect(need.createdBy).toBe(REVIEWER_ID);
+    const carried = await get(`/api/v1/documents/User/test-reviewer-${stamp}?branch=${EARLY}`);
+    expect(carried.status).toBe(200);
+    expect(etagOf(carried)).toBe(commit);
+
+    const head = await (await get(`/api/v1/branches/${EARLY}`)).json();
+    expect(head.head.commit).toBe(commit);
+    expect(head.head.author).toBe(REVIEWER_ID);
+  });
+
+  it('merges the carried copy into a branch that already holds the User without conflict', async () => {
+    const created = await post('/api/v1/branches', { name: LATE, from: { branch: 'main' } });
+    expect(created.status).toBe(201);
+
+    const res = await post(`/api/v1/branches/${LATE}/merge`, { message: 'Merge the carried write', from: EARLY }, asReviewer);
+    expect(res.status).toBe(200);
+    expect((await res.json()).upToDate).toBe(false);
+
+    const need = await (await get(`/api/v1/documents/${NEED}?branch=${LATE}`)).json();
+    expect(need.createdBy).toBe(REVIEWER_ID);
+    const user = await (await get(`/api/v1/documents/User/test-reviewer-${stamp}?branch=${LATE}`)).json();
+    expect(user.displayName).toBe('Test Reviewer');
+  });
+
+  it('reports a same-id, different-content insert on both sides as an InsertConflict', async () => {
+    const doc = `LearningNeed/twice-${stamp}`;
+    const onLate = await write(`/api/v1/documents/${doc}?branch=${LATE}`, {
+      message: 'Insert on late',
+      document: { label: 'Late version', rationale: 'x' },
+    });
+    expect(onLate.status).toBe(200);
+    const onEarly = await write(`/api/v1/documents/${doc}?branch=${EARLY}`, {
+      message: 'Insert on early',
+      document: { label: 'Early version', rationale: 'x' },
+    });
+    expect(onEarly.status).toBe(200);
+
+    const res = await post(`/api/v1/branches/${LATE}/merge`, { message: 'Merge twice-inserted', from: EARLY });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe('merge_conflict');
+    expect(body.conflicts).toEqual([{ id: doc, op: 'InsertConflict' }]);
   });
 });
