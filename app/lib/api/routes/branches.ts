@@ -21,7 +21,15 @@ export const branches = new Hono();
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
 const toHead = (commit: Commit | undefined) =>
-  commit ? { commit: commit.id, author: commit.author, message: commit.message, timestamp: commit.timestamp } : null;
+  commit
+    ? {
+        commit: commit.id,
+        author: commit.author,
+        message: commit.message,
+        timestamp: commit.timestamp,
+        ...(commit.metadata ? { metadata: commit.metadata } : {}),
+      }
+    : null;
 
 function parseFrom(from: unknown): Ref {
   if (from === undefined) return { branch: 'main' };
@@ -34,27 +42,21 @@ function parseFrom(from: unknown): Ref {
 
 /**
  * The store records one parent per commit, so a merge commit made by `apply`
- * does not remember which source commit it merged. The hub records it as a
- * git-style trailer on the merge commit's message (ADR-0025 decision 5):
+ * does not remember which source commit it merged. The hub records it in the
+ * commit's JSON metadata, which `apply` accepts and the log returns (platform
+ * check V), under the same `armature` namespace the schema uses for its own
+ * metadata (ADR-0025 decision 5):
  *
- *     <the caller's reason>
- *
- *     Merge-Source: <commit-id>
+ *     { "armature": { "mergeSource": "<commit-id>" } }
  */
-const MERGE_SOURCE = 'Merge-Source';
-
-function withMergeTrailer(message: string, sourceCommit: string): string {
-  return `${message}\n\n${MERGE_SOURCE}: ${sourceCommit}`;
+function mergeMetadata(sourceCommit: string): Record<string, unknown> {
+  return { armature: { mergeSource: sourceCommit } };
 }
 
-/** The value of one `Key: value` trailer in the block after the last blank line. */
-function trailer(message: string, key: string): string | undefined {
-  const block = message.split(/\n\s*\n/).pop() ?? '';
-  for (const line of block.split('\n')) {
-    const match = /^([A-Za-z][A-Za-z-]*):\s*(.+?)\s*$/.exec(line);
-    if (match && match[1] === key) return match[2];
-  }
-  return undefined;
+function mergeSourceOf(commit: Commit): string | undefined {
+  const armature = commit.metadata?.armature;
+  const value = isRecord(armature) ? armature.mergeSource : undefined;
+  return typeof value === 'string' ? value : undefined;
 }
 
 async function fullLog(store: Store): Promise<Commit[]> {
@@ -73,19 +75,17 @@ async function fullLog(store: Store): Promise<Commit[]> {
  * The most recent commit both branches have seen, which `apply` needs as an
  * explicit `before_commit` (platform check P1). Walking the target's log
  * newest first, a commit counts when it is in the source's log, when its
- * `Merge-Source` trailer names a source commit (the target merged the source
- * there), or when a source commit's trailer names it (the source merged the
+ * merge metadata names a source commit (the target merged the source there),
+ * or when a source commit's merge metadata names it (the source merged the
  * target there).
  */
 async function mergeBase(target: Store, source: Store): Promise<string | undefined> {
   const sourceLog = await fullLog(source);
   const sourceIds = new Set(sourceLog.map((commit) => commit.id));
-  const mergedBySource = new Set(
-    sourceLog.map((commit) => trailer(commit.message, MERGE_SOURCE)).filter((id): id is string => !!id)
-  );
+  const mergedBySource = new Set(sourceLog.map(mergeSourceOf).filter((id): id is string => !!id));
   for (const commit of await fullLog(target)) {
     if (sourceIds.has(commit.id)) return commit.id;
-    const merged = trailer(commit.message, MERGE_SOURCE);
+    const merged = mergeSourceOf(commit);
     if (merged && sourceIds.has(merged)) return merged;
     if (mergedBySource.has(commit.id)) return commit.id;
   }
@@ -172,7 +172,8 @@ branches.post('/:name/merge', async (c) => {
     base,
     source: sourceHead.id,
     author,
-    message: withMergeTrailer(envelope.message, sourceHead.id),
+    message: envelope.message,
+    metadata: mergeMetadata(sourceHead.id),
   });
   if (result.ok) {
     setEtag(c, result.commit);

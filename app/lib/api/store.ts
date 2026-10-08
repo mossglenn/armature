@@ -29,6 +29,8 @@ export interface Commit {
   message: string;
   timestamp: number;
   parent?: string;
+  /** User-supplied JSON on the commit; set by `apply`, returned by the log (check V). */
+  metadata?: Record<string, unknown>;
 }
 
 export interface HistoryEntry extends Commit {
@@ -122,6 +124,7 @@ function toCommit(entry: unknown): Commit {
     message: String(e.message ?? ''),
     timestamp: Number(e.timestamp ?? 0),
     parent,
+    ...(isRecord(e.metadata) ? { metadata: e.metadata } : {}),
   };
 }
 
@@ -316,19 +319,24 @@ export class Store {
 
   /**
    * Three-way merge: apply the diff from `base` to `source` (bare commit ids)
-   * onto `target` as a commit by `author`. A conflict comes back as the
-   * store's witnesses rather than an error (platform check P).
+   * onto `target` as a commit by `author`, with optional JSON `metadata`
+   * stored on the commit (check V2). A conflict comes back as the store's
+   * witnesses rather than an error (platform check P).
    */
   async apply(
     target: string,
-    opts: { base: string; source: string; author: string; message: string }
+    opts: { base: string; source: string; author: string; message: string; metadata?: Record<string, unknown> }
   ): Promise<ApplyResult> {
     try {
       const r = await this.request('POST', `/api/apply/${this.dbPath}/local/branch/${encodeURIComponent(target)}`, {
         body: {
           before_commit: opts.base,
           after_commit: opts.source,
-          commit_info: { author: opts.author, message: opts.message },
+          commit_info: {
+            author: opts.author,
+            message: opts.message,
+            ...(opts.metadata ? { metadata: opts.metadata } : {}),
+          },
         },
       });
       const commit = r.commit ?? (await this.at({ branch: target }).head())?.id ?? '';
