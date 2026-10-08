@@ -247,7 +247,8 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     const head = await (await app.request(`/api/v1/branches/${TARGET}`)).json();
     expect(head.head.commit).toBe(body.commit);
     expect(head.head.author).toBe(AUTHOR);
-    expect(head.head.message).toBe(`Merge the walkthrough\n\nMerge-Source: ${secondWrite}`);
+    expect(head.head.message).toBe('Merge the walkthrough');
+    expect(head.head.metadata).toEqual({ armature: { mergeSource: secondWrite } });
 
     const merged = await app.request(`/api/v1/documents/${DOC}?branch=${TARGET}`);
     expect(merged.status).toBe(200);
