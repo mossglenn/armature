@@ -94,6 +94,13 @@ Recorded in `docs/development-plan.md` §9 as of v12.0.7. The ones most often ne
   not the `@before`/`@after_left`/`@after_right` the vendored merge page shows (platform check
   P). `rebase` replays commits and gives them new ids; `POST /api/rebase/<X>` with
   `rebase_from: <Y>` rebases X onto Y, the reverse of how the vendored page reads (check Q).
+- When both sides inserted the same id, `apply` succeeds and makes no commit if the fields are
+  identical, and reports a 409 with a witness `{ "@op": "InsertConflict", "@id_already_exists":
+  "<iri>" }` if they differ, a different shape from the per-field witness (check W2, W2d).
+- The document API's template query works over HTTP as a `POST` to the document path with
+  `X-HTTP-Method-Override: GET` and a body `{ type, as_list, query: { field: value } }`; it
+  returns the matching documents and the data-version header (check W1). A list body on `POST`,
+  or on `PUT` with `create=true`, commits every document in one commit (check W3).
 - A commit's existence is checked by reading `ValidCommit/<id>` from `local/_commits`; a document
   read at a commit path that does not exist is a 500 (check U). A stale `TerminusDB-Data-Version`
   is HTTP 400 `api:DataVersionMismatch`; a bare commit id as the token is rejected (check M).

@@ -405,7 +405,8 @@ Work:
       is never rewritten (no reset, squash or rebase exposed or called); `/api/v1` exposes the
       bare commit id as `ETag` and accepts `If-Match` (412 when stale). Corrections to the
       merge facts previously recorded here are in §9. Who may merge and per-type merge
-      filtering stay open (§6). Interim identity: an `Armature-User` header until ADR-0032.
+      filtering stay open (§6). Interim identity: an `Armature-User` header carrying a `User`
+      id, replaced by ADR-0032's resolver in Phase 3.
 - [x] **Routes are Hono routes.** `app/lib/api/routes/documents.ts` and `routes/branches.ts`,
       mounted by `app.ts`. The concurrency token is handled by shared helpers in
       `app/lib/api/http.ts` (`ifMatchFrom`, `setEtag`) rather than middleware, because the commit
@@ -424,9 +425,10 @@ Work:
       `createStore(ref)` per request; `getDocument`, `putDocument` (author, message, If-Match),
       `log`, `head`, `getCommit`, `history`, `diff`, `listBranches`, `createBranch`,
       `deleteBranch`, `apply`. Typed `StoreError` carries the server's `@type`; `app.onError`
-      matches on it. Interim identity in `app/lib/api/identity.ts` (`Armature-User` header,
-      verified to be a `User` document). A provisional `PUT /api/v1/documents/:type/:id` exists
-      so the walkthrough can write; Phase 3 wraps it in the invariants engine.
+      matches on it. Identity in `app/lib/api/identity.ts`, interim in Phase 2 (`Armature-User`
+      header naming a `User`), replaced by ADR-0032's resolver in Phase 3. A provisional
+      `PUT /api/v1/documents/:type/:id` exists so the walkthrough can write; Phase 3 wraps it in
+      the invariants engine.
 - [x] **Branch routes.** `POST /api/v1/branches` (`{ name, from: { branch } | { commit } }`,
       201 with the head), `GET /api/v1/branches` (names with heads), `GET /api/v1/branches/:name`
       (head commit). `DELETE` reserved (ADR-0025 decision 6); tests delete their scratch branches
@@ -477,11 +479,18 @@ Work:
       read the branch they are writing to, never `main` by default.
 - [ ] **Recompute hooks.** `afterWrite` for `AssessmentItem`, `ItemInstance`, `ModuleObjective`
       calls the coverage recompute from Phase 4 (stubbed until then).
-- [ ] **Users.** `GET /api/v1/users`, `POST /api/v1/users`, and **ADR-0032: Identity
-      resolution**, implementing ADR-0015's boundary with a pluggable resolver: a trusted header
-      for local and demo use, OIDC later. `createdBy` and the commit author are set by the hub
-      from the resolved identity, never from the body. Agent users are ordinary `User` documents
-      with a documented naming convention.
+- [x] **Users and ADR-0032: Identity resolution** (proposed and implemented 2026-10-08).
+      `app/lib/api/identity.ts`: a pluggable resolver chosen by `ARMATURE_IDENTITY` (`header`
+      now, carrying the caller's `externalId`; `oidc` named for later) yields claims; the hub
+      resolves them to a `User` on `main`, the registry of record, by template query (check W1),
+      registering one there on first encounter when the claims carry a `displayName`. The commit
+      author and `createdBy` come from the resolved `User`, never from the body: set on create,
+      preserved on replace. A write on a branch that lacks the `User` carries `main`'s copy in
+      the same commit (W3b); identical copies merge clean (W2). `GET /api/v1/users`,
+      `GET /api/v1/users/me`, `POST /api/v1/users` (main only; 409 `user_exists`). Agent users
+      are `User` documents with an `agent:` `externalId`, registered by a person. The generator
+      emits `CLASS_ANCESTORS` so the hub knows which classes carry `createdBy`; the same map
+      serves constraint 0. The merge route reports the `InsertConflict` witness (W2d).
 - [ ] Identity resolution and request validation are Hono middleware and validators on the
       generic routes; the TerminusDB error mapping lives in the app's `onError`, replacing
       `handleTerminusError` (ADR-0054 decision 4). Zod request schemas are emitted by
@@ -681,7 +690,7 @@ reading TerminusDB documentation.
 | 0029 | Coverage algorithm | 4 | Closes PROJECT_CONTEXT's open question |
 | 0030 | External references and attachments | 6 | P6; attachment references with mandatory content hash, backend left open |
 | 0031 | Export profiles and schema slices | 6 | P7, P8; implements ADR-0021's deferred section |
-| 0032 | Identity resolution | 3 | Implements ADR-0015's boundary |
+| 0032 | Identity resolution | 3 (proposed 2026-10-08, implemented) | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |
 | 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Abstract `Fragment` subdocument; `ItemOption` as a specialisation; generic kinds with `sys:JSON` payload and per-kind validation; promotion path to typed subdocuments. Verify polymorphic subdocument lists first |
 | 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI as precedents); the hub never serves executable content from a graph document, renderers load sandboxed under CSP |
 
@@ -899,6 +908,15 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - Access control is role-based at organization and database scope. No per-branch permissions
   exist, and only basic authentication is documented for self-hosted use. Branch write
   exclusivity is therefore a hub convention, as the CoQui handoff assumed.
+- *Verified (2026-10-08, check W):* the document API's template query works over HTTP as a
+  `POST` with `X-HTTP-Method-Override: GET` and a body `{ type, as_list, query }`, returning the
+  matching documents and the data-version header, `[]` when nothing matches (W1, W1c). `apply`
+  of a commit that inserted a document the target already holds with identical fields succeeds
+  and makes no commit, since the patch is empty (W2, W2b); the same id inserted on both sides
+  with different fields is a 409 with a witness `{ "@op": "InsertConflict",
+  "@id_already_exists": "<iri>" }` rather than a per-field witness (W2d). A list body on `POST`,
+  and on `PUT` with `create=true`, commits every document in one commit, including a reference
+  from one to another (W3, W3b). ADR-0032 rests on these.
 
 **Schema** (Phase 1)
 - *Corrected (2026-10-07):* the store does **not** check the class of a referenced document. A
