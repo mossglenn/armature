@@ -6,7 +6,7 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Phases 0 and 1 complete on 2026-10-07 (Phase 1 on branch `phase-1/schema-catch-up`, PR pending) → Phase 2 of `docs/development-plan.md` (the version-control model) is next.** The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
+**Phases 0 and 1 complete and merged on 2026-10-07 (PRs #1, #2, #3; CI green on `main`) → Phase 2 of `docs/development-plan.md` (the version-control model) is next.** The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
 
 History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 (October 2026).
 
@@ -118,7 +118,7 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 **Phase 0 is done locally but uncommitted.** First action next session: review and commit the Phase 0 changes (proposed commit sequence in the 2026-10-07 entry under Recent Sessions), push, and confirm the CI workflow goes green on `main`. That is the phase's exit criterion.
 
-**Merge the Phase 1 PR, then Phase 2 of `docs/development-plan.md` — the version-control model (2 to 3 sessions):**
+**Phase 2 of `docs/development-plan.md` — the version-control model (2 to 3 sessions):**
 
 1. Read research candidate 0036 (immutable shared history and durable pins) before writing ADR-0025; attestations and findings will store commit ids, so the no-rewrite rule on shared branches belongs in the ADR
 2. **ADR-0025: design process data lives in the commit graph.** Includes the merge model (`apply` is a three-way merge with field-level conflict reports), the no-history-rewrite rule, and the data-version token decision ADR-0054 left open (`branch:<commit>` raw, or the bare commit id)
@@ -170,7 +170,7 @@ None. The 2026-10-05 credentials failure was the previously running container ha
 
 ## Notes for Next Session
 
-Merge the Phase 1 PR, then start Phase 2 with ADR-0025. Phase 2 is the first phase that writes Hono routes; put them in `app/lib/api/routes/` and mount them on the app in `app/lib/api/app.ts`. Read research candidate 0036 first: the no-history-rewrite rule and content-hash pins belong in ADR-0025 because attestations will store commit ids.
+Start Phase 2 with ADR-0025, on a new branch. Phase 2 is the first phase that writes Hono routes; put them in `app/lib/api/routes/` and mount them on the app in `app/lib/api/app.ts`. Read research candidate 0036 first: the no-history-rewrite rule and content-hash pins belong in ADR-0025 because attestations will store commit ids.
 
 Phase 1 facts worth carrying forward:
 - `scripts/platform_checks.js` is the place to prove a store behaviour before an ADR relies on it. Checks A–L exist; add a lettered check, run it, cite it in the ADR.
@@ -214,7 +214,7 @@ Key context:
 - `@types/node` bumped 20 → 22 to satisfy Vitest's peer range (matches CI's Node 22). Local Node is now 24.21
 - One tooling note: Node cannot resolve the `@/` alias on its own; serving the app standalone for the check used `npx tsx`. Phase 7's container entry needs a real build step or relative imports
 - ADR-0054 accepted on the result. Amended ADR-0026 (decision 1), CLAUDE.md (stack, repo tree, Principle 1, Tests workflow, three What-Not-To-Do rules), PROJECT_CONTEXT.md, README, and the development plan (§3 host bullet, Phase 2 data-version decision and Hono routes, Phase 3 middleware and `onError`, Phase 7 container entry and build step, ADR queue row 0054, Phase 0 checkboxes marked done). The two unanticipated consequences are recorded in ADR-0054 §Consequences and as Phase 2 and Phase 7 work items
-- Committed on `spike/adr-0054-hono` and opened as a PR against `main`
+- Committed on `spike/adr-0054-hono`, merged as PR #2
 
 ### 2026-10-07 (Phase 0)
 
