@@ -79,6 +79,16 @@
  * many). The invariants engine reads CLASS_FIELDS to find the references it
  * must check and CLASS_KEY to find an existing Hash-keyed document.
  *
+ * --- Computed fields (ADR-0029) ---
+ *
+ * A class may list fields in @metadata.armature.computed that the hub, not
+ * the client, writes: ModuleObjective's coverageStatus and
+ * projectedCoverageStatus. They stay on the interface, since reads return
+ * them, and are left out of the class's request schema, so a write that
+ * carries one is a 400 like any unknown key. CLASS_COMPUTED exports the list
+ * per class for the write pipeline. A computed name that is not a field of
+ * the class (own or inherited) fails generation.
+ *
  * --- Zod request schemas (second output, app/lib/schemas.ts) ---
  *
  * One Zod schema per concrete class, for the generic write routes (ADR-0054
@@ -101,8 +111,9 @@
  *
  * Objects are strict: an unknown key is a 400, not a store error. A document
  * schema takes an optional @id, @type and @capture (the route fills @id and
- * @type from the path); a subdocument schema requires @type, which the store
- * needs, and ignores any nested @id, which the store regenerates (ADR-0023).
+ * @type from the path) and omits the class's computed fields; a subdocument
+ * schema requires @type, which the store needs, and ignores any nested @id,
+ * which the store regenerates (ADR-0023).
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -181,6 +192,25 @@ function categoryOf(entry) {
     process.exit(1);
   }
   return cat;
+}
+
+/**
+ * The fields of a class the hub computes, own and inherited, from
+ * @metadata.armature.computed (ADR-0029). Fails loudly when a name is not a
+ * field of the class, since a typo would silently let a client write it.
+ */
+function computedOf(entry) {
+  const chain = [entry['@id'], ...ancestorsOf(entry['@id'])];
+  const names = new Set();
+  for (const id of chain) for (const name of classes[id]['@metadata']?.armature?.computed ?? []) names.add(name);
+  const fields = new Set(allFields(entry).map(([k]) => k));
+  for (const name of names) {
+    if (!fields.has(name)) {
+      console.error(`✗ ${entry['@id']} lists computed field "${name}", which is not a field of the class (ADR-0029)`);
+      process.exit(1);
+    }
+  }
+  return names;
 }
 
 // ── Type resolution ───────────────────────────────────────────────────────────
@@ -316,10 +346,11 @@ function divider(label) {
  * @param {object} entry - A Class entry from schema.json
  */
 function renderClassFields(entry) {
+  const computed = computedOf(entry);
   for (const [k, v] of getFields(entry)) {
     const opt     = isOptional(v);
     const tsType  = resolveFieldType(opt ? v['@class'] : v);
-    const comment = refComment(v);
+    const comment = computed.has(k) ? '// computed by the hub, never written by a client (ADR-0029)' : refComment(v);
     line(`  ${k}${opt ? '?' : ''}: ${tsType};${comment ? `  ${comment}` : ''}`);
   }
 }
@@ -522,6 +553,14 @@ for (const entry of Object.values(classes)) {
 line(`} as const;`);
 line();
 
+line(`/** The fields of each class the hub computes and a client may not write, from @metadata.armature.computed (ADR-0029). */`);
+line(`export const CLASS_COMPUTED: Record<ClassName, readonly string[]> = {`);
+for (const entry of Object.values(classes)) {
+  line(`  ${entry['@id']}: [${[...computedOf(entry)].map((f) => `"${f}"`).join(', ')}],`);
+}
+line(`};`);
+line();
+
 line(`/** One field's shape as data; see CLASS_FIELDS. */`);
 line(`export interface FieldShape {`);
 line(`  /** The xsd/sys type, enum, subdocument class or referenced class. */`);
@@ -561,8 +600,8 @@ const ZOD_XSD = {
   'sys:JSON':     'z.unknown()',
 };
 
-const sOut = [];
-function sline(s = '') { sOut.push(s); }
+const sBody = [];
+function sline(s = '') { sBody.push(s); }
 
 /** The Zod expression for one field value. */
 function zodFor(val) {
@@ -583,17 +622,6 @@ const isAbstract = (entry) => entry['@abstract'] !== undefined;
 const concreteDescendants = (id) =>
   Object.values(classes).filter((c) => !isAbstract(c) && ancestorsOf(c['@id']).includes(id)).map((c) => c['@id']);
 
-sline(`// GENERATED — do not edit manually`);
-sline(`// Source:      schema/schema.json`);
-sline(`// Regenerate:  npm run generate:types  (from armature/app/)`);
-sline(`// Check drift: npm run check:types`);
-sline(`//`);
-sline(`// Zod request schemas for the generic write routes (ADR-0054 decision 4,`);
-sline(`// Phase 3). Shape only: cross-document rules live in the invariants engine.`);
-sline();
-sline(`import { z } from 'zod';`);
-sline(`import { ${Object.keys(enums).map((e) => `VALID_${e}`).join(', ')} } from './types';`);
-sline();
 sline(`/**`);
 sline(` * A reference to another document: its id, or { "@ref": "<capture>" } naming a`);
 sline(` * document captured earlier in the same batch with "@capture" (platform check X2).`);
@@ -643,15 +671,17 @@ for (const id of subdocOrder) {
   sline();
 }
 
-sline(`// ── Documents (concrete classes; the route fills @id and @type) ───────────────`);
+sline(`// ── Documents (concrete classes; the route fills @id and @type; computed fields omitted) ───`);
 sline();
 const documentIds = Object.values(classes).filter((c) => !isAbstract(c) && !subdocIds.has(c['@id'])).map((c) => c['@id']);
 for (const id of documentIds) {
+  const computed = computedOf(classes[id]);
+  if (computed.size) sline(`/** Without ${[...computed].join(', ')}: computed by the hub (ADR-0029). */`);
   sline(`export const ${id}Schema = z.strictObject({`);
   sline(`  '@id': z.string().min(1).optional(),`);
   sline(`  '@type': z.literal('${id}').optional(),`);
   sline(`  '@capture': z.string().min(1).optional(),`);
-  for (const [k, v] of allFields(classes[id])) sline(`  ${k}: ${zodFor(v)},`);
+  for (const [k, v] of allFields(classes[id])) if (!computed.has(k)) sline(`  ${k}: ${zodFor(v)},`);
   sline(`});`);
   sline();
 }
@@ -662,6 +692,24 @@ sline(`} as const;`);
 sline();
 sline(`export type DocumentClassName = keyof typeof DOCUMENT_SCHEMAS;`);
 sline();
+
+// The header names only the enums the schemas use: a computed enum field
+// (ADR-0029) may leave an enum with no request schema referencing it.
+const usedEnums = Object.keys(enums).filter((e) => sBody.some((l) => l.includes(`VALID_${e}`)));
+const sOut = [
+  `// GENERATED — do not edit manually`,
+  `// Source:      schema/schema.json`,
+  `// Regenerate:  npm run generate:types  (from armature/app/)`,
+  `// Check drift: npm run check:types`,
+  `//`,
+  `// Zod request schemas for the generic write routes (ADR-0054 decision 4,`,
+  `// Phase 3). Shape only: cross-document rules live in the invariants engine.`,
+  ``,
+  `import { z } from 'zod';`,
+  `import { ${usedEnums.map((e) => `VALID_${e}`).join(', ')} } from './types';`,
+  ``,
+  ...sBody,
+];
 
 // ── Write / check ─────────────────────────────────────────────────────────────
 

@@ -325,7 +325,8 @@ export interface ModuleObjective extends DesignRecord {
   sequence?: number;
   role: ObjectiveRole;
   roleRationale?: string;
-  coverageStatus: CoverageStatus;
+  coverageStatus: CoverageStatus;  // computed by the hub, never written by a client (ADR-0029)
+  projectedCoverageStatus: CoverageStatus;  // computed by the hub, never written by a client (ADR-0029)
   module: string;  // Module @id
   references: string;  // LearningObjective @id
 }
@@ -445,6 +446,37 @@ export const CLASS_KEY = {
   DesignFinding: {"type":"Random"},
   Course: {"type":"Random"},
 } as const;
+
+/** The fields of each class the hub computes and a client may not write, from @metadata.armature.computed (ADR-0029). */
+export const CLASS_COMPUTED: Record<ClassName, readonly string[]> = {
+  User: [],
+  DesignRecord: [],
+  ArmatureDocument: [],
+  LearningEvidence: [],
+  LearningMetric: [],
+  DescriptiveEvidence: [],
+  LearningDataset: [],
+  LearningNeed: [],
+  NeedEvidenceLink: [],
+  LearningObjective: [],
+  PrerequisiteRecord: [],
+  Fragment: [],
+  TextFragment: [],
+  ItemOption: [],
+  AssessmentItem: [],
+  ItemInstance: [],
+  Assessment: [],
+  LearningActivity: [],
+  ActivityGroup: [],
+  ActivityGroupMember: [],
+  ModuleObjective: ["coverageStatus", "projectedCoverageStatus"],
+  Module: [],
+  ModuleActivityLink: [],
+  ModuleActivityGroupLink: [],
+  DesignNote: [],
+  DesignFinding: [],
+  Course: [],
+};
 
 /** One field's shape as data; see CLASS_FIELDS. */
 export interface FieldShape {
@@ -603,6 +635,7 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     role: {"type":"ObjectiveRole","kind":"enum","optional":false,"many":false},
     roleRationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     coverageStatus: {"type":"CoverageStatus","kind":"enum","optional":false,"many":false},
+    projectedCoverageStatus: {"type":"CoverageStatus","kind":"enum","optional":false,"many":false},
     module: {"type":"Module","kind":"reference","optional":false,"many":false},
     references: {"type":"LearningObjective","kind":"reference","optional":false,"many":false},
   },
