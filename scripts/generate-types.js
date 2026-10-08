@@ -69,12 +69,40 @@
  * JSDoc tag. A class with no own properties emits a type alias, since an
  * empty interface is equivalent and is rejected by the app's lint config.
  *
- * --- Extending the generator ---
+ * --- Schema as data (Phase 3) ---
  *
- * Phase 3 of docs/development-plan.md adds a second output pass emitting
- * Zod request schemas for the generic write route (ADR-0054 decision 4).
- * resolveFieldType and isOptional map cleanly to z.string(), z.boolean(),
- * z.optional(), z.array(), etc.
+ * Beside the interfaces, types.ts carries the schema as runtime data so the
+ * hub never keeps a second copy of it: CLASS_CATEGORY, CLASS_ANCESTORS,
+ * CLASS_KEY (each class's @key strategy and fields) and CLASS_FIELDS (every
+ * field of every class, own and inherited, with its kind: primitive, enum,
+ * subdocument or reference, its target type, and whether it is optional or
+ * many). The invariants engine reads CLASS_FIELDS to find the references it
+ * must check and CLASS_KEY to find an existing Hash-keyed document.
+ *
+ * --- Zod request schemas (second output, app/lib/schemas.ts) ---
+ *
+ * One Zod schema per concrete class, for the generic write routes (ADR-0054
+ * decision 4). The mapping mirrors the TypeScript one:
+ *
+ *   xsd:string / xsd:anyURI        → z.string().min(1).max(10_000)  (never empty)
+ *   xsd:boolean                    → z.boolean()
+ *   xsd:integer                    → z.number().int()
+ *   xsd:decimal                    → z.number()
+ *   xsd:dateTime / xsd:date        → z.iso.datetime() / z.iso.date()
+ *   sys:JSON                       → z.unknown()
+ *   Enum                           → z.enum(VALID_<Enum>)  (the same arrays)
+ *   Reference to a document Class  → ReferenceSchema: an id, or { "@ref" } to a
+ *                                    document captured earlier in the same batch
+ *   @subdocument Class             → that class's schema, inline; an abstract
+ *                                    subdocument is the union of its concrete
+ *                                    descendants discriminated on @type
+ *   Optional<T>                    → .optional()
+ *   Set<T> / List<T>               → z.array(T), with .min(@min_cardinality)
+ *
+ * Objects are strict: an unknown key is a 400, not a store error. A document
+ * schema takes an optional @id, @type and @capture (the route fills @id and
+ * @type from the path); a subdocument schema requires @type, which the store
+ * needs, and ignores any nested @id, which the store regenerates (ADR-0023).
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -87,6 +115,7 @@ const __dirname = dirname(__filename);
 const CHECK_MODE = process.argv.includes('--check');
 const schemaPath = join(__dirname, '../schema/schema.json');
 const outputPath = join(__dirname, '../app/lib/types.ts');
+const schemasPath = join(__dirname, '../app/lib/schemas.ts');
 
 const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
 
@@ -438,24 +467,227 @@ for (const entry of Object.values(classes)) {
 line(`} as const;`);
 line();
 
+// ── Schema as data: keys and fields ───────────────────────────────────────────
+
+/**
+ * One field's shape as data: the target type, its kind, and its cardinality.
+ * `kind` is primitive (an xsd or sys type), enum, subdocument (inline) or
+ * reference (an @id of another document). `many` for Set/List/Array, with
+ * `min` when the schema declares @min_cardinality.
+ */
+function fieldDescriptor(val) {
+  let optional = false;
+  let many = false;
+  let min;
+  let inner = val;
+  if (val && typeof val === 'object') {
+    if (val['@type'] === 'Optional') {
+      optional = true;
+      inner = val['@class'];
+    } else if (val['@type'] === 'Set' || val['@type'] === 'List' || val['@type'] === 'Array') {
+      many = true;
+      inner = val['@class'];
+      min = val['@min_cardinality'];
+    } else {
+      inner = val['@class'] ?? val;
+    }
+  }
+  const type = String(inner);
+  const kind = XSD_MAP[type] !== undefined ? 'primitive'
+    : enumIds.has(type) ? 'enum'
+    : subdocIds.has(type) ? 'subdocument'
+    : classIds.has(type) ? 'reference'
+    : 'primitive';
+  // A Set or List is zero-or-more unless @min_cardinality says otherwise, so
+  // the store accepts its absence; the request schema does too.
+  if (many && !(min >= 1)) optional = true;
+  return { type, kind, optional, many, ...(min !== undefined ? { min } : {}) };
+}
+
+/** Own and inherited fields, ancestors' first, a subclass's declaration winning. */
+function allFields(entry) {
+  const chain = [...ancestorsOf(entry['@id']).reverse(), entry['@id']];
+  const fields = {};
+  for (const id of chain) for (const [k, v] of getFields(classes[id])) fields[k] = v;
+  return Object.entries(fields);
+}
+
+line(`/** Each class's @key strategy; Hash keys name the fields the id is derived from (ADR-0016, ADR-0024). */`);
+line(`export const CLASS_KEY = {`);
+for (const entry of Object.values(classes)) {
+  const key = entry['@key'];
+  if (!key) continue;
+  line(`  ${entry['@id']}: ${JSON.stringify({ type: key['@type'], ...(key['@fields'] ? { fields: key['@fields'] } : {}) })},`);
+}
+line(`} as const;`);
+line();
+
+line(`/** One field's shape as data; see CLASS_FIELDS. */`);
+line(`export interface FieldShape {`);
+line(`  /** The xsd/sys type, enum, subdocument class or referenced class. */`);
+line(`  type: string;`);
+line(`  kind: "primitive" | "enum" | "subdocument" | "reference";`);
+line(`  optional: boolean;`);
+line(`  many: boolean;`);
+line(`  /** @min_cardinality on a Set or List. */`);
+line(`  min?: number;`);
+line(`}`);
+line();
+line(`/** Every field of every class, own and inherited: the schema as data for the invariants engine (ADR-0027). */`);
+line(`export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {`);
+for (const entry of Object.values(classes)) {
+  const fields = allFields(entry);
+  if (fields.length === 0) {
+    line(`  ${entry['@id']}: {},`);
+    continue;
+  }
+  line(`  ${entry['@id']}: {`);
+  for (const [k, v] of fields) line(`    ${k}: ${JSON.stringify(fieldDescriptor(v))},`);
+  line(`  },`);
+}
+line(`};`);
+line();
+
+// ── Zod schemas (second output) ───────────────────────────────────────────────
+
+const ZOD_XSD = {
+  'xsd:string':   'z.string().min(1).max(10_000)',
+  'xsd:boolean':  'z.boolean()',
+  'xsd:integer':  'z.number().int()',
+  'xsd:decimal':  'z.number()',
+  'xsd:dateTime': 'z.iso.datetime()',
+  'xsd:date':     'z.iso.date()',
+  'xsd:anyURI':   'z.string().min(1).max(10_000)',
+  'sys:JSON':     'z.unknown()',
+};
+
+const sOut = [];
+function sline(s = '') { sOut.push(s); }
+
+/** The Zod expression for one field value. */
+function zodFor(val) {
+  const d = fieldDescriptor(val);
+  let expr;
+  switch (d.kind) {
+    case 'primitive':   expr = ZOD_XSD[d.type] ?? 'z.string().min(1).max(10_000)'; break;
+    case 'enum':        expr = `z.enum(VALID_${d.type})`; break;
+    case 'subdocument': expr = `${d.type}Schema`; break;
+    case 'reference':   expr = 'ReferenceSchema'; break;
+  }
+  if (d.many) expr = `z.array(${expr})${d.min !== undefined ? `.min(${d.min})` : ''}`;
+  if (d.optional) expr += '.optional()';
+  return expr;
+}
+
+const isAbstract = (entry) => entry['@abstract'] !== undefined;
+const concreteDescendants = (id) =>
+  Object.values(classes).filter((c) => !isAbstract(c) && ancestorsOf(c['@id']).includes(id)).map((c) => c['@id']);
+
+sline(`// GENERATED — do not edit manually`);
+sline(`// Source:      schema/schema.json`);
+sline(`// Regenerate:  npm run generate:types  (from armature/app/)`);
+sline(`// Check drift: npm run check:types`);
+sline(`//`);
+sline(`// Zod request schemas for the generic write routes (ADR-0054 decision 4,`);
+sline(`// Phase 3). Shape only: cross-document rules live in the invariants engine.`);
+sline();
+sline(`import { z } from 'zod';`);
+sline(`import { ${Object.keys(enums).map((e) => `VALID_${e}`).join(', ')} } from './types';`);
+sline();
+sline(`/**`);
+sline(` * A reference to another document: its id, or { "@ref": "<capture>" } naming a`);
+sline(` * document captured earlier in the same batch with "@capture" (platform check X2).`);
+sline(` */`);
+sline(`export const ReferenceSchema = z.union([z.string().min(1), z.strictObject({ '@ref': z.string().min(1) })]);`);
+sline();
+
+// Subdocuments: a schema is emitted once every subdocument schema it names exists.
+const subdocOrder = [];
+const pending = new Set(subdocIds);
+while (pending.size) {
+  let progressed = false;
+  for (const id of [...pending]) {
+    const entry = classes[id];
+    const deps = isAbstract(entry)
+      ? concreteDescendants(id)
+      : allFields(entry).map(([, v]) => fieldDescriptor(v)).filter((d) => d.kind === 'subdocument').map((d) => d.type);
+    if (deps.every((d) => subdocOrder.includes(d))) {
+      subdocOrder.push(id);
+      pending.delete(id);
+      progressed = true;
+    }
+  }
+  if (!progressed) {
+    console.error(`✗ subdocument schemas form a cycle: ${[...pending].join(', ')}`);
+    process.exit(1);
+  }
+}
+
+sline(`// ── Subdocuments (inline; @type required, nested @id ignored) ─────────────────`);
+sline();
+for (const id of subdocOrder) {
+  const entry = classes[id];
+  if (isAbstract(entry)) {
+    const members = concreteDescendants(id);
+    sline(`/** @abstract: any concrete ${id} */`);
+    if (members.length === 1) sline(`export const ${id}Schema = ${members[0]}Schema;`);
+    else sline(`export const ${id}Schema = z.discriminatedUnion('@type', [${members.map((m) => `${m}Schema`).join(', ')}]);`);
+    sline();
+    continue;
+  }
+  sline(`export const ${id}Schema = z.strictObject({`);
+  sline(`  '@id': z.string().optional(),`);
+  sline(`  '@type': z.literal('${id}'),`);
+  for (const [k, v] of allFields(entry)) sline(`  ${k}: ${zodFor(v)},`);
+  sline(`});`);
+  sline();
+}
+
+sline(`// ── Documents (concrete classes; the route fills @id and @type) ───────────────`);
+sline();
+const documentIds = Object.values(classes).filter((c) => !isAbstract(c) && !subdocIds.has(c['@id'])).map((c) => c['@id']);
+for (const id of documentIds) {
+  sline(`export const ${id}Schema = z.strictObject({`);
+  sline(`  '@id': z.string().min(1).optional(),`);
+  sline(`  '@type': z.literal('${id}').optional(),`);
+  sline(`  '@capture': z.string().min(1).optional(),`);
+  for (const [k, v] of allFields(classes[id])) sline(`  ${k}: ${zodFor(v)},`);
+  sline(`});`);
+  sline();
+}
+sline(`/** Every concrete document class by @id. */`);
+sline(`export const DOCUMENT_SCHEMAS = {`);
+for (const id of documentIds) sline(`  ${id}: ${id}Schema,`);
+sline(`} as const;`);
+sline();
+sline(`export type DocumentClassName = keyof typeof DOCUMENT_SCHEMAS;`);
+sline();
+
 // ── Write / check ─────────────────────────────────────────────────────────────
 
-const output = out.join('\n').trimEnd() + '\n';
+const outputs = [
+  [outputPath, 'types.ts', out.join('\n').trimEnd() + '\n'],
+  [schemasPath, 'schemas.ts', sOut.join('\n').trimEnd() + '\n'],
+];
 
 if (CHECK_MODE) {
-  if (!existsSync(outputPath)) {
-    console.error(`✗ ${outputPath} does not exist — run npm run generate:types first`);
-    process.exit(1);
+  let ok = true;
+  for (const [path, name, content] of outputs) {
+    if (!existsSync(path)) {
+      console.error(`✗ ${path} does not exist — run npm run generate:types first`);
+      ok = false;
+    } else if (readFileSync(path, 'utf8') !== content) {
+      console.error(`✗ ${name} is out of sync with schema.json — run npm run generate:types`);
+      ok = false;
+    }
   }
-  const existing = readFileSync(outputPath, 'utf8');
-  if (existing !== output) {
-    console.error(`✗ types.ts is out of sync with schema.json — run npm run generate:types`);
-    process.exit(1);
-  }
-  console.log(`✓ types.ts is in sync with schema.json`);
+  if (!ok) process.exit(1);
+  console.log(`✓ types.ts and schemas.ts are in sync with schema.json`);
 } else {
-  writeFileSync(outputPath, output, 'utf8');
-  console.log(`✓ types.ts written to ${outputPath}`);
+  for (const [path, name, content] of outputs) {
+    writeFileSync(path, content, 'utf8');
+    console.log(`✓ ${name} written to ${path}`);
+  }
   console.log(`  Classes: ${Object.keys(classes).length} (${[...byCategory].map(([c, g]) => `${g.length} ${c}`).join(', ')})`);
   console.log(`  Enums:   ${Object.keys(enums).length}`);
 }

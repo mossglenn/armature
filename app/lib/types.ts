@@ -417,3 +417,235 @@ export const CLASS_ANCESTORS = {
   DesignFinding: ["ArmatureDocument", "DesignRecord"],
   Course: ["ArmatureDocument", "DesignRecord"],
 } as const;
+
+/** Each class's @key strategy; Hash keys name the fields the id is derived from (ADR-0016, ADR-0024). */
+export const CLASS_KEY = {
+  User: {"type":"Random"},
+  LearningMetric: {"type":"Random"},
+  DescriptiveEvidence: {"type":"Random"},
+  LearningDataset: {"type":"Random"},
+  LearningNeed: {"type":"Random"},
+  NeedEvidenceLink: {"type":"Hash","fields":["need","evidence"]},
+  LearningObjective: {"type":"Random"},
+  PrerequisiteRecord: {"type":"Hash","fields":["objective","prerequisite"]},
+  Fragment: {"type":"Random"},
+  TextFragment: {"type":"Random"},
+  ItemOption: {"type":"Random"},
+  AssessmentItem: {"type":"Random"},
+  ItemInstance: {"type":"Hash","fields":["assessment","implements"]},
+  Assessment: {"type":"Random"},
+  LearningActivity: {"type":"Random"},
+  ActivityGroup: {"type":"Random"},
+  ActivityGroupMember: {"type":"Hash","fields":["group","activity"]},
+  ModuleObjective: {"type":"Hash","fields":["module","references"]},
+  Module: {"type":"Random"},
+  ModuleActivityLink: {"type":"Hash","fields":["module","activity"]},
+  ModuleActivityGroupLink: {"type":"Hash","fields":["module","group"]},
+  DesignNote: {"type":"Random"},
+  DesignFinding: {"type":"Random"},
+  Course: {"type":"Random"},
+} as const;
+
+/** One field's shape as data; see CLASS_FIELDS. */
+export interface FieldShape {
+  /** The xsd/sys type, enum, subdocument class or referenced class. */
+  type: string;
+  kind: "primitive" | "enum" | "subdocument" | "reference";
+  optional: boolean;
+  many: boolean;
+  /** @min_cardinality on a Set or List. */
+  min?: number;
+}
+
+/** Every field of every class, own and inherited: the schema as data for the invariants engine (ADR-0027). */
+export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
+  User: {
+    displayName: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    externalId: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    email: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    institution: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+  },
+  DesignRecord: {},
+  ArmatureDocument: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+  },
+  LearningEvidence: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    collectedAt: {"type":"xsd:dateTime","kind":"primitive","optional":false,"many":false},
+    source: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+  },
+  LearningMetric: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    collectedAt: {"type":"xsd:dateTime","kind":"primitive","optional":false,"many":false},
+    source: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    value: {"type":"xsd:decimal","kind":"primitive","optional":false,"many":false},
+    unit: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    derivedFrom: {"type":"LearningDataset","kind":"reference","optional":true,"many":false},
+  },
+  DescriptiveEvidence: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    collectedAt: {"type":"xsd:dateTime","kind":"primitive","optional":false,"many":false},
+    source: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    method: {"type":"EvidenceMethod","kind":"enum","optional":false,"many":false},
+    finding: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+  },
+  LearningDataset: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    administrationDate: {"type":"xsd:date","kind":"primitive","optional":true,"many":false},
+    cohort: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    producedBy: {"type":"Assessment","kind":"reference","optional":true,"many":false},
+  },
+  LearningNeed: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    rationale: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    priority: {"type":"NeedPriority","kind":"enum","optional":true,"many":false},
+  },
+  NeedEvidenceLink: {
+    need: {"type":"LearningNeed","kind":"reference","optional":false,"many":false},
+    evidence: {"type":"LearningEvidence","kind":"reference","optional":false,"many":false},
+    confidence: {"type":"ConfidenceLevel","kind":"enum","optional":true,"many":false},
+  },
+  LearningObjective: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    bloomsLevel: {"type":"BloomsLevel","kind":"enum","optional":true,"many":false},
+    state: {"type":"ObjectiveState","kind":"enum","optional":false,"many":false},
+    generatedBy: {"type":"LearningNeed","kind":"reference","optional":true,"many":false},
+  },
+  PrerequisiteRecord: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    rationale: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    prerequisiteType: {"type":"PrerequisiteType","kind":"enum","optional":false,"many":false},
+    objective: {"type":"LearningObjective","kind":"reference","optional":false,"many":false},
+    prerequisite: {"type":"LearningObjective","kind":"reference","optional":false,"many":false},
+  },
+  Fragment: {
+    fragmentId: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    text: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+  },
+  TextFragment: {
+    fragmentId: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    text: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+  },
+  ItemOption: {
+    fragmentId: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    text: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    isCorrect: {"type":"xsd:boolean","kind":"primitive","optional":false,"many":false},
+    feedback: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    purpose: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+  },
+  AssessmentItem: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    stem: {"type":"TextFragment","kind":"subdocument","optional":false,"many":false},
+    options: {"type":"ItemOption","kind":"subdocument","optional":true,"many":true},
+    correctFeedback: {"type":"TextFragment","kind":"subdocument","optional":true,"many":false},
+    incorrectFeedback: {"type":"TextFragment","kind":"subdocument","optional":true,"many":false},
+    itemType: {"type":"ItemType","kind":"enum","optional":false,"many":false},
+    status: {"type":"ItemStatus","kind":"enum","optional":false,"many":false},
+    bloomsLevel: {"type":"BloomsLevel","kind":"enum","optional":true,"many":false},
+    assesses: {"type":"LearningObjective","kind":"reference","optional":false,"many":true,"min":1},
+    difficultyIndex: {"type":"xsd:decimal","kind":"primitive","optional":true,"many":false},
+    discriminationIndex: {"type":"xsd:decimal","kind":"primitive","optional":true,"many":false},
+  },
+  ItemInstance: {
+    sequence: {"type":"xsd:integer","kind":"primitive","optional":false,"many":false},
+    pointValue: {"type":"xsd:integer","kind":"primitive","optional":false,"many":false},
+    randomize: {"type":"xsd:boolean","kind":"primitive","optional":false,"many":false},
+    status: {"type":"ItemStatus","kind":"enum","optional":false,"many":false},
+    assessment: {"type":"Assessment","kind":"reference","optional":false,"many":false},
+    implements: {"type":"AssessmentItem","kind":"reference","optional":false,"many":false},
+  },
+  Assessment: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    randomize: {"type":"xsd:boolean","kind":"primitive","optional":false,"many":false},
+    passingScore: {"type":"xsd:decimal","kind":"primitive","optional":true,"many":false},
+    retakes: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
+    module: {"type":"Module","kind":"reference","optional":false,"many":false},
+  },
+  LearningActivity: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    activityType: {"type":"ActivityType","kind":"enum","optional":true,"many":false},
+    targets: {"type":"LearningObjective","kind":"reference","optional":false,"many":true,"min":1},
+  },
+  ActivityGroup: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+  },
+  ActivityGroupMember: {
+    group: {"type":"ActivityGroup","kind":"reference","optional":false,"many":false},
+    activity: {"type":"LearningActivity","kind":"reference","optional":false,"many":false},
+    sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
+  },
+  ModuleObjective: {
+    sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
+    role: {"type":"ObjectiveRole","kind":"enum","optional":false,"many":false},
+    roleRationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    coverageStatus: {"type":"CoverageStatus","kind":"enum","optional":false,"many":false},
+    module: {"type":"Module","kind":"reference","optional":false,"many":false},
+    references: {"type":"LearningObjective","kind":"reference","optional":false,"many":false},
+  },
+  Module: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
+    course: {"type":"Course","kind":"reference","optional":false,"many":false},
+  },
+  ModuleActivityLink: {
+    module: {"type":"Module","kind":"reference","optional":false,"many":false},
+    activity: {"type":"LearningActivity","kind":"reference","optional":false,"many":false},
+    sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
+  },
+  ModuleActivityGroupLink: {
+    module: {"type":"Module","kind":"reference","optional":false,"many":false},
+    group: {"type":"ActivityGroup","kind":"reference","optional":false,"many":false},
+    sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
+  },
+  DesignNote: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    rationale: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    subject: {"type":"DesignRecord","kind":"reference","optional":false,"many":true,"min":1},
+    category: {"type":"DesignNoteCategory","kind":"enum","optional":true,"many":false},
+  },
+  DesignFinding: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    finding: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    subject: {"type":"DesignRecord","kind":"reference","optional":false,"many":true,"min":1},
+    regarding: {"type":"DesignRecord","kind":"reference","optional":true,"many":false},
+    evidence: {"type":"LearningEvidence","kind":"reference","optional":true,"many":true},
+    confidence: {"type":"ConfidenceLevel","kind":"enum","optional":true,"many":false},
+    status: {"type":"FindingStatus","kind":"enum","optional":false,"many":false},
+    resolutionRationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+  },
+  Course: {
+    label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+  },
+};
