@@ -46,6 +46,14 @@
 //      query parameter on a document write)? If so, ADR-0025's Merge-Source belongs there
 //      rather than in a message trailer. Also confirms the merge commit has exactly one parent
 //
+// Phase 3 checks (ADR-0032), added 2026-10-08:
+//   W. Identity resolution needs three store facts: a document can be found by a field value
+//      through the HTTP document API (POST with X-HTTP-Method-Override: GET and a query
+//      template), so a User can be resolved by externalId; what apply does when both sides
+//      inserted a document with the same id and the same fields (a User carried onto a branch
+//      and later merged back), and when the fields differ; and whether one write request can
+//      carry a list so a User copy and the artifact that references it land in one commit
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -409,6 +417,68 @@ async function main() {
     record("V4", "INFO", `document PUT with a metadata query parameter threw: ${e.message}`);
   }
   await api("DELETE", `/api/branch/admin/${DB}/local/branch/meta`, {});
+
+  // W: identity resolution (ADR-0032)
+  const override = { "X-HTTP-Method-Override": "GET" };
+  r = await api("POST", at("branch/main", commit("insert w-query")), { "@type": "Artifact", "@id": "Artifact/w-query", label: "w-unique" });
+  r = await api("POST", at("branch/main", ""), { type: "Artifact", as_list: true, query: { label: "w-unique" } }, override);
+  let found = Array.isArray(r.json) ? r.json : [];
+  record("W1", r.status === 200 && found.length === 1 && found[0]?.["@id"] === "Artifact/w-query" ? "PASS" : "INFO",
+    `template query via POST + X-HTTP-Method-Override: GET with { type, as_list, query }: ${r.status} ${short(r.json)}; data version ${r.dataVersion}`);
+  if (!(r.status === 200 && found.length === 1)) {
+    r = await api("POST", at("branch/main", ""), { "@type": "Artifact", as_list: true, query: { label: "w-unique" } }, override);
+    found = Array.isArray(r.json) ? r.json : [];
+    record("W1b", r.status === 200 && found.length === 1 ? "PASS" : "INFO", `the same with "@type" in place of type: ${r.status} ${short(r.json)}`);
+  }
+  r = await api("POST", at("branch/main", ""), { type: "Artifact", as_list: true, query: { label: "no-such-label" } }, override);
+  record("W1c", r.status === 200 && Array.isArray(r.json) && r.json.length === 0 ? "PASS" : "INFO", `template query with no match: ${r.status} ${short(r.json)}`);
+  r = await api("POST", at("branch/main", ""), { type: "Artifact", as_list: true, query: { "@type": "Artifact", label: "w-unique" } }, override);
+  record("W1d", r.status === 200 && Array.isArray(r.json) && r.json.length === 1 ? "PASS" : "INFO", `template carrying "@type" itself, no type field: ${r.status} ${short(r.json)}`);
+
+  const wBase = (await log("main", 1))?.[0]?.identifier;
+  r = await api("POST", `/api/branch/admin/${DB}/local/branch/w-ident`, { origin: `admin/${DB}/local/branch/main` });
+  const same = { "@type": "Artifact", "@id": "Artifact/w-user", label: "same" };
+  r = await api("POST", at("branch/main", commit("insert w-user on main")), same);
+  r = await api("POST", at("branch/w-ident", commit("insert w-user on w-ident")), same);
+  r = await api("POST", at("branch/main", commit("insert w-user2 on main as a")), { "@type": "Artifact", "@id": "Artifact/w-user2", label: "a" });
+  r = await api("POST", at("branch/w-ident", commit("insert w-user2 on w-ident as b")), { "@type": "Artifact", "@id": "Artifact/w-user2", label: "b" });
+  const wHead = (await log("w-ident", 1))?.[0]?.identifier;
+  const wIdentLog = await log("w-ident", 5);
+  const wSameHead = wIdentLog?.find((e) => e.message === "insert w-user on w-ident")?.identifier;
+  const mainBeforeW2 = (await log("main", 1))?.[0]?.identifier;
+  if (applyForm && applyForm[0] === "commit") {
+    const f = applyForm[2];
+    r = await api("POST", applyUrl, { before_commit: f(wBase), after_commit: f(wSameHead), commit_info: { author: "merger@example", message: "merge identical insert" } });
+    const ok = r.status === 200 && r.json?.["api:status"] === "api:success";
+    record("W2", ok ? "PASS" : "INFO", `apply of a branch commit that inserted a document main already holds with the same id and fields: ${r.status} ${ok ? "success" : JSON.stringify(r.json ?? "").slice(0, 500)}`);
+    const mainAfterW2 = (await log("main", 1))?.[0];
+    record("W2b", "INFO", `main head after that apply: ${mainAfterW2?.identifier === mainBeforeW2 ? "unchanged (no commit for an empty patch)" : `new commit ${mainAfterW2?.identifier} "${mainAfterW2?.message}"`}`);
+    r = await api("GET", at("branch/main", "id=Artifact/w-user"));
+    record("W2c", r.json?.label === "same" ? "PASS" : "FAIL", `Artifact/w-user on main afterwards: ${short(r.json)}`);
+    r = await api("POST", applyUrl, { before_commit: f(wSameHead), after_commit: f(wHead), commit_info: { author: "merger@example", message: "merge differing insert" } });
+    const conflict = r.json?.["api:status"] === "api:conflict" || JSON.stringify(r.json ?? "").includes("witness");
+    record("W2d", conflict ? "PASS" : "INFO", `apply when both sides inserted the same id with different fields (main a, branch b): ${r.status} ${conflict ? "conflict reported" : "accepted"} ${JSON.stringify(r.json ?? "").slice(0, 400)}`);
+    r = await api("GET", at("branch/main", "id=Artifact/w-user2"));
+    record("W2e", "INFO", `Artifact/w-user2 on main afterwards: label ${r.json?.label}`);
+  } else {
+    record("W2", "FAIL", "skipped: no commit-ref apply form from P");
+  }
+
+  r = await api("POST", at("branch/w-ident", commit("list insert with reference")), [
+    { "@type": "Artifact", "@id": "Artifact/w-u2", label: "carried" },
+    { "@type": "Holder", "@id": "Holder/w-h", one: "Artifact/w-u2" },
+  ]);
+  const w3Head = (await log("w-ident", 1))?.[0];
+  record("W3", r.status === 200 && w3Head?.message === "list insert with reference" ? "PASS" : "FAIL", `POST of a list whose second document references the first: ${r.status} ${short(r.json)}; head commit "${w3Head?.message}"`);
+  r = await api("PUT", at("branch/w-ident", `${commit("list upsert")}&create=true`), [
+    { "@type": "Artifact", "@id": "Artifact/w-u2", label: "carried" },
+    { "@type": "Holder", "@id": "Holder/w-h2", one: "Artifact/w-u2" },
+  ]);
+  const w3bHead = (await log("w-ident", 1))?.[0];
+  record("W3b", r.status === 200 ? "PASS" : "INFO", `PUT create=true with a list (one unchanged existing document, one new): ${r.status} ${r.status === 200 ? `head "${w3bHead?.message}"` : errType(r)}`);
+  r = await api("GET", at("branch/w-ident", "id=Holder/w-h2"));
+  record("W3c", r.json?.one === "Artifact/w-u2" ? "PASS" : "INFO", `Holder/w-h2 after the list PUT: ${short(r.json)}`);
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/w-ident`, {});
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
