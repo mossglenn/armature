@@ -181,7 +181,7 @@ Plugins (CoQui, future tools)
 │ 1. Identity and provenance     User resolution · agent users · │
 │                                commit author and reason        │
 └───────────────────────────────────────────────────────────────┘
-        │  per-request client bound to one branch or commit
+        │  per-request HTTP store adapter bound to one branch or commit (ADR-0055)
         ▼
 TerminusDB
 ```
@@ -193,18 +193,20 @@ TerminusDB
   recompute hooks keyed by `@type`. The existing per-type routes become thin aliases or are
   retired. This is what lets a generic `PUT` still enforce ADR-0006 constraints.
 - **Every request names its ref.** The module-level client singleton in `app/lib/terminusdb.ts`
-  holds branch state in the instance. A per-request factory (the client's `copy()` then
-  `checkout()` or `ref()`) replaces it. Reads return the commit they were served from. Writes
-  return the commit they created and accept the client's last-seen data version for optimistic
-  concurrency, which the client already supports.
+  holds branch state in the instance. A per-request HTTP store adapter (ADR-0055), created from
+  the resolved ref and identity and holding no other state, replaces it. Reads return the commit
+  they were served from. Writes return the commit they created and accept the caller's last-seen
+  data version for optimistic concurrency.
 - **The commit is the unit of process data (P3).** Every write carries an author and a reason.
   The reason is the commit message. A `DesignNote` is optional elaboration, not the primary
   record of why something changed. One platform fact shapes the write layer: the JavaScript
   client sets the commit author from its own connection credentials and offers no override, so
   every commit it makes is authored "admin". The HTTP document API takes `author` and `message`
-  as query parameters. The hub therefore issues document writes over HTTP directly, with the
-  resolved Armature `User` as author, and keeps the client for everything else. SESSION.md's
-  "JS client retained over raw HTTP" decision is narrowed to reads and version-control calls.
+  as query parameters. That fact, with the others recorded in ADR-0055 (instance state that leaks
+  across calls, flattened errors, a client that lags the server), is why the API layer reaches the
+  store only through its HTTP adapter, with the resolved Armature `User` as author on every write.
+  The JavaScript client stays in `scripts/`. This supersedes SESSION.md's earlier "JS client
+  retained over raw HTTP" decision and the narrowing of it that this bullet previously recorded.
 - **Next.js stays the host for now; the API is a Hono app.** PROJECT_CONTEXT's "separate API
   service" is reaffirmed as the long-term goal (ADR-0026). The API itself is a Hono application in
   `app/lib/api/` that imports nothing from Next.js; a single catch-all route mounts it under the
@@ -414,12 +416,20 @@ Work:
       format into the contract. Decide whether `/api/v1` exposes the raw token or the bare commit
       id that history and diff return, before CoQui's `httpHub` round-trips the header. Record in
       ADR-0025 (ADR-0054 consequences).
-- [ ] **Per-request client and an HTTP write path.** Replace the singleton with
-      `getClient({ branch?, ref? })`. Every handler receives it. Document writes go over the HTTP
-      document API with `author` and `message` set from the resolved identity (see §3). The
+- [x] **ADR-0055: the API layer reaches the store over HTTP.** Accepted 2026-10-08 on a reading
+      of the installed client source. One `fetch`-based adapter under `app/lib/api/` owns URL
+      construction, credentials, `author` and `message`, the data-version header and typed error
+      parsing; the JavaScript client stays in `scripts/` and may re-enter the API layer only to
+      build WOQL JSON. Two behaviours it relies on still need lettered platform checks before the
+      routes land: the error body on a stale data version, and `diff=true` on history.
+- [ ] **Per-request store adapter and the write path (ADR-0055).** Replace the singleton with a
+      request-scoped adapter created from the resolved ref and identity. Every handler receives
+      it. Rewrite the spike's read route and test against it first. Document writes go over the
+      HTTP document API with `author` and `message` set from the resolved identity (see §3). The
       `TerminusDB-Data-Version` header is returned on reads and forwarded on writes when the
       caller supplies it; without it the server retries a write up to three times if the branch
-      head moved, so two blind writers both succeed and the last one wins.
+      head moved, so two blind writers both succeed and the last one wins. `app.onError` maps the
+      adapter's typed error by the server's `@type`, not by substring.
 - [ ] **Branch routes.** `POST /api/v1/branches` (name, from a branch head or a commit; the
       store's `origin` accepts a commit path and the client builds one when `ref()` is set),
       `GET /api/v1/branches`, `GET /api/v1/branches/:name` (head commit), `DELETE` reserved.
@@ -677,6 +687,7 @@ reading TerminusDB documentation.
 | 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI as precedents); the hub never serves executable content from a graph document, renderers load sandboxed under CSP |
 
 | 0054 | The API is a Hono application | 0 (accepted 2026-10-07) | Amends ADR-0026 decision 1; host-neutral app in `app/lib/api/`, one catch-all mount; numbered past the reserved and candidate blocks |
+| 0055 | The API layer reaches TerminusDB over HTTP | 2 (accepted 2026-10-08) | One `fetch` adapter under `app/lib/api/`; the JavaScript client stays in `scripts/`; supersedes the "keep the JS client" decision and the §3 split |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -827,6 +838,12 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - Client: the npm package was renamed from `@terminusdb/terminusdb-client` to `terminusdb` at
   12.0.3; current is 12.0.5 with bundled TypeScript types. The repo has 12.0.0 of the old name in
   both `app/` and `scripts/`. Same API surface; the rename is the only migration.
+- Client internals (read 2026-10-08, `terminusdb@12.0.5`, for ADR-0055): every method is a URL
+  built by `ConnectionConfig` and dispatched through axios; database, branch, ref and custom
+  headers live on the instance; a write given a data version stores it in the instance headers
+  and never clears it, and `copy()` does not carry those headers; errors are thrown as a plain
+  `Error` with the server's JSON fields concatenated into the message; `DocHistoryParams` does
+  not include the `diff` option the server added in v12.0.5.
 
 **Version control** (Phase 2)
 - Branch creation accepts an `origin` that is a branch head *or* a commit path
@@ -849,8 +866,8 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 **Writes, identity and concurrency** (Phases 2 and 3)
 - *Corrected:* the JavaScript client sets `author` from its connection user and provides no
   override on any write method. The HTTP document API accepts `author` and `message` query
-  parameters on `POST`, `PUT` and `DELETE`. Writes that must carry an Armature `User` as author go
-  over HTTP.
+  parameters on `POST`, `PUT` and `DELETE`. All store calls from the API layer go over HTTP
+  through one adapter, with the resolved `User` as author on every write (ADR-0055).
 - `POST` inserts and errors on an existing id unless `overwrite=true`; `PUT` replaces and errors
   on a missing id unless `create=true` (upsert). `@capture` and `@ref` allow intra-batch
   references.

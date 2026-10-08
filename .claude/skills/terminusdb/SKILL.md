@@ -50,7 +50,9 @@ terminusdb.org/docs. There is no llms.txt and no MCP server. The older
    `app/node_modules/<client>/lib/woqlClient.js` and `lib/typedef.js` before stating what a
    client method does. The docs describe the client loosely; the source does not. Example: the
    docs do not mention that every write method hardcodes the commit author from the connection
-   user. The source shows it in one line.
+   user. The source shows it in one line. Since ADR-0055 the client is used only by `scripts/`;
+   the API layer's contract is the HTTP API, so for route work read `http-documents-api.md` and
+   the version-control pages, and consult the client source only to see how it built a URL.
 2. **The running store is authoritative for server behaviour.** When an ADR depends on a platform
    fact (a key type on subdocuments, whether `@metadata` survives a load, a four-level inheritance
    chain), test it against the Docker container before encoding the decision. ADR-0013 and
@@ -95,7 +97,9 @@ Recorded in `docs/development-plan.md` §9 as of v12.0.7. The ones most often ne
 - The `TerminusDB-Data-Version` header gives optimistic concurrency; without it the server retries
   a write up to three times when the head moved, so blind concurrent writers both succeed.
 - The JavaScript client cannot set the commit author; the HTTP API takes `author` and `message`
-  as query parameters.
+  as query parameters. The client also keeps a supplied data version in its instance headers
+  without clearing it, flattens server errors into a string, and lacks the history `diff`
+  option. ADR-0055 therefore keeps it out of `app/lib/api/`.
 - Subdocuments need `@key` `Random` or `ValueHash`, nest under the parent, and cannot be
   referenced from outside.
 - `Cardinality` is deprecated; use `Set` with `@min_cardinality`.

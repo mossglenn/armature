@@ -83,7 +83,7 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 - Scaffolded with `create-next-app` — TypeScript, Tailwind CSS, App Router, React Compiler enabled
 - Node 23.5 in use; `eslint-visitor-keys` engine warning is cosmetic — Node 23 works fine
-- `app/lib/terminusdb.ts` — shared WOQLClient singleton; requires `organization: "admin"` in constructor. To be replaced by a per-request client bound to a branch or ref (Phase 2)
+- `app/lib/terminusdb.ts` — WOQLClient singleton; requires `organization: "admin"` in constructor. Legacy: serves only the unversioned routes until Phase 3 deletes both. The API layer uses the per-request HTTP store adapter (ADR-0055, Phase 2)
 - `app/lib/routeHelpers.ts` — `createGetHandler(type)` factory for boilerplate GET routes
 - `app/lib/types.ts` — generated from `schema/schema.json`
 - All 8 simple GET routes implemented via factory: courses, objectives, modules, needs, assessments, items, prerequisites, notes
@@ -116,13 +116,11 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ## What's Next
 
-**Phase 0 is done locally but uncommitted.** First action next session: review and commit the Phase 0 changes (proposed commit sequence in the 2026-10-07 entry under Recent Sessions), push, and confirm the CI workflow goes green on `main`. That is the phase's exit criterion.
-
 **Phase 2 of `docs/development-plan.md` — the version-control model (2 to 3 sessions):**
 
 1. Read research candidate 0036 (immutable shared history and durable pins) before writing ADR-0025; attestations and findings will store commit ids, so the no-rewrite rule on shared branches belongs in the ADR
 2. **ADR-0025: design process data lives in the commit graph.** Includes the merge model (`apply` is a three-way merge with field-level conflict reports), the no-history-rewrite rule, and the data-version token decision ADR-0054 left open (`branch:<commit>` raw, or the bare commit id)
-3. Per-request client `getClient({ branch?, ref? })` replacing the singleton; HTTP write path with `author` and `message` from the resolved identity (JS client cannot set author)
+3. Per-request HTTP store adapter under `app/lib/api/` replacing the singleton (ADR-0055, accepted 2026-10-08); rewrite the spike's read route and test against it first; `author` and `message` from the resolved identity on every write; two platform checks before the routes land (stale data-version error body; `diff=true` on history)
 4. Hono routes in `app/lib/api/routes/`: `POST/GET /api/v1/branches`, `GET /branches/:name`, `POST /branches/:name/merge` (409 with the store's witnesses on conflict), read-at-ref on every document read (`?branch=`, `?ref=`), `GET /documents/:type/:id/history` (with `diff=true`), `GET /branches/:name/changes?since=`, `GET /documents/:type/:id/diff?from=&to=`
 5. Middleware reading and echoing `TerminusDB-Data-Version`
 6. Exit: a scripted walkthrough creates a branch from a commit, writes as a named author, reads one document at two commits, lists history with diffs, merges, and provokes one conflict, all through `/api/v1`
@@ -139,7 +137,7 @@ Phase 3 follows with the generic write path and the invariants engine; CLAUDE.md
 - Attachments are references with a mandatory content hash and optional revision and path; the graph never embeds binaries; the backend is a deployment choice; tool-managed stores write through the ordinary path (ADR-0030)
 - Items are a tree of fragments; `ItemOption` is a `Fragment` specialisation so generic kinds can sit beside it (ADR-0033); behaviour is a versioned `InteractionType`, and the hub never serves executable content from a graph document (ADR-0034)
 - Design process data lives in the commit graph; the graph is a projection of any asset store's history, never a replay (ADR-0025)
-- Document writes that must carry an Armature `User` as author go over the HTTP document API (`author`, `message` params); the JS client is retained for reads and version-control calls only — narrows the earlier "JS client over raw HTTP" decision
+- **ADR-0055 (Accepted 2026-10-08):** the API layer reaches TerminusDB only through one `fetch`-based adapter under `app/lib/api/` that owns URLs, credentials, `author` and `message`, the data-version header and typed `@type` errors. The JavaScript client stays in `scripts/` and may re-enter the API layer only to build WOQL JSON. Supersedes "keep the JS client" (2026-03-03) and the later "client for reads, HTTP for writes" split. Evidence: the client welds author to the connection user, keeps a supplied data version in instance headers forever, flattens errors to strings, and lacks the history `diff` option
 - Next.js routes remain the API host for this phase under `/api/v1` (ADR-0026); separate service stays the destination
 - **ADR-0054 (Accepted 2026-10-07):** the API is a Hono app in `app/lib/api/`, mounted in Next.js through one catch-all route via `@hono/vercel`; nothing under `app/lib/api/` imports from `next`. ADR-0026 decision 1 now reads "Next.js is the host, Hono is the API". New routes are Hono routes only; the legacy Next.js handlers are not ported and die in Phase 3; Zod request validation derives from `schema.json` via the generator (Phase 3)
 - Two ADR-0054 knock-ons to decide later: the data-version token shape (`branch:<commit>` is the store's; Phase 2 decides what `/api/v1` exposes) and the standalone build step that resolves the `@/` alias (Phase 7)
