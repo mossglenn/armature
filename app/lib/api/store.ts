@@ -244,20 +244,37 @@ export class Store {
   }
 
   /**
-   * Replace (or create) several documents in one commit (platform check
-   * W3b). The hub uses this to carry a `User` copy beside the artifact that
-   * references it (ADR-0032 decision 5).
+   * Replace (or create) several documents in one commit (platform checks
+   * W3b, X1, X2b). Hash-keyed documents may omit `@id`; `@capture` and
+   * `@ref` resolve within the list; the whole list fails together (X5). The
+   * store answers with the written ids as full IRIs, in input order, returned
+   * here as bare ids. The hub uses this for the generic write path and to
+   * carry a `User` copy beside the artifact that references it (ADR-0032).
    */
   async putDocuments(
-    documents: TerminusDocument[],
+    documents: Array<Record<string, unknown>>,
     opts: { author: string; message: string; ifMatch?: string; create?: boolean }
-  ): Promise<{ commit: string }> {
+  ): Promise<{ commit: string; ids: string[] }> {
     const r = await this.request('PUT', `/api/document/${this.refPath({ branch: this.branch })}`, {
       query: { author: opts.author, message: opts.message, create: String(opts.create ?? true) },
       body: documents,
       headers: dataVersionHeader(opts.ifMatch),
     });
-    return { commit: r.commit ?? '' };
+    const ids = Array.isArray(r.body) ? r.body.filter((x): x is string => typeof x === 'string').map(idFromIri) : [];
+    return { commit: r.commit ?? '', ids };
+  }
+
+  /**
+   * Several documents by id at this store's ref, in one read (platform check
+   * X4). Ids that do not exist are left out, not reported.
+   */
+  async getDocuments(ids: string[]): Promise<{ documents: TerminusDocument[]; commit: string }> {
+    if (ids.length === 0) return { documents: [], commit: '' };
+    const r = await this.request('POST', `/api/document/${this.refPath()}`, {
+      headers: { 'X-HTTP-Method-Override': 'GET' },
+      body: { ids, as_list: true },
+    });
+    return { documents: Array.isArray(r.body) ? (r.body as TerminusDocument[]) : [], commit: r.commit ?? '' };
   }
 
   /**
