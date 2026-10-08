@@ -40,7 +40,8 @@ docker/                    # Docker Compose configuration (TerminusDB pinned to 
 scripts/
   generate-types.js        # Derives app/lib/types.ts from schema.json — run after schema changes
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
-  load_schema.js           # Loads schema into local TerminusDB instance
+  load_schema.js           # Replaces the schema graph in one full_replace; --clear-instances empties data first for breaking changes
+  platform_checks.js       # Probes store behaviours the ADRs depend on, in a scratch database it creates and deletes (run before encoding a platform assumption)
   seed_data.js             # Inserts demo artifact graph (69 documents)
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill)
@@ -99,15 +100,18 @@ npm run check:types
 
 The generator handles: xsd primitives → TS primitives, `Optional<T>` → optional fields, `Set<T>`/`List<T>` → arrays, Class references → `string` (@id), enum references → union types, `@abstract` → JSDoc comment, junction types → `extends TerminusDocument`.
 
-To add a new type: (1) update `schema.json` (with ADR), (2) add `@id` to `JUNCTION_IDS` if it's a junction, (3) add `@id` to `CLASS_ORDER` in the generator, (4) run `generate:types`, (5) commit both files together.
+To add a new type: (1) update `schema.json` (with ADR), giving the class `@metadata.armature.category` (`infrastructure`, `fragment`, `artifact` or `relationship`; ADR-0027) and an explicit `@key` (ADR-0024), (2) run `generate:types` and `node scripts/generate-schema-appendix.js`, (3) commit schema, types and appendix together. There is no list of types in the generators; a class without a category fails generation, which CI catches. Before relying on any store behaviour a change depends on, add a check to `scripts/platform_checks.js` and run it against the scratch database it creates.
 
 ### Key types and their roles
 
 | Type | Role |
 |---|---|
+| `DesignRecord` | Abstract root of every artifact and relationship; the type `DesignNote.subject` and `DesignFinding.subject` point at. `User` is outside it (ADR-0017) |
 | `LearningObjective` | Central node — everything connects to it |
-| `AssessmentItem` | Reusable question in the item bank; placed into Assessments via `ItemInstance` |
-| `ItemInstance` | Assessment-context wrapper around an `AssessmentItem` |
+| `AssessmentItem` | Reusable question in the item bank; a tree of fragments (stem, options, feedbacks) with its own `status`; placed into Assessments via `ItemInstance` |
+| `Fragment` / `TextFragment` / `ItemOption` | Subdocument parts of an item, returned inline; identity is the client-assigned `fragmentId`, never the nested store id (ADR-0022, ADR-0023, ADR-0033) |
+| `ItemInstance` | Assessment-context wrapper around an `AssessmentItem`; its `status` is placement clearance, distinct from the item's own (ADR-0018) |
+| `DesignFinding` | An evidence-grounded concern about any design record, with `status` and resolution rationale (ADR-0020) |
 | `ModuleObjective` | Programmatic junction; carries computed `coverageStatus` |
 | `PrerequisiteRecord` | Junction doc; carries `rationale` and `prerequisiteType` — design decision preserved as data |
 | `NeedEvidenceLink` | Junction doc; links LearningNeed to LearningEvidence with `confidence` weighting |
@@ -117,15 +121,21 @@ To add a new type: (1) update `schema.json` (with ADR), (2) add `@id` to `JUNCTI
 
 ### Critical API constraints (not enforced by TerminusDB schema)
 
-These must be enforced by the API on every write:
+These must be enforced by the API on every write (the invariants engine, Phase 3). TerminusDB enforces field types, required fields, `@min_cardinality`, enum values and that a referenced document *exists*. It does **not** check the class of a referenced document (verified 2026-10-07, `scripts/platform_checks.js` check L), and it cannot express cross-document or conditional rules.
 
+0. **Every reference field's target must be an instance of the declared class or a subclass.** Generic, applies to every type. This is what keeps a `User` out of `DesignNote.subject` and an `AssessmentItem` out of `Module.course` (ADR-0014, ADR-0017 amended)
 1. `AssessmentItem.assesses` — must contain at least one `LearningObjective`
 2. `LearningActivity.targets` — must contain at least one `LearningObjective`
 3. `ModuleActivityLink.sequence` and `ModuleActivityGroupLink.sequence` — must be unique across both types for a given Module (they share one integer namespace)
 4. `ActivityGroupMember.sequence` — must be unique within a group
 5. `ItemInstance.sequence` — must be unique within an Assessment
 6. `ActivityGroup` — must not contain other `ActivityGroup` instances (flatness constraint)
-7. `ModuleObjective.coverageStatus` — must be recomputed after any change to `AssessmentItem.assesses`, `ItemInstance` membership, or `ModuleObjective.role`
+7. `ModuleObjective.coverageStatus` — must be recomputed after any change to `AssessmentItem.assesses`, `ItemInstance` membership, `ItemInstance` or `AssessmentItem` status, or `ModuleObjective.role`
+8. `fragmentId` — unique across all fragments (stem, options, feedbacks) of one `AssessmentItem`; never regenerated by the hub (ADR-0023, ADR-0033)
+9. `ItemOption.text` — present, and unique within one item; the number of correct options must suit `itemType` (ADR-0022)
+10. `ItemInstance.status` — may not be `Approved` while its `AssessmentItem.status` is `Draft` or `InReview` (ADR-0018)
+11. `DesignFinding.resolutionRationale` — required when `status` is `Dismissed` (ADR-0020)
+12. A write whose `@id` exists under a different `@type` — rejected with 409 (ADR-0024)
 
 ### Junction document pattern
 
