@@ -6,7 +6,7 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Phase 2 (the version-control model) complete on `phase-2/version-control`, 2026-10-08; PR open for rebase merge → Phase 3 of `docs/development-plan.md` (generic writes and the invariants engine) is next.** Phases 0 and 1 merged on 2026-10-07 (PRs #1 to #4). The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
+**Phase 2 (the version-control model) complete and merged on 2026-10-08 (PR #5, rebase merge, CI green on `main`) → Phase 3 of `docs/development-plan.md` (generic writes and the invariants engine) is next.** Phases 0 and 1 merged on 2026-10-07 (PRs #1 to #4). The plan supersedes the earlier "What's Next" sequence (POST /needs, POST /objectives, …): per-type POST routes are replaced by a generic write path with an invariants engine in Phase 3.
 
 History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 → ADR-0054 Hono → Phase 1 schema catch-up → ADR-0055, ADR-0025, Phase 2 version control (October 2026).
 
@@ -128,9 +128,7 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ## What's Next
 
-**First:** merge the Phase 2 PR (rebase merge, delete branch), confirm CI on `main`, then close the session so this file says "merged".
-
-**Phase 3 of `docs/development-plan.md` — generic writes and the invariants engine (2 to 3 sessions):**
+**Phase 3 of `docs/development-plan.md` — generic writes and the invariants engine (2 to 3 sessions), on a new branch:**
 
 1. **ADR-0032: identity resolution.** Replaces the interim `Armature-User` header in `app/lib/api/identity.ts` with resolution of an authenticated identity to a `User` document (ADR-0015's boundary); `GET /api/v1/users`, `POST /api/v1/users`; agent users are ordinary `User` documents. No route changes
 2. **The generic write path** over the provisional `PUT /api/v1/documents/:type/:id`: the write envelope stays (`{ message, document }`); Zod request schemas generated from `schema.json` by the generator, guarded by `check:types`
@@ -182,7 +180,7 @@ None. The 2026-10-05 credentials failure was the previously running container ha
 
 ## Notes for Next Session
 
-Merge the Phase 2 PR first, then start Phase 3 on a new branch with ADR-0032. Every Phase 3 route is a Hono route in `app/lib/api/routes/` reaching the store only through `createStore(ref)` in `app/lib/api/store.ts`; request conventions (`?branch=|?ref=`, `ETag`/`If-Match`, the write envelope, `requireCommit`) are in `app/lib/api/http.ts`. The provisional `PUT` in `routes/documents.ts` is where the invariants engine attaches.
+Start Phase 3 on a new branch with ADR-0032. Every Phase 3 route is a Hono route in `app/lib/api/routes/` reaching the store only through `createStore(ref)` in `app/lib/api/store.ts`; request conventions (`?branch=|?ref=`, `ETag`/`If-Match`, the write envelope, `requireCommit`) are in `app/lib/api/http.ts`. The provisional `PUT` in `routes/documents.ts` is where the invariants engine attaches.
 
 Phase 2 facts worth carrying forward:
 - Validate any caller-supplied commit id with `requireCommit` before using it as a ref; the store answers a read at a non-existent commit path with a bare 500 (check U).
@@ -223,7 +221,7 @@ Key context:
 - Built `store.ts`, `http.ts`, `identity.ts`, `errors.ts`, `routes/documents.ts`, `routes/branches.ts`; rewired `app.ts`; rewrote the tests as the Phase 2 walkthrough (25 passing). Seeded `User/demo-designer`
 - Found during the walkthrough that a second merge from the same branch replayed the fork's insert; fixed by recording the merged source head, first as a message trailer, then as commit metadata once check V showed `apply` keeps `commit_info.metadata`
 - Acknowledged the automated security finding on the interim identity header: documented in ADR-0025, `User` writes refused, routes local until ADR-0032
-- Twelve commits on `phase-2/version-control`, pushed; PR opened
+- Thirteen commits on `phase-2/version-control`, merged as PR #5 (rebase merge); CI green on `main`
 
 ### 2026-10-07 (Phase 1)
 
