@@ -1,5 +1,6 @@
-import { Hono } from 'hono';
-import { hasCreatedBy, isKnownType, isWritable } from '../classes';
+import { Hono, type Context } from 'hono';
+import { CLASS_FIELDS, type FieldShape } from '@/lib/types';
+import { isKnownType, isWritable } from '../classes';
 import { ApiError } from '../errors';
 import {
   branchFromQuery,
@@ -10,32 +11,69 @@ import {
   requireCommit,
   setEtag,
 } from '../http';
-import { resolveUser, userCopyFor } from '../identity';
-import { createStore, isRecord, StoreError, type TerminusDocument } from '../store';
+import { resolveUser } from '../identity';
+import { createStore, isRecord, type Ref } from '../store';
+import { parseDocuments, writeDocuments } from '../write';
 
 /**
- * /api/v1/documents (ADR-0025 decisions 3, 7, 8 and 9).
+ * /api/v1/documents (ADR-0024, ADR-0025 decisions 3, 7, 8 and 9; Phase 3).
  *
- *   GET /:type/:id?branch=|ref=          one document at a ref; ETag is the commit
- *   PUT /:type/:id?branch=               provisional write (see below); If-Match honoured
- *   GET /:type/:id/history?branch=       the commits that touched it, with diffs
- *   GET /:type/:id/diff?from=&to=        the structural diff between two commits
+ *   GET  /:type?branch=|ref=&<field>=&count=&skip=   list, filtered by field values
+ *   GET  /:type/:id?branch=|ref=                      one document at a ref; ETag is the commit
+ *   PUT  /:type/:id?branch=                           { message, document }  replace or create
+ *   POST /?branch=                                    { message, documents: [...] }  one commit
+ *   GET  /:type/:id/history?branch=                   the commits that touched it, with diffs
+ *   GET  /:type/:id/diff?from=&to=                    the structural diff between two commits
  *
- * The write is provisional until Phase 3's invariants engine: it checks only
- * that the type is a writable class, that the body's `@id` and `@type` agree
- * with the route, that the id is not held by another type (ADR-0024), and
- * that an author and a reason are present. Writable classes are the artifact
- * and relationship categories: fragments are parts of a document, and
- * infrastructure (`User`, the abstract roots) is not written here; users are
- * registered through /users and identity resolution (ADR-0032).
- *
- * Identity (ADR-0032 decisions 4 and 5): the commit author is the resolved
- * User. On a class that carries createdBy, a create sets it to the resolved
- * User and a replace keeps the stored value; the body's value is ignored. When
- * the branch lacks the User that createdBy names, main's copy is written in
- * the same commit so the reference is valid.
+ * Both writes run the same pipeline (../write.ts): generated Zod shape,
+ * 409 on an id held by another type, createdBy from the resolved identity,
+ * the invariants engine, one commit, If-Match honoured. A batch may use
+ * @capture and { "@ref" } to reference a document it creates, which is how
+ * a note attaches to a Hash-keyed junction written in the same request.
  */
 export const documents = new Hono();
+
+const fieldsOf = (type: string): Record<string, FieldShape> =>
+  (CLASS_FIELDS as Record<string, Record<string, FieldShape>>)[type] ?? {};
+
+const RESERVED_QUERY = new Set(['branch', 'ref', 'count', 'skip']);
+
+/** A template for the store's query from `?field=value` pairs the class has. */
+function templateFromQuery(type: string, query: Record<string, string>): Record<string, unknown> {
+  const fields = fieldsOf(type);
+  const template: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(query)) {
+    if (RESERVED_QUERY.has(key)) continue;
+    const shape = fields[key];
+    if (!shape || shape.kind === 'subdocument') {
+      throw new ApiError(400, 'unknown_field', `${type} has no filterable field ${key}`);
+    }
+    if (shape.type === 'xsd:boolean') template[key] = raw === 'true';
+    else if (shape.type === 'xsd:integer' || shape.type === 'xsd:decimal') template[key] = Number(raw);
+    else template[key] = raw;
+  }
+  return template;
+}
+
+function writeRef(c: Context): Ref & { branch: string } {
+  const ref = refFromQuery(c);
+  if ('commit' in ref) throw new ApiError(400, 'write_at_commit', 'Writes go to a branch; a commit is read-only');
+  return ref;
+}
+
+documents.get('/:type', async (c) => {
+  const { type } = c.req.param();
+  if (!isKnownType(type)) throw new ApiError(404, 'unknown_type', `No type ${type}`);
+  const ref = refFromQuery(c);
+  const store = createStore(ref);
+  if ('commit' in ref) await requireCommit(store, ref.commit);
+  const template = templateFromQuery(type, c.req.query());
+  const count = c.req.query('count') === undefined ? undefined : intQuery(c, 'count', 0);
+  const skip = c.req.query('skip') === undefined ? undefined : intQuery(c, 'skip', 0);
+  const { documents: found, commit } = await store.queryDocuments(type, template, { count, skip });
+  setEtag(c, commit);
+  return c.json(found);
+});
 
 documents.get('/:type/:id', async (c) => {
   const { type, id } = c.req.param();
@@ -56,11 +94,8 @@ documents.get('/:type/:id', async (c) => {
 
 documents.put('/:type/:id', async (c) => {
   const { type, id } = c.req.param();
-  if (!isWritable(type)) {
-    throw new ApiError(400, 'invalid_type', `${type} is not a writable document type`);
-  }
-  const ref = refFromQuery(c);
-  if ('commit' in ref) throw new ApiError(400, 'write_at_commit', 'Writes go to a branch; a commit is read-only');
+  if (!isWritable(type)) throw new ApiError(400, 'invalid_type', `${type} is not a writable document type`);
+  const ref = writeRef(c);
   const docId = `${type}/${id}`;
 
   const envelope = await readEnvelope(c);
@@ -72,53 +107,38 @@ documents.put('/:type/:id', async (c) => {
   if (input['@type'] !== undefined && input['@type'] !== type) {
     throw new ApiError(400, 'type_mismatch', `document @type ${String(input['@type'])} does not match ${type}`);
   }
-  const document: TerminusDocument = { ...input, '@id': docId, '@type': type };
+  const [document] = parseDocuments([{ ...input, '@id': docId, '@type': type }]);
 
-  const store = createStore(ref);
   const who = await resolveUser(c);
+  const { commit } = await writeDocuments([document], {
+    branch: createStore(ref),
+    who,
+    message: envelope.message,
+    ifMatch: ifMatchFrom(c),
+  });
+  setEtag(c, commit);
+  return c.json({ id: docId, commit });
+});
 
-  // An id held by another type is a conflict, never a replace (ADR-0024).
-  let existing: TerminusDocument | undefined;
-  try {
-    existing = (await store.getDocument(docId)).document;
-    if (existing['@type'] !== type) {
-      throw new ApiError(409, 'type_conflict', `${docId} already exists as ${existing['@type']}`);
-    }
-  } catch (err) {
-    if (!(err instanceof StoreError && err.type === 'api:DocumentNotFound')) throw err;
+documents.post('/', async (c) => {
+  const ref = writeRef(c);
+  const envelope = await readEnvelope(c);
+  const inputs = envelope.documents;
+  if (!Array.isArray(inputs) || inputs.length === 0) {
+    throw new ApiError(400, 'bad_request', 'documents must be a non-empty array');
   }
+  if (inputs.length > 500) throw new ApiError(400, 'bad_request', 'At most 500 documents per write');
+  const parsed = parseDocuments(inputs);
 
-  // createdBy comes from the resolved identity, never from the body (ADR-0032
-  // decision 4); a User the branch lacks is carried in the same commit
-  // (decision 5).
-  const batch: TerminusDocument[] = [];
-  if (hasCreatedBy(type)) {
-    if (existing) {
-      if (existing.createdBy === undefined) delete document.createdBy;
-      else document.createdBy = existing.createdBy;
-    } else {
-      document.createdBy = who.id;
-      const copy = await userCopyFor(store, who);
-      if (copy) batch.push(copy);
-    }
-  }
-  batch.push(document);
-
-  const ifMatch = ifMatchFrom(c);
-  try {
-    const { commit } = await store.putDocuments(batch, { author: who.id, message: envelope.message, ifMatch });
-    setEtag(c, commit);
-    return c.json({ id: docId, commit });
-  } catch (err) {
-    if (err instanceof StoreError && err.type === 'api:DataVersionMismatch') {
-      const head = await store.head();
-      throw new ApiError(412, 'precondition_failed', `Branch ${ref.branch} has moved since commit ${ifMatch}`, {
-        expected: ifMatch,
-        current: head?.id,
-      });
-    }
-    throw err;
-  }
+  const who = await resolveUser(c);
+  const { commit, ids } = await writeDocuments(parsed, {
+    branch: createStore(ref),
+    who,
+    message: envelope.message,
+    ifMatch: ifMatchFrom(c),
+  });
+  setEtag(c, commit);
+  return c.json({ commit, ids });
 });
 
 documents.get('/:type/:id/history', async (c) => {
