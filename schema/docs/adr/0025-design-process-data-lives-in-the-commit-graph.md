@@ -28,6 +28,20 @@ What the store does, reproduced on 2026-10-08 in a scratch database (check lette
 - Every write is a commit with `author`, `message`, `timestamp` and an `identifier` (S). The
   author is a free string the store records without checking (plan §9; the vendored
   `commit-message-howto.md` calls it logical responsibility, distinct from the HTTP user).
+- **A commit has one parent.** The commit graph (`local/_commits`) is an ordinary document graph
+  whose schema, read from the running store, declares `Commit.parent` as `Optional<Commit>`.
+  There is no second parent, so no commit can record that it joined two histories. `apply` is
+  patch-based: the CLI reference describes it as "apply a diff to path which is obtained from
+  the differences between two commits". It adds one commit to the target, authored by whoever
+  merged, and does not link the source branch's commits. Its three-way character is the conflict
+  check against the target (`@expected` versus `@found`), not the graph shape. The docs'
+  "merge" vocabulary describes the conflict check, not a Git merge commit. This is a property of
+  the store, the same trade-off rebase-only Git workflows make, and it is why decision 5 records
+  the merged source commit itself. The commit schema also carries `metadata: Optional<sys:JSON>`,
+  documented as user-supplied JSON. `apply` stores what `commit_info.metadata` carries and the
+  log returns it; the history endpoint does not, and a `metadata` query parameter on a document
+  write is ignored (V1 to V4). So the merge source has a structured home on exactly the commits
+  that need it.
 - A document read on a branch returns `TerminusDB-Data-Version: branch:<commit-id>`, where the
   id is the branch head in the log (M1, M2). A read at `local/commit/<id>` returns
   `commit:<id>` (M3) and rejects writes with `api:DocumentAccessImpossible` (O5).
@@ -78,10 +92,12 @@ Phase 2's routes land (ADR-0054 consequences).
 2. **Every write is a commit with an author and a reason.** The author is the `@id` of the
    Armature `User` the request resolved to (`User/<id>`), set by the hub and never taken from the
    body (ADR-0055 decision 3). The reason is the commit message, required and non-empty; a write
-   without one is rejected with 400. The message is free text. The hub reserves git-style
-   trailers (a blank line, then `Key: value` lines) for structured provenance and defines one in
-   this phase, `Merge-Source` (decision 5); the delegation trailers proposed for this ADR wait
-   for their trigger. Messages are returned as stored, trailers included.
+   without one is rejected with 400. The message is free text and is returned as stored.
+   Structured facts about a commit go in the commit's JSON `metadata` under an `armature` key,
+   the namespace the schema already uses (ADR-0027), where the store lets the hub set it
+   (decision 5); where it does not, git-style trailers in the message (a blank line, then
+   `Key: value` lines) remain reserved. No trailer is defined in this phase; the delegation
+   trailers proposed for this ADR wait for their trigger.
 
    Until ADR-0032 lands in Phase 3, the hub resolves the author from an `Armature-User` request
    header holding a `User` document id, verifies the document exists and is a `User`, and
@@ -99,11 +115,12 @@ Phase 2's routes land (ADR-0054 consequences).
 
 5. **Merge is the store's three-way `apply`, wrapped.** `apply` takes an explicit `before_commit`
    and does not compute one, and the commit it creates has a single parent, so the store does not
-   remember which source commit a merge brought in. The hub therefore does two things. It appends
-   a `Merge-Source: <commit-id>` trailer to every merge commit's message, naming the source head
-   that was merged. And it computes the merge base by walking the target's log newest first for
-   the first commit that is in the source's log, or whose `Merge-Source` names a source commit,
-   or that a source commit's `Merge-Source` names. It then applies the diff from base to the
+   remember which source commit a merge brought in. The hub therefore does two things. It stores
+   `{ "armature": { "mergeSource": "<commit-id>" } }` as the merge commit's metadata, naming the
+   source head that was merged; `apply` accepts it in `commit_info` and the log returns it
+   (checks V2, V3b). And it computes the merge base by walking the target's log newest first for
+   the first commit that is in the source's log, or whose merge metadata names a source commit,
+   or that a source commit's merge metadata names. It then applies the diff from base to the
    source head onto the target branch with the resolved author and the caller's reason. A source
    already merged is reported as up to date without a commit. On conflict the hub returns 409
    with the base commit and one entry per
@@ -175,6 +192,9 @@ every Phase 1 check still passes.
 | T2 | PASS | A deleted branch's commit remains readable at its id |
 | U1, U2 | PASS | `ValidCommit/<id>` in `local/_commits` returns the commit, or `api:DocumentNotFound` |
 | U3 | INFO | A document read at a non-existent commit path is a 500 `api:InternalServerError` |
+| V1 | PASS | Commit schema: `parent` is `Optional<Commit>`, `metadata` is `Optional<sys:JSON>` |
+| V2, V3, V3b | PASS | `apply` stores `commit_info.metadata`; the merge commit has one parent; `/api/log` returns the metadata |
+| V3c, V4 | INFO | `/api/history` entries carry no metadata; a `metadata` query parameter on a document `PUT` is ignored |
 
 ## Consequences
 
@@ -187,14 +207,14 @@ every Phase 1 check still passes.
   ids for `apply`, the rebase direction, the DELETE body. The vendored pages for merge and
   Git-for-Data are wrong on two of these; the running store is authoritative (`terminusdb` skill
   trust order).
-- The merge base is found by walking two logs and reading `Merge-Source` trailers. Without the
-  trailer, a second merge from the same branch would find the original fork as its base and
-  replay an insert the target already has, which the store reports as an `@id_already_exists`
-  conflict (found while testing the walkthrough). At demo scale the walk is a handful of
-  requests; at larger scale the commit graph (`local/_commits`) can be queried directly, which
-  is one of the WOQL cases ADR-0055 decision 5 admits. The trailer is hub data in a store field,
-  which is the same arrangement as the author string, and it is the first use of the trailer
-  block decision 2 reserves.
+- The merge base is found by walking two logs and reading merge metadata. Without it, a second
+  merge from the same branch would find the original fork as its base and replay an insert the
+  target already has, which the store reports as an `@id_already_exists` conflict (found while
+  testing the walkthrough). At demo scale the walk is a handful of requests; at larger scale the
+  commit graph (`local/_commits`) can be queried directly, which is one of the WOQL cases
+  ADR-0055 decision 5 admits. The metadata is hub data in a store field, the same arrangement as
+  the author string. It was first implemented as a `Merge-Source` message trailer and moved to
+  commit metadata the same day once check V showed the store keeps it.
 - `ETag` on a document is the branch head, not a hash of the document, so two reads of an
   unchanged document across commits get different tags. Caches treat that as a changed resource,
   which is harmless. `If-None-Match` is not supported in this phase.

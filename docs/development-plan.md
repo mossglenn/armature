@@ -432,7 +432,7 @@ Work:
       (head commit). `DELETE` reserved (ADR-0025 decision 6); tests delete their scratch branches
       through the adapter.
 - [x] **Merge route.** `POST /api/v1/branches/:name/merge` with `{ message, from }`: computes the
-      merge base from the logs and `Merge-Source` trailers, calls `apply`, returns the merge
+      merge base from the logs and the merge commits' metadata, calls `apply`, returns the merge
       commit or `upToDate: true`; on conflict 409 `merge_conflict` with `{ id, field, base,
       target, source }` per witness, the source value read from the source head. Per-type merge
       filtering and a conflict view are not built here.
@@ -865,8 +865,12 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - A commit's existence is checked by reading `ValidCommit/<id>` from `local/_commits` (200 or
   `api:DocumentNotFound`). A document read at a commit path that does not exist is a 500
   `api:InternalServerError`, so the hub validates commit ids before using them as refs (check U).
-- A merge commit made by `apply` has one parent and does not record the source commit; the hub
-  records it as a `Merge-Source` trailer in the commit message (ADR-0025 decision 5).
+- The commit schema (`local/_commits`) declares `parent` as `Optional<Commit>` and `metadata` as
+  `Optional<sys:JSON>`. A merge commit made by `apply` has one parent and does not record the
+  source commit; the hub records it as `{ armature: { mergeSource } }` in the commit's metadata,
+  which `apply` accepts in `commit_info` and `/api/log` returns. `/api/history` entries carry no
+  metadata, and a `metadata` query parameter on a document write is ignored (check V, ADR-0025
+  decision 5).
 - Document history: `/api/history/<path>?id=<doc>&diff=true` returns the commits that touched one
   document, with author, message, identifier, timestamp, and since v12.0.5 the structural diff.
 - Diff: `/api/diff` takes two data versions (branch names or commit ids) and an optional document

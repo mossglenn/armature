@@ -59,7 +59,7 @@ app/
       errors.ts            # ApiError: status + stable code + message, rendered by onError
       routes/
         documents.ts       # GET at ref, provisional PUT, history, diff
-        branches.ts        # list, create, head, merge (three-way via apply, Merge-Source trailer), changes since a commit
+        branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata), changes since a commit
     terminusdb.ts          # Legacy WOQLClient singleton for the unversioned routes only; deleted with them in Phase 3. The API layer uses the HTTP store adapter (ADR-0055)
     routeHelpers.ts        # Legacy: createGetHandler + handleTerminusError for the unversioned routes only
     types.ts               # GENERATED — do not edit; run npm run generate:types
