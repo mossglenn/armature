@@ -3,7 +3,8 @@ import { DOCUMENT_SCHEMAS } from '@/lib/schemas';
 import { hasCreatedBy, isWritable } from './classes';
 import { ApiError } from './errors';
 import { userCopyFor, type ResolvedUser } from './identity';
-import { checkInvariants, createWriteContext, runAfterWrite } from './invariants';
+import { checkInvariants, createWriteContext } from './invariants';
+import { deriveCoverage } from './invariants/recompute';
 import { StoreError, type Store, type TerminusDocument } from './store';
 
 /**
@@ -19,10 +20,13 @@ import { StoreError, type Store, type TerminusDocument } from './store';
  *      every class that carries it; a User the branch lacks is carried in
  *      the same commit (ADR-0032 decisions 4 and 5)
  *   4. invariants: every constraint, over the whole batch (422)
- *   5. the write: one PUT with create=true for the whole list, so it is one
+ *   5. computed fields: coverage is recomputed for every module the batch
+ *      affects; declarations in the batch are filled, declarations on the
+ *      branch whose values change join the list (ADR-0029 decision 5)
+ *   6. the write: one PUT with create=true for the whole list, so it is one
  *      commit and fails together (platform checks X1, X2b, X5); If-Match
- *      honoured (412)
- *   6. afterWrite hooks (coverage recompute, Phase 4)
+ *      honoured (412). The caller's documents, the carried User and the
+ *      recomputed declarations land as one commit under the caller's reason
  */
 
 export interface WriteOptions {
@@ -123,10 +127,15 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   const ctx = createWriteContext(branch, documents, replacing, copy ? [copy] : []);
   await checkInvariants(ctx);
 
-  // Step 5: the write.
+  // Step 5: computed fields, over the batch now known to be valid.
+  const derived = await deriveCoverage(ctx);
+
+  // Step 6: the write. The carried User first, then the caller's documents,
+  // then the recomputed declarations; `ids` reports the caller's only.
+  const carried = copy ? [copy] : [];
   let result: { commit: string; ids: string[] };
   try {
-    result = await branch.putDocuments([...(copy ? [copy] : []), ...documents], {
+    result = await branch.putDocuments([...carried, ...documents, ...derived], {
       author: who.id,
       message: opts.message,
       ifMatch: opts.ifMatch,
@@ -143,10 +152,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
     throw err;
   }
 
-  // Step 6.
-  await runAfterWrite(ctx);
-
-  return { commit: result.commit, ids: result.ids.slice(result.ids.length - documents.length) };
+  return { commit: result.commit, ids: result.ids.slice(carried.length, carried.length + documents.length) };
 }
 
 /**
