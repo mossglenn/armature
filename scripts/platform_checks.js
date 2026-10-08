@@ -53,6 +53,10 @@
 //      inserted a document with the same id and the same fields (a User carried onto a branch
 //      and later merged back), and when the fields differ; and whether one write request can
 //      carry a list so a User copy and the artifact that references it land in one commit
+//   X. The generic write path (plan §4 Phase 3): can a Hash-keyed document be written in a PUT
+//      list without an @id; do @capture and @ref work in a POST list and in a PUT list; what do
+//      the list forms return (ids?); does POST overwrite=true upsert a list; does the GET `ids`
+//      parameter read several documents at once
 //
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
@@ -91,6 +95,8 @@ const schema = [
   { "@type": "Class", "@id": "Artifact", "@key": { "@type": "Random" }, "label": "xsd:string" },
   { "@type": "Class", "@id": "Other", "@key": { "@type": "Random" }, "label": "xsd:string" },
   { "@type": "Class", "@id": "Holder", "@key": { "@type": "Random" }, "one": "Artifact", "many": { "@type": "Set", "@class": "Artifact" } },
+  // X: a Hash-keyed junction, as Armature's relationship documents are
+  { "@type": "Class", "@id": "Link", "@key": { "@type": "Hash", "@fields": ["a", "b"] }, "a": "Artifact", "b": "Artifact", "note": { "@type": "Optional", "@class": "xsd:string" } },
   // D–J: abstract subdocument with typed and generic specialisations
   { "@type": "Class", "@id": "Fragment", "@subdocument": [], "@abstract": [], "@key": { "@type": "Random" },
     "fragmentId": "xsd:string", "kind": "xsd:string", "text": { "@type": "Optional", "@class": "xsd:string" } },
@@ -479,6 +485,58 @@ async function main() {
   r = await api("GET", at("branch/w-ident", "id=Holder/w-h2"));
   record("W3c", r.json?.one === "Artifact/w-u2" ? "PASS" : "INFO", `Holder/w-h2 after the list PUT: ${short(r.json)}`);
   await api("DELETE", `/api/branch/admin/${DB}/local/branch/w-ident`, {});
+
+  // X: the generic write path
+  r = await api("POST", `/api/branch/admin/${DB}/local/branch/x-write`, { origin: `admin/${DB}/local/branch/main` });
+  const xb = (q) => at("branch/x-write", q);
+  r = await api("PUT", xb(`${commit("put list with hash-keyed link")}&create=true`), [
+    { "@type": "Artifact", "@id": "Artifact/x-a", label: "xa" },
+    { "@type": "Artifact", "@id": "Artifact/x-b", label: "xb" },
+    { "@type": "Link", a: "Artifact/x-a", b: "Artifact/x-b", note: "first" },
+  ]);
+  record("X1", r.status === 200 ? "PASS" : "INFO", `PUT create=true list including a Hash-keyed Link with no @id: ${r.status} ${r.status === 200 ? "" : errType(r)}; response body ${short(r.json)}`);
+  r = await api("POST", xb("type=Link&as_list=true"), { type: "Link", as_list: true, query: {} }, override);
+  const links = Array.isArray(r.json) ? r.json : [];
+  record("X1b", links.length === 1 ? "PASS" : "INFO", `Link documents after that PUT: ${links.length} ${short(links)}`);
+  const linkId = links[0]?.["@id"];
+  r = await api("PUT", xb(`${commit("put list replacing the link by fields")}&create=true`), [
+    { "@type": "Link", a: "Artifact/x-a", b: "Artifact/x-b", note: "second" },
+  ]);
+  r = await api("POST", xb(""), { type: "Link", as_list: true, query: {} }, override);
+  record("X1c", Array.isArray(r.json) && r.json.length === 1 && r.json[0]?.note === "second" && r.json[0]?.["@id"] === linkId ? "PASS" : "INFO", `PUT of the same Hash fields again replaces in place (same id, new note): ${short(r.json)}`);
+  r = await api("POST", xb(commit("post list with capture and ref")), [
+    { "@type": "Artifact", "@id": "Artifact/x-c", "@capture": "C", label: "xc" },
+    { "@type": "Holder", "@id": "Holder/x-h1", one: { "@ref": "C" } },
+  ]);
+  record("X2", r.status === 200 ? "PASS" : "INFO", `POST list with @capture/@ref: ${r.status} ${r.status === 200 ? "" : errType(r)}; response ${short(r.json)}`);
+  r = await api("GET", xb("id=Holder/x-h1"));
+  record("X2a", r.json?.one === "Artifact/x-c" ? "PASS" : "INFO", `Holder/x-h1.one resolved through @ref: ${short(r.json)}`);
+  r = await api("PUT", xb(`${commit("put list with capture and ref")}&create=true`), [
+    { "@type": "Artifact", "@id": "Artifact/x-d", "@capture": "D", label: "xd" },
+    { "@type": "Holder", "@id": "Holder/x-h2", one: { "@ref": "D" } },
+  ]);
+  record("X2b", r.status === 200 ? "PASS" : "INFO", `PUT create=true list with @capture/@ref: ${r.status} ${r.status === 200 ? "" : errType(r)}; response ${short(r.json)}`);
+  r = await api("GET", xb("id=Holder/x-h2"));
+  record("X2c", r.json?.one === "Artifact/x-d" ? "PASS" : "INFO", `Holder/x-h2.one resolved through @ref under PUT: ${short(r.json)}`);
+  r = await api("POST", xb(`${commit("post overwrite list")}&overwrite=true`), [
+    { "@type": "Artifact", "@id": "Artifact/x-a", label: "xa2" },
+    { "@type": "Artifact", "@id": "Artifact/x-e", label: "xe" },
+  ]);
+  record("X3", r.status === 200 ? "PASS" : "INFO", `POST overwrite=true list with one existing and one new document: ${r.status} ${r.status === 200 ? "" : errType(r)}; response ${short(r.json)}`);
+  r = await api("GET", xb("id=Artifact/x-a"));
+  record("X3a", r.json?.label === "xa2" ? "PASS" : "INFO", `Artifact/x-a after POST overwrite: label ${r.json?.label}`);
+  r = await api("GET", xb(`ids=${encodeURIComponent(JSON.stringify(["Artifact/x-a", "Artifact/x-e", "Artifact/no-such"]))}&as_list=true`));
+  record("X4", r.status === 200 && Array.isArray(r.json) ? "PASS" : "INFO", `GET with ids=[...] (one missing): ${r.status} ${short(r.json)}`);
+  r = await api("POST", xb(""), { ids: ["Artifact/x-a", "Artifact/x-e"], as_list: true }, override);
+  record("X4b", r.status === 200 && Array.isArray(r.json) && r.json.length === 2 ? "PASS" : "INFO", `POST override with ids in the body: ${r.status} ${short(r.json)}`);
+  r = await api("PUT", xb(`${commit("put list where one doc is a wrong-type replace")}&create=true`), [
+    { "@type": "Artifact", "@id": "Artifact/x-f", label: "xf" },
+    { "@type": "Other", "@id": "Artifact/x-a", label: "clash" },
+  ]);
+  record("X5", r.status !== 200 ? "PASS" : "INFO", `PUT list where one document's id is held by another type: ${r.status} ${errType(r)}`);
+  r = await api("GET", xb("id=Artifact/x-f"));
+  record("X5a", r.status === 404 ? "PASS" : "INFO", `the other document in that rejected list was not written (atomic): ${r.status}`);
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/x-write`, {});
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
