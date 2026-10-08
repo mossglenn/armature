@@ -748,6 +748,16 @@ what evidence would be enough.
   modelling the LEED tracker's columns.
 - **A fourth `DesignFinding` status.** CoQui stretches `Dismissed` to cover a reviewer's own
   withdrawal. Evidence: a second tool needing the distinction (ADR-0018 §5's test).
+- **One placement per item per assessment.** `ItemInstance`'s Hash key over `(assessment,
+  implements)` means an item appears at most once in an assessment, a client never mints a
+  placement id, and writing the pair again is a replace, which keeps `sequence` freely editable
+  (a key that included it would orphan the old placement, and the API has no delete). Two forms
+  or orderings of the same items are two `Assessment`s of the module; coverage counts distinct
+  items per module, so reuse across forms counts once (ADR-0029). Evidence to reopen it: a
+  container inside `Assessment` (a section, an in-assessment form) that the same item may belong
+  to twice, which would change the key anyway; or the outcomes importer meeting a source that
+  references one item twice in one test, which QTI permits. Decided 2026-10-08 as a timing
+  decision, not a scope decision.
 - **Separate API service.** When Phase 7's container and client package exist, the move is
   mechanical. Evidence: a plugin that cannot or should not depend on a Next.js deployment, or
   the hosted demo needing independent scaling.
