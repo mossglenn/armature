@@ -50,6 +50,11 @@ app.onError((err, c) => {
     if (err.type === 'api:DataVersionMismatch') {
       return c.json({ error: 'precondition_failed', message: 'The branch has moved since the commit in If-Match' }, 412);
     }
+    if (err.type === 'api:SubmittedDocumentIdDoesNotHaveExpectedPrefix') {
+      // The store derives the id prefix from the class (platform check X5);
+      // a client-supplied id must start with its own type (ADR-0024).
+      return c.json({ error: 'bad_id', message: 'A document id must begin with its own type, as Type/<id>' }, 400);
+    }
     if (err.status === 404 || UNKNOWN_REF_TYPES.has(err.type)) {
       return c.json({ error: 'unknown_ref', message: 'No such branch, commit or document' }, 404);
     }
