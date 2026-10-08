@@ -55,6 +55,11 @@ app.onError((err, c) => {
       // a client-supplied id must start with its own type (ADR-0024).
       return c.json({ error: 'bad_id', message: 'A document id must begin with its own type, as Type/<id>' }, 400);
     }
+    if (err.type === 'api:SubmittedIdDoesNotMatchGeneratedId') {
+      // A Hash-keyed class derives its id from its key fields (ADR-0024);
+      // a client-supplied id on one can only disagree with it.
+      return c.json({ error: 'bad_id', message: 'This type derives its id from its key fields; omit @id and let the hub mint it' }, 400);
+    }
     if (err.status === 404 || UNKNOWN_REF_TYPES.has(err.type)) {
       return c.json({ error: 'unknown_ref', message: 'No such branch, commit or document' }, 404);
     }
