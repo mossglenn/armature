@@ -6,21 +6,23 @@
  * a standalone process serves the same object with `@hono/node-server`.
  *
  * Route groups live in `./routes/` and reach the store only through the
- * adapter in `./store.ts` (ADR-0055). Phase 2 (ADR-0025) adds the branch,
- * merge, history and diff routes; Phase 3 adds the generic write path and
- * the invariants engine.
+ * adapter in `./store.ts` (ADR-0055). Phase 2 (ADR-0025) added the branch,
+ * merge, history and diff routes; Phase 3 adds identity resolution and the
+ * users routes (ADR-0032), the generic write path and the invariants engine.
  */
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { ApiError } from './errors';
 import { branches } from './routes/branches';
 import { documents } from './routes/documents';
+import { users } from './routes/users';
 import { StoreError } from './store';
 
 export const app = new Hono().basePath('/api/v1');
 
 app.route('/documents', documents);
 app.route('/branches', branches);
+app.route('/users', users);
 
 /** Store error types that mean "the ref or id you named does not exist". */
 const UNKNOWN_REF_TYPES = new Set([

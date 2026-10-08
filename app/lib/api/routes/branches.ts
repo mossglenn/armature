@@ -2,7 +2,16 @@ import { Hono } from 'hono';
 import { ApiError } from '../errors';
 import { readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { resolveAuthor } from '../identity';
-import { createStore, isRecord, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
+import {
+  createStore,
+  idFromIri,
+  isRecord,
+  StoreError,
+  type Commit,
+  type Ref,
+  type Store,
+  type WitnessField,
+} from '../store';
 
 /**
  * /api/v1/branches (ADR-0025 decisions 4, 5, 6 and 8).
@@ -52,6 +61,15 @@ function parseFrom(from: unknown): Ref {
 function mergeMetadata(sourceCommit: string): Record<string, unknown> {
   return { armature: { mergeSource: sourceCommit } };
 }
+
+/**
+ * One entry of a 409 merge report: a field both sides changed, with its three
+ * values, or a document both sides inserted with different content (check
+ * W2d), which has no field.
+ */
+type MergeConflict =
+  | { id: string; field: string; base: unknown; target: unknown; source: unknown }
+  | { id: string; op: 'InsertConflict' };
 
 function mergeSourceOf(commit: Commit): string | undefined {
   const armature = commit.metadata?.armature;
@@ -155,7 +173,7 @@ branches.post('/:name/merge', async (c) => {
   if (sourceName === targetName) throw new ApiError(400, 'bad_request', 'A branch cannot be merged into itself');
 
   const target = createStore({ branch: targetName });
-  const author = await resolveAuthor(c, target);
+  const author = await resolveAuthor(c);
   const source = target.at({ branch: sourceName });
   const [targetHead, sourceHead] = await Promise.all([target.head(), source.head()]);
   if (!targetHead) throw new ApiError(404, 'not_found', `Branch ${targetName} has no commits`);
@@ -180,24 +198,31 @@ branches.post('/:name/merge', async (c) => {
     return c.json({ commit: result.commit, base, source: sourceHead.id, target: targetHead.id, upToDate: false });
   }
 
-  // The witness carries the base and target values; the source value is read
-  // from the source head so the client sees all three sides (decision 5).
+  // A per-field witness carries the base and target values; the source value
+  // is read from the source head so the client sees all three sides (decision
+  // 5). An InsertConflict witness means both sides inserted the same id with
+  // different content (check W2d, ADR-0032 decision 8); it names the document
+  // and no field.
   const atSource = target.at({ commit: sourceHead.id });
-  const conflicts = await Promise.all(
-    result.witnesses.flatMap((witness) =>
-      Object.keys(witness)
+  const conflicts: MergeConflict[] = await Promise.all(
+    result.witnesses.flatMap((witness): Promise<MergeConflict>[] => {
+      if (witness['@op'] === 'InsertConflict') {
+        return [Promise.resolve({ id: idFromIri(String(witness['@id_already_exists'] ?? '')), op: 'InsertConflict' as const })];
+      }
+      const id = witness['@id'] ?? '';
+      return Object.keys(witness)
         .filter((key) => key !== '@id')
         .map(async (field) => {
           const detail = witness[field] as WitnessField;
           let sourceValue: unknown;
           try {
-            sourceValue = (await atSource.getDocument(witness['@id'])).document[field];
+            sourceValue = (await atSource.getDocument(id)).document[field];
           } catch {
             sourceValue = undefined;
           }
-          return { id: witness['@id'], field, base: detail['@expected'], target: detail['@found'], source: sourceValue };
-        })
-    )
+          return { id, field, base: detail['@expected'], target: detail['@found'], source: sourceValue };
+        });
+    })
   );
   throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflicts.length} field(s)`, {
     base,
