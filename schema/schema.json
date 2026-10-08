@@ -315,8 +315,27 @@
     ]
   },
   {
+    "@type": "Enum",
+    "@id": "FindingStatus",
+    "@value": [
+      "Open",
+      "Addressed",
+      "Dismissed"
+    ],
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "FindingStatus",
+        "@comment": "Lifecycle of a DesignFinding. Deliberately minimal: a finding that was raised and never addressed is materially different design history from one that was revised, and that difference is what justifies carrying state at all. Richer review lifecycles are plugin concerns and map onto these three at the boundary. API CONSTRAINT: Dismissed requires resolutionRationale. See ADR-0020."
+      }
+    ]
+  },
+  {
     "@type": "Class",
     "@id": "User",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -337,7 +356,29 @@
     "institution": {
       "@type": "Optional",
       "@class": "xsd:string"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "infrastructure"
+      }
     }
+  },
+  {
+    "@type": "Class",
+    "@id": "DesignRecord",
+    "@abstract": [],
+    "@metadata": {
+      "armature": {
+        "category": "infrastructure"
+      }
+    },
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "DesignRecord",
+        "@comment": "Abstract root of every record of design: the artifacts (via ArmatureDocument) and the reified relationships between them (the junction documents). Carries no fields. Its purpose is to be referenceable: DesignNote.subject and DesignFinding.subject are typed to DesignRecord, so any artifact or relationship can carry design rationale, and whether a relationship can be annotated is a deliberate decision rather than a side effect of whether it has a label. User is deliberately outside this hierarchy (ADR-0015). Category (artifact, relationship, fragment, infrastructure) is declared as @metadata.armature.category on every class, not as a class: a category becomes a class only when something must reference it. See ADR-0017, ADR-0027."
+      }
+    ]
   },
   {
     "@type": "Class",
@@ -347,7 +388,7 @@
       {
         "@language": "en",
         "@label": "ArmatureDocument",
-        "@comment": "Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Junction documents and structural types (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, a system agent for API-generated records. Optional to accommodate the demo context and deployments without a full auth system. See ADR-0014, ADR-0015.",
+        "@comment": "Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Junction documents and structural types (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, a system agent for API-generated records. Optional to accommodate the demo context and deployments without a full auth system. See ADR-0014, ADR-0015. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).",
         "@properties": {
           "createdBy": "The User responsible for this record entering the graph. Set by the API at document creation using the authenticated identity — not authored directly. Optional to accommodate single-user and demo contexts without a full auth system. Never updated after creation — change history is tracked at the TerminusDB commit level, not via schema fields. See ADR-0015."
         }
@@ -361,6 +402,12 @@
     "createdBy": {
       "@type": "Optional",
       "@class": "User"
+    },
+    "@inherits": "DesignRecord",
+    "@metadata": {
+      "armature": {
+        "category": "infrastructure"
+      }
     }
   },
   {
@@ -376,12 +423,20 @@
       }
     ],
     "collectedAt": "xsd:dateTime",
-    "source": "xsd:string"
+    "source": "xsd:string",
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
+    }
   },
   {
     "@type": "Class",
     "@id": "LearningMetric",
     "@inherits": "LearningEvidence",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -397,12 +452,20 @@
     "derivedFrom": {
       "@type": "Optional",
       "@class": "LearningDataset"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
     }
   },
   {
     "@type": "Class",
     "@id": "DescriptiveEvidence",
     "@inherits": "LearningEvidence",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -411,12 +474,20 @@
       }
     ],
     "method": "EvidenceMethod",
-    "finding": "xsd:string"
+    "finding": "xsd:string",
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
+    }
   },
   {
     "@type": "Class",
     "@id": "LearningDataset",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -440,12 +511,20 @@
     "producedBy": {
       "@type": "Optional",
       "@class": "Assessment"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
     }
   },
   {
     "@type": "Class",
     "@id": "LearningNeed",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -460,6 +539,11 @@
     "priority": {
       "@type": "Optional",
       "@class": "NeedPriority"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
     }
   },
   {
@@ -487,12 +571,21 @@
     "confidence": {
       "@type": "Optional",
       "@class": "ConfidenceLevel"
-    }
+    },
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    },
+    "@inherits": "DesignRecord"
   },
   {
     "@type": "Class",
     "@id": "LearningObjective",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -512,6 +605,11 @@
     "generatedBy": {
       "@type": "Optional",
       "@class": "LearningNeed"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
     }
   },
   {
@@ -535,27 +633,123 @@
     "rationale": "xsd:string",
     "prerequisiteType": "PrerequisiteType",
     "objective": "LearningObjective",
-    "prerequisite": "LearningObjective"
+    "prerequisite": "LearningObjective",
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    }
+  },
+  {
+    "@type": "Class",
+    "@id": "Fragment",
+    "@subdocument": [],
+    "@abstract": [],
+    "@key": {
+      "@type": "Random"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "fragment"
+      }
+    },
+    "fragmentId": "xsd:string",
+    "text": "xsd:string",
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "Fragment",
+        "@comment": "Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a note, finding or attestation can point at a part through the compound reference { document @id, fragmentId } rather than at the whole document. Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (ADR-0030) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.",
+        "@properties": {
+          "fragmentId": "Client-assigned, immutable identifier of this part, unique within the parent document. Generated once at creation by the authoring tool (UUID, nanoid or similar), never derived from array position or display order, never regenerated. Armature validates uniqueness within one document on write and otherwise treats it as opaque authored content. Named fragmentId, never id, so it cannot be mistaken for a document identifier. See ADR-0023.",
+          "text": "The inline text of this part. Required until attachment references exist (ADR-0030)."
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Class",
+    "@id": "TextFragment",
+    "@subdocument": [],
+    "@inherits": "Fragment",
+    "@key": {
+      "@type": "Random"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "fragment"
+      }
+    },
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "TextFragment",
+        "@comment": "A fragment that is only text: an item stem, a general correct or incorrect feedback. No fields beyond Fragment. Exists as a concrete type so that stem and feedback slots are typed to text rather than to the abstract Fragment, which would also accept an ItemOption. See ADR-0033."
+      }
+    ]
+  },
+  {
+    "@type": "Class",
+    "@id": "ItemOption",
+    "@subdocument": [],
+    "@inherits": "Fragment",
+    "@key": {
+      "@type": "Random"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "fragment"
+      }
+    },
+    "isCorrect": "xsd:boolean",
+    "feedback": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "purpose": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "ItemOption",
+        "@comment": "One answer option of an AssessmentItem, embedded in the item as a subdocument. Replaces the former standalone Response document: options are never shared across items and an option's meaning depends on its stem and siblings, so independent identity bought nothing and made accidental relocation possible. Per-option change history is unaffected: the store diffs into nested structure, so a diff between two commits of the item reports which option changed. API CONSTRAINTS: text is required (inherited as a Fragment field); option text must be unique within one item; fragmentId must be unique within the item. See ADR-0022, ADR-0023.",
+        "@properties": {
+          "isCorrect": "Whether selecting this option is a correct response. For MultipleChoice exactly one option is correct; for MultipleSelect one or more. Enforced by the API per itemType.",
+          "feedback": "Feedback shown when this option is selected. Optional: correct options rarely need it, and not every design includes distractor-specific feedback. Item-level general feedback lives on AssessmentItem.correctFeedback and incorrectFeedback.",
+          "purpose": "Free-text note on what this option is for: the misconception a distractor targets, or why a correct option is phrased as it is. Design rationale at the option level; free text per ADR-0010 until usage shows structure."
+        }
+      }
+    ]
   },
   {
     "@type": "Class",
     "@id": "AssessmentItem",
     "@inherits": "ArmatureDocument",
-    "@documentation": [
-      {
-        "@language": "en",
-        "@label": "AssessmentItem",
-        "@comment": "A single reusable question or task in the item bank. Inherits label, description from ArmatureDocument. Exists independently of any specific Assessment — placed into Assessments via ItemInstance. assesses must contain at least one LearningObjective — enforced at schema level via @min_cardinality (ADR-0013). difficultyIndex and discriminationIndex are computed from LearningDataset analysis and written back by the API, closing the design-to-evidence feedback loop. See ADR-0009, ADR-0013.",
-        "@properties": {
-          "bloomsLevel": "The cognitive level this item assesses. Optional at authoring time. When set, enables Bloom's alignment queries against the objectives in the assesses set.",
-          "assesses": "The LearningObjectives this item provides evidence of. Minimum 1 enforced at the schema level. An item that assesses no objective has no place in the artifact graph. See ADR-0013.",
-          "difficultyIndex": "Proportion of learners who answered correctly (0.0–1.0). Computed from LearningDataset analysis by the API — not authored. A lower value indicates a harder item. Written back to the item to enable item bank queries by difficulty.",
-          "discriminationIndex": "Measure of how well the item distinguishes high performers from low performers (typically -1.0 to 1.0, with higher values indicating better discrimination). Computed from LearningDataset analysis by the API — not authored."
-        }
+    "@key": {
+      "@type": "Random"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
       }
-    ],
-    "stem": "xsd:string",
+    },
+    "stem": "TextFragment",
+    "options": {
+      "@type": "List",
+      "@class": "ItemOption"
+    },
+    "correctFeedback": {
+      "@type": "Optional",
+      "@class": "TextFragment"
+    },
+    "incorrectFeedback": {
+      "@type": "Optional",
+      "@class": "TextFragment"
+    },
     "itemType": "ItemType",
+    "status": "ItemStatus",
     "bloomsLevel": {
       "@type": "Optional",
       "@class": "BloomsLevel"
@@ -572,35 +766,25 @@
     "discriminationIndex": {
       "@type": "Optional",
       "@class": "xsd:decimal"
-    }
-  },
-  {
-    "@type": "Class",
-    "@id": "Response",
-    "@inherits": "ArmatureDocument",
-    "@key": {
-      "@type": "Hash",
-      "@fields": [
-        "item",
-        "label"
-      ]
     },
     "@documentation": [
       {
         "@language": "en",
-        "@label": "Response",
-        "@comment": "One answer option for an AssessmentItem. Inherits label, description from ArmatureDocument. A back-reference pattern is used: Response holds the foreign key to its item rather than AssessmentItem holding an array of responses. This keeps AssessmentItem documents lean regardless of the number of responses. See ADR-0004.",
+        "@label": "AssessmentItem",
+        "@comment": "A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). difficultyIndex and discriminationIndex are computed from LearningDataset analysis and written back by the API. API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.",
         "@properties": {
-          "incorrectFeedback": "Feedback shown to the learner when they select this incorrect response. Optional — correct responses do not need feedback, and not all item designs include distractor-specific feedback."
+          "stem": "The question or prompt, as a TextFragment with its own fragmentId so a reviewer can address the stem rather than the whole item.",
+          "options": "The ordered answer options, embedded as ItemOption subdocuments. Order is presentation order; identity is fragmentId, never position. Empty for item types with no options (Essay, ShortAnswer). See ADR-0022.",
+          "correctFeedback": "General feedback shown on a correct response, as a TextFragment. Optional. Distractor-specific feedback lives on the option.",
+          "incorrectFeedback": "General feedback shown on an incorrect response, as a TextFragment. Optional.",
+          "status": "The item's own review lifecycle: Draft on creation, InReview, Approved, Retired. Required so that absence is never ambiguous. Shares the ItemStatus enum with ItemInstance.status so the consistency check \"placements Approved whose item is not\" is a graph query. Only Approved items count toward coverageStatus (ADR-0019). See ADR-0018.",
+          "bloomsLevel": "The cognitive level this item assesses. Optional at authoring time. When set, enables Bloom's alignment queries against the objectives in the assesses set.",
+          "assesses": "The LearningObjectives this item provides evidence of. Minimum 1 enforced at the schema level. An item that assesses no objective has no place in the artifact graph. See ADR-0013.",
+          "difficultyIndex": "Proportion of learners who answered correctly (0.0–1.0). Computed from LearningDataset analysis by the API — not authored. A lower value indicates a harder item. Written back to the item to enable item bank queries by difficulty.",
+          "discriminationIndex": "Measure of how well the item distinguishes high performers from low performers (typically -1.0 to 1.0, with higher values indicating better discrimination). Computed from LearningDataset analysis by the API — not authored."
         }
       }
-    ],
-    "isCorrect": "xsd:boolean",
-    "incorrectFeedback": {
-      "@type": "Optional",
-      "@class": "xsd:string"
-    },
-    "item": "AssessmentItem"
+    ]
   },
   {
     "@type": "Class",
@@ -620,8 +804,8 @@
         "@properties": {
           "sequence": "The position of this item within the Assessment. API CONSTRAINT: sequence values must be unique within an Assessment. Gaps are permitted.",
           "pointValue": "Integer point value awarded for a correct response.",
-          "randomize": "Whether the responses for this item should be presented in random order when the Assessment is administered.",
-          "status": "Review lifecycle state of this item within this assessment.",
+          "randomize": "Whether the options for this item should be presented in random order when the Assessment is administered.",
+          "status": "Placement clearance: whether this item is cleared for administration in this Assessment. Distinct from AssessmentItem.status, which is the item's own review lifecycle. API CONSTRAINT: may not be Approved while the AssessmentItem is Draft or InReview. See ADR-0018.",
           "assessment": "The Assessment this item is placed in.",
           "implements": "The reusable AssessmentItem this instance is drawn from."
         }
@@ -632,12 +816,21 @@
     "randomize": "xsd:boolean",
     "status": "ItemStatus",
     "assessment": "Assessment",
-    "implements": "AssessmentItem"
+    "implements": "AssessmentItem",
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    },
+    "@inherits": "DesignRecord"
   },
   {
     "@type": "Class",
     "@id": "Assessment",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -660,12 +853,20 @@
       "@type": "Optional",
       "@class": "xsd:integer"
     },
-    "module": "Module"
+    "module": "Module",
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
+    }
   },
   {
     "@type": "Class",
     "@id": "LearningActivity",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -685,19 +886,32 @@
       "@type": "Set",
       "@class": "LearningObjective",
       "@min_cardinality": 1
+    },
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
     }
   },
   {
     "@type": "Class",
     "@id": "ActivityGroup",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
         "@label": "ActivityGroup",
         "@comment": "A reusable, named collection of LearningActivities with a defined pedagogical sequence. Inherits label, description from ArmatureDocument. Can appear in multiple Modules via ModuleActivityGroupLink. Intentionally flat — ActivityGroups do not contain other ActivityGroups. Membership and sequence are managed through ActivityGroupMember junction documents. See ADR-0003."
       }
-    ]
+    ],
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
+    }
   },
   {
     "@type": "Class",
@@ -724,7 +938,13 @@
     "sequence": {
       "@type": "Optional",
       "@class": "xsd:integer"
-    }
+    },
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    },
+    "@inherits": "DesignRecord"
   },
   {
     "@type": "Class",
@@ -758,12 +978,21 @@
     },
     "coverageStatus": "CoverageStatus",
     "module": "Module",
-    "references": "LearningObjective"
+    "references": "LearningObjective",
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    },
+    "@inherits": "DesignRecord"
   },
   {
     "@type": "Class",
     "@id": "Module",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
@@ -778,7 +1007,12 @@
       "@type": "Optional",
       "@class": "xsd:integer"
     },
-    "course": "Course"
+    "course": "Course",
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
+    }
   },
   {
     "@type": "Class",
@@ -805,7 +1039,13 @@
     "sequence": {
       "@type": "Optional",
       "@class": "xsd:integer"
-    }
+    },
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    },
+    "@inherits": "DesignRecord"
   },
   {
     "@type": "Class",
@@ -832,19 +1072,28 @@
     "sequence": {
       "@type": "Optional",
       "@class": "xsd:integer"
-    }
+    },
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    },
+    "@inherits": "DesignRecord"
   },
   {
     "@type": "Class",
     "@id": "DesignNote",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
         "@label": "DesignNote",
-        "@comment": "A free-form rationale record attached to any primary artifact in the Armature graph. Inherits label, description from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject types to Set<ArmatureDocument> — any primary artifact can be a subject. TerminusDB enforces referential integrity natively, replacing the earlier xsd:anyURI stopgap. See ADR-0012, ADR-0014.",
+        "@comment": "A free-form rationale record attached to any design record in the Armature graph. Inherits label, description, createdBy from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject is typed Set<DesignRecord>: any artifact or any reified relationship (a sequencing decision, an evidence weighting) can carry a note. TerminusDB enforces referential integrity natively. See ADR-0012, ADR-0014, ADR-0017.",
         "@properties": {
-          "subject": "The primary artifact(s) this note pertains to. Typed to ArmatureDocument — accepts any subtype (LearningObjective, AssessmentItem, Module, etc.) at runtime via TerminusDB polymorphism. Minimum 1 enforced at schema level — a note without a subject is orphaned. Referential integrity is enforced by TerminusDB: subjects must exist and deletions of referenced documents are handled via standard reference semantics. See ADR-0014.",
+          "subject": "The design record(s) this note pertains to. Typed to DesignRecord, so it accepts any artifact or junction document at runtime via TerminusDB polymorphism; User is excluded by design (ADR-0015). Minimum 1 enforced at schema level: a note without a subject is orphaned. See ADR-0017.",
           "category": "Optional categorization of the design decision type. Enables queries like 'show all rationale related to Bloom's level choices' or 'show all prerequisite intent notes'. Not all notes fit neatly into a category."
         }
       }
@@ -852,24 +1101,89 @@
     "rationale": "xsd:string",
     "subject": {
       "@type": "Set",
-      "@class": "ArmatureDocument",
+      "@class": "DesignRecord",
       "@min_cardinality": 1
     },
     "category": {
       "@type": "Optional",
       "@class": "DesignNoteCategory"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
     }
+  },
+  {
+    "@type": "Class",
+    "@id": "DesignFinding",
+    "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
+    },
+    "finding": "xsd:string",
+    "subject": {
+      "@type": "Set",
+      "@class": "DesignRecord",
+      "@min_cardinality": 1
+    },
+    "regarding": {
+      "@type": "Optional",
+      "@class": "DesignRecord"
+    },
+    "evidence": {
+      "@type": "Set",
+      "@class": "LearningEvidence"
+    },
+    "confidence": {
+      "@type": "Optional",
+      "@class": "ConfidenceLevel"
+    },
+    "status": "FindingStatus",
+    "resolutionRationale": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "DesignFinding",
+        "@comment": "An evidence-grounded concern about a design record: \"this objective is ambiguous\", \"these two items are redundant\", \"this prerequisite is unjustified\". Where DesignNote records why something was done, DesignFinding records that someone judged something to be a problem, and what became of that judgment. Inherits label, description, createdBy from ArmatureDocument. Evidence is a Set rather than a junction because a finding's confidence is a property of the finding, not of each piece of evidence. Evidence is optional: a finding without it is weaker, and that weakness is visible in the graph, which is more useful than forcing ceremony. API CONSTRAINT: resolutionRationale is required when status is Dismissed. See ADR-0020.",
+        "@properties": {
+          "finding": "What the concern is, in the reporter's words.",
+          "subject": "The design record(s) of concern. Minimum 1.",
+          "regarding": "A second record the subject is being related to, for findings about a relationship between two things (an item and the objective it claims to assess, two items suspected redundant).",
+          "evidence": "Evidence grounding the concern, typically DescriptiveEvidence with method ExpertReview. Optional. Each evidence document must be self-contained: the substance in finding, a pointer to the originating system in source.",
+          "confidence": "How sure the reporter is that the concern is real. A property of the finding, not of each evidence item.",
+          "status": "Open on creation; Addressed when the design changed in response; Dismissed when judged not a problem. See FindingStatus.",
+          "resolutionRationale": "Why the finding was addressed or dismissed. Required for Dismissed (API-enforced): a concern waved away without explanation launders a judgment as a fact."
+        }
+      }
+    ]
   },
   {
     "@type": "Class",
     "@id": "Course",
     "@inherits": "ArmatureDocument",
+    "@key": {
+      "@type": "Random"
+    },
     "@documentation": [
       {
         "@language": "en",
         "@label": "Course",
         "@comment": "Top-level container for a complete instructional design project. Inherits label, description from ArmatureDocument. Contains one or more Modules. Intentionally minimal in the current schema — version, status, dates, and authorship fields are deferred. See ADR-0010."
       }
-    ]
+    ],
+    "@metadata": {
+      "armature": {
+        "category": "artifact"
+      }
+    }
   }
 ]
