@@ -195,3 +195,6 @@ Everything else as anticipated:
 - A new dependency with a fast release cadence (Hono is at 4.x; the Vercel adapter reached 1.0 in
   2026). Pin exact versions in `app/package.json` and let CI catch breakage, as the repository does
   for the TerminusDB client.
+- ADR-0055 (2026-10-08) decides how the layer this ADR created reaches the store: one `fetch`
+  adapter under `app/lib/api/`, with the JavaScript client kept out of it. The spike route's use
+  of the client singleton is replaced by that adapter as the first Phase 2 code change.
