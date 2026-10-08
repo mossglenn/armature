@@ -3,7 +3,8 @@
 ## Status
 
 Accepted (2026-10-08). Verified against TerminusDB v12.0.7 by `scripts/platform_checks.js`
-checks M to T, results in §Verification. Makes ADR-0010's versioning deferral a decision; resolves
+checks M to T, results in §Verification. Decision 6 amended 2026-10-08 with the branch-delete
+rule Phase 3 was to decide. Makes ADR-0010's versioning deferral a decision; resolves
 the data-version token question ADR-0054 left open; absorbs research candidate 0036's no-rewrite
 rule. Research candidates 0037 (release pointers), 0046 (change feed) and the delegation trailers
 proposed for this ADR are deferred, with the reason for each in §Consequences.
@@ -136,11 +137,26 @@ Phase 2's routes land (ADR-0054 consequences).
    branch, and does not call them. Rebase changes commit identifiers (Q2), and a pinned id would
    then name a commit no branch reaches. Reads at a commit id still work after a rebase or a
    branch delete (Q4, T2), so an existing pin never dangles on this store; the rule protects the
-   meaning of the pin, which is "a state on a shared branch", not its readability. Branch delete
-   is reserved for a later phase and is subject to the same rule: a branch whose commits another
-   document references is not deleted. Content-hash pins beside commit ids (candidate 0036) are
-   ADR-0028's to specify, as an integrity check across stores rather than a reachability check
-   within this one.
+   meaning of the pin, which is "a state on a shared branch", not its readability. Content-hash
+   pins beside commit ids (candidate 0036) are ADR-0028's to specify, as an integrity check
+   across stores rather than a reachability check within this one.
+
+   *Branch delete, decided 2026-10-08 (Phase 3).* `DELETE /api/v1/branches/:name` exists under
+   three rules. `main` is never deleted. A branch is deleted only when another branch holds its
+   head: the head commit is in another branch's log, or a commit on another branch names it as
+   `armature.mergeSource`. Otherwise the hub answers 409 `unmerged_branch` with the head, and the
+   caller merges first or keeps the branch. There is no force. The reason is that a branch
+   deletion is the one mutation the store records nowhere: it is not a commit, so it has no
+   author and no reason, and the paper's third principle does not allow design history to
+   vanish without a trace. When the head is held elsewhere nothing vanishes: every commit on
+   the branch is an ancestor of its head, so all of them stay reachable from the holding branch
+   through the merge commit's `mergeSource` and the parent chain, and readable by id besides
+   (T2). An abandoned exploration is process data (plan §1 P1, P3); a plugin that wants it out
+   of the way names the branch accordingly rather than deleting it. The earlier reservation,
+   "a branch whose commits another document references is not deleted", is subsumed: a pinned
+   commit on an unmerged branch is protected because the branch is, and a pinned commit on a
+   merged branch stays reachable. The response carries the deleted branch's head so the last
+   state remains nameable.
 
 7. **`/api/v1` exposes the bare commit id, in standard HTTP headers.** Every response that read
    from or wrote to the store carries `ETag: "<commit-id>"`: the commit the read was served from,
