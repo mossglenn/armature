@@ -3,7 +3,15 @@
 // Safe to re-run: uses replace semantics so existing schema is overwritten.
 //
 // Usage:
-//   node load_schema.js
+//   node load_schema.js                     # replace the schema; instance data must conform
+//   node load_schema.js --clear-instances   # empty the instance graph first, then replace the schema
+//
+// A breaking schema change (removing a class, changing a field's type) fails the
+// schema check against existing instance data. At demo scale the answer is a
+// reload: --clear-instances deletes every instance document in one transaction,
+// the schema loads against an empty graph, and seed_data.js repopulates it.
+// For a deployment holding real data, use TerminusDB's schema migration
+// endpoint (/api/migration, with dry_run) instead; see ADR-0022's consequences.
 //
 // Environment variables (all have defaults for local dev):
 //   TERMINUS_URL    - TerminusDB server URL  (default: http://localhost:6363)
@@ -89,6 +97,15 @@ async function main() {
   //
   //    The commit message is the fourth positional argument of addDocument; the
   //    client does not accept a commit_info parameter.
+  // 3b. Optionally empty the instance graph so a breaking schema change can load.
+  //     full_replace with an empty document list deletes every instance document
+  //     in one commit. Explicit flag because it is destructive.
+  if (process.argv.includes("--clear-instances")) {
+    console.log(`\nClearing instance data (--clear-instances)...`);
+    await client.addDocument([], { full_replace: true }, null, "Clear instance data before schema replace");
+    console.log(`  → Instance graph emptied`);
+  }
+
   console.log(`\nLoading schema...`);
 
   // Strip top-level @comment keys from each entry — TerminusDB rejects @-prefixed
