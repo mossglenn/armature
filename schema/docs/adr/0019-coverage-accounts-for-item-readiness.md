@@ -1,11 +1,12 @@
 # ADR-0019: Coverage Semantics Account for Item Readiness
 
 ## Status
-Proposed. Its dependency, ADR-0018, was accepted and implemented on 2026-10-07. Promotion is
-scheduled with ADR-0029 (the coverage algorithm) in Phase 4 of `docs/development-plan.md`, when
-coverage stops being hand-seeded. Until then the seeded `coverageStatus` values do not reflect this
-ADR's eligibility rule (the Draft item `hallucination-mc` is the only item assessing
-`identify-ai-limitations`, which the seed still marks FullyAssessed).
+Accepted (2026-10-08), with ADR-0029, which defines the algorithm this ADR left open, adopts its
+eligibility rule as its decision 2, and specifies the population counted, the verdict thresholds
+and the commit the recompute lands in. Its dependency, ADR-0018, was accepted and implemented on
+2026-10-07. The seed no longer hand-writes coverage; on the seed this rule reads
+`identify-ai-limitations` in `how-ai-works` as `Uncovered` with `PartiallyAssessed` projected,
+because its only item, `hallucination-mc`, is `Draft`.
 
 ## Context
 
@@ -77,10 +78,12 @@ Acceptable at demo scale. SESSION.md already records that `ModuleObjective` filt
 
 ## Open
 
-The coverage algorithm itself — what makes an objective `PartiallyAssessed` rather than `FullyAssessed` — remains undefined, as recorded in PROJECT_CONTEXT. This ADR defines only which items are eligible to be counted, not how counting produces a verdict. Both fields use the same algorithm over different populations, so defining it once serves both.
+Closed by ADR-0029: the verdict is by the number of distinct eligible items placed in the module's
+assessments, with both fields using the same algorithm over the two populations this ADR defines.
 
 ## Related
 
 - ADR-0007 — `ModuleObjective` as programmatic junction; amended by decision 4
+- ADR-0029 — the coverage algorithm; adopts this ADR's eligibility rule and promotes it
 - ADR-0018 — item readiness, which this depends on
 - ADR-0006 — the API's responsibility for constraints and computed consistency
