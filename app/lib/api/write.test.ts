@@ -378,7 +378,6 @@ describe('generic write path and invariants (Phase 3)', () => {
             module: MODULE,
             references: 'LearningObjective/write-effective-prompts',
             role: 'Supporting',
-            coverageStatus: 'Uncovered',
           },
           { '@type': 'DesignNote', label: 'Why supporting', rationale: 'Prompting is practised here, assessed later.', subject: [{ '@ref': 'mo' }] },
         ],
@@ -429,6 +428,151 @@ describe('generic write path and invariants (Phase 3)', () => {
 
       expect((await get(`/api/v1/documents/AssessmentItem${q}&colour=red`)).status).toBe(400);
       expect((await get(`/api/v1/documents/Widget${q}`)).status).toBe(404);
+    });
+  });
+  describe('constraint 7: coverage is computed in the commit that changes it (ADR-0029)', () => {
+    const OBJECTIVE_2 = 'LearningObjective/describe-model-training';
+    let moduleId = '';
+    let assessmentId = '';
+    let declarationId = '';
+
+    const declaration = async () => (await get(`/api/v1/documents/${declarationId}${q}`)).json();
+    const lastCommitOf = async (id: string) =>
+      ((await (await get(`/api/v1/documents/${id}/history${q}&count=1&diff=false`)).json()).entries[0] as { commit: string }).commit;
+    // Placements are Hash-keyed on (assessment, implements): no client id, and
+    // writing the same pair again is a replace of that placement.
+    const placement = (itemId: string, sequence: number, status: string, assessment: unknown = assessmentId) => ({
+      '@type': 'ItemInstance',
+      sequence,
+      pointValue: 1,
+      randomize: false,
+      status,
+      assessment,
+      implements: `AssessmentItem/${itemId}`,
+    });
+    const write = (message: string, documents: unknown[]) => post(`/api/v1/documents${q}`, { message, documents });
+    const expectCoverage = async (coverageStatus: string, projectedCoverageStatus: string) => {
+      const d = await declaration();
+      expect(d.coverageStatus).toBe(coverageStatus);
+      expect(d.projectedCoverageStatus).toBe(projectedCoverageStatus);
+    };
+
+    it('rejects a computed field sent by a client with 400, naming the field', async () => {
+      const res = await write('x', [
+        { '@type': 'ModuleObjective', module: MODULE, references: OBJECTIVE_2, role: 'Supporting', coverageStatus: 'FullyAssessed' },
+      ]);
+      expect(res.status).toBe(400);
+      const { issues } = await res.json();
+      expect(issues).toHaveLength(1);
+      expect(issues[0].path).toBe('coverageStatus');
+      expect(issues[0].message).toContain('computed');
+    });
+
+    it('fills both fields on a declaration of a module minted in the same write', async () => {
+      const res = await write('A module, its assessment and one declared objective', [
+        { '@type': 'Module', '@capture': 'm', label: `Coverage module ${stamp}`, course: 'Course/intro-ai-for-ids' },
+        { '@type': 'Assessment', '@capture': 'a', label: 'Coverage check', randomize: false, module: { '@ref': 'm' } },
+        { '@type': 'ModuleObjective', module: { '@ref': 'm' }, references: OBJECTIVE_2, role: 'Primary' },
+      ]);
+      expect(res.status).toBe(200);
+      [moduleId, assessmentId, declarationId] = (await res.json()).ids;
+      expect(moduleId).toMatch(/^Module\//);
+      await expectCoverage('Uncovered', 'Uncovered');
+    });
+
+    it('an approved bank item that nobody has placed covers nothing', async () => {
+      const res = await put(`/api/v1/documents/AssessmentItem/cov-a-${stamp}${q}`, {
+        message: 'Author item a',
+        document: item(`cov-a-${stamp}`, { status: 'Approved', assesses: [OBJECTIVE_2] }),
+      });
+      expect(res.status).toBe(200);
+      await expectCoverage('Uncovered', 'Uncovered');
+    });
+
+    it('a Draft placement moves the projected figure only, in the same commit', async () => {
+      const res = await write('Place item a, not yet cleared', [placement(`cov-a-${stamp}`, 1, 'Draft')]);
+      expect(res.status).toBe(200);
+      const { commit } = await res.json();
+      await expectCoverage('Uncovered', 'PartiallyAssessed');
+      expect(await lastCommitOf(declarationId)).toBe(commit);
+      expect(res.headers.get('etag')).toBe(`"${commit}"`);
+    });
+
+    it('clearing the placement delivers it', async () => {
+      const res = await write('Clear the placement', [placement(`cov-a-${stamp}`, 1, 'Approved')]);
+      expect(res.status).toBe(200);
+      await expectCoverage('PartiallyAssessed', 'PartiallyAssessed');
+    });
+
+    it('two distinct items are FullyAssessed; the same item in a second assessment counts once', async () => {
+      const second = await write('Author and place item b', [
+        item(`cov-b-${stamp}`, { status: 'Approved', assesses: [OBJECTIVE_2] }),
+        placement(`cov-b-${stamp}`, 2, 'Approved'),
+      ]);
+      expect(second.status).toBe(200);
+      await expectCoverage('FullyAssessed', 'FullyAssessed');
+
+      const again = await write('A second assessment that places item a too', [
+        { '@type': 'Assessment', '@capture': 'a2', label: 'Coverage recheck', randomize: false, module: moduleId },
+        placement(`cov-a-${stamp}`, 1, 'Approved', { '@ref': 'a2' }),
+      ]);
+      expect(again.status).toBe(200);
+      await expectCoverage('FullyAssessed', 'FullyAssessed');
+    });
+
+    it('above the threshold it is OverAssessed', async () => {
+      const ids = ['c', 'd', 'e'].map((x) => `cov-${x}-${stamp}`);
+      const res = await write('Three more items, all placed', [
+        ...ids.map((id) => item(id, { status: 'Approved', assesses: [OBJECTIVE_2] })),
+        ...ids.map((id, i) => placement(id, 3 + i, 'Approved')),
+      ]);
+      expect(res.status).toBe(200);
+      await expectCoverage('OverAssessed', 'OverAssessed');
+    });
+
+    it('retiring an item removes it from both figures', async () => {
+      const res = await put(`/api/v1/documents/AssessmentItem/cov-e-${stamp}${q}`, {
+        message: 'Retire item e',
+        document: item(`cov-e-${stamp}`, { status: 'Retired', assesses: [OBJECTIVE_2] }),
+      });
+      expect(res.status).toBe(200);
+      await expectCoverage('FullyAssessed', 'FullyAssessed');
+    });
+
+    it('dropping the objective from an item recomputes the declaration', async () => {
+      const res = await put(`/api/v1/documents/AssessmentItem/cov-d-${stamp}${q}`, {
+        message: 'Item d assesses another objective now',
+        document: item(`cov-d-${stamp}`, { status: 'Approved', assesses: [OBJECTIVE] }),
+      });
+      expect(res.status).toBe(200);
+      await expectCoverage('FullyAssessed', 'FullyAssessed'); // a, b and c remain: three distinct items
+    });
+
+    it('moving an assessment to another module recomputes both modules in one commit', async () => {
+      const before = await (await get(`/api/v1/documents/ModuleObjective${q}&module=${MODULE}&references=${OBJECTIVE_2}`)).json();
+      expect(before).toHaveLength(1);
+      expect(before[0].coverageStatus).toBe('Uncovered');
+
+      const res = await put(`/api/v1/documents/${assessmentId}${q}`, {
+        message: 'Move the first assessment to How AI Works',
+        document: { label: 'Coverage check', randomize: false, module: MODULE },
+      });
+      expect(res.status).toBe(200);
+      const { commit } = await res.json();
+
+      // The test module keeps item a through its second assessment only.
+      await expectCoverage('PartiallyAssessed', 'PartiallyAssessed');
+      // How AI Works gains a, b and c (d assesses another objective, e is Retired).
+      const after = await (await get(`/api/v1/documents/ModuleObjective${q}&module=${MODULE}&references=${OBJECTIVE_2}`)).json();
+      expect(after[0].coverageStatus).toBe('FullyAssessed');
+      expect(await lastCommitOf(after[0]['@id'])).toBe(commit);
+      expect(await lastCommitOf(declarationId)).toBe(commit);
+    });
+
+    it('rejects a client id on a Hash-keyed type with 400', async () => {
+      const res = await write('x', [{ '@id': `ItemInstance/mine-${stamp}`, ...placement(`cov-a-${stamp}`, 9, 'Draft') }]);
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('bad_id');
     });
   });
 });
