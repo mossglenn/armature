@@ -485,7 +485,7 @@ Work:
       a passing test in `app/lib/api/write.test.ts`.
 - [x] **Recompute hooks.** `afterWrite` for `AssessmentItem`, `ItemInstance`, `ModuleObjective`
       in `invariants/recompute.ts` names the affected modules; Phase 4 gives it a body.
-- [x] **Users and ADR-0032: Identity resolution** (proposed and implemented 2026-10-08).
+- [x] **Users and ADR-0032: Identity resolution** (accepted 2026-10-08, PR #7).
       `app/lib/api/identity.ts`: a pluggable resolver chosen by `ARMATURE_IDENTITY` (`header`
       now, carrying the caller's `externalId`; `oidc` named for later) yields claims; the hub
       resolves them to a `User` on `main`, the registry of record, by template query (check W1),
@@ -705,7 +705,7 @@ reading TerminusDB documentation.
 | 0029 | Coverage algorithm | 4 | Closes PROJECT_CONTEXT's open question |
 | 0030 | External references and attachments | 6 | P6; attachment references with mandatory content hash, backend left open |
 | 0031 | Export profiles and schema slices | 6 | P7, P8; implements ADR-0021's deferred section |
-| 0032 | Identity resolution | 3 (proposed 2026-10-08, implemented) | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |
+| 0032 | Identity resolution | 3 (accepted 2026-10-08) | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |
 | 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Abstract `Fragment` subdocument; `ItemOption` as a specialisation; generic kinds with `sys:JSON` payload and per-kind validation; promotion path to typed subdocuments. Verify polymorphic subdocument lists first |
 | 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI as precedents); the hub never serves executable content from a graph document, renderers load sandboxed under CSP |
 

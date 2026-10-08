@@ -2,8 +2,7 @@
 
 ## Status
 
-Proposed (2026-10-08), implemented on `phase-3/generic-writes`; promote to Accepted on merge.
-Implements the boundary ADR-0015 drew between the external auth system, the store's access
+Accepted (2026-10-08, merged in PR #7). Implements the boundary ADR-0015 drew between the external auth system, the store's access
 control and the Armature `User`. Replaces the interim `Armature-User` mechanism ADR-0025
 decision 2 and ADR-0055 anticipated. Verified against TerminusDB v12.0.7 by
 `scripts/platform_checks.js` check W, results in §Verification.
