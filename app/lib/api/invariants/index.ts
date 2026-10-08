@@ -5,7 +5,6 @@ import { validateDesignFinding } from './designFinding';
 import { validateItemInstance } from './itemInstance';
 import { validateActivityGroupMember, validateModuleContentLink } from './moduleContent';
 import { checkReferences } from './references';
-import { afterWriteCoverage } from './recompute';
 
 /**
  * The invariants engine (ADR-0006, plan §4 Phase 3).
@@ -23,7 +22,8 @@ import { afterWriteCoverage } from './recompute';
  *   4  group member sequence      moduleContent.ts
  *   5  ItemInstance sequence      itemInstance.ts
  *   6  ActivityGroup flatness     constraint 0: a member's activity is typed LearningActivity
- *   7  coverageStatus recompute   recompute.ts (afterWrite; Phase 4 fills it in)
+ *   7  coverage recompute         recompute.ts: deriveCoverage, run by the pipeline after
+ *                                the checks and before the commit, in it (ADR-0029)
  *   8  fragmentId unique          assessmentItem.ts
  *   9  option text, correct count assessmentItem.ts
  *  10  placement not ahead of item itemInstance.ts and assessmentItem.ts (both sides)
@@ -86,13 +86,6 @@ const VALIDATORS: Record<string, Validator> = {
   DesignFinding: validateDesignFinding,
 };
 
-/** Hooks run after the commit, keyed by @type (constraint 7). */
-const AFTER_WRITE: Record<string, (docs: TerminusDocument[], ctx: WriteContext) => Promise<void>> = {
-  AssessmentItem: afterWriteCoverage,
-  ItemInstance: afterWriteCoverage,
-  ModuleObjective: afterWriteCoverage,
-};
-
 /** Runs every check over the batch; throws a 422 carrying all violations. */
 export async function checkInvariants(ctx: WriteContext): Promise<void> {
   const violations: Violation[] = [];
@@ -102,17 +95,6 @@ export async function checkInvariants(ctx: WriteContext): Promise<void> {
     if (validator) violations.push(...(await validator(doc, index, ctx)));
   }
   if (violations.length) throw new InvariantError(violations);
-}
-
-export async function runAfterWrite(ctx: WriteContext): Promise<void> {
-  const seen = new Set<(docs: TerminusDocument[], ctx: WriteContext) => Promise<void>>();
-  for (const doc of ctx.batch) {
-    const hook = AFTER_WRITE[doc['@type']];
-    if (hook && !seen.has(hook)) {
-      seen.add(hook);
-      await hook(ctx.batch, ctx);
-    }
-  }
 }
 
 /** A reference value's id when it is a plain id, else undefined (`{ "@ref" }` has none yet). */
