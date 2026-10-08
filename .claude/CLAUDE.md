@@ -55,11 +55,13 @@ app/
       app.test.ts          # In-process Vitest tests via app.request(), including the Phase 2 walkthrough; need the container running
       store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
-      identity.ts          # Interim author resolution from the Armature-User header; replaced by ADR-0032 in Phase 3
+      identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
+      classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy
       errors.ts            # ApiError: status + stable code + message, rendered by onError
       routes/
-        documents.ts       # GET at ref, provisional PUT, history, diff
-        branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata), changes since a commit
+        documents.ts       # GET at ref, provisional PUT (sets createdBy from the resolved User), history, diff
+        branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit
+        users.ts           # list at ref, /me, register on main (ADR-0032)
     terminusdb.ts          # Legacy WOQLClient singleton for the unversioned routes only; deleted with them in Phase 3. The API layer uses the HTTP store adapter (ADR-0055)
     routeHelpers.ts        # Legacy: createGetHandler + handleTerminusError for the unversioned routes only
     types.ts               # GENERATED — do not edit; run npm run generate:types
@@ -193,6 +195,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0006** — Minimum cardinality enforced by API (affects all create/update validators)
 - **ADR-0007** — ModuleObjective as programmatic junction (affects coverage computation)
 - **ADR-0026** — API host and route versioning (Next.js routes are the API; new routes under `/api/v1`)
+- **ADR-0032** — Identity resolution (`main` is the `User` registry; author and `createdBy` come from the resolved identity, never the body; a branch that lacks the `User` gets `main`'s copy in the same commit)
 - **ADR-0054** — The API is a Hono application (host-neutral; nothing under `app/lib/api/` imports from `next`)
 - **ADR-0055** — The API layer reaches TerminusDB over HTTP through one adapter (the JavaScript client stays in `scripts/`)
 
@@ -241,4 +244,5 @@ Follow the guide in `.claude/prompts/commit-message-guide.md`. Descriptive, conv
 - **Don't** import the `terminusdb` client under `app/lib/api/` — the API layer reaches the store through its HTTP adapter (ADR-0055); the client lives in `scripts/`. The one exception is `lib/woql.js` to build query JSON the adapter posts, and the first such use amends the ADR
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)
 - **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6)
+- **Don't** take the commit author or `createdBy` from a request body — both come from the identity the request resolved to; `User` documents are created on `main` only (ADR-0032)
 - **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will
