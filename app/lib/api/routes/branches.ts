@@ -21,9 +21,12 @@ import {
  *   GET  /:name                 the head commit
  *   POST /:name/merge           { message, from }  three-way merge; 409 on conflict
  *   GET  /:name/changes?since=  changed document ids since a commit
+ *   DELETE /:name               only when another branch holds the head; 409 otherwise
  *
- * No delete, reset, squash or rebase: shared history is never rewritten
- * (decision 6). Branch delete is reserved for a later phase.
+ * No reset, squash or rebase: shared history is never rewritten (decision
+ * 6). A branch deletion is the one mutation the store records nowhere, so
+ * the hub allows it only when nothing leaves branch-reachable history: the
+ * head is in another branch's log or is a merge commit's mergeSource there.
  */
 export const branches = new Hono();
 
@@ -106,6 +109,21 @@ async function mergeBase(target: Store, source: Store): Promise<string | undefin
     const merged = mergeSourceOf(commit);
     if (merged && sourceIds.has(merged)) return merged;
     if (mergedBySource.has(commit.id)) return commit.id;
+  }
+  return undefined;
+}
+
+/**
+ * The first of `candidates` whose history holds `head`: the commit is in its
+ * log, or one of its commits merged it (decision 6, branch delete). Every
+ * commit on the branch being deleted is an ancestor of its head, so a held
+ * head means the whole branch stays reachable.
+ */
+async function branchHolding(head: string, candidates: string[], store: Store): Promise<string | undefined> {
+  for (const name of candidates) {
+    for (const commit of await fullLog(store.at({ branch: name }))) {
+      if (commit.id === head || mergeSourceOf(commit) === head) return name;
+    }
   }
   return undefined;
 }
@@ -230,6 +248,30 @@ branches.post('/:name/merge', async (c) => {
     target: targetHead.id,
     conflicts,
   });
+});
+
+branches.delete('/:name', async (c) => {
+  const { name } = c.req.param();
+  if (name === 'main') throw new ApiError(400, 'protected_branch', 'main is never deleted (ADR-0025 decision 6)');
+  await resolveAuthor(c);
+  const store = createStore({ branch: 'main' });
+  const names = await store.listBranches();
+  if (!names.includes(name)) throw new ApiError(404, 'unknown_ref', `No branch ${name}`);
+  const head = await store.at({ branch: name }).head();
+  let heldBy: string | undefined;
+  if (head) {
+    heldBy = await branchHolding(head.id, names.filter((n) => n !== name), store);
+    if (!heldBy) {
+      throw new ApiError(
+        409,
+        'unmerged_branch',
+        `Branch ${name} has commits no other branch holds; merge it first, or keep it as the record of that work (ADR-0025 decision 6)`,
+        { head: head.id }
+      );
+    }
+  }
+  await store.deleteBranch(name);
+  return c.json({ deleted: name, head: head?.id ?? null, heldBy: heldBy ?? null });
 });
 
 branches.get('/:name/changes', async (c) => {
