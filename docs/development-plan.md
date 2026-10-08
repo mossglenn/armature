@@ -395,64 +395,63 @@ its outbox depends on.
 **Serves:** P3 directly; P1 (process data becomes inspectable); P8 (author on every commit).
 
 Work:
-- [ ] **ADR-0025: Design process data lives in the commit graph.** States the reconciliation in
-      §1 P3. Decides: no `version`, `createdAt` or "new version of" fields (confirms ADR-0010);
-      every write names an author and a reason; the reason is the commit message; branches are
-      the unit of parallel work; reads are always at a named ref; what "immutable" means when
-      the store replaces in place (every prior state is readable at its commit, forever). Records
-      the merge model: TerminusDB's `apply` endpoint is a three-way merge with field-level
-      conflict detection that returns a conflict report (document, field, `@before`,
-      `@after_left`, `@after_right`) and never resolves silently; `rebase` replays commits
-      instead. The hub wraps `apply` as its merge, surfaces the store's conflict report in the
-      plugin's terms, and owns the policy questions the store does not answer: who may merge,
-      and whether some document types merge without approval (CoQui's O-P). Change requests
-      exist only as an unmaintained dashboard feature, so a review workflow above the merge is
-      hub or plugin product work.
-- [ ] **Routes are Hono routes.** Branch, merge, read-at-ref, history and diff land in
-      `app/lib/api/routes/` and are mounted on the app from ADR-0054's spike; the data-version
-      header is read and echoed by middleware, not per handler.
-- [ ] **Decide the shape of the data-version token.** The client returns the branch head as
-      `branch:<commit-id>` and the spike route forwards it verbatim, which leaks the store's token
-      format into the contract. Decide whether `/api/v1` exposes the raw token or the bare commit
-      id that history and diff return, before CoQui's `httpHub` round-trips the header. Record in
-      ADR-0025 (ADR-0054 consequences).
+- [x] **ADR-0025: Design process data lives in the commit graph.** Accepted 2026-10-08 on
+      platform checks M to T. Decides: no `version`, `createdAt`, `updatedAt` or "new version of"
+      fields (ADR-0010 amended); every write is a commit whose author is the resolved `User` id
+      and whose reason is a required message, carried in a JSON envelope; branches are the unit
+      of parallel work; reads are at a named ref (`branch` or `ref`); history, changes and diff
+      are read routes over the store; the hub wraps `apply` as a three-way merge with a computed
+      base and returns 409 with the witnesses plus the source value on conflict; shared history
+      is never rewritten (no reset, squash or rebase exposed or called); `/api/v1` exposes the
+      bare commit id as `ETag` and accepts `If-Match` (412 when stale). Corrections to the
+      merge facts previously recorded here are in §9. Who may merge and per-type merge
+      filtering stay open (§6). Interim identity: an `Armature-User` header until ADR-0032.
+- [x] **Routes are Hono routes.** `app/lib/api/routes/documents.ts` and `routes/branches.ts`,
+      mounted by `app.ts`. The concurrency token is handled by shared helpers in
+      `app/lib/api/http.ts` (`ifMatchFrom`, `setEtag`) rather than middleware, because the commit
+      a response carries is known only after the store call; the effect is the same.
+- [x] **Decide the shape of the data-version token.** Decided in ADR-0025 decision 7: `/api/v1`
+      exposes the bare commit id in `ETag` on every response that touched the store and accepts
+      `If-Match` on writes; the adapter translates to and from the store's `branch:<id>` token and
+      maps `api:DataVersionMismatch` to 412. The store's header never appears in the contract.
 - [x] **ADR-0055: the API layer reaches the store over HTTP.** Accepted 2026-10-08 on a reading
       of the installed client source. One `fetch`-based adapter under `app/lib/api/` owns URL
       construction, credentials, `author` and `message`, the data-version header and typed error
       parsing; the JavaScript client stays in `scripts/` and may re-enter the API layer only to
-      build WOQL JSON. Two behaviours it relies on still need lettered platform checks before the
-      routes land: the error body on a stale data version, and `diff=true` on history.
-- [ ] **Per-request store adapter and the write path (ADR-0055).** Replace the singleton with a
-      request-scoped adapter created from the resolved ref and identity. Every handler receives
-      it. Rewrite the spike's read route and test against it first. Document writes go over the
-      HTTP document API with `author` and `message` set from the resolved identity (see §3). The
-      `TerminusDB-Data-Version` header is returned on reads and forwarded on writes when the
-      caller supplies it; without it the server retries a write up to three times if the branch
-      head moved, so two blind writers both succeed and the last one wins. `app.onError` maps the
-      adapter's typed error by the server's `@type`, not by substring.
-- [ ] **Branch routes.** `POST /api/v1/branches` (name, from a branch head or a commit; the
-      store's `origin` accepts a commit path and the client builds one when `ref()` is set),
-      `GET /api/v1/branches`, `GET /api/v1/branches/:name` (head commit), `DELETE` reserved.
-- [ ] **Merge route.** `POST /api/v1/branches/:name/merge` wrapping `apply` with author and
-      reason; on conflict, return 409 with the store's witnesses mapped to document ids and
-      fields. Per-type merge filtering and a conflict view are not built here; the route makes
-      the paper's merge promise true and gives the deferred questions something concrete to be
-      about.
-- [ ] **Read at ref.** All document reads accept `?branch=` or `?ref=`; the response carries the
-      commit it was read at. Reads at a commit use the store's `local/commit/<id>` path, which is
-      read-only by construction.
-- [ ] **History routes.** `GET /api/v1/documents/:type/:id/history` wrapping the store's history
-      endpoint, including its `diff=true` option (added in v12.0.5) so each commit carries the
-      structural change it made. `GET /api/v1/branches/:name/changes?since=<commit>` wrapping a
-      branch diff between two data versions with no document filter, which yields the changed
-      document ids.
-- [ ] **Diff route.** `GET /api/v1/documents/:type/:id/diff?from=<commit>&to=<commit>` returning
-      the store's diff. List fields diff positionally in the store, so fragment-aware diffing
-      stays in the plugin, as CoQui concluded.
+      build WOQL JSON. The two behaviours it relies on that §9 did not yet record have their
+      checks: the stale data-version error body (M5) and `diff=true` on history (N2).
+- [x] **Per-request store adapter and the write path (ADR-0055).** `app/lib/api/store.ts`:
+      `createStore(ref)` per request; `getDocument`, `putDocument` (author, message, If-Match),
+      `log`, `head`, `getCommit`, `history`, `diff`, `listBranches`, `createBranch`,
+      `deleteBranch`, `apply`. Typed `StoreError` carries the server's `@type`; `app.onError`
+      matches on it. Interim identity in `app/lib/api/identity.ts` (`Armature-User` header,
+      verified to be a `User` document). A provisional `PUT /api/v1/documents/:type/:id` exists
+      so the walkthrough can write; Phase 3 wraps it in the invariants engine.
+- [x] **Branch routes.** `POST /api/v1/branches` (`{ name, from: { branch } | { commit } }`,
+      201 with the head), `GET /api/v1/branches` (names with heads), `GET /api/v1/branches/:name`
+      (head commit). `DELETE` reserved (ADR-0025 decision 6); tests delete their scratch branches
+      through the adapter.
+- [x] **Merge route.** `POST /api/v1/branches/:name/merge` with `{ message, from }`: computes the
+      merge base from the logs and `Merge-Source` trailers, calls `apply`, returns the merge
+      commit or `upToDate: true`; on conflict 409 `merge_conflict` with `{ id, field, base,
+      target, source }` per witness, the source value read from the source head. Per-type merge
+      filtering and a conflict view are not built here.
+- [x] **Read at ref.** `GET /api/v1/documents/:type/:id?branch=|ref=`; `ETag` is the commit. A
+      caller-supplied commit id is checked against the commit graph first, because the store
+      answers a read at a non-existent commit with a 500 (check U).
+- [x] **History routes.** `GET /api/v1/documents/:type/:id/history?branch=&start=&count=&diff=`
+      returning `{ commit, author, message, timestamp, diff }` per entry, newest first.
+      `GET /api/v1/branches/:name/changes?since=<commit>` returning `{ id, op }` per changed
+      document (`insert`, `delete`, `update`).
+- [x] **Diff route.** `GET /api/v1/documents/:type/:id/diff?from=<commit>&to=<commit>` returning
+      the store's structural diff. List fields diff positionally in the store, so fragment-aware
+      diffing stays in the plugin, as CoQui concluded.
 
 Exit: a scripted walkthrough creates a branch from a commit, writes to it as a named author,
 reads the same document at two commits, lists its history with diffs, merges the branch, and
-provokes one conflict, without touching the TerminusDB API directly.
+provokes one conflict, without touching the TerminusDB API directly. **Met on 2026-10-08:** the
+walkthrough is the second `describe` block of `app/lib/api/app.test.ts`, run with `npm test`
+against the container; it works on scratch branches and leaves `main` untouched.
 
 CoQui receives: asks 1, 2 and 6, and the merge its PR 6 was deferred for.
 
@@ -849,11 +848,25 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - Branch creation accepts an `origin` that is a branch head *or* a commit path
   (`org/db/local/commit/<id>`); the client uses the commit when `ref()` is set.
 - Reads at a commit use the `local/commit/<id>` path and are read-only.
-- *Corrected:* `apply` is a three-way merge with field-level conflict detection. A conflict is
-  reported per document and field with `@before`, `@after_left` and `@after_right`, and the merge
-  is rejected rather than resolved. `rebase` replays commits and requires a shared ancestor.
-  Earlier statements that TerminusDB lacks a three-way merge (CoQui handoff §4, and the first
-  draft of this plan) were wrong for v12.
+- *Corrected:* `apply` is a three-way merge with field-level conflict detection, and the merge
+  is rejected rather than resolved. Earlier statements that TerminusDB lacks a three-way merge
+  (CoQui handoff §4, and the first draft of this plan) were wrong for v12.
+- *Corrected (2026-10-08, checks P and Q):* `apply` takes `before_commit` and `after_commit` as
+  bare commit ids (commit paths are `api:NotValidRefError`) and does not compute the merge base;
+  the caller supplies it. A conflict is HTTP 409 with `api:status: api:conflict` and witnesses of
+  the form `{ "@id", "<field>": { "@op": "Conflict", "@expected": <base>, "@found": <target> } }`;
+  the source branch's value is not in the witness. The vendored docs' `@before`/`@after_left`/
+  `@after_right` shape is not what the store returns. `rebase` replays commits, gives them new
+  identifiers, and leaves the old commit readable at its old id; `POST /api/rebase/<X>` with
+  `rebase_from: <Y>` rebases X onto Y (the vendored page reads the other way).
+- Branch creation from a commit path starts the branch at that commit with the same identifier
+  (check O). Deleting a branch keeps its commits readable at `local/commit/<id>`; the DELETE
+  needs a `{}` body when sent with a JSON content type, else 500 (check T).
+- A commit's existence is checked by reading `ValidCommit/<id>` from `local/_commits` (200 or
+  `api:DocumentNotFound`). A document read at a commit path that does not exist is a 500
+  `api:InternalServerError`, so the hub validates commit ids before using them as refs (check U).
+- A merge commit made by `apply` has one parent and does not record the source commit; the hub
+  records it as a `Merge-Source` trailer in the commit message (ADR-0025 decision 5).
 - Document history: `/api/history/<path>?id=<doc>&diff=true` returns the commits that touched one
   document, with author, message, identifier, timestamp, and since v12.0.5 the structural diff.
 - Diff: `/api/diff` takes two data versions (branch names or commit ids) and an optional document
@@ -875,6 +888,10 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   concurrency. Independently, the server retries a transaction up to three times when the branch
   head moved during it (`TERMINUSDB_SERVER_MAX_TRANSACTION_RETRIES`), so concurrent writers do not
   fail unless they pass a data version.
+- *Verified (2026-10-08, check M):* the token is `branch:<commit-id>` on a branch read and
+  `commit:<commit-id>` on a read at a commit, and the id is the log head. A write with a stale
+  token is HTTP 400 `api:DataVersionMismatch` (not 409); a bare commit id as the token is HTTP
+  400 `api:BadDataVersion`. `/api/v1` maps the stale case to 412 (ADR-0025 decision 7).
 - Access control is role-based at organization and database scope. No per-branch permissions
   exist, and only basic authentication is documented for self-hosted use. Branch write
   exclusivity is therefore a hub convention, as the CoQui handoff assumed.

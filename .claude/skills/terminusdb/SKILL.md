@@ -89,7 +89,15 @@ renamed; fix the slug in the script's `CURATED` list and in the table above.
 Recorded in `docs/development-plan.md` §9 as of v12.0.7. The ones most often needed:
 
 - `apply` is a three-way merge with field-level conflict detection; conflicts are reported, never
-  resolved silently. `rebase` replays commits.
+  resolved silently. It takes bare commit ids for `before_commit` and `after_commit`, and a
+  conflict is HTTP 409 with witnesses of the form `{ "@op": "Conflict", "@expected", "@found" }`,
+  not the `@before`/`@after_left`/`@after_right` the vendored merge page shows (platform check
+  P). `rebase` replays commits and gives them new ids; `POST /api/rebase/<X>` with
+  `rebase_from: <Y>` rebases X onto Y, the reverse of how the vendored page reads (check Q).
+- A commit's existence is checked by reading `ValidCommit/<id>` from `local/_commits`; a document
+  read at a commit path that does not exist is a 500 (check U). A stale `TerminusDB-Data-Version`
+  is HTTP 400 `api:DataVersionMismatch`; a bare commit id as the token is rejected (check M).
+  Branch DELETE needs a `{}` body with a JSON content type (check T).
 - Branch `origin` may be a branch head or a commit path. Reads at `local/commit/<id>` are
   read-only.
 - `POST` inserts and rejects an existing id unless `overwrite=true`; `PUT` replaces and needs

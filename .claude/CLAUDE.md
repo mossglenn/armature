@@ -51,8 +51,15 @@ app/
     */route.ts             # Legacy unversioned Next.js handlers (courses, coverage, ...) — retired in Phase 3; write no new ones
   lib/
     api/
-      app.ts               # The Armature API: Hono app, basePath /api/v1, routes, onError mapping. Never imports from next
-      app.test.ts          # In-process Vitest tests via app.request(); need the TerminusDB container running
+      app.ts               # The Armature API: Hono app, basePath /api/v1, mounts routes/, onError mapping. Never imports from next
+      app.test.ts          # In-process Vitest tests via app.request(), including the Phase 2 walkthrough; need the container running
+      store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
+      http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
+      identity.ts          # Interim author resolution from the Armature-User header; replaced by ADR-0032 in Phase 3
+      errors.ts            # ApiError: status + stable code + message, rendered by onError
+      routes/
+        documents.ts       # GET at ref, provisional PUT, history, diff
+        branches.ts        # list, create, head, merge (three-way via apply, Merge-Source trailer), changes since a commit
     terminusdb.ts          # Legacy WOQLClient singleton for the unversioned routes only; deleted with them in Phase 3. The API layer uses the HTTP store adapter (ADR-0055)
     routeHelpers.ts        # Legacy: createGetHandler + handleTerminusError for the unversioned routes only
     types.ts               # GENERATED — do not edit; run npm run generate:types
@@ -232,5 +239,6 @@ Follow the guide in `.claude/prompts/commit-message-guide.md`. Descriptive, conv
 - **Don't** write new API routes as Next.js route handlers — new routes are Hono routes in `app/lib/api/` under `/api/v1` (ADR-0054); the files under `app/app/api/*/route.ts` are legacy
 - **Don't** import from `next` anywhere under `app/lib/api/` — the host appears only in `app/app/api/[[...route]]/route.ts`
 - **Don't** import the `terminusdb` client under `app/lib/api/` — the API layer reaches the store through its HTTP adapter (ADR-0055); the client lives in `scripts/`. The one exception is `lib/woql.js` to build query JSON the adapter posts, and the first such use amends the ADR
-- **Don't** forward store-internal tokens into the API contract without deciding their shape — the `TerminusDB-Data-Version` value is the store's `branch:<commit>` token today; Phase 2 decides what `/api/v1` exposes (ADR-0054 consequences)
+- **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)
+- **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6)
 - **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will
