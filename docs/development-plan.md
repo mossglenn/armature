@@ -431,8 +431,9 @@ Work:
       the invariants engine.
 - [x] **Branch routes.** `POST /api/v1/branches` (`{ name, from: { branch } | { commit } }`,
       201 with the head), `GET /api/v1/branches` (names with heads), `GET /api/v1/branches/:name`
-      (head commit). `DELETE` reserved (ADR-0025 decision 6); tests delete their scratch branches
-      through the adapter.
+      (head commit). `DELETE /api/v1/branches/:name` decided in Phase 3 (ADR-0025 decision 6,
+      amended 2026-10-08): never `main`, and only when another branch holds the head, else 409
+      `unmerged_branch`; tests still delete their unmerged scratch branches through the adapter.
 - [x] **Merge route.** `POST /api/v1/branches/:name/merge` with `{ message, from }`: computes the
       merge base from the logs and the merge commits' metadata, calls `apply`, returns the merge
       commit or `upToDate: true`; on conflict 409 `merge_conflict` with `{ id, field, base,
@@ -510,8 +511,10 @@ Work:
       POST routes, and the coverage read is two list reads until Phase 4's intelligence route.
 
 Exit (met 2026-10-08): every constraint in CLAUDE.md has a failing test and a passing test
-against the running store (`app/lib/api/write.test.ts`). The old per-type routes are gone. Open
-from this phase: `DELETE /api/v1/branches/:name` (reserved by ADR-0025 decision 6).
+against the running store (`app/lib/api/write.test.ts`). The old per-type routes are gone.
+`DELETE /api/v1/branches/:name` is decided and built: a branch goes only when another branch
+holds its head, because a deletion is the one mutation the store records nowhere (ADR-0025
+decision 6, amended).
 
 CoQui receives: asks 3, 4 and 5.
 

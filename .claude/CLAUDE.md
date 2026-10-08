@@ -62,7 +62,7 @@ app/
       errors.ts            # ApiError: status + stable code + message, rendered by onError
       routes/
         documents.ts       # list with field filters, GET at ref, PUT, batch POST (@capture/@ref), history, diff
-        branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit
+        branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
     types.ts               # GENERATED — do not edit; run npm run generate:types. Interfaces plus the schema as data: CLASS_CATEGORY, CLASS_ANCESTORS, CLASS_KEY, CLASS_FIELDS
     schemas.ts             # GENERATED — do not edit; Zod request schemas, one per concrete class, from the same generator
@@ -245,6 +245,6 @@ Follow the guide in `.claude/prompts/commit-message-guide.md`. Descriptive, conv
 - **Don't** add the `terminusdb` client to `app/` — the API layer reaches the store through its HTTP adapter (ADR-0055); the client is a dependency of `scripts/` only. The one exception would be `lib/woql.js` to build query JSON the adapter posts, and the first such use amends the ADR
 - **Don't** write a per-type route or hand-write a request schema — type behaviour is a validator in `app/lib/api/invariants/`, and request shape comes from the generated `schemas.ts`
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)
-- **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6)
+- **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6). A branch is deleted only when another branch holds its head; there is no force
 - **Don't** take the commit author or `createdBy` from a request body — both come from the identity the request resolved to; `User` documents are created on `main` only (ADR-0032)
 - **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will
