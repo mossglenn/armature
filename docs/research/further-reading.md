@@ -1,6 +1,6 @@
 # Further reading: follow-up literature search
 
-**Date:** 2026-10-06 · Companion to `learning-data-standards-precedents.md` and `adr-candidates.md`.
+**Date:** 2026-10-06 · Companion to `learning-data-standards-precedents.md` and `adr-candidates.md`. A dated snapshot, kept as written; see the status note at the top of `learning-data-standards-precedents.md` for what has changed since. `docs/how-armature-works.md` draws on several of these sources.
 
 Eight follow-up topics, 85 sources. Every item was checked against a DOI record, publisher page or repository record by the searching agent. Items marked † had thinner checks (noted in the row). Nothing here duplicates the sources already cited in the precedents document. None of these are in Zotero yet.
 

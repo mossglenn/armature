@@ -1,6 +1,6 @@
 # Armature Demo API
 
-> **Status: Retired (2026-10-08).** This document defined the demo-era API: per-type routes shaped around demo tools. The eight simple GET list routes, `GET /coverage/:moduleId`, `POST /courses` and `POST /modules` existed unversioned as legacy routes (ADR-0026) until Phase 3 of `docs/development-plan.md` retired them. Their work is done by the generic document API under `/api/v1/`: `GET /documents/:type?field=value` lists any type with filters, `PUT /documents/:type/:id` and the batch `POST /documents` write any type through the invariants engine, and a module's coverage is the two reads the old route made (`ModuleObjective?module=` and `LearningObjective`) or, since Phase 4 (2026-10-08), the one read `GET /api/v1/intelligence/coverage/:moduleId` (ADR-0029). The rest of what is specified below was never built and will not be built in this form. Two shapes are stale and flagged in place: the item shape (superseded by ADR-0022 and ADR-0023) and the coverage response. The demo-tool framing and the "narrow domain layer" idea remain useful context for what the generic API must make possible.
+> **Status: Retired (2026-10-08).** This document defined the demo-era API: per-type routes shaped around demo tools. The eight simple GET list routes, `GET /coverage/:moduleId`, `POST /courses` and `POST /modules` existed unversioned as legacy routes (ADR-0026) until Phase 3 of `docs/development-plan.md` retired them. Their work is done by the generic document API under `/api/v1/`: `GET /documents/:type?field=value` lists any type with filters, `PUT /documents/:type/:id` and the batch `POST /documents` write any type through the invariants engine, and a module's coverage is the one read `GET /api/v1/intelligence/coverage/:moduleId` (Phase 4, 2026-10-08; ADR-0029, ADR-0056), which computes it on read. `ModuleObjective` no longer has a coverage field, so no list read returns coverage. The current API is documented in `docs/api.md`. The rest of what is specified below was never built and will not be built in this form. Two shapes are stale and flagged in place: the item shape (superseded by ADR-0022 and ADR-0023) and the coverage response. The demo-tool framing and the "narrow domain layer" idea remain useful context for what the generic API must make possible.
 
 ## Purpose
 
@@ -38,6 +38,8 @@ The API supports four demo tools plus two supporting views:
 | **Coverage View** | Graph intelligence; what you get back from capturing design rationale |
 
 The Coverage View is the demo payoff — it reads `ModuleObjective.coverageStatus` to show whether a module's declared objectives are adequately assessed, demonstrating that the graph can answer design questions that no current tool can.
+
+> **Stale (2026-10-08).** `coverageStatus` was removed by ADR-0056. The Coverage View built in Phase 4 (`app/app/coverage/[moduleId]/page.tsx`) calls `GET /api/v1/intelligence/coverage/:moduleId`, which computes coverage on read. Every `coverageStatus` value in the examples below is historical.
 
 ## Endpoints
 
@@ -209,7 +211,7 @@ Creates a learning objective. Optionally links to a LearningNeed and creates a M
 
 ### Assessment Items
 
-> **Stale shape.** The `responses` array below reflects the pre-ADR-0022 schema, in which options were separate `Response` documents. ADR-0022 (Accepted) embeds options in the item as `ItemOption` subdocuments, and ADR-0023 gives the stem, each option and both general feedbacks a client-assigned `fragmentId`. The schema change itself lands in Phase 1 of `docs/development-plan.md`; until then the running store still holds `Response` documents and `GET /items` returns raw item documents without joined objective labels. Treat the shapes in this section as historical.
+> **Stale shape.** The `responses` array below reflects the pre-ADR-0022 schema, in which options were separate `Response` documents. ADR-0022 (Accepted) embeds options in the item as `ItemOption` subdocuments, and ADR-0023 gives the stem, each option and both general feedbacks a client-assigned `fragmentId`. The schema change landed in Phase 1 of `docs/development-plan.md` (2026-10-07), and `GET /items` was retired in Phase 3. Treat the shapes in this section as historical.
 
 #### `GET /items`
 Returns all assessment items with their objective alignments. Used by the Coverage View and item builder review state.
