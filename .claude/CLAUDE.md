@@ -53,6 +53,7 @@ app/
       app.ts               # The Armature API: Hono app, basePath /api/v1, mounts routes/, onError mapping. Never imports from next
       app.test.ts          # In-process Vitest tests via app.request(): reads, the Phase 2 walkthrough, users and identity; need the container running
       write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
+      intelligence.test.ts # The four intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone (Phase 4 exit criterion)
       store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
       identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
@@ -61,11 +62,13 @@ app/
       invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), one module per constrained type; recompute.ts derives coverage before the commit (ADR-0029)
       intelligence/
         coverage.ts        # The coverage algorithm (ADR-0029): pure and dependency-free, so the write pipeline and scripts/seed_data.js call the same code
+        graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
       errors.ts            # ApiError: status + stable code + message, rendered by onError
       routes/
         documents.ts       # list with field filters, GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
+        intelligence.ts    # coverage/:moduleId, alignment, trace/:type/:id, impact/:type/:id: design intelligence from structure alone (plan P4)
     types.ts               # GENERATED — do not edit; run npm run generate:types. Interfaces plus the schema as data: CLASS_CATEGORY, CLASS_ANCESTORS, CLASS_KEY, CLASS_FIELDS
     schemas.ts             # GENERATED — do not edit; Zod request schemas, one per concrete class, from the same generator
   vitest.config.mts        # Vitest: '@' alias, reads .env.local so tests hit the same store as the app
