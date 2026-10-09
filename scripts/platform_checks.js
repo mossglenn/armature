@@ -94,7 +94,8 @@ const schema = [
   { "@type": "Class", "@id": "Note", "@key": { "@type": "Random" }, "subject": { "@type": "Set", "@class": "L1", "@min_cardinality": 1 } },
   { "@type": "Class", "@id": "Artifact", "@key": { "@type": "Random" }, "label": "xsd:string" },
   { "@type": "Class", "@id": "Other", "@key": { "@type": "Random" }, "label": "xsd:string" },
-  { "@type": "Class", "@id": "Holder", "@key": { "@type": "Random" }, "one": "Artifact", "many": { "@type": "Set", "@class": "Artifact" } },
+  // Y: a required, an Optional and a Set reference, for the template-query probes
+  { "@type": "Class", "@id": "Holder", "@key": { "@type": "Random" }, "one": "Artifact", "many": { "@type": "Set", "@class": "Artifact" }, "maybe": { "@type": "Optional", "@class": "Artifact" } },
   // X: a Hash-keyed junction, as Armature's relationship documents are
   { "@type": "Class", "@id": "Link", "@key": { "@type": "Hash", "@fields": ["a", "b"] }, "a": "Artifact", "b": "Artifact", "note": { "@type": "Optional", "@class": "xsd:string" } },
   // D–J: abstract subdocument with typed and generic specialisations
@@ -537,6 +538,24 @@ async function main() {
   r = await api("GET", xb("id=Artifact/x-f"));
   record("X5a", r.status === 404 ? "PASS" : "INFO", `the other document in that rejected list was not written (atomic): ${r.status}`);
   await api("DELETE", `/api/branch/admin/${DB}/local/branch/x-write`, {});
+
+  // Y: template queries on reference fields (the Phase 4 intelligence reads look documents up by what they reference)
+  r = await api("POST", at("branch/main", commit("y fixtures")), [
+    { "@type": "Artifact", "@id": "Artifact/y-a", label: "ya" },
+    { "@type": "Artifact", "@id": "Artifact/y-b", label: "yb" },
+    { "@type": "Holder", "@id": "Holder/y-h", one: "Artifact/y-a", many: ["Artifact/y-a", "Artifact/y-b"], maybe: "Artifact/y-b" },
+    { "@type": "Holder", "@id": "Holder/y-h2", one: "Artifact/y-b", many: [] },
+  ]);
+  if (r.status !== 200) record("Y", "FAIL", `fixtures: ${r.status} ${errType(r)}`);
+  const yq = (query) => api("POST", at("branch/main", ""), { type: "Holder", as_list: true, query }, override);
+  r = await yq({ one: "Artifact/y-a" });
+  record("Y1", r.status === 200 && Array.isArray(r.json) && r.json.length === 1 && r.json[0]?.["@id"] === "Holder/y-h" ? "PASS" : "INFO", `template on a required reference field: ${r.status} ${short(r.json)}`);
+  r = await yq({ maybe: "Artifact/y-b" });
+  record("Y2", r.status === 500 ? "PASS" : "INFO", `template on an Optional reference field: ${r.status} ${errType(r)} (PASS records the 500 the hub works around by listing and filtering; a 200 here means the store was fixed and Graph.where can use the template)`);
+  r = await yq({ many: "Artifact/y-b" });
+  record("Y3", "INFO", `template on a Set reference field with one member as the value: ${r.status} ${short(r.json)}`);
+  r = await yq({ many: ["Artifact/y-b"] });
+  record("Y3b", "INFO", `template on a Set reference field with an array value: ${r.status} ${short(r.json)}`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
