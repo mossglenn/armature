@@ -13,8 +13,8 @@
  * Runtime allowlists for every TerminusDB enum type.
  * Each VALID_* array is the source of truth — the union type is derived from it.
  *
- * Use with validateEnum() in route handlers:
- *   validateEnum(body.bloomsLevel, 'bloomsLevel', VALID_BloomsLevel, false)
+ * The generated Zod schemas in schemas.ts build their enum checks from these
+ * arrays, so request validation and the types can never disagree.
  *
  * The arrays are readonly tuples so TypeScript can narrow the derived union type.
  */

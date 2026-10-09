@@ -1,26 +1,26 @@
 #!/usr/bin/env node
 /**
  * generate-types.js
- * Generates app/lib/types.ts from Armature's schema.json.
+ * Generates app/lib/types.ts and app/lib/schemas.ts from Armature's schema.json.
  *
  * schema.json is the single source of truth for all type information.
  * This generator derives TypeScript interfaces and union types from it
  * so that app/lib/types.ts never needs to be hand-maintained.
  *
  * Usage (from repo root):
- *   node scripts/generate-types.js           # write types.ts
- *   node scripts/generate-types.js --check   # exit 1 if types.ts is out of sync
+ *   node scripts/generate-types.js           # write types.ts and schemas.ts
+ *   node scripts/generate-types.js --check   # exit 1 if either is out of sync
  *
  * Usage (from armature/app/):
  *   npm run generate:types
  *   npm run check:types
  *
- * --check is intended for CI. It regenerates the file in memory, diffs
- * against the committed version, and exits non-zero if they differ.
- * Run `npm run generate:types` to fix drift.
+ * --check is intended for CI (continuous integration). It regenerates both
+ * files in memory, diffs them against the committed versions, and exits
+ * non-zero if either differs. Run `npm run generate:types` to fix drift.
  *
  * Schema path:  schema/schema.json   (relative to repo root)
- * Output path:  app/lib/types.ts     (relative to repo root)
+ * Output paths: app/lib/types.ts, app/lib/schemas.ts   (relative to repo root)
  *
  * --- Type mapping decisions ---
  *
@@ -47,7 +47,7 @@
  * Inline comments on reference fields (e.g. `// Module @id`) preserve
  * the semantic target for readers.
  *
- * --- Schema self-description (ADR-0027) ---
+ * --- Schema self-description (architecture decision record ADR-0027) ---
  *
  * Every class declares @metadata.armature.category, one of:
  *   infrastructure  User, DesignRecord, ArmatureDocument
@@ -81,8 +81,9 @@
  *
  * --- Zod request schemas (second output, app/lib/schemas.ts) ---
  *
- * One Zod schema per concrete class, for the generic write routes (ADR-0054
- * decision 4). The mapping mirrors the TypeScript one:
+ * One Zod (TypeScript validation library) schema per concrete class, for the
+ * generic write routes (ADR-0054 decision 4). The mapping mirrors the
+ * TypeScript one:
  *
  *   xsd:string / xsd:anyURI        → z.string().min(1).max(10_000)  (never empty)
  *   xsd:boolean                    → z.boolean()
@@ -370,8 +371,8 @@ line(`/**`);
 line(` * Runtime allowlists for every TerminusDB enum type.`);
 line(` * Each VALID_* array is the source of truth — the union type is derived from it.`);
 line(` *`);
-line(` * Use with validateEnum() in route handlers:`);
-line(` *   validateEnum(body.bloomsLevel, 'bloomsLevel', VALID_BloomsLevel, false)`);
+line(` * The generated Zod schemas in schemas.ts build their enum checks from these`);
+line(` * arrays, so request validation and the types can never disagree.`);
 line(` *`);
 line(` * The arrays are readonly tuples so TypeScript can narrow the derived union type.`);
 line(` */`);
