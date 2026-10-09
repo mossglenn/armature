@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-10-08_
+_Schema snapshot · Generated 2026-10-09_
 
 ---
 
@@ -16,7 +16,7 @@ Armature models the full instructional design artifact graph from problem defini
 - **Fragments** — an item is a tree of embedded subdocuments (stem, options, feedbacks), each with a client-assigned `fragmentId` so a part can be addressed without having document identity (ADR-0022, ADR-0023, ADR-0033).
 - **Back-reference pattern** — child documents hold foreign keys to their parents (e.g., `Assessment.module`, `Module.course`), keeping parent documents lean regardless of child count (ADR-0004).
 - **API constraints** — TerminusDB checks that a referenced document exists but not its class, and cannot express cross-document or conditional rules. Those constraints (reference class, unique sequences, conditional requirements, coverage recompute) are enforced by the API and are noted inline (ADR-0006).
-- **Computed fields** — a class may list fields in `@metadata.armature.computed` that the API computes and a client may not write; today `ModuleObjective.coverageStatus` and `projectedCoverageStatus`, recomputed in the same commit as any write that affects them (ADR-0029).
+- **Nothing derived is stored** — coverage and alignment are computed from the structure at read time by the intelligence routes, at any commit, and never written into a document (ADR-0056).
 
 ---
 
@@ -158,8 +158,6 @@ classDiagram
     +integer? sequence
     +ObjectiveRole role
     +string? roleRationale
-    +CoverageStatus coverageStatus
-    +CoverageStatus projectedCoverageStatus
     +Module module
     +LearningObjective references
   }
@@ -504,15 +502,13 @@ _category: relationship · extends `DesignRecord` · key: Hash(group, activity)_
 ### `ModuleObjective`
 _category: relationship · extends `DesignRecord` · key: Hash(module, references)_
 
-> Reifies the relationship between a Module and a LearningObjective it declares. A first-class graph node that carries both design intent (role, roleRationale, sequence) and computed graph intelligence (coverageStatus, projectedCoverageStatus). Clients write the design-intent fields through the generic document API; the two computed fields are the API's alone: they are listed in @metadata.armature.computed, a write that carries one is rejected with 400, and the API computes them in the same commit as any write that affects them — a ModuleObjective, an ItemInstance, an AssessmentItem or an Assessment, including the assessment or module a replace leaves. Coverage counts the distinct AssessmentItems placed in the module's assessments whose assesses names the objective; a bank item nobody has placed covers nothing. See ADR-0007, ADR-0019, ADR-0029.
+> Reifies the relationship between a Module and a LearningObjective it declares: a first-class graph node that carries the design intent of the declaration (role, roleRationale, sequence). Written through the generic document API. It carries no computed value: coverage is derived from the module's placements at read time by GET /api/v1/intelligence/coverage/:moduleId, at any ref, and is never stored (ADR-0056; the algorithm is ADR-0029 decisions 1 to 3). See ADR-0007.
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `sequence` | `integer?` | optional |
 | `role` | `ObjectiveRole` | required |
 | `roleRationale` | `string?` | optional |
-| `coverageStatus` | `CoverageStatus` | required, computed by the API, rejected on write (ADR-0029) |
-| `projectedCoverageStatus` | `CoverageStatus` | required, computed by the API, rejected on write (ADR-0029) |
 | `module` | `Module` | required |
 | `references` | `LearningObjective` | required |
 
@@ -683,16 +679,7 @@ _category: artifact · extends `ArmatureDocument` · key: Random_
 - `Medium`
 - `Low`
 
-### Coverage & Activities
-
-### `CoverageStatus`
-
-> Computed alignment status on ModuleObjective, set by the Armature API and never authored (ADR-0007, ADR-0029). The verdict is by the number of distinct eligible AssessmentItems placed in the module's assessments that assess the declared objective: Uncovered is 0, PartiallyAssessed is 1, FullyAssessed is 2 to 4, OverAssessed is 5 or more. The thresholds are provisional; the upper bound is the hub constant OVER_ASSESSED_ABOVE. Which items are eligible depends on the field: coverageStatus counts Approved items with Approved placements, projectedCoverageStatus counts every item and placement that is not Retired (ADR-0019).
-
-- `Uncovered`
-- `PartiallyAssessed`
-- `FullyAssessed`
-- `OverAssessed`
+### Activities
 
 ### `ActivityType`
 

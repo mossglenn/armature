@@ -188,14 +188,12 @@ function buildClassDiagram() {
 function fieldTable(entry) {
   const fields = getFields(entry);
   if (fields.length === 0) return '_No additional fields._\n';
-  const computed = new Set(entry['@metadata']?.armature?.computed ?? []);
   const rows = fields.map((f) => {
     const optional = f.type.endsWith('?');
     const notes = [optional ? 'optional' : 'required'];
     if (f.min) notes.push(`min ${f.min}`);
     const inner = f.type.replace(/^(Set|List)<(.*)>$/, '$2').replace(/\?$/, '');
     if (subdocIds.has(inner)) notes.push('embedded subdocument');
-    if (computed.has(f.name)) notes.push('computed by the API, rejected on write (ADR-0029)');
     return `| \`${f.name}\` | \`${f.type}\` | ${notes.join(', ')} |`;
   });
   return ['| Field | Type | Notes |', '|-------|------|-------|', ...rows].join('\n') + '\n';
@@ -246,7 +244,7 @@ const ENUM_GROUPS = [
   { label: 'Objectives', ids: ['BloomsLevel', 'ObjectiveState', 'ObjectiveRole', 'PrerequisiteType'] },
   { label: 'Assessment', ids: ['ItemType', 'ItemStatus'] },
   { label: 'Evidence & Needs', ids: ['EvidenceMethod', 'ConfidenceLevel', 'NeedPriority'] },
-  { label: 'Coverage & Activities', ids: ['CoverageStatus', 'ActivityType'] },
+  { label: 'Activities', ids: ['ActivityType'] },
   { label: 'Design Rationale', ids: ['DesignNoteCategory', 'FindingStatus'] },
 ];
 const placedEnums = new Set(ENUM_GROUPS.flatMap((g) => g.ids));
@@ -275,7 +273,7 @@ Armature models the full instructional design artifact graph from problem defini
 - **Fragments** — an item is a tree of embedded subdocuments (stem, options, feedbacks), each with a client-assigned \`fragmentId\` so a part can be addressed without having document identity (ADR-0022, ADR-0023, ADR-0033).
 - **Back-reference pattern** — child documents hold foreign keys to their parents (e.g., \`Assessment.module\`, \`Module.course\`), keeping parent documents lean regardless of child count (ADR-0004).
 - **API constraints** — TerminusDB checks that a referenced document exists but not its class, and cannot express cross-document or conditional rules. Those constraints (reference class, unique sequences, conditional requirements, coverage recompute) are enforced by the API and are noted inline (ADR-0006).
-- **Computed fields** — a class may list fields in \`@metadata.armature.computed\` that the API computes and a client may not write; today \`ModuleObjective.coverageStatus\` and \`projectedCoverageStatus\`, recomputed in the same commit as any write that affects them (ADR-0029).
+- **Nothing derived is stored** — coverage and alignment are computed from the structure at read time by the intelligence routes, at any commit, and never written into a document (ADR-0056).
 
 ---
 
