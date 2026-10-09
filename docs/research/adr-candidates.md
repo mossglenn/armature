@@ -1,9 +1,11 @@
 # ADR candidates from the standards-precedents research
 
 **Date:** 2026-10-06 · **Status:** Candidates, not decisions. Each entry is a proposal to write an ADR; none is Accepted.
+> **Status since this snapshot (2026-10-08).** This document is a dated research snapshot and is kept as written. Since it was produced: Phases 0 to 4 of `docs/development-plan.md` are done; ADR-0024, 0025, 0027, 0029 and 0033 were written and accepted (ADR-0029 partly superseded by ADR-0056, coverage computed on read); candidate 0036's no-rewrite rule was adopted as ADR-0025 decision 6; candidates 0037 (release pointers) and 0046 (change feed) were deferred by ADR-0025, though a branch-changes route (`GET /api/v1/branches/:name/changes?since=`) covers part of 0046; the `typeVersion` on items was deferred to ADR-0034 (ADR-0033 decision 6); candidate 0043 (alignment models) was noted but not adopted by ADR-0029. **Lesson 1 / candidate 0035 (lossless writes) was not implemented in Phase 3** and is now an open question in plan §6. The seed has no learning activities, so recommendations that tag seed activities do not yet apply.
+
 **Source:** `docs/research/learning-data-standards-precedents.md` (snapshot of the Claude Doc *What Armature Can Learn from Learning-Data Standards*). Section names below refer to that document.
 
-ADR-0024 to ADR-0034 are already reserved by `docs/development-plan.md` §5. This list does two things:
+ADR-0024 to ADR-0034 are already reserved by `docs/development-plan.md` §5 (this is the canonical reserved range; some ADRs state it differently). Of those, 0024, 0025, 0026, 0027, 0029, 0032 and 0033 have since been written; 0028, 0030, 0031 and 0034 remain reserved. This list does two things:
 
 1. **Amendments** to those reserved ADRs, so the research lands in decisions already planned.
 2. **New ADR candidates**, numbered provisionally from ADR-0035. Renumber freely; the order is by when each is cheapest to decide, not by importance.

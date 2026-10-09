@@ -1,5 +1,14 @@
 # What CoQui asks of Armature, and what it learned
 
+> **Status since this handoff (2026-10-08).** This is a dated record of what CoQui, the first plugin, asked of Armature on 2026-10-05, as it read the repository at commit `3f00f40`. It is kept as written. Since then:
+>
+> - **All six asks in §3 have landed** in generic form: asks 1, 2 and 6 in Phase 2 (read any document at any commit, branches, history and changes since a commit; ADR-0025), asks 3, 4 and 5 in Phase 3 (client-supplied identifiers with replace semantics for every artifact, the generic write path for notes and findings, users; ADR-0024, ADR-0032). The merge with a per-field conflict report also exists (Phase 2); merge *policy* (O-P, O-Q) is still open (plan §6). The `Attestation` type is planned as ADR-0028 in Phase 5.
+> - **The schema work in §3 is done:** ADR-0017, 0018, 0020, 0022, 0023 and 0024 are implemented (Phase 1).
+> - **Superseded statements:** TerminusDB *does* have a three-way merge with field-level conflict reports (§4's "no three-way merge with markers" is wrong for v12; plan §9). The API is no longer "eight unpaginated GET-all routes": those were retired, and `/api/v1` has filtered, paged list reads (`docs/api.md`). The hub no longer takes a `User` id on trust: the `Armature-User` header now carries an `externalId` that the hub resolves to a `User` (ADR-0032), and every write through the API sets `createdBy`. The API's location is settled (ADR-0026, ADR-0054) and so is the coverage algorithm (ADR-0029, computed on read by ADR-0056).
+> - **One recorded divergence:** this handoff gives each option's own feedback a `{ fragmentId, text }` shape (§2), but the schema has `ItemOption.feedback` as plain text, so per-option feedback is not separately addressable. The difference has not been decided either way.
+>
+> Every path written `coqui/…` refers to the CoQui repository, not this one.
+
 **Date:** 2026-10-05 (Session 22) · **Status: a handoff, for whoever continues Armature's
 development.** Everything here is collected from the CoQui repository's documents and session log
 ([github.com/mossglenn/coqui](https://github.com/mossglenn/coqui)); nothing is new. **Every path written
