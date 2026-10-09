@@ -149,7 +149,7 @@ These are settled. Don't re-open them without a strong reason.
 - **Back-references on children** (ADR-0004)
 - **Shared integer sequence space for module content** (ADR-0005)
 - **API enforces minimum cardinality** (ADR-0006)
-- **ModuleObjective is programmatic, not UI-editable** (ADR-0007)
+- **ModuleObjective is programmatic, not UI-editable** (ADR-0007), and carries no computed value: coverage is derived on read, never stored (ADR-0056)
 - **The API is a boundary CoQui never crosses** — plugins talk to Armature routes, never to TerminusDB. The API is a host-neutral Hono application under `/api/v1` (ADR-0054), served by the Next.js app in this repo for the current phase (ADR-0026); a separate process serving the same application remains the destination and the triggers for the move are recorded in ADR-0026
 
 ---
@@ -161,4 +161,4 @@ These are not yet decided. Treat them as design questions to explore, not gaps t
 - **Authentication model:** Not needed for the demo. Deferred per ADR-0010; identity resolution is ADR-0032 (Phase 3).
 - **Merge policy, project boundaries, AI provenance beyond `createdBy`:** see `docs/development-plan.md` §6 for each question and the evidence that would settle it.
 
-Resolved since this list was written: the API framework question (ADR-0026: Next.js routes are the API host; no Express or Fastify service); the seed data content domain ("Introduction to AI for Instructional Designers", `scripts/seed_data.js`); and the coverage computation algorithm (ADR-0029, 2026-10-08: the verdict is by the number of distinct eligible items placed in the module's assessments, `FullyAssessed` at two to four, thresholds provisional).
+Resolved since this list was written: the API framework question (ADR-0026: Next.js routes are the API host; no Express or Fastify service); the seed data content domain ("Introduction to AI for Instructional Designers", `scripts/seed_data.js`); and the coverage computation algorithm (ADR-0029, 2026-10-08: the verdict is by the number of distinct eligible items placed in the module's assessments, `FullyAssessed` at two to four by default, thresholds provisional and passed as parameters to the coverage read; ADR-0056 the same day: the verdict is computed on read and never stored).
