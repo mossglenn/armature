@@ -11,7 +11,8 @@
 // reload: --clear-instances deletes every instance document in one transaction,
 // the schema loads against an empty graph, and seed_data.js repopulates it.
 // For a deployment holding real data, use TerminusDB's schema migration
-// endpoint (/api/migration, with dry_run) instead; see ADR-0022's consequences.
+// endpoint (/api/migration, with dry_run) instead; see the consequences of
+// ADR-0022 (architecture decision record, in schema/docs/adr/).
 //
 // Environment variables (all have defaults for local dev):
 //   TERMINUS_URL    - TerminusDB server URL  (default: http://localhost:6363)
@@ -53,7 +54,8 @@ async function main() {
   console.log(`  → ${schema.length} schema entries found`);
 
   // 2. Create the client
-  //    WOQLClient takes the server URL and credentials.
+  //    WOQLClient (the terminusdb JS client, named for WOQL, TerminusDB's Web
+  //    Object Query Language) takes the server URL and credentials.
   //    client.db() sets the active database for subsequent operations.
   //    connect() is deprecated — the client is ready to use immediately.
   const client = new WOQLClient(TERMINUS_URL, {
@@ -82,6 +84,15 @@ async function main() {
     console.log(`  → Database created`);
   }
 
+  // 3b. Optionally empty the instance graph so a breaking schema change can load.
+  //     full_replace with an empty document list deletes every instance document
+  //     in one commit. Explicit flag because it is destructive.
+  if (process.argv.includes("--clear-instances")) {
+    console.log(`\nClearing instance data (--clear-instances)...`);
+    await client.addDocument([], { full_replace: true }, null, "Clear instance data before schema replace");
+    console.log(`  → Instance graph emptied`);
+  }
+
   // 4. Load the schema
   //    One POST to the schema graph with full_replace: true. The server deletes the
   //    existing schema and inserts the posted one in a single transaction, then runs
@@ -97,15 +108,6 @@ async function main() {
   //
   //    The commit message is the fourth positional argument of addDocument; the
   //    client does not accept a commit_info parameter.
-  // 3b. Optionally empty the instance graph so a breaking schema change can load.
-  //     full_replace with an empty document list deletes every instance document
-  //     in one commit. Explicit flag because it is destructive.
-  if (process.argv.includes("--clear-instances")) {
-    console.log(`\nClearing instance data (--clear-instances)...`);
-    await client.addDocument([], { full_replace: true }, null, "Clear instance data before schema replace");
-    console.log(`  → Instance graph emptied`);
-  }
-
   console.log(`\nLoading schema...`);
 
   // Strip top-level @comment keys from each entry — TerminusDB rejects @-prefixed

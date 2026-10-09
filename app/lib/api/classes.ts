@@ -2,9 +2,10 @@ import { CLASS_ANCESTORS, CLASS_CATEGORY } from '@/lib/types';
 
 /**
  * What the schema says about a class, read from the generated maps
- * (ADR-0027). Nothing here is hand-maintained: a new class in schema.json
- * appears in `CLASS_CATEGORY` and `CLASS_ANCESTORS` on the next
- * `npm run generate:types`, and CI's drift check catches a stale copy.
+ * (architecture decision record ADR-0027). Nothing here is hand-maintained:
+ * a new class in schema.json appears in `CLASS_CATEGORY` and `CLASS_ANCESTORS`
+ * on the next `npm run generate:types`, and the continuous integration (CI)
+ * drift check catches a stale copy.
  */
 
 const categories = CLASS_CATEGORY as Record<string, string>;

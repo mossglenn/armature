@@ -1,6 +1,7 @@
 /**
- * The store adapter (ADR-0055): the one module under `app/lib/api/` that
- * talks to TerminusDB. Everything else in the API layer goes through it.
+ * The store adapter (architecture decision record ADR-0055): the one module
+ * under `app/lib/api/` that talks to TerminusDB. Everything else in the API
+ * layer goes through it.
  *
  * It owns the base URL and credentials, path construction for a branch or a
  * commit, `author` and `message` on every write, the translation between the
@@ -10,8 +11,8 @@
  *
  * A `Store` is bound to one ref and holds no other state, so one is created
  * per request from the resolved ref (`createStore`). The endpoints and
- * behaviours relied on here are the ones recorded in docs/development-plan.md
- * §9 and reproduced by scripts/platform_checks.js checks M to T.
+ * behaviors relied on here are the ones recorded in docs/development-plan.md
+ * §9 and reproduced by scripts/platform_checks.js checks K and M to X.
  */
 
 /** A branch head or a commit. Reads accept either; writes need a branch. */
@@ -63,16 +64,16 @@ export type ApplyResult =
   | { ok: true; commit: string }
   | { ok: false; witnesses: ConflictWitness[] };
 
-/** A non-2xx response from the store, with the server's error `@type`. */
 /** `If-Match` as the store's token: it compares against the branch head (check M). */
 function dataVersionHeader(ifMatch: string | undefined): Record<string, string> | undefined {
   return ifMatch ? { 'TerminusDB-Data-Version': `branch:${ifMatch}` } : undefined;
 }
 
 /**
- * A document id from a full IRI under the database's `@base`, which the
- * store uses in insert responses and in the `InsertConflict` witness (check
- * W2d): `http://armature.design/data/User/x` → `User/x`, and likewise under
+ * A document id from a full IRI (Internationalized Resource Identifier)
+ * under the database's `@base`, which the store uses in insert responses and
+ * in the `InsertConflict` witness (check W2d):
+ * `http://armature.design/data/User/x` → `User/x`, and likewise under
  * a `terminusdb:///<db>/data/` base. A value that is not such an IRI is
  * returned unchanged.
  */
@@ -80,6 +81,7 @@ export function idFromIri(iri: string): string {
   return iri.replace(/^[a-z][a-z0-9+.-]*:\/\/.*?\/data\//i, '');
 }
 
+/** A non-2xx response from the store, with the server's error `@type`. */
 export class StoreError extends Error {
   constructor(
     readonly status: number,

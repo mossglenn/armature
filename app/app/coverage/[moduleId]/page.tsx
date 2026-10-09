@@ -8,9 +8,9 @@ import { app } from '@/lib/api/app';
  * the Hono app in-process, the same object the catch-all route serves, so
  * the page is a client of the API like any plugin and never reads the store.
  * `?branch=` reads another branch; `?fullyAssessedAt=&overAssessedAbove=`
- * change the cut (ADR-0029 decision 3); the commit the data came from is
- * shown. Nothing here is stored: coverage is computed at read time
- * (ADR-0056).
+ * change the cut (architecture decision record ADR-0029, decision 3); the
+ * commit the data came from is shown. Nothing here is stored: coverage is
+ * computed at read time (ADR-0056).
  */
 export const dynamic = 'force-dynamic';
 

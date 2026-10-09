@@ -1,7 +1,8 @@
-# Armature CI
+# Armature CI (continuous integration)
 #
 # Guards the two contracts the repository relies on without a running store:
-#   1. `schema/schema.json` and the generated `app/lib/types.ts` agree (check:types)
+#   1. `schema/schema.json` and the generated `app/lib/types.ts` and
+#      `app/lib/schemas.ts` agree (check:types)
 #   2. the Next.js app lints clean
 #
 # A contract suite that starts TerminusDB as a service container, loads the schema

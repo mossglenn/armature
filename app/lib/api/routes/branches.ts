@@ -14,7 +14,8 @@ import {
 } from '../store';
 
 /**
- * /api/v1/branches (ADR-0025 decisions 4, 5, 6 and 8).
+ * /api/v1/branches (architecture decision record ADR-0025, decisions 4, 5, 6
+ * and 8).
  *
  *   GET  /                      every branch with its head commit
  *   POST /                      { name, from?: { branch } | { commit } }  → 201

@@ -3,10 +3,10 @@ import { ApiError } from './errors';
 import { isRecord, type Commit, type Ref, type Store } from './store';
 
 /**
- * Request and response conventions shared by the route groups (ADR-0025):
- * refs come from `?branch=` or `?ref=`, concurrency tokens travel in `ETag`
- * and `If-Match` as bare commit ids, and every write body is an envelope
- * with a required `message`.
+ * Request and response conventions shared by the route groups (architecture
+ * decision record ADR-0025): refs come from `?branch=` or `?ref=`,
+ * concurrency tokens travel in `ETag` (entity tag) and `If-Match` as bare
+ * commit ids, and every write body is an envelope with a required `message`.
  */
 
 /** `?branch=` or `?ref=` (a commit id), never both; `main` when neither. */

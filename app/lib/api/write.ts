@@ -7,21 +7,23 @@ import { checkInvariants, createWriteContext } from './invariants';
 import { StoreError, type Store, type TerminusDocument } from './store';
 
 /**
- * The generic write path (plan §4 Phase 3; ADR-0024, ADR-0025, ADR-0032).
- * One pipeline for a single PUT and for a batch POST:
+ * The generic write path (plan §4 Phase 3; architecture decision records
+ * ADR-0024, ADR-0025, ADR-0032). One pipeline for a single PUT and for a
+ * batch POST:
  *
  *   1. shape: each document's @type is a writable class and the document
- *      matches its generated Zod schema (400 invalid_document)
+ *      matches its generated Zod (validation library) schema in
+ *      app/lib/schemas.ts (400 invalid_document)
  *   2. identity: an id held by another type is a 409 (ADR-0024 decision 4);
  *      an existing document is found by @id, or for a Hash-keyed class by
- *      its key fields, so a replace is recognised either way
+ *      its key fields, so a replace is recognized either way
  *   3. provenance: createdBy is set on create and preserved on replace for
  *      every class that carries it; a User the branch lacks is carried in
  *      the same commit (ADR-0032 decisions 4 and 5)
  *   4. invariants: every constraint, over the whole batch (422)
  *   5. the write: one PUT with create=true for the whole list, so it is one
  *      commit and fails together (platform checks X1, X2b, X5); If-Match
- *      honoured (412). The caller's documents and the carried User land as
+ *      honored (412). The caller's documents and the carried User land as
  *      one commit under the caller's reason, and nothing else: the graph
  *      stores no derived values (ADR-0056)
  */
@@ -81,7 +83,7 @@ export function parseDocuments(inputs: unknown[]): TerminusDocument[] {
   return parsed;
 }
 
-/** Steps 2 to 6. */
+/** Steps 2 to 5. */
 export async function writeDocuments(documents: TerminusDocument[], opts: WriteOptions): Promise<WriteResult> {
   const { branch, who } = opts;
 
