@@ -1,9 +1,18 @@
 import { Hono, type Context } from 'hono';
-import { VALID_CoverageStatus, type CoverageStatus } from '@/lib/types';
 import { isKnownType } from '../classes';
 import { ApiError } from '../errors';
-import { refFromQuery, requireCommit, setEtag } from '../http';
-import { coverageOf, isDelivered, isProjected, type ItemLike, type PlacementLike } from '../intelligence/coverage';
+import { intQuery, refFromQuery, requireCommit, setEtag } from '../http';
+import {
+  COVERAGE_STATUSES,
+  DEFAULT_THRESHOLDS,
+  coverageOf,
+  isDelivered,
+  isProjected,
+  type CoverageStatus,
+  type ItemLike,
+  type PlacementLike,
+  type Thresholds,
+} from '../intelligence/coverage';
 import { Graph, bloomsRank, idsIn, otherReferences, summarize, type Summary } from '../intelligence/graph';
 import { createStore, type TerminusDocument } from '../store';
 
@@ -11,8 +20,10 @@ import { createStore, type TerminusDocument } from '../store';
  * /api/v1/intelligence (plan §4 Phase 4; the paper's §4 as read endpoints).
  *
  *   GET /coverage/:moduleId?branch=|ref=       a module's declarations with both coverage
- *                                              figures, the items behind each, and the
- *                                              objectives its assessments test without declaring
+ *       &fullyAssessedAt=&overAssessedAbove=   figures (counts and verdicts), the items behind
+ *                                              each, and the objectives its assessments test
+ *                                              without declaring
+ *   GET /coverage?course=&branch=|ref=         the same for every module of a course (or all)
  *   GET /alignment?module=&branch=|ref=        Bloom's mismatches: items below an objective
  *                                              they assess; objectives no item reaches at level;
  *                                              objectives no activity targets
@@ -27,11 +38,10 @@ import { createStore, type TerminusDocument } from '../store';
  * Redundancy detection ("a new item duplicates one in the bank") needs text
  * similarity and is deferred; it is not a structural question.
  *
- * Coverage reports the stored verdicts, which the write pipeline computed in
- * the commit that last changed their inputs (ADR-0029), and recomputes them
- * live from the same algorithm to list the items behind each; a declaration
- * whose stored and live verdicts differ is marked `stale`, which can only
- * mean something wrote around the pipeline.
+ * Coverage is computed here, at the requested ref, from the placements and
+ * items as they stand; nothing is stored (ADR-0056). The verdict thresholds
+ * are the hub's default cut unless the query names others, and the counts
+ * are returned beside the verdicts so a client can apply its own.
  */
 export const intelligence = new Hono();
 
@@ -97,13 +107,22 @@ function assessedBy(objective: string, a: ModuleAssessment): Array<Summary & { e
 }
 
 const emptyCounts = (): Record<CoverageStatus, number> =>
-  Object.fromEntries(VALID_CoverageStatus.map((v) => [v, 0])) as Record<CoverageStatus, number>;
+  Object.fromEntries(COVERAGE_STATUSES.map((v) => [v, 0])) as Record<CoverageStatus, number>;
 
-intelligence.get('/coverage/:moduleId', async (c) => {
-  const graph = await graphAt(c);
-  const mod = await requireDocument(graph, 'Module', c.req.param('moduleId'));
+/** `?fullyAssessedAt=&overAssessedAbove=`, the hub's defaults when absent (ADR-0029 decision 3). */
+function thresholdsFrom(c: Context): Thresholds {
+  const fullyAssessedAt = intQuery(c, 'fullyAssessedAt', DEFAULT_THRESHOLDS.fullyAssessedAt);
+  const overAssessedAbove = intQuery(c, 'overAssessedAbove', DEFAULT_THRESHOLDS.overAssessedAbove);
+  if (fullyAssessedAt < 1) throw new ApiError(400, 'bad_query', 'fullyAssessedAt must be at least 1');
+  if (overAssessedAbove < fullyAssessedAt) {
+    throw new ApiError(400, 'bad_query', 'overAssessedAbove must be at least fullyAssessedAt');
+  }
+  return { fullyAssessedAt, overAssessedAbove };
+}
+
+/** One module's coverage block: the shape both coverage routes return per module. */
+async function moduleCoverage(graph: Graph, mod: TerminusDocument, thresholds: Thresholds) {
   const moduleId = mod['@id'];
-
   const declarations = await graph.list('ModuleObjective', { module: moduleId });
   const a = await assessmentOf(graph, moduleId);
   const declared = new Set(declarations.map((d) => String(d.references)));
@@ -111,28 +130,29 @@ intelligence.get('/coverage/:moduleId', async (c) => {
   const objectives = new Map(
     (await graph.getMany([...declared, ...assessedObjectives])).map((d) => [d['@id'], d])
   );
+  const objectiveSummary = (id: string): Summary => {
+    const target = objectives.get(id);
+    return target ? summarize(target) : { id, type: 'LearningObjective' };
+  };
 
   const coverage = emptyCounts();
   const projected = emptyCounts();
   const rows = declarations
     .slice()
-    .sort((x, y) => (Number(x.sequence ?? Infinity) - Number(y.sequence ?? Infinity)))
+    .sort((x, y) => Number(x.sequence ?? Infinity) - Number(y.sequence ?? Infinity))
     .map((d) => {
       const objective = String(d.references);
-      const live = coverageOf(objective, a.placementLikes, a.itemLikes);
-      const stored = { coverageStatus: String(d.coverageStatus), projectedCoverageStatus: String(d.projectedCoverageStatus) };
-      coverage[stored.coverageStatus as CoverageStatus] += 1;
-      projected[stored.projectedCoverageStatus as CoverageStatus] += 1;
-      const stale = stored.coverageStatus !== live.coverageStatus || stored.projectedCoverageStatus !== live.projectedCoverageStatus;
-      const target = objectives.get(objective);
+      const c = coverageOf(objective, a.placementLikes, a.itemLikes, thresholds);
+      coverage[c.coverageStatus] += 1;
+      projected[c.projectedCoverageStatus] += 1;
       return {
         id: d['@id'],
         role: d.role,
         sequence: d.sequence,
         roleRationale: d.roleRationale,
-        ...stored,
-        ...(stale ? { stale: true, live } : {}),
-        objective: target ? summarize(target) : { id: objective, type: 'LearningObjective' },
+        objective: objectiveSummary(objective),
+        coverage: { status: c.coverageStatus, items: c.deliveredItems.length },
+        projected: { status: c.projectedCoverageStatus, items: c.projectedItems.length },
         assessedBy: assessedBy(objective, a),
       };
     });
@@ -140,18 +160,38 @@ intelligence.get('/coverage/:moduleId', async (c) => {
   const undeclared = [...assessedObjectives]
     .filter((o) => !declared.has(o))
     .sort()
-    .map((o) => {
-      const target = objectives.get(o);
-      return { objective: target ? summarize(target) : { id: o, type: 'LearningObjective' }, assessedBy: assessedBy(o, a) };
-    });
+    .map((o) => ({ objective: objectiveSummary(o), assessedBy: assessedBy(o, a) }));
 
-  setEtag(c, graph.commit);
-  return c.json({
+  return {
     module: summarize(mod),
     summary: { declared: declarations.length, coverage, projected, undeclared: undeclared.length },
     objectives: rows,
     undeclared,
-  });
+  };
+}
+
+intelligence.get('/coverage/:moduleId', async (c) => {
+  const graph = await graphAt(c);
+  const thresholds = thresholdsFrom(c);
+  const mod = await requireDocument(graph, 'Module', c.req.param('moduleId'));
+  const block = await moduleCoverage(graph, mod, thresholds);
+  setEtag(c, graph.commit);
+  return c.json({ ...block, thresholds });
+});
+
+intelligence.get('/coverage', async (c) => {
+  const graph = await graphAt(c);
+  const thresholds = thresholdsFrom(c);
+  const courseQuery = c.req.query('course');
+  let course: TerminusDocument | undefined;
+  if (courseQuery) course = await requireDocument(graph, 'Course', courseQuery.replace(/^Course\//, ''));
+  const modules = (course ? await graph.list('Module', { course: course['@id'] }) : await graph.list('Module'))
+    .slice()
+    .sort((x, y) => Number(x.sequence ?? Infinity) - Number(y.sequence ?? Infinity) || x['@id'].localeCompare(y['@id']));
+  const blocks = [];
+  for (const mod of modules) blocks.push(await moduleCoverage(graph, mod, thresholds));
+  setEtag(c, graph.commit);
+  return c.json({ ...(course ? { course: summarize(course) } : {}), thresholds, modules: blocks });
 });
 
 // ── Alignment ─────────────────────────────────────────────────────────────────
@@ -318,7 +358,7 @@ async function moduleContext(graph: Graph, doc: TerminusDocument): Promise<Array
   if (doc['@type'] === 'LearningObjective') {
     for (const d of await graph.where('ModuleObjective', 'references', from)) {
       const next = await graph.get(String(d.module));
-      if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'module', through: d['@id'], role: String(d.role), status: String(d.coverageStatus) } });
+      if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'module', through: d['@id'], role: String(d.role) } });
     }
   } else if (doc['@type'] === 'Assessment' && typeof doc.module === 'string') {
     const next = await graph.get(doc.module);
