@@ -1,5 +1,13 @@
 # ADR-0025: Design process data lives in the commit graph
 
+> **In brief.** This decision answered: how does Armature keep the history of a design, meaning who
+> changed what, when and why? It decided that the database's own version history is that record: every
+> change is a commit carrying its author and a required reason, every read names the branch or past
+> commit it reads from, branches hold parallel work and are combined with the database's three-way
+> merge, and shared history is never rewritten or deleted. It still holds and is implemented in the
+> application programming interface (API) under `/api/v1`, which reports the commit behind each
+> response in the standard HyperText Transfer Protocol (HTTP) `ETag` (entity tag) header.
+
 ## Status
 
 Accepted (2026-10-08). Verified against TerminusDB v12.0.7 by `scripts/platform_checks.js`
@@ -8,6 +16,12 @@ rule Phase 3 was to decide. Makes ADR-0010's versioning deferral a decision; res
 the data-version token question ADR-0054 left open; absorbs research candidate 0036's no-rewrite
 rule. Research candidates 0037 (release pointers), 0046 (change feed) and the delegation trailers
 proposed for this ADR are deferred, with the reason for each in §Consequences.
+
+**Corrected 2026-10-08:** the verification table covers checks M to V (with S), not M to T.
+Amends ADR-0010 (its versioning deferral is now decided) and confirms ADR-0015's commit-level
+history. The interim `Armature-User` header (decision 2) and the provisional document write
+(§Consequences) were replaced in Phase 3 by ADR-0032 and the generic write path. ADR-0028
+(Attestation), cited below, is planned in `docs/development-plan.md` Phase 5 and not yet written.
 
 ## Context
 
@@ -83,6 +97,9 @@ Two downstream facts shape the decision. Attestations and findings will store co
 round-trip whatever concurrency token the API exposes, so the token's shape has to be fixed before
 Phase 2's routes land (ADR-0054 consequences).
 
+> **Later change (2026-10-08):** ADR-0028 is planned (`docs/development-plan.md` Phase 5) and not
+> yet written. ADR-0057 (Proposed) would add the same commit-id field, `asOf`, to findings.
+
 ## Decision
 
 1. **The commit is the unit of design process data.** No `version`, `createdAt`, `updatedAt`,
@@ -140,6 +157,8 @@ Phase 2's routes land (ADR-0054 consequences).
    meaning of the pin, which is "a state on a shared branch", not its readability. Content-hash
    pins beside commit ids (candidate 0036) are ADR-0028's to specify, as an integrity check
    across stores rather than a reachability check within this one.
+
+   > **Later change (2026-10-08):** ADR-0028 is planned and not yet written.
 
    *Branch delete, decided 2026-10-08 (Phase 3).* `DELETE /api/v1/branches/:name` exists under
    three rules. `main` is never deleted. A branch is deleted only when another branch holds its
@@ -224,6 +243,11 @@ every Phase 1 check still passes.
   ADR-0055's adapter. The document write is provisional because the invariants engine arrives in
   Phase 3; until then it checks only that the body's `@type` matches the route, that the id is
   not held by another type (ADR-0024), and that author and reason are present.
+
+  > **Later change (2026-10-08):** done. Phase 3 replaced the provisional write with the generic
+  > write path (`app/lib/api/write.ts`): generated Zod shape validation, the invariants engine, and
+  > one commit per request.
+
 - Plan §9 gains the corrections above: the conflict witness shape, the 400 on a stale token, bare
   ids for `apply`, the rebase direction, the DELETE body. The vendored pages for merge and
   Git-for-Data are wrong on two of these; the running store is authoritative (`terminusdb` skill
@@ -244,6 +268,13 @@ every Phase 1 check still passes.
   changing any route. Two limits apply meanwhile: the provisional write accepts only artifact and
   relationship classes, so a caller cannot mint the `User` it then names as author, and the
   mutating routes must not be exposed beyond the local demo until ADR-0032 lands.
+
+  > **Later change (2026-10-08):** ADR-0032 landed in Phase 3. The header now carries an
+  > `externalId` resolved to a `User` on `main`; `User` documents are created only through
+  > `POST /api/v1/users`, never through the document write, which refuses them. The header resolver
+  > still trusts the caller, so the mutating routes still stay local while it is the configured
+  > resolver.
+
 - The hub never offers history rewriting, so a demo cannot "undo" a commit except by a new
   commit that restores the earlier state, which is the Git discipline the paper asks for.
 - Deferred, each with its trigger: release pointers (candidate 0037) when the first delivered
@@ -251,6 +282,9 @@ every Phase 1 check still passes.
   consumer of `changes?since=` appears, since the commit id already serves as the cursor;
   delegation trailers when an agent user acts on someone's behalf (plan §1 P5); content-hash
   pins with ADR-0028.
+
+  > **Later change (2026-10-08):** ADR-0028 is planned and not yet written.
+
 - ADR-0010 is amended to record that the versioning deferral is now decided. ADR-0015's
   "change history is tracked at the commit level" is confirmed. ADR-0054's open data-version
   consequence is closed. CLAUDE.md's rule against forwarding store tokens becomes the positive

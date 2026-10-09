@@ -1,7 +1,17 @@
 # ADR-0004: Back-References on Children, Not Arrays on Parents
 
+> **In brief.** When one record belongs under another (a question's placement under an assessment, a
+> module under a course), this decision put the pointer on the child ("I belong to this assessment")
+> instead of keeping an ever-growing list on the parent. It still holds for every parent-child
+> relationship between documents. The example it first gave for answer options was removed when
+> options became part of the question itself (ADR-0022; ADR stands for Architecture Decision
+> Record).
+
 ## Status
 Accepted
+
+**Amended by ADR-0022** (2026-10-07): `Response` is no longer a document, so its back-reference
+example is struck below.
 
 ## Context
 For one-to-many relationships with a clear ownership direction, there are two ways to model the association: store a list of child IDs on the parent, or store the parent ID on each child.
@@ -22,6 +32,9 @@ For all one-to-many relationships with a clear parent/child direction, the forei
 - `LearningObjective.generatedBy → LearningNeed` (one need generates zero or more objectives; each objective optionally references its originating need)
 
 Parent documents contain no arrays of child references.
+
+> **Later change (2026-10-08):** `AssessmentItem.options` is a list, but of embedded `ItemOption`
+> parts, not of references to child documents (ADR-0022, ADR-0033), so this rule is unaffected.
 
 ## Consequences
 - Parent documents remain lean regardless of how many children they have.

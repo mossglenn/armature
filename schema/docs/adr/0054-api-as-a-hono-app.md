@@ -1,13 +1,35 @@
 # ADR-0054: The Armature API is a Hono application
 
+> **In brief.** This decision answered: what software framework should Armature's application
+> programming interface (API) be written in, so that it can later move out of the Next.js web
+> application without being rewritten? It chose Hono, a small framework built on web-standard requests
+> and responses, put the whole API in `app/lib/api/`, and made a single Next.js file hand every request
+> to it. It still holds and is implemented; the old unversioned routes it left in place were removed on
+> 2026-10-08, and several framework features it planned to use (validation and identity "middleware",
+> and a `GET /api/v1/schema` address) were done differently or not built, as the notes below record.
+
 ## Status
 
 Accepted (2026-10-07). Proposed and verified the same day: the six-check spike in §Verification
 before acceptance passed in full (results recorded there). Amends ADR-0026 decision 1.
 
+**Amended 2026-10-08 by ADR-0032 and Phase 3** (decision 4): identity resolution and the
+data-version token are handled by functions the routes call, not by middleware, because both
+depend on the ref resolved inside the route; request validation is the generated Zod schemas
+(`app/lib/schemas.ts`) called in `app/lib/api/write.ts`, and `@hono/zod-validator` is not a
+dependency. **Completed 2026-10-08:** decisions 3 and 5 (the legacy routes coexist until Phase 3)
+are done; all eleven legacy routes, `app/lib/terminusdb.ts` and `app/lib/routeHelpers.ts` were
+removed in Phase 3. The open data-version question in §Consequences was closed by ADR-0025
+decision 7, and store access was decided by ADR-0055. `GET /api/v1/schema` (ADR-0027 decision 4),
+named in decision 4, is not built.
+
 Numbering note: ADR-0027 to ADR-0034 are reserved by `docs/development-plan.md` §5 and ADR-0035 to
 ADR-0053 are provisional candidates in `docs/research/adr-candidates.md`. This is the first free
 number. Renumber if the candidates are renumbered.
+
+> **Later change (2026-10-08):** the canonical reserved block is ADR-0024 to ADR-0034
+> (`docs/development-plan.md` §5). Of it, 0024 to 0027, 0029, 0032 and 0033 are written; 0028,
+> 0030, 0031 and 0034 are reserved and unwritten. The candidates were not renumbered.
 
 ## Context
 
@@ -64,15 +86,30 @@ through an official adapter. Facts checked on 2026-10-07 against hono.dev and np
    written. Decision 1 of ADR-0026 is amended to read: the Next.js app is the host, the Hono app is
    the API.
 
+   > **Later change (2026-10-08):** Phase 3 retired the legacy routes; the catch-all is the only
+   > route file.
+
 4. **Framework features are adopted where the plan already needs them, and nowhere else.**
    - Middleware for identity resolution (ADR-0032, Phase 3) and for reading and echoing the
      `TerminusDB-Data-Version` header (Phase 2).
+
+     > **Later change (2026-10-08):** neither is middleware. Identity (`app/lib/api/identity.ts`)
+     > and the data-version token (`ETag`/`If-Match` in `app/lib/api/http.ts`) are functions the
+     > routes call, because both depend on the ref resolved inside the route (ADR-0032
+     > §Consequences). The store's header never reaches `/api/v1` (ADR-0025 decision 7).
+
    - `app.onError` replaces `handleTerminusError`'s `NextResponse` return with a host-neutral
      mapping from TerminusDB error types to HTTP status and body; the mapping logic is kept.
    - Request validation at the boundary with `@hono/zod-validator`, which is the Zod adoption the
      types generator deferred; Zod schemas for request bodies are derived from `schema.json` by the
      generator, not hand-written, so there remains one source of truth. The invariants engine
      (Phase 3) stays separate: validation checks shape, invariants check meaning against the graph.
+
+     > **Later change (2026-10-08):** `@hono/zod-validator` was not adopted. The generator emits
+     > Zod request schemas (`app/lib/schemas.ts`), and the write pipeline calls them directly with
+     > `safeParse` (`app/lib/api/write.ts`), a 400 on failure. The split between shape and
+     > invariants holds as written.
+
    - `app.request()` is how the Phase 7 contract test exercises every route against a TerminusDB
      service container, without starting Next.js.
    - Hono's typed client is evaluated as the basis of the Phase 7 `packages/client`; if its inferred
@@ -80,10 +117,17 @@ through an official adapter. Facts checked on 2026-10-07 against hono.dev and np
    - OpenAPI generation is not adopted until a client needs it; `GET /schema` (ADR-0027) is the
      self-description the plan asks for.
 
+     > **Later change (2026-10-08):** `GET /api/v1/schema` has not been built and no phase
+     > currently owns it.
+
 5. **Existing routes are not ported ahead of their phase.** The eight GET list routes, the two POSTs
    and the coverage route remain Next.js handlers and die on the plan's schedule (Phase 3 and
    Phase 4). The first Hono routes are the Phase 2 branch, history, diff and read-at-ref routes.
    This ADR is therefore cheapest to accept before Phase 2 and expensive to accept after Phase 5.
+
+   > **Later change (2026-10-08):** all eleven were retired in Phase 3 (the coverage route
+   > included), ahead of the Phase 4 date given here; Phase 4 added
+   > `GET /api/v1/intelligence/coverage/:moduleId` in its place.
 
 ## Alternatives considered
 
@@ -183,6 +227,11 @@ Everything else as anticipated:
   not wanted, since the TerminusDB client is Node code.
 - `handleTerminusError` and `createGetHandler` in `app/lib/routeHelpers.ts` become legacy with the
   routes that use them and are deleted in Phase 3.
+
+  > **Later change (2026-10-08):** the edge-runtime reason no longer applies: under ADR-0055 the API
+  > reaches TerminusDB with the web-standard `fetch`, not the Node-only client. The runtime is still
+  > Node.js. `app/lib/routeHelpers.ts` was deleted in Phase 3 as planned.
+
 - The types generator gains a second output (Zod request schemas) when Phase 3's write path lands.
   `check:types` guards both.
 - Phase 7's contract test and typed client both get a foundation they would otherwise have to

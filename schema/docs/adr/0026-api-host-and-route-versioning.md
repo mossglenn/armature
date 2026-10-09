@@ -1,9 +1,20 @@
 # ADR-0026: API host and route versioning
 
+> **In brief.** This decision answered: where does Armature's application programming interface (API)
+> run, and how do client tools address it? It decided that, for now, the API is served from inside the
+> project's Next.js web application rather than a separate server; that every new address begins with
+> the versioned prefix `/api/v1/`; that the older unversioned addresses were temporary; and that a
+> separate server remains the long-term goal. It still holds: ADR-0054 (an Architecture Decision Record,
+> or ADR) refined decision 1 so that the API is a Hono application hosted by Next.js, and the old
+> unversioned addresses were removed on 2026-10-08 as decision 3 planned.
+
 ## Status
 
 Accepted (2026-10-07). Decision 1 amended the same day by ADR-0054 (the API is a Hono
 application; Next.js is its host). Decisions 2 to 4 are unchanged.
+
+**Decision 3 completed 2026-10-08 (Phase 3):** the eleven legacy unversioned routes were removed;
+`app/app/api/[[...route]]/route.ts` is the only route file, and every route is under `/api/v1`.
 
 ## Context
 
@@ -30,6 +41,9 @@ not follow is that the boundary must be a separate process today. The boundary i
    through a single catch-all route handler. The legacy unversioned routes in decision 3 remain
    Next.js handlers until Phase 3 retires them.*
 
+   > **Later change (2026-10-08):** Phase 3 retired them; no Next.js route handler other than the
+   > catch-all remains.
+
 2. **All new routes are mounted under a versioned prefix, `/api/v1/`.** The generic document API,
    branch, history, diff, user and intelligence routes the plan describes all land there. The
    version segment is part of the contract a client depends on; the host serving it is not.
@@ -37,6 +51,10 @@ not follow is that the boundary must be a separate process today. The boundary i
 3. **The existing unversioned routes** (`/api/courses`, `/api/coverage/:moduleId` and the rest)
    are legacy. They are kept working until Phase 3 retires or aliases them, and no client should be
    written against them.
+
+   > **Later change (2026-10-08):** done. All eleven (eight GET list routes, the coverage route,
+   > `POST /courses` and `POST /modules`) were removed, not aliased. Coverage is now
+   > `GET /api/v1/intelligence/coverage/:moduleId`.
 
 4. **A separate API service remains the destination.** The move happens in Phase 7 or when one
    of these triggers appears first:
@@ -61,3 +79,7 @@ not follow is that the boundary must be a separate process today. The boundary i
   A future extraction lifts `app/lib/` and the handlers together.
 - The legacy unversioned routes carry a documented expiry (Phase 3) so they do not become a second
   contract by accident.
+
+  > **Later change (2026-10-08):** the expiry was met in Phase 3. TerminusDB access now goes through
+  > one HTTP adapter, `app/lib/api/store.ts` (ADR-0055), and the extraction unit is `app/lib/api/`
+  > (ADR-0054).

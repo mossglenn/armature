@@ -1,5 +1,13 @@
 # ADR-0056: Coverage Is Computed on Read, Never Stored
 
+> **In brief.** This decision answered: should Armature store its coverage verdicts (whether each
+> objective a module declares is adequately assessed) in the database, or calculate them when asked?
+> It decided to calculate them on request, at whatever point in the design's history the request
+> names, and never to store them, because a stored verdict is the output of a formula rather than
+> anyone's decision, can go stale, and causes false conflicts when parallel branches of work are
+> merged. It still holds and is implemented in `GET /api/v1/intelligence/coverage/:moduleId`, and the
+> same rule applies to any score Armature derives in future.
+
 ## Status
 
 Accepted (2026-10-08). Supersedes ADR-0007's decision that `ModuleObjective` carries a computed
@@ -10,6 +18,14 @@ thresholds) stand as the default algorithm of the coverage read. ADR-0019's two 
 as the read's two outputs. `CoverageStatus` leaves the schema: it is the computation's vocabulary,
 not the graph's. The reversal was decided the same day ADR-0029 was accepted, once the merge
 recompute it required had been built and could be weighed.
+
+Amends ADR-0019: its two figures are the coverage read's two outputs, not stored fields. Supersedes
+in part ADR-0007 (its computed field) and ADR-0029 (decisions 4 to 6). **Notes 2026-10-08:** the
+Attestation cited in decision 1 is planned as ADR-0028 (`docs/development-plan.md` Phase 5) and not
+yet written. **Open:** decision 1 names difficulty summaries among derived values; whether
+`AssessmentItem.difficultyIndex` and `discriminationIndex` stay in the schema as imported
+observations or are removed is not decided. No code computes or writes them; the question is to be
+settled with the Phase 6 outcomes importer (see ADR-0009).
 
 ## Context
 

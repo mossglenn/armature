@@ -1,5 +1,14 @@
 # ADR-0032: Identity resolution
 
+> **In brief.** This decision answered: how does Armature know who is making a request, so that every
+> change is credited to a person or a tool? Armature does not check passwords itself: a pluggable
+> "resolver" turns what the deployment supplies (today a trusted `Armature-User` header carrying the
+> person's external identifier; later OpenID Connect (OIDC) sign-in) into an Armature `User` record,
+> all `User` records live on the `main` branch, and the author of every change and the creator recorded
+> on every new record come from that identity, never from the request body. It still holds and is
+> implemented (2026-10-08); the OIDC resolver is named but not built, and because the header carries no
+> display name, new users are registered explicitly rather than on first sight.
+
 ## Status
 
 Accepted (2026-10-08, merged in PR #7). Implements the boundary ADR-0015 drew between the external auth system, the store's access
@@ -8,6 +17,10 @@ decision 2 and ADR-0055 anticipated. Verified against TerminusDB v12.0.7 by
 `scripts/platform_checks.js` check W, results in §Verification.
 
 Numbering note: 0032 is the number `docs/development-plan.md` §5 reserved for this decision.
+
+Amends ADR-0015 (a `User` is created on first encounter only when the claims carry a
+`displayName`) and ADR-0054 decision 4 (identity is resolved by a function the routes call, not by
+middleware). Completes ADR-0025 decision 2's interim paragraph.
 
 ## Context
 

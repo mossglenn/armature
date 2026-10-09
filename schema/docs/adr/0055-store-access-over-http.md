@@ -1,5 +1,13 @@
 # ADR-0055: The API layer reaches TerminusDB over HTTP, not through the JavaScript client
 
+> **In brief.** This decision answered: how should Armature's application programming interface (API)
+> talk to the TerminusDB database? It decided that the API goes through one small module,
+> `app/lib/api/store.ts`, that calls TerminusDB's HyperText Transfer Protocol (HTTP) interface directly
+> with the web-standard `fetch` function, rather than through TerminusDB's JavaScript client library,
+> mainly because that library cannot record the real author of a change and carries request settings
+> over from one call to the next. It still holds and is implemented; the JavaScript client is now used
+> only by the scripts in `scripts/`.
+
 ## Status
 
 Accepted (2026-10-08). Supersedes the 2026-03-03 session decision "keep the JS client, not worth
@@ -7,9 +15,20 @@ switching to the raw HTTP API mid-project" and the narrowing of it in `docs/deve
 §3 ("client for reads and version-control calls, HTTP for authored writes"). Amends the Phase 2
 work item "Per-request client and an HTTP write path".
 
+**Notes 2026-10-08:** implemented in Phase 2 as `app/lib/api/store.ts`. Decision 4 is complete:
+`app/lib/terminusdb.ts` and the legacy routes were deleted in Phase 3. No route uses WOQL
+(TerminusDB's query language) yet, so decision 5's re-admission path is unused, and the coverage
+recomputation once expected to be its first use no longer exists (ADR-0056). The stale-token error
+was verified as HTTP 400 `api:DataVersionMismatch` (ADR-0025, check M5), not the 409 expected in
+§Consequences; `/api/v1` answers it with 412. Identity (decision 3) is ADR-0032, implemented in
+Phase 3.
+
 Numbering note: ADR-0025 to ADR-0034 are reserved by `docs/development-plan.md` §5 and ADR-0035 to
 ADR-0053 are provisional candidates in `docs/research/adr-candidates.md`. 0055 is the next free
 number after ADR-0054.
+
+> **Later change (2026-10-08):** the canonical reserved block is ADR-0024 to ADR-0034
+> (`docs/development-plan.md` §5); 0024 was written before this ADR.
 
 ## Context
 
@@ -92,6 +111,10 @@ on the read path, and two things to re-verify at every server release.
    the loader, seed and platform checks run as a single operator and its batch helpers are
    convenient. `app/lib/terminusdb.ts` remains only for the legacy unversioned routes and is
    deleted with them in Phase 3.
+
+   > **Later change (2026-10-08):** done; both were deleted in Phase 3. The `terminusdb` package is
+   > not a dependency of `app/`.
+
 5. **One re-admission path.** If a route needs WOQL, the client's `lib/woql.js` may be imported
    to construct the query JSON, which the adapter then posts to the query endpoint. The client is
    never used to dispatch. The first such use amends this ADR naming the route.
@@ -130,6 +153,9 @@ on the read path, and two things to re-verify at every server release.
   as the first Phase 2 code change, before the branch and history routes are added.
 - The API layer drops axios, pako, buffer and form-data from its dependency graph. The client
   remains a dependency of `scripts/` and, until Phase 3, of the legacy routes.
+
+  > **Later change (2026-10-08):** Phase 3 has passed; the client is a dependency of `scripts/` only.
+
 - The hub's contract with the store is the vendored HTTP documentation plus plan §9, with no
   translation layer whose behaviour has to be read out of `woqlClient.js`. The sync discipline in
   the `terminusdb` skill matters more as a result: a stale vendored page is now a stale contract.
@@ -141,6 +167,11 @@ on the read path, and two things to re-verify at every server release.
   platform check and must be before the routes land (decision 7): the exact error body returned
   when a write carries a stale `TerminusDB-Data-Version` (expected 409, `@type` to be recorded),
   and `diff=true` on the history endpoint returning the per-commit structural diff.
+
+  > **Later change (2026-10-08):** both were reproduced before the routes landed (ADR-0025,
+  > checks M5 and N1 to N5). The stale-token error is HTTP 400 with `api:DataVersionMismatch`, not
+  > 409; the adapter maps it, and `/api/v1` returns 412 Precondition Failed.
+
 - The plan's §3 diagram line "per-request client bound to one branch or commit" becomes
   "per-request HTTP store adapter bound to one branch or commit". The Phase 2 work item, the
   ADR queue, §9, CLAUDE.md's repository tree and What-Not-To-Do list, SESSION.md's active
@@ -151,3 +182,6 @@ on the read path, and two things to re-verify at every server release.
 - If the project later needs the WOQL builder (Phase 4's coverage recomputation is the likely
   first case), decision 5 admits it without reopening this ADR's structure: the builder produces
   JSON, the adapter posts it.
+
+  > **Later change (2026-10-08):** there is no coverage recomputation; ADR-0056 computes coverage on
+  > read with document reads through the adapter. No route uses WOQL yet.

@@ -1,7 +1,20 @@
 # ADR-0027: Schema Self-Description via `@metadata`
 
+> **In brief.** This decision answered: how can a tool learn from the schema itself which kinds of
+> record are design artifacts, which are relationships between them, which are embedded parts and
+> which are supporting machinery? It decided that every class in the schema carries one of four
+> category labels (`infrastructure`, `fragment`, `artifact` or `relationship`) in its metadata, that
+> the code generators read these labels instead of hand-kept lists, and that a class without a label
+> fails the build. It still holds and is implemented, except decision 4: the planned address
+> `GET /api/v1/schema`, which would let a tool read the schema from the application programming
+> interface (API), has not been built.
+
 ## Status
 Accepted (2026-10-07). Implements ADR-0017 §2.
+
+Amends ADR-0017 §2: adds a fourth category, `fragment`, and deletes `JUNCTION_IDS` rather than
+deriving it. **Decision 4 not yet built (2026-10-08):** `GET /api/v1/schema` was not built in
+Phase 2 or Phase 3, and no phase of `docs/development-plan.md` currently owns it.
 
 ## Context
 
@@ -33,6 +46,10 @@ metadata one level, which the `armature` namespace does.
    artifact (it has no identity) nor infrastructure, and generators must treat it differently from
    both (inline type, no `@id` reference).
 
+   > **Later change (2026-10-08):** under ADR-0056 the API stores nothing it computes, so an
+   > `artifact` is a thing a person or tool authors; "or the API computes about them" no longer
+   > describes any stored record.
+
 2. **Generators derive everything from the metadata.** `generate-types.js` groups output by category,
    emits inheritance as declared (`@inherits`, or `TerminusDocument`), inlines `@subdocument` types,
    and exports a `CLASS_CATEGORY` map and `SUBDOCUMENT_CLASSES` list so the app can ask the same
@@ -45,6 +62,10 @@ metadata one level, which the `armature` namespace does.
 
 4. **`GET /api/v1/schema`** (Phase 2 or 3, with the generic routes) returns the schema graph so a
    tool discovers types and categories from the hub rather than from a copy of `schema.json`.
+
+   > **Later change (2026-10-08):** not built. Phases 2 and 3 shipped without it, and no phase
+   > currently owns it. Until it exists, a tool reads categories from `schema.json` or from the
+   > generated `CLASS_CATEGORY` map in `app/lib/types.ts`.
 
 5. **Not adopted now.** The research survey proposes extending the metadata into a relation-type
    registry (endpoints, inverse, transitivity, coverage role, maturity, export term) and a `reserved`
@@ -67,3 +88,4 @@ metadata one level, which the `armature` namespace does.
 - ADR-0017 — category as metadata, not class; the decision this implements
 - ADR-0033 — the `fragment` category's members
 - `docs/research/adr-candidates.md` — relation-type registry and `reserved` names, deferred
+- ADR-0029 — added a `@metadata.armature.computed` list; ADR-0056 removed it, so no class declares one

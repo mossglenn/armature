@@ -1,7 +1,18 @@
 # ADR-0003: Set References vs. Junction Documents for Multi-Valued Relationships
 
+> **In brief.** Armature links records in two ways: a simple list of pointers kept on a record, or a
+> separate small "link" record (a junction document) that describes the relationship itself. This
+> decision said to use the simple list when the link carries no extra information (for example,
+> which learning objectives a question assesses) and a junction document when it does (an order, a
+> rationale, a confidence rating). It still holds. One example below is out of date: the
+> module-to-objective link no longer stores a coverage status, because coverage is now calculated
+> whenever it is asked for (ADR-0056; ADR stands for Architecture Decision Record).
+
 ## Status
 Accepted
+
+**Note (2026-10-08):** the decision stands. One example in the Decision is out of date since
+ADR-0056; see the note there.
 
 ## Context
 The schema has two categories of multi-valued relationships:
@@ -26,6 +37,11 @@ Use junction documents for all relationships where the relationship itself carri
 - `NeedEvidenceLink` — carries `confidence`
 - `PrerequisiteRecord` — carries `rationale` and `prerequisiteType`
 - `ModuleObjective` — carries `role`, `roleRationale`, `coverageStatus`, `sequence`
+
+> **Later change (2026-10-08):** `ModuleObjective` no longer carries `coverageStatus`, and no
+> junction carries a computed status. Coverage is computed on read by
+> `GET /api/v1/intelligence/coverage/:moduleId` and never stored (ADR-0056). `ModuleObjective`
+> carries `role`, `roleRationale` and `sequence`.
 
 ## Consequences
 - Objective mappings are simple and queryable without traversal overhead.
