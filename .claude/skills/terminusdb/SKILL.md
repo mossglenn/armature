@@ -100,7 +100,10 @@ Recorded in `docs/development-plan.md` §9 as of v12.0.7. The ones most often ne
 - The document API's template query works over HTTP as a `POST` to the document path with
   `X-HTTP-Method-Override: GET` and a body `{ type, as_list, query: { field: value } }`; it
   returns the matching documents and the data-version header (check W1). A list body on `POST`,
-  or on `PUT` with `create=true`, commits every document in one commit (check W3).
+  or on `PUT` with `create=true`, commits every document in one commit (check W3). **A template
+  filters only on a required field: a template on an `Optional` reference field, or on a `Set`
+  reference field in either value form, is a 500 `api:InternalServerError` (check Y).** The hub
+  lists the type and filters in `Graph.where` for those.
 - A commit's existence is checked by reading `ValidCommit/<id>` from `local/_commits`; a document
   read at a commit path that does not exist is a 500 (check U). A stale `TerminusDB-Data-Version`
   is HTTP 400 `api:DataVersionMismatch`; a bare commit id as the token is rejected (check M).

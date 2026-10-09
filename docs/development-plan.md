@@ -541,17 +541,23 @@ Work:
       after `apply`.
 - [ ] **`GET /api/v1/intelligence/coverage/:moduleId`** replacing the current route, returning
       the summary block `demo-api.md` promised, both coverage figures, and the items behind each.
-- [ ] **`GET /api/v1/intelligence/alignment`**: items whose `bloomsLevel` is below an objective
-      they assess; objectives with no item or activity at their level.
-- [ ] **`GET /api/v1/intelligence/trace/:type/:id`**: the provenance chain. From an item to its
-      objectives, their needs, and the evidence with confidence; from a dataset or metric back
-      to items (Narrative 1).
-- [ ] **`GET /api/v1/intelligence/impact/:type/:id`**: what should be reviewed if this document
-      changes. Items, activities, module declarations and prerequisites that reference it.
-      This is the paper's "if an objective changes, you can immediately see what needs to be
-      reviewed."
-- [ ] Redundancy detection ("a new item is redundant in the bank") is recorded as a future
-      endpoint; it needs text similarity and is not structural. Deferred with a note.
+- [x] **`GET /api/v1/intelligence/alignment?module=`** (2026-10-08): items whose `bloomsLevel`
+      is below an objective they assess, with the gap in levels; objectives no item reaches at or
+      above their level; objectives no activity targets; and the objectives and items that have no
+      level to judge. `LearningActivity` has no level, so "activity at their level" is read as
+      "any activity targets it" until the schema says otherwise.
+- [x] **`GET /api/v1/intelligence/trace/:type/:id`** (2026-10-08): the lifecycle walk, evidence
+      to metric, both ways from any document on it, each hop naming the field and the junction it
+      went through (with the link's confidence, the placement's status, the declaration's role and
+      verdict); modules attached as context to every objective and assessment reached; the notes
+      and findings about anything reached. A metric traces to the module that declared the
+      objective its item assessed, which is Narrative 1.
+- [x] **`GET /api/v1/intelligence/impact/:type/:id`** (2026-10-08): every document that
+      references this one, found from CLASS_FIELDS (the inverse of constraint 0), each with the
+      field and, for a junction, the artifact it sits in. Platform check Y records why Optional
+      and Set references are listed and filtered rather than queried.
+- [x] Redundancy detection ("a new item is redundant in the bank") is deferred: it needs text
+      similarity and is not structural (P4). Recorded in the routes' header comment.
 - [ ] A first read-only Coverage View page in the app, as SESSION.md intended, consuming the
       intelligence route.
 
@@ -994,5 +1000,11 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - `GET` supports `type`, `id`, `ids`, `skip`, `count`, `as_list`, `unfold`, `minimized`, and a
   template `query` sent via `X-HTTP-Method-Override: GET`. The client exposes `skip`, `count` and
   `query`.
+- *Verified (2026-10-08, check Y):* a template filters on a required reference field (Y1). A
+  template on an `Optional` reference field is a 500 `api:InternalServerError`
+  (`unknown_type_casting_error` in the server log), and so is a template on a `Set` reference
+  field, whether the value is one member or an array (Y2, Y3). The intelligence reads therefore
+  look documents up by an Optional or Set reference by listing the type and filtering in the hub
+  (`Graph.where`); a WOQL query over the adapter replaces that when a type outgrows a list.
 - Turtle and RDF/XML content negotiation appear under enterprise-labelled pages; treat JSON and
   JSON-LD as the guaranteed export formats until verified.
