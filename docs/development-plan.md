@@ -1,7 +1,23 @@
 # Armature Development Plan
 
-**Date:** 2026-10-05 · **Status:** Proposed plan for the next phase of development. Supersedes the
-"What's Next" section of `.claude/SESSION.md` once adopted.
+**Date:** 2026-10-05 · **Status:** Adopted; the project's roadmap. Phases 0 to 4 are done (7 and 8
+October 2026, pull requests #1 to #10); next is the decision on ADR-0057 and Phase 5.
+`.claude/SESSION.md` tracks day-to-day state against this plan. **Last reconciled with the code:**
+2026-10-08.
+
+**How to read this plan.** §1 states nine principles (P1 to P9) taken from the position paper;
+later sections cite them by label. §2 names the reference clients and the two-client test that
+keeps the hub from overfitting to its first client. §3 describes the target architecture. §4 is the
+phases, each with its work, decision records and exit criterion; completed items are checked, and
+items that were built and then reversed are struck through with the reason. §5 is the queue of
+decision records, §6 the questions deliberately left open, §8 what the plan declines to do, and §9
+the database behaviors the plan relies on, each verified. Abbreviations used throughout: ADR
+(Architecture Decision Record, in `schema/docs/adr/`), API (application programming interface), SME
+(subject-matter expert), LMS (learning management system), CI (continuous integration), CASE
+(Competencies and Academic Standards Exchange), QTI (Question and Test Interoperability), xAPI
+(Experience API), LTI (Learning Tools Interoperability), JSON-LD (JSON for Linked Data), WOQL
+(TerminusDB's query language). For a narrative account of the same material, see
+`docs/how-armature-works.md`.
 
 **What this rests on:** the position paper (`docs/positionpaper/`), the CoQui handoff
 (`docs/armature-asks-from-Coqui.md`), ADRs 0001 to 0023, `schema/schema.json` at commit `f4d7110`,
@@ -83,17 +99,17 @@ the minimal generic form and lets the client carry its own vocabulary in a refer
 
 ## 2. Reference clients: the test for every ask
 
-To avoid shaping the hub for CoQui, the plan names six plausible tools the paper implies or the
-project has discussed. They are not commitments to build anything. They are a checklist: an ask is
+To avoid shaping the hub for CoQui, the plan names eight plausible tools the paper implies or the
+project has discussed, beside CoQui. They are not commitments to build anything. They are a checklist: an ask is
 adopted into the hub when at least two reference clients would need the same capability.
 
 | Reference client | What it does | What it needs from the hub |
 |---|---|---|
 | **CoQui** (real) | SME review of assessment items in rounds | Read by id at a commit; branch per round; replace-by-id writes; findings; attestations on item parts; users; history |
-| **Objective and curriculum mapper** | Author objectives, prerequisites, module declarations; link to CASE competencies | Transitive prerequisite queries; objective history and impact analysis; external competency references; ModuleObjective writes with coverage recompute |
+| **Objective and curriculum mapper** | Author objectives, prerequisites, module declarations; link to CASE competencies | Transitive prerequisite queries; objective history and impact analysis; external competency references; ModuleObjective writes; coverage reads |
 | **Needs-analysis intake** | Record evidence, needs, priorities; the LEED-tracker decision log as a graph | Evidence and need writes; NeedEvidenceLink confidence; DesignNote and a future DesignDecision; provenance trace from objective back to evidence |
 | **Activity and strategy designer** | Plan activities and groups per module; see strategy coverage | Sequenced module content (ADR-0005); "which objectives have no Practice activity" queries; ActivityGroup flatness enforced |
-| **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistic write-back; xAPI and QTI references; bulk atomic writes |
+| **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistics (stored or computed: see §6); xAPI and QTI references; bulk atomic writes |
 | **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description; attachments resolvable or deliberately excluded per profile |
 | **AI design assistant** | Propose items, objectives or alignments inside another tool | Agent `User` provenance; design-intelligence reads for context; the same write path and constraints as humans |
 | **Rich item authoring tool** | Author drag-and-drop, hotspot and media-bearing items on a shared item bank | Items as a tree of addressable fragments, typed or generic; attachment references on fragments; interaction types with versioned renderers; impact analysis when a renderer or an image changes; the same review surface CoQui uses |
@@ -118,7 +134,7 @@ shape is versioned-tree-capable from the start. See the note below the CoQui tab
 | Users: read and create | Every client | `GET /users`, `POST /users`, identity resolution hook (ADR-0032) | Reviewer roles |
 | Item history and changed-since | Outcomes importer (what changed since last pull), research exporter | Per-document history and branch diff for any type | Nothing withheld |
 | `assesses` optional while Draft | None yet; CoQui withdrew it | Not adopted | Keep `@min_cardinality: 1` |
-| Merge with per-document conflict report | Curriculum mapper eventually | Deferred until a second writer exists (Phase 2 records the design) | Nothing yet |
+| Merge with per-document conflict report | Curriculum mapper eventually | The store's three-way merge, wrapped with a computed base and a three-value conflict report (built in Phase 2); merge *policy* deferred until a second writer exists (§6) | Per-type filtered merge |
 
 Three CoQui concepts never enter the hub: the **round**, the **craft grid**, and CoQui's
 **review workflow states**. Each is workflow vocabulary (P2). They map onto branches, claim
@@ -159,8 +175,10 @@ each other without either duplicating the other.
 
 ## 3. Target shape of the hub
 
-The current API is nine routes written one at a time. The target is five layers, each with a
-single responsibility, so that adding a type or a client does not mean adding routes.
+When this plan was written, the API was eleven routes written one at a time (eight list reads, a
+coverage read and two writes; Phase 3 retired them). The target is five layers, each with a
+single responsibility, so that adding a type or a client does not mean adding routes. As of Phase
+4, layers 1 to 4 exist; the typed client package is Phase 7.
 
 ```
 Plugins (CoQui, future tools)
@@ -170,9 +188,9 @@ Plugins (CoQui, future tools)
 │ 4. Design-intelligence reads   coverage · alignment · trace ·  │
 │                                impact · redundancy (later)     │
 ├───────────────────────────────────────────────────────────────┤
-│ 3. Invariants engine           per-type validators ·           │
-│                                recompute hooks · run on every  │
-│                                write regardless of route       │
+│ 3. Invariants engine           per-type validators · run on    │
+│                                every write regardless of route │
+│                                (no recompute: ADR-0056)        │
 ├───────────────────────────────────────────────────────────────┤
 │ 2. Core document API           read at ref · list with filter  │
 │                                and paging · put by id ·        │
@@ -189,11 +207,13 @@ TerminusDB
 **Decisions this shape implies, each recorded as an ADR in Phase 0 or the phase that builds it:**
 
 - **Generic before specific.** Layer 2 is type-agnostic: `/api/v1/documents/:type/:id` style
-  routes, not one handler per type. Type-specific behaviour lives in layer 3 as validators and
-  recompute hooks keyed by `@type`. The existing per-type routes become thin aliases or are
-  retired. This is what lets a generic `PUT` still enforce ADR-0006 constraints.
+  routes, not one handler per type. Type-specific behavior lives in layer 3 as validators keyed
+  by `@type`. *(Done in Phase 3: the per-type routes were retired, not aliased; the recompute hooks
+  first planned here were removed by ADR-0056, since nothing derived is stored.)* This is what lets
+  a generic `PUT` still enforce the constraints the store cannot (ADR-0006, ADR-0013, and the
+  invariants engine).
 - **Every request names its ref.** The module-level client singleton in `app/lib/terminusdb.ts`
-  holds branch state in the instance. A per-request HTTP store adapter (ADR-0055), created from
+  held branch state in the instance (deleted in Phase 3). A per-request HTTP store adapter (ADR-0055), created from
   the resolved ref and identity and holding no other state, replaces it. Reads return the commit
   they were served from. Writes return the commit they created and accept the caller's last-seen
   data version for optimistic concurrency.
@@ -214,8 +234,9 @@ TerminusDB
   a deployment change plus a build configuration that resolves the `@/` alias, never a handler
   change. Every route Phases 2 to 6 add is a Hono route; the legacy Next.js handlers die in
   Phase 3.
-- **The schema describes itself.** `@metadata.armature.category` on every class; a `GET /schema`
-  route; generated types and a typed client derived from the same file. Tools discover types
+- **The schema describes itself.** `@metadata.armature.category` on every class (done, ADR-0027);
+  a `GET /schema` route (not yet built, and no phase currently owns it; see §6); generated types
+  (done) and a typed client (Phase 7) derived from the same file. Tools discover types
   from the hub, not from a hand-maintained list.
 
 ### Rich artifacts: four layers with different homes
@@ -224,9 +245,9 @@ CoQui can review any item in the graph, however it got there, because three thin
 text item: its design structure is in the graph in a shape CoQui did not define; every part has a
 stable address (item id plus `fragmentId`) CoQui did not mint; and everything that is not
 structure is reachable. None of these depend on the parts being text. The complexity of richer
-items comes from content, behaviour and structure separating: an image separates content from
-structure; drag-and-drop separates behaviour from both; an animation library or a simulation
-gives behaviour its own development history. Each step adds a layer. None changes the three
+items comes from content, behavior and structure separating: an image separates content from
+structure; drag-and-drop separates behavior from both; an animation library or a simulation
+gives behavior its own development history. Each step adds a layer. None changes the three
 requirements. The hub keeps them true by giving each layer a different home.
 
 **Structure lives in the graph, always.** For drag-and-drop: instruction text, draggables, drop
@@ -234,10 +255,10 @@ zones, the correct mapping, the objectives assessed. For a simulation: the manif
 parameters and what each measures. Structure is what design intelligence reads and what every
 tool needs to interoperate. Underneath the typed shapes sits a **generic part model**: an item is
 a tree of fragments, each with a `fragmentId`, a `kind`, and inline text, an attachment reference,
-or both. Multiple-choice options are a typed specialisation carrying `isCorrect`; a new item type
+or both. Multiple-choice options are a typed specialization carrying `isCorrect`; a new item type
 begins as generic fragments with a validated JSON payload (TerminusDB's `sys:JSON` subdocument is
 stored but not schema-checked) and is promoted to typed subdocuments once its shape settles. This
-is ADR-0010's progressive formalisation applied to item types. A review tool that has never seen
+is ADR-0010's progressive formalization applied to item types. A review tool that has never seen
 drag-and-drop still sees a tree of addressable parts with text and images, which is enough to
 review against and attach findings to. (ADR-0033.)
 
@@ -248,7 +269,7 @@ elaborate. Because the reference is inside the item document, the item's commit 
 image does, so attestation staleness works for images with no new mechanism. The presign path on
 the attachment endpoints is how a reviewer sees it. (ADR-0030.)
 
-**Behaviour is a property of the item type, not the item, and is a versioned artifact of its
+**Behavior is a property of the item type, not the item, and is a versioned artifact of its
 own.** Drag-and-drop logic is shared by every drag-and-drop item; what varies per item is data.
 So an item declares "an instance of interaction type X at version N" and carries only data. The
 graph holds the registry entry, an `InteractionType` with its version, the data shape it expects,
@@ -269,7 +290,7 @@ attestations. Richer items force one addition: notes and findings need the compo
 replace this image" points at a part, not an item. (Folded into ADR-0028.)
 
 The simulation case then differs in scale, not in kind. It is an activity whose structure is a
-manifest in the graph, whose content and behaviour are an asset tree referenced at a revision,
+manifest in the graph, whose content and behavior are an asset tree referenced at a revision,
 and whose rationale is the commits that moved the reference plus the notes on them. The asset
 store keeps the development history; the graph keeps the projection designers and researchers
 need.
@@ -282,7 +303,7 @@ state transitions a designer chose and could explain; everything else is reachab
 replicated.
 
 **What Phase 1 must not do**: make `ItemOption` the only way an item can have parts. The typed
-option list lands as planned, but as a specialisation of a fragment, so that the generic model
+option list lands as planned, but as a specialization of a fragment, so that the generic model
 can sit beside it without a second migration.
 
 ---
@@ -348,7 +369,7 @@ Work:
       annotation was considered and rejected: options are never shared across items (ADR-0022).
       Verify on the running store whether subdocuments return inline by default or need the
       `unfold` read parameter (the ADR-0013 gating discipline). Model `ItemOption` as a
-      specialisation of an abstract `Fragment` subdocument (`fragmentId`, `kind`, optional
+      specialization of an abstract `Fragment` subdocument (`fragmentId`, `kind`, optional
       `text`, optional attachment) so that §3's generic part model and the `sys:JSON` payload for
       new item types can sit beside typed options later without re-keying anything. Verify first
       that a `List` of subdocuments accepts subtypes polymorphically on the running store; if it
@@ -357,7 +378,7 @@ Work:
       migration endpoint with `DeleteClass`, `CreateClassProperty`, `ChangeKey` and a dry-run
       mode that rewrites instance data with the schema. At demo scale a reload of the seed is
       simpler, but the ADR should record that the migration path exists for any deployment that
-      holds real data. Note that `Cardinality` is deprecated in v12 in favour of `Set` with
+      holds real data. Note that `Cardinality` is deprecated in v12 in favor of `Set` with
       `@min_cardinality`, which is what the schema already uses.
 - [x] **Generator support for subdocuments.** `scripts/generate-types.js` maps class references
       to `string`; subdocument references must inline the type. Same change in
@@ -389,7 +410,7 @@ Exit: `schema.json`, the ADR index, the seed, and the generated files agree. ADR
 CoQui receives: the target item shape its PR 3 types file is written against, and the id rules
 its outbox depends on.
 
-### Phase 2: The version-control model (2 to 3 sessions)
+### Phase 2: The version-control model (2 to 3 sessions) — done 2026-10-08, PR #5
 
 **Goal.** Make the paper's "collaboration and version control" section true at the API.
 **Serves:** P3 directly; P1 (process data becomes inspectable); P8 (author on every commit).
@@ -419,7 +440,7 @@ Work:
       of the installed client source. One `fetch`-based adapter under `app/lib/api/` owns URL
       construction, credentials, `author` and `message`, the data-version header and typed error
       parsing; the JavaScript client stays in `scripts/` and may re-enter the API layer only to
-      build WOQL JSON. The two behaviours it relies on that §9 did not yet record have their
+      build WOQL JSON. The two behaviors it relies on that §9 did not yet record have their
       checks: the stale data-version error body (M5) and `diff=true` on history (N2).
 - [x] **Per-request store adapter and the write path (ADR-0055).** `app/lib/api/store.ts`:
       `createStore(ref)` per request; `getDocument`, `putDocument` (author, message, If-Match),
@@ -458,11 +479,12 @@ against the container; it works on scratch branches and leaves `main` untouched.
 
 CoQui receives: asks 1, 2 and 6, and the merge its PR 6 was deferred for.
 
-### Phase 3: Generic writes and the invariants engine (2 to 3 sessions)
+### Phase 3: Generic writes and the invariants engine (2 to 3 sessions) — done 2026-10-08, PR #7
 
 **Goal.** One write path for every type, with every ADR-0006 constraint enforced on it.
-**Serves:** P2 (constraints are infrastructure), P4 (computed fields stay correct), P5 (one write
-path for humans and agents alike).
+**Serves:** P2 (constraints are infrastructure), P5 (one write path for humans and agents alike).
+(As first written this also served "P4: computed fields stay correct"; ADR-0056 removed the
+computed fields.)
 
 Work:
 - [x] **`PUT /api/v1/documents/:type/:id` and `POST /api/v1/documents`** (2026-10-08), one
@@ -471,7 +493,7 @@ Work:
       within the list, the response carries the written ids, and the list fails together. The
       store's `POST overwrite=true` turned out to merge triples rather than replace (X3a), so the
       hub never uses it. An existing document is found by `@id`, or for a Hash-keyed class by its
-      key fields (X1c), so a replace is recognised either way; an id held by another type is a
+      key fields (X1c), so a replace is recognized either way; an id held by another type is a
       409 before the store sees it. `GET /api/v1/documents/:type?field=value&count=&skip=` lists
       with filters from the template query (W1).
 - [x] **Invariants engine** in `app/lib/api/invariants/` (under the API directory, since it is
@@ -483,8 +505,9 @@ Work:
       job (400 `invalid_document`); `@min_cardinality` becomes `.min(n)`, so constraints 1 and 2
       are shape. Flatness is constraint 0's doing. Every CLAUDE.md constraint has a failing and
       a passing test in `app/lib/api/write.test.ts`.
-- [x] **Recompute hooks.** `afterWrite` for `AssessmentItem`, `ItemInstance`, `ModuleObjective`
-      in `invariants/recompute.ts` names the affected modules; Phase 4 gives it a body.
+- [x] ~~**Recompute hooks.** `afterWrite` for `AssessmentItem`, `ItemInstance`, `ModuleObjective`
+      in `invariants/recompute.ts` names the affected modules; Phase 4 gives it a body.~~
+      **Removed in Phase 4 by ADR-0056:** coverage is computed on read; `recompute.ts` is gone.
 - [x] **Users and ADR-0032: Identity resolution** (accepted 2026-10-08, PR #7).
       `app/lib/api/identity.ts`: a pluggable resolver chosen by `ARMATURE_IDENTITY` (`header`
       now, carrying the caller's `externalId`; `oidc` named for later) yields claims; the hub
@@ -508,7 +531,7 @@ Work:
 - [x] Retired the per-type routes, `app/lib/terminusdb.ts`, `app/lib/routeHelpers.ts` and
       `app/lib/validate.ts` (2026-10-08); the `terminusdb` client package left `app/`. Nothing
       aliases them: the list route covers the eight GET routes, the write path covers the two
-      POST routes, and the coverage read is two list reads until Phase 4's intelligence route.
+      POST routes, and coverage became the Phase 4 intelligence read.
 
 Exit (met 2026-10-08): every constraint in CLAUDE.md has a failing test and a passing test
 against the running store (`app/lib/api/write.test.ts`). The old per-type routes are gone.
@@ -518,20 +541,23 @@ decision 6, amended).
 
 CoQui receives: asks 3, 4 and 5.
 
-### Phase 4: Design intelligence (2 to 3 sessions)
+### Phase 4: Design intelligence (2 to 3 sessions) — done 2026-10-08, PRs #8 to #10
 
 **Goal.** Deliver the paper's §4 as read endpoints, starting with the four the paper names for a
 quiz tool.
 **Serves:** P4 directly; it is also the demo payoff for both narratives in PROJECT_CONTEXT.
 
 Work:
-- [x] **ADR-0029: Coverage algorithm** (accepted 2026-10-08). Defines the verdict: `Uncovered` is
-      zero eligible items, `PartiallyAssessed` is one, `FullyAssessed` is two to four,
-      `OverAssessed` is above the hub constant `OVER_ASSESSED_ABOVE` (4), not a module field until
-      two clients need modules to differ. Counts distinct items placed in the module's
-      assessments, not the bank. Adopts ADR-0019's eligibility rule (Approved only for
-      `coverageStatus`; non-Retired for `projectedCoverageStatus`) and promotes ADR-0019 to
-      Accepted. The thresholds are provisional (P9); the ADR says what would revise them.
+- [x] **ADR-0029: Coverage algorithm** (decisions 1 to 3 accepted 2026-10-08; 4 to 6 superseded
+      by ADR-0056 the same day). Defines the verdict: `Uncovered` is zero eligible items,
+      `PartiallyAssessed` is one, `FullyAssessed` is two to four, `OverAssessed` is five or more.
+      These are the default thresholds (`DEFAULT_THRESHOLDS` in `app/lib/api/intelligence/coverage.ts`),
+      which the coverage read takes as query parameters (`fullyAssessedAt`, `overAssessedAbove`);
+      no module field until two clients need modules to differ. Counts distinct items placed in the
+      module's assessments, not the bank. Adopts ADR-0019's eligibility rule as the read's two
+      figures (delivered: Approved items in Approved placements; projected: nothing Retired) and
+      promotes ADR-0019 to Accepted. The thresholds are provisional (P9); the ADR says what would
+      revise them.
 - [x] ~~`deriveCoverage(ctx)` in the write pipeline~~ **Reversed the same day by ADR-0056.** Built
       first as a pre-commit recompute with the fields declared computed in the schema metadata,
       then a merge-route recompute with a resolution path for conflicts on the computed fields
@@ -541,8 +567,11 @@ Work:
       `projectedCoverageStatus` and the `CoverageStatus` enum left the schema; coverage is
       computed by the read at any ref, with the counts returned and the thresholds as parameters.
       Coverage stops being seeded at all.
-- [ ] **`GET /api/v1/intelligence/coverage/:moduleId`** replacing the current route, returning
-      the summary block `demo-api.md` promised, both coverage figures, and the items behind each.
+- [x] **`GET /api/v1/intelligence/coverage/:moduleId`** (2026-10-08), returning the summary block
+      `demo-api.md` promised, both coverage figures with their counts and default verdicts, the
+      thresholds in force, the items behind each, and the objectives the module assesses without
+      declaring. A course-wide form, `GET /api/v1/intelligence/coverage?course=`, returns every
+      module (every module in the database when `course` is omitted).
 - [x] **`GET /api/v1/intelligence/alignment?module=`** (2026-10-08): items whose `bloomsLevel`
       is below an objective they assess, with the gap in levels; objectives no item reaches at or
       above their level; objectives no activity targets; and the objectives and items that have no
@@ -550,8 +579,7 @@ Work:
       "any activity targets it" until the schema says otherwise.
 - [x] **`GET /api/v1/intelligence/trace/:type/:id`** (2026-10-08): the lifecycle walk, evidence
       to metric, both ways from any document on it, each hop naming the field and the junction it
-      went through (with the link's confidence, the placement's status, the declaration's role and
-      verdict); modules attached as context to every objective and assessment reached; the notes
+      went through (with the link's confidence, the placement's status, the declaration's role); modules attached as context to every objective and assessment reached; the notes
       and findings about anything reached. A metric traces to the module that declared the
       objective its item assessed, which is Narrative 1.
 - [x] **`GET /api/v1/intelligence/impact/:type/:id`** (2026-10-08): every document that
@@ -596,7 +624,8 @@ Work:
 - [ ] **Non-aggregation guard (ADR-0021).** The generic list route refuses `attestedBy` and
       `createdBy` as filter keys, and the ADR records why this one restriction lives in the
       generic layer.
-- [ ] `DesignFinding` and `Attestation` validators in the invariants registry.
+- [ ] An `Attestation` validator in the invariants registry (the `DesignFinding` validator, rule
+      11, has existed since Phase 3).
 - [ ] Seed one attestation so the trace route can show "affirmed by an expert at <institution>
       as of commit X, two revisions ago."
 
@@ -668,8 +697,8 @@ Work:
       (institution only, per ADR-0021's cheapest option). Slices are declared as lists of
       classes in a small JSON file, so the needs-to-objectives-to-outcomes slice the paper
       describes is a configuration, not code.
-- [ ] **Outcomes import path.** `LearningDataset`, `LearningMetric` and item statistic
-      write-back through the generic write route, with an invariant for `producedBy` when the
+- [ ] **Outcomes import path.** `LearningDataset`, `LearningMetric` and item statistics (stored
+      or computed: decide first, §6) through the generic write route, with an invariant for `producedBy` when the
       assessment is Armature's. Seed one dataset so Narrative 1 is live end to end.
 - [ ] A short `docs/research-path.md` describing how a scientist would stand up a constrained
       Armature for one study: which slice, which profile, what the collection instrument writes.
@@ -687,8 +716,8 @@ Work:
 - [ ] Move generated types into a workspace package (`packages/types`), published or consumable
       by git reference; the generator writes there and `check:types` still guards drift.
 - [ ] A thin typed client (`packages/client`): fetch wrappers over the v1 routes, branch and ref
-      parameters, data-version handling, and `handleTerminusError`'s mapping behind the
-      boundary. CoQui's `httpHub` becomes a consumer of it, not a reimplementation.
+      parameters, data-version handling, and the store-error mapping (now `app.onError` in
+      `app/lib/api/app.ts`; formerly `handleTerminusError`) behind the boundary. CoQui's `httpHub` becomes a consumer of it, not a reimplementation.
 - [ ] **Contract test owned by Armature.** A test suite that starts TerminusDB as a CI service
       container, loads the schema, seeds, and exercises every v1 route and every invariant.
       CoQui's planned `armature:check` becomes a second opinion, not the only one.
@@ -699,8 +728,9 @@ Work:
       fallback rather than the source. The Next.js app becomes the demo UI only, deployed
       separately or not at all. The contract test above runs through `app.request()` against the
       service container, so `npm test` joins CI here.
-- [ ] `docs/schema-guide.md` written at last, from the reference-client perspective: what a tool
-      author needs to know to write and read the graph.
+- [ ] `docs/schema-guide.md` revised from the reference-client perspective: what a tool author
+      needs to know to write and read the graph. (A first conceptual version was written on
+      2026-10-08, with `docs/api.md` and `docs/how-armature-works.md`.)
 
 Exit: a developer with the repo, Docker and the client package can write a new plugin without
 reading TerminusDB documentation.
@@ -709,29 +739,32 @@ reading TerminusDB documentation.
 
 ## 5. ADR queue
 
-| ADR | Title | Phase | Notes |
-|---|---|---|---|
-| 0017 | DesignRecord abstract root | 1 | Promote to Accepted after verification |
-| 0018 | Item readiness on AssessmentItem | 1 | Promote to Accepted |
-| 0019 | Coverage accounts for readiness | 4 (accepted 2026-10-08) | Promoted with 0029 |
-| 0020 | DesignFinding | 1 | Promote to Accepted |
-| 0022, 0023 | Embedded parts, fragmentId | 1 | Already Accepted; implement |
-| 0024 | Client-supplied identifiers | 1 | Resolves 0016 decision 5 and 0023's open question |
-| 0025 | Design process data lives in the commit graph | 2 | Reconciles the paper's model with the store; amended in Phase 6 for externally versioned artifacts |
-| 0026 | API host and route versioning | 0 | Resolves the PROJECT_CONTEXT contradiction |
-| 0027 | Schema self-description via `@metadata` | 1 | Replaces `JUNCTION_IDS` |
-| 0028 | Attestation | 5 | Generic form of CoQui's proposal |
-| 0029 | Coverage algorithm | 4 (accepted 2026-10-08) | Closes PROJECT_CONTEXT's open question; counted over placements; same-commit recompute; computed fields rejected on write |
-| 0030 | External references and attachments | 6 | P6; attachment references with mandatory content hash, backend left open |
-| 0031 | Export profiles and schema slices | 6 | P7, P8; implements ADR-0021's deferred section |
-| 0032 | Identity resolution | 3 (accepted 2026-10-08) | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |
-| 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Abstract `Fragment` subdocument; `ItemOption` as a specialisation; generic kinds with `sys:JSON` payload and per-kind validation; promotion path to typed subdocuments. Verify polymorphic subdocument lists first |
-| 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI as precedents); the hub never serves executable content from a graph document, renderers load sandboxed under CSP |
+The decision records this plan reserved or produced, in number order, with their status as of
+2026-10-08. The full index of all decision records is `schema/docs/adr/README.md`. Numbers 0035 to
+0053 are research candidates (`docs/research/adr-candidates.md`), not decisions.
 
-| 0056 | Coverage is computed on read, never stored | 4 (accepted 2026-10-08) | Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6; the graph stores decisions and observations, the reads derive the rest |
-| 0057 | Records that refer to a state of the graph name its commit (`asOf`) | 6 (proposed 2026-10-08) | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head when absent and validates a supplied id; closes Narrative 1's "adequate when" |
-| 0054 | The API is a Hono application | 0 (accepted 2026-10-07) | Amends ADR-0026 decision 1; host-neutral app in `app/lib/api/`, one catch-all mount; numbered past the reserved and candidate blocks |
-| 0055 | The API layer reaches TerminusDB over HTTP | 2 (accepted 2026-10-08) | One `fetch` adapter under `app/lib/api/`; the JavaScript client stays in `scripts/`; supersedes the "keep the JS client" decision and the §3 split |
+| ADR | Title | Phase | Status | Notes |
+|---|---|---|---|---|
+| 0017 | DesignRecord abstract root | 1 | Accepted and implemented | Promoted after platform checks A to C |
+| 0018 | Item readiness on AssessmentItem | 1 | Accepted and implemented | |
+| 0019 | Coverage accounts for readiness | 4 | Accepted 2026-10-08 | Promoted with 0029; its two figures are outputs of the coverage read (amended by 0056) |
+| 0020 | DesignFinding | 1 | Accepted and implemented | |
+| 0022, 0023 | Embedded parts, fragmentId | 1 | Accepted and implemented | |
+| 0024 | Client-supplied identifiers | 1 | Accepted and implemented | Resolves 0016 decision 5 and 0023's open question. Its lossless-write requirement (candidate 0035) is still open; see §6 |
+| 0025 | Design process data lives in the commit graph | 2 | Accepted and implemented | Reconciles the paper's model with the store; to be amended in Phase 6 for externally versioned artifacts |
+| 0026 | API host and route versioning | 0 | Accepted; decision 1 amended by 0054 | Resolved the PROJECT_CONTEXT contradiction; the legacy routes it named were retired in Phase 3 |
+| 0027 | Schema self-description via `@metadata` | 1 | Accepted and implemented, except `GET /schema` | Replaced `JUNCTION_IDS`; `GET /api/v1/schema` not built (see §6) |
+| 0028 | Attestation | 5 | Reserved, not written | Generic form of CoQui's proposal |
+| 0029 | Coverage algorithm | 4 | Decisions 1 to 3 accepted 2026-10-08; 4 to 6 superseded by 0056 | Counted over placements; two figures; default thresholds as parameters |
+| 0030 | External references and attachments | 6 | Reserved, not written | P6; attachment references with mandatory content hash, backend left open |
+| 0031 | Export profiles and schema slices | 6 | Reserved, not written | P7, P8; implements ADR-0021's deferred section |
+| 0032 | Identity resolution | 3 | Accepted and implemented | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |
+| 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Accepted; shape implemented | Abstract `Fragment` subdocument; `ItemOption` as a specialization; generic kinds with `sys:JSON` payload and per-kind validation land with the first non-text item type |
+| 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | Reserved, not written | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI, Portable Custom Interactions, as precedents); the hub never serves executable content from a graph document, and renderers load sandboxed under a content security policy (CSP) |
+| 0054 | The API is a Hono application | 0 | Accepted 2026-10-07 | Amends ADR-0026 decision 1; host-neutral app in `app/lib/api/`, one catch-all mount; numbered past the reserved and candidate blocks |
+| 0055 | The API layer reaches TerminusDB over HTTP | 2 | Accepted 2026-10-08 | One `fetch` adapter under `app/lib/api/`; the JavaScript client stays in `scripts/`; supersedes the "keep the JS client" decision and the earlier §3 split |
+| 0056 | Coverage is computed on read, never stored | 4 | Accepted 2026-10-08 | Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6; the graph stores decisions and observations, the reads derive the rest |
+| 0057 | Records that refer to a state of the graph name its commit (`asOf`) | Before or with Phase 5 (needed by Phase 6) | Proposed 2026-10-08 | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head when absent and validates a supplied id (a new rule 13); closes Narrative 1's "adequate when" |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -743,6 +776,41 @@ superseded. ADR-0026 is amended by ADR-0054.
 These are not in any phase. Each should become an ADR when evidence arrives, and the plan names
 what evidence would be enough.
 
+- **Lossless writes across schema versions.** ADR-0024's replace semantics mean a client built
+  against an older schema can read a document, edit it, and write it back without fields it does
+  not know, erasing them. ADR-0024 paired itself with a Phase 3 requirement that the hub carry such
+  fields forward (research candidate ADR-0035, "High"); Phase 3 shipped without it, and the
+  generated request schemas reject unknown fields rather than preserving them. Evidence that
+  forces it: the first schema change that adds a field to a type a deployed plugin already writes.
+- **Item statistics: stored or computed?** `AssessmentItem.difficultyIndex` and
+  `discriminationIndex` (ADR-0009) are described as values written back after dataset analysis, but
+  ADR-0056 names difficulty summaries among derived values to compute on read. Either they are
+  observations imported from an external analysis (and stay), or they are computed from datasets
+  at read time (and leave the schema). No code writes them today. Evidence: the outcomes importer
+  in Phase 6.
+- **`GET /api/v1/schema`.** ADR-0027 decision 4 scheduled a route returning the schema graph so a
+  tool can discover types from the hub, for "Phase 2 or 3"; it was not built, and no phase owns it
+  now. Phase 7's toolkit is the natural home. Evidence: a second plugin that needs to discover
+  types at run time rather than from generated files.
+- **How `ModuleObjective` declarations are written.** ADR-0007 decided the API would create a
+  declaration "programmatically" when a designer assigned an objective to a module, and that it
+  would not be created or edited directly through a UI. What was built treats it like any other
+  relationship: clients write it through `PUT`/`POST /api/v1/documents`, and the seed writes seven.
+  Either amend ADR-0007 so the generic path is the recorded decision (the two-client test favors
+  it: a curriculum mapper and an AI design assistant would both write declarations), or add a
+  rule restricting writes. Evidence: the objective and curriculum mapper reference client.
+- **The ordered module-content view.** ADR-0005 assigns the API the job of merging
+  `ModuleActivityLink` and `ModuleActivityGroupLink` by `sequence` into one ordered view of a
+  module, with each group's members in their own order. The uniqueness rules are enforced
+  (constraints 3 and 4), but the composed view has not been built; clients sort the links
+  themselves. Evidence: the activity and strategy designer reference client, or a Coverage View
+  that shows a module's activities.
+- **Filtering the list route on optional and multi-valued references.** The store answers a
+  template query on an `Optional` or `Set` reference field with a 500 (check Y), and
+  `GET /api/v1/documents/:type?<field>=` passes such filters through, so `?createdBy=` or
+  `?assesses=` fail with a 500. The intelligence reads work around it in `Graph.where`. Fixing the
+  list route (list and filter in the hub, or refuse with 400) should happen with Phase 5's
+  non-aggregation guard, which refuses `createdBy` as a filter anyway.
 - **Merge policy.** The store's three-way merge lands in Phase 2; what remains open is policy:
   who may merge a branch, whether findings and attestations merge without approval (CoQui's
   O-P), which needs a per-type filtered merge the store does not offer, and where a
@@ -760,7 +828,7 @@ what evidence would be enough.
   tool needs it.
 - **DesignDecision as a structured type.** ADR-0010's intended second layer over `DesignNote`.
   Evidence: `DesignNote.category` usage showing recurring structure, or a needs-analysis tool
-  modelling the LEED tracker's columns.
+  modeling the LEED tracker's columns.
 - **A fourth `DesignFinding` status.** CoQui stretches `Dismissed` to cover a reviewer's own
   withdrawal. Evidence: a second tool needing the distinction (ADR-0018 §5's test).
 - **One placement per item per assessment.** `ItemInstance`'s Hash key over `(assessment,
@@ -850,7 +918,7 @@ Recorded so the decisions are inherited rather than rediscovered.
 
 - No CoQui vocabulary in the schema: no round, grid, claim version, workflow state, or reviewer
   role. They map onto branches, `claimRef`, `ItemStatus` and `User` at CoQui's boundary.
-- No per-type write routes once the generic path exists. Type behaviour is a validator, not a
+- No per-type write routes once the generic path exists. Type behavior is a validator, not a
   handler.
 - No "new version of" relation, `version` field, or timestamp fields. The commit graph is the
   record (ADR-0010, ADR-0025).
@@ -868,7 +936,7 @@ Recorded so the decisions are inherited rather than rediscovered.
 - No replay of an asset store's history into the graph. The graph records the revisions that
   matter to design, with author and reason; the asset store keeps the rest, reachable through
   the reference. Branching and merging of design relations happen only in the graph.
-- No executable content served from a graph document. Behaviour reaches a tool only as a
+- No executable content served from a graph document. Behavior reaches a tool only as a
   registered, hashed, versioned reference, loaded sandboxed. Item documents carry data, never
   code.
 - No item type whose parts cannot be enumerated generically. A tool that does not know an item
@@ -887,11 +955,11 @@ The same pages are now vendored under `docs/vendor/terminusdb/` (see `VERSION.js
 pinned docs commit and release), so future checks can diff rather than re-read.
 
 **Versions**
-- Server: v12.0.7, released 2026-08-10. The local container runs the `v12` tag built that day,
-  so it is current. Compose should pin `v12.0.7` rather than `latest`.
+- Server: v12.0.7, released 2026-08-10. Compose pins `terminusdb/terminusdb-server:v12.0.7`
+  (done in Phase 0; it previously used `latest`).
 - Client: the npm package was renamed from `@terminusdb/terminusdb-client` to `terminusdb` at
-  12.0.3; current is 12.0.5 with bundled TypeScript types. The repo has 12.0.0 of the old name in
-  both `app/` and `scripts/`. Same API surface; the rename is the only migration.
+  12.0.3; current is 12.0.5 with bundled TypeScript types. `scripts/` uses `terminusdb` ^12.0.5
+  (updated in Phase 0); `app/` has no client at all since Phase 3 (ADR-0055).
 - Client internals (read 2026-10-08, `terminusdb@12.0.5`, for ADR-0055): every method is a URL
   built by `ConnectionConfig` and dispatched through axios; database, branch, ref and custom
   headers live on the instance; a write given a data version stores it in the instance headers
@@ -931,7 +999,7 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - Diff: `/api/diff` takes two data versions (branch names or commit ids) and an optional document
   id; list fields diff positionally (`CopyList`, `SwapList`).
 - Patch: applying a patch whose `@before` no longer matches returns 409 with `api:PatchError` and
-  `api:witnesses`. This is the behaviour CoQui's handoff relied on.
+  `api:witnesses`. This is the behavior CoQui's handoff relied on.
 - *Verified (2026-10-08, check Z):* a conflict on a field is cleared by restoring the base value
   on the target in a new commit: `apply` with the same `before_commit` and `after_commit` then
   succeeds, the source's value lands, and the target's other changes are kept. Verified for the
@@ -989,7 +1057,7 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   inline by default (no `unfold` needed); a `List` typed to an abstract subdocument accepts
   subclasses polymorphically; `sys:JSON` on a subdocument round-trips; a replace of the parent
   regenerates every subdocument id (checks D to J, `scripts/platform_checks.js`).
-- A client-supplied `@id` is honoured under an explicit `@key: Random`; `POST` under an existing
+- A client-supplied `@id` is honored under an explicit `@key: Random`; `POST` under an existing
   id fails with `api:DocumentIdAlreadyExists`; `PUT` replaces; `@capture` and `@ref` resolve
   intra-batch references including to Hash-keyed junctions (check K; the seed uses it).
 - `@shared` (v12.0.6) is a regular document with reference-counted cascade deletion. Not needed
@@ -999,7 +1067,7 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   migration operation exists.
 - `@inherits` forms a DAG; multiple inheritance is allowed when shared properties agree; key
   strategies are not inherited.
-- `Cardinality` is deprecated in favour of `Set` with `@min_cardinality` and `@max_cardinality`.
+- `Cardinality` is deprecated in favor of `Set` with `@min_cardinality` and `@max_cardinality`.
   The schema already follows this.
 - `@documentation` may be a list of language-tagged objects, as the schema already does.
 - A schema migration endpoint (`/api/migration/<path>`, with `dry_run`) rewrites instance data
@@ -1007,7 +1075,8 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   `ChangeKey`, `MoveClass`, `ExpandEnum` and others. Weakening changes (new optional fields, new
   classes) need no migration.
 - `@unfoldable` and field-level `@unfold` expand linked documents on read with cycle detection.
-  Worth evaluating for the trace route in Phase 4 before writing custom joins.
+  Considered for the trace route in Phase 4; not used. The trace and impact reads use a
+  per-request cached reader (`app/lib/api/intelligence/graph.ts`) over ordinary document reads.
 
 **Documents API** (Phases 2 to 4)
 - `GET` supports `type`, `id`, `ids`, `skip`, `count`, `as_list`, `unfold`, `minimized`, and a
@@ -1019,5 +1088,5 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   field, whether the value is one member or an array (Y2, Y3). The intelligence reads therefore
   look documents up by an Optional or Set reference by listing the type and filtering in the hub
   (`Graph.where`); a WOQL query over the adapter replaces that when a type outgrows a list.
-- Turtle and RDF/XML content negotiation appear under enterprise-labelled pages; treat JSON and
+- Turtle and RDF/XML content negotiation appear under enterprise-labeled pages; treat JSON and
   JSON-LD as the guaranteed export formats until verified.
