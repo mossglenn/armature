@@ -12,8 +12,8 @@ Run these commands to collect what happened this session:
 # Recent commits
 git log --oneline -20
 
-# Files changed since last session update
-git diff --name-only HEAD~5..HEAD 2>/dev/null || git diff --name-only
+# Files changed since the last session update commit
+git diff --name-only "$(git log -1 --format=%H --grep='update session state')"..HEAD 2>/dev/null || git diff --name-only
 
 # Any uncommitted work
 git status
@@ -72,7 +72,7 @@ Once confirmed, update SESSION.md:
 5. Prepend a new entry to "Recent Sessions" with today's date and a 3–5 bullet summary
 6. Replace "Notes for Next Session" with fresh notes
 
-Keep entries concrete and specific. "Worked on API" is not useful. "Wrote GET /objectives endpoint with TerminusDB WOQL query; deferred pagination" is.
+Keep entries concrete and specific. "Worked on API" is not useful. "Added the alignment read (`GET /api/v1/intelligence/alignment`), with Bloom's mismatches and objectives without activities; deferred redundancy detection (needs text similarity)" is.
 
 ---
 
@@ -82,10 +82,10 @@ Ask: does anything that changed this session require updating CLAUDE.md?
 
 - New architectural patterns introduced?
 - New constraints discovered?
-- Stack decisions finalized (e.g., Express chosen over Fastify)?
+- Stack decisions finalized (e.g., Hono chosen as the API framework, ADR-0054)?
 - New "don't do this" patterns discovered?
 
-If yes, update CLAUDE.md as well.
+If yes, update CLAUDE.md as well. Also check whether `README.md`, `docs/api.md`, `docs/schema-guide.md` or `docs/how-armature-works.md` describe something this session changed, and update them (or list them in What's Next).
 
 ---
 

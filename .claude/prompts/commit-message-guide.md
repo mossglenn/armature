@@ -38,12 +38,16 @@ Use the directory or system being changed:
 
 | Scope | Covers |
 |---|---|
-| `schema` | `schema/schema.json` |
+| `schema` | `schema/schema.json` (with its regenerated `app/lib/types.ts`, `app/lib/schemas.ts` and `docs/SCHEMA_APPENDIX.md`) |
 | `adr` | `schema/docs/adr/` |
-| `api` | `api/` |
-| `docker` | `docker/` |
+| `api` | The Armature API, `app/lib/api/` |
+| `app` | The rest of `app/`: pages, configuration, generated files when not part of a schema change |
 | `scripts` | `scripts/` |
+| `docker` | `docker/` |
+| `ci` | `.github/workflows/` |
+| `deps` | Dependency changes in either `package.json` |
 | `docs` | `docs/` |
+| `research` | `docs/research/` |
 | `.claude` | `.claude/` |
 
 ---
@@ -51,37 +55,41 @@ Use the directory or system being changed:
 ## Examples
 
 ```
-schema(schema): add difficultyIndex and discriminationIndex to AssessmentItem
+feat(api): add the coverage read under /api/v1/intelligence
 
-Computed fields written back by the API after LearningDataset analysis.
-Enables item bank queries by empirical difficulty. See ADR-0009.
+Computes each declared objective's coverage from the module's placements
+at the requested ref, with both figures, their counts and the items behind
+them. Nothing is stored. See ADR-0029, ADR-0056.
 ```
 
 ```
-feat(api): add GET /objectives endpoint with coverage status
+schema(schema): add DesignFinding and FindingStatus
 
-Returns all LearningObjectives for a course with their ModuleObjective
-coverageStatus values. Pagination deferred — returns all for now.
+An evidence-grounded concern about any design record, distinct from a
+DesignNote's settled rationale. Dismissed requires a resolutionRationale,
+enforced by the API. See ADR-0020.
 ```
 
 ```
-docs(adr): add ADR-0011 for API framework selection
+docs(adr): add ADR-0054, the API as a Hono application
 
-Chose Fastify over Express for schema-based validation support and
-better TypeScript integration.
+Host-neutral routes mounted in Next.js through one catch-all, so moving
+to a standalone server is a deployment change. Verified by a six-check
+spike before acceptance.
 ```
 
 ```
-chore(docker): add Docker Compose for TerminusDB local development
+chore(docker): pin terminusdb-server to v12.0.7
 
-Includes persistent volume mount and environment variable configuration.
+The compose file used latest; every platform check was run against
+v12.0.7.
 ```
 
 ```
-fix(api): enforce minimum cardinality on AssessmentItem.assesses
+fix(api): report each unrecognized key at its own path
 
-Was accepting empty assesses array on create. Now returns 422 with
-descriptive error. See ADR-0006.
+Zod reports unknown keys as one issue with an empty path; split them so
+a client learns which field was refused.
 ```
 
 ---

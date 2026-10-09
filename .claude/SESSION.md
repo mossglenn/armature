@@ -29,12 +29,12 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 ### Phase 3: generic writes and the invariants engine (2026-10-08)
 
 - **ADR-0032 (Accepted):** identity resolution. A pluggable resolver chosen by `ARMATURE_IDENTITY` (`header`, carrying the caller's `externalId`; `oidc` named for later) yields claims; the hub resolves them to a `User` on `main`, the registry of record, by template query, registering one there on first encounter when the claims carry a `displayName`. Commit author and `createdBy` come from the resolved `User`, never the body: set on create, preserved on replace. A write on a branch that lacks the `User` carries `main`'s copy in the same commit; identical copies merge clean. `GET /api/v1/users`, `GET /api/v1/users/me`, `POST /api/v1/users` (main only, 409 `user_exists`). Agent users are `User` documents with an `agent:` `externalId`, registered by a person
-- **ADR-0025 decision 6 amended:** `DELETE /api/v1/branches/:name` only when another branch holds the head (in its log or as a merge commit's `mergeSource`), never `main`, no force, because a deletion is the one mutation the store records nowhere. `If-Match` honoured (412), head re-read before the delete (409 `branch_moved`)
-- **Platform checks W and X** (all passing on v12.0.7): template query over HTTP via `POST` + `X-HTTP-Method-Override: GET`; identical inserts on two branches merge as an empty patch, differing ones are a 409 `InsertConflict` witness; a `PUT` list with `create=true` writes Hash-keyed documents without `@id`, honours `@capture`/`@ref`, returns the ids and fails as a whole; **`POST overwrite=true` merges values into a list rather than replacing**; `GET ids=[...]` batch-reads and drops missing ids
+- **ADR-0025 decision 6 amended:** `DELETE /api/v1/branches/:name` only when another branch holds the head (in its log or as a merge commit's `mergeSource`), never `main`, no force, because a deletion is the one mutation the store records nowhere. `If-Match` honored (412), head re-read before the delete (409 `branch_moved`)
+- **Platform checks W and X** (all passing on v12.0.7): template query over HTTP via `POST` + `X-HTTP-Method-Override: GET`; identical inserts on two branches merge as an empty patch, differing ones are a 409 `InsertConflict` witness; a `PUT` list with `create=true` writes Hash-keyed documents without `@id`, honors `@capture`/`@ref`, returns the ids and fails as a whole; **`POST overwrite=true` merges values into a list rather than replacing**; `GET ids=[...]` batch-reads and drops missing ids
 - **Generator:** `types.ts` now carries the schema as data (`CLASS_ANCESTORS`, `CLASS_KEY`, `CLASS_FIELDS`); a second output `app/lib/schemas.ts` holds strict Zod schemas per concrete class (`@min_cardinality` as `.min(n)`, enums from `VALID_*`, references as an id or `{ "@ref" }`, abstract subdocuments as discriminated unions, Set/List without a minimum optional). `check:types` covers both. `zod@4.3.6` is a direct dependency
 - **One write pipeline** (`app/lib/api/write.ts`) behind `PUT /api/v1/documents/:type/:id` and the batch `POST /api/v1/documents`: Zod shape (400 `invalid_document`), what each document replaces (by `@id` or by Hash key fields), 409 `type_conflict`, `createdBy`, the invariants (422 `invariant_violation` with every violation), one `PUT create=true` over the list, `If-Match` as 412, afterWrite hooks. `GET /api/v1/documents/:type?field=value&count=&skip=` lists with filters
-- **Invariants engine** in `app/lib/api/invariants/`: `index.ts` (context, registry, 422), `references.ts` (constraint 0, walking into fragments), `assessmentItem.ts` (8, 9, 10), `itemInstance.ts` (5, 10), `moduleContent.ts` (3, 4), `designFinding.ts` (11), `recompute.ts` (7, afterWrite stub naming affected modules). Constraints 1 and 2 are Zod minimums; 6 falls out of constraint 0; 12 is the pipeline. The merge route reports the `InsertConflict` witness
-- **Retired:** the nine unversioned routes, `lib/terminusdb.ts`, `lib/routeHelpers.ts`, `lib/validate.ts`; the `terminusdb` client left `app/` (scripts keeps its own). The catch-all is the only route file. A module's coverage is two list reads until Phase 4
+- **Invariants engine** in `app/lib/api/invariants/`: `index.ts` (context, registry, 422), `references.ts` (constraint 0, walking into fragments), `assessmentItem.ts` (8, 9, 10), `itemInstance.ts` (5, 10), `moduleContent.ts` (3, 4), `designFinding.ts` (11), `recompute.ts` (7, afterWrite stub naming affected modules; removed in Phase 4 by ADR-0056). Constraints 1 and 2 are Zod minimums; 6 falls out of constraint 0; 12 is the pipeline. The merge route reports the `InsertConflict` witness
+- **Retired:** the eleven unversioned routes (eight GET lists, the coverage route, two POSTs), `lib/terminusdb.ts`, `lib/routeHelpers.ts`, `lib/validate.ts`; the `terminusdb` client left `app/` (scripts keeps its own). The catch-all is the only route file. A module's coverage is two list reads until Phase 4
 - **Exit criterion met:** every CLAUDE.md constraint has a failing and a passing test in `app/lib/api/write.test.ts`; 68 tests across two files pass; lint, `check:types`, `tsc`, `next build` clean. The automated security review's two findings on the delete route (check-then-delete race, unbounded holder walk) were fixed in the PR
 
 ### Phase 2: the version-control model (2026-10-08)
@@ -51,7 +51,7 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ### Phase 1: schema catch-up (2026-10-07)
 
-- `scripts/platform_checks.js`: reproducible probes of store behaviour in a scratch database (checks A to L). All Phase 1 platform assumptions verified on v12.0.7: subdocuments inline by default, polymorphic `List<Fragment>`, `sys:JSON` on subdocuments, four-level inheritance, `@metadata` survival, empty abstract root, client-supplied `@id` under `@key Random`, nested diffs
+- `scripts/platform_checks.js`: reproducible probes of store behavior in a scratch database (checks A to L). All Phase 1 platform assumptions verified on v12.0.7: subdocuments inline by default, polymorphic `List<Fragment>`, `sys:JSON` on subdocuments, four-level inheritance, `@metadata` survival, empty abstract root, client-supplied `@id` under `@key Random`, nested diffs
 - **New platform fact, corrected in plan §9:** the store does not check the class of a referenced document, only that it exists. `DesignNote.subject → User` and `Module.course → AssessmentItem` were accepted. Reference class is now CLAUDE.md constraint 0 for the invariants engine; ADR-0014 and ADR-0017 amended
 - `schema/schema.json`: 27 classes, 13 enums. `Response` removed; `Fragment` (abstract subdocument) with `TextFragment` and `ItemOption`; `AssessmentItem` carries `stem`, `options`, `correctFeedback`, `incorrectFeedback` as fragments and a required `status`; `DesignRecord` abstract root above `ArmatureDocument` and the junctions; `DesignNote.subject: Set<DesignRecord>`; `DesignFinding` and `FindingStatus`; `@metadata.armature.category` on every class; explicit `@key Random` on every primary artifact
 - ADRs: 0017, 0018, 0020 Accepted and implemented; 0022, 0023 marked implemented; 0024 (client-supplied identifiers), 0027 (schema self-description), 0033 (items as a tree of fragments) written and Accepted; 0019 stays Proposed until Phase 4; 0014 amended
@@ -74,22 +74,22 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ### Planning and research (October 2026)
 
-- `docs/development-plan.md` — eight phases grounded in the position paper's principles; seven reference clients and the two-client test (an ask enters the hub only when a second client would need it); ADR queue 0024–0034; open questions with the evidence that would settle each; declines; §9 platform facts verified against TerminusDB v12.0.7
+- `docs/development-plan.md` — eight phases grounded in the position paper's principles; eight reference clients beside CoQui and the two-client test (an ask enters the hub only when a second client would need it); ADR queue 0024–0034; open questions with the evidence that would settle each; declines; §9 platform facts verified against TerminusDB v12.0.7
 - TerminusDB v12.0.7 verified against live docs and client source. Two corrections to earlier assumptions: the store has a three-way merge with field-level conflict reports (`apply`), and the JS client cannot set the commit author (writes needing an Armature `User` as author go over the HTTP document API)
 - `scripts/sync-terminusdb-docs.js` — vendors TerminusDB docs from the public Markdoc source repo (`dfrnt-labs/terminusdb-docs-static`) at a pinned commit; 50 curated pages committed under `docs/vendor/terminusdb/` with `INDEX.md` and `VERSION.json`; the rest gitignored under `_all/`
 - `.claude/skills/terminusdb/SKILL.md` — which vendored page answers what; trust order (installed client source → running store → vendored docs → live site); when to re-sync
 - Evaluations recorded in the plan (§6): Epic's Lore (leading candidate for a developed-assets store, deferred on timing: pre-1.0 API churn, QUIC/gRPC/OIDC operations, native SDK); slash-builder/bitchain (not a candidate; its `context` field independently supports the `fragmentId` + attachment-reference split)
-- Rich-artifact model recorded in the plan (§3): structure in the graph as a fragment tree, content as attachment references, behaviour as versioned `InteractionType` renderers, rationale via commits and compound targets; ADR-0033 and ADR-0034 queued
+- Rich-artifact model recorded in the plan (§3): structure in the graph as a fragment tree, content as attachment references, behavior as versioned `InteractionType` renderers, rationale via commits and compound targets; ADR-0033 and ADR-0034 queued
 - `docs/research/` (from a parallel session, 2026-10-06) — standards-precedents survey, ADR candidates 0035–0053, further-reading list of 85 sources
 
 ### Schema
 
 - TerminusDB schema fully designed and documented (`schema/schema.json`)
-- 13 enums, 27 classes: `User`; abstract roots `DesignRecord` and `ArmatureDocument`; subdocument fragments `Fragment`, `TextFragment`, `ItemOption`; 14 artifacts including `DesignNote` and `DesignFinding`; 7 relationship (junction) documents. Every class carries `@metadata.armature.category` and an explicit `@key`
+- 12 enums (`CoverageStatus` left with ADR-0056), 27 classes: `User`; abstract roots `DesignRecord` and `ArmatureDocument`; subdocument fragments `Fragment`, `TextFragment`, `ItemOption`; 14 artifacts including `DesignNote` and `DesignFinding`; 7 relationship (junction) documents. Every class carries `@metadata.armature.category` and an explicit `@key`
 - All types documented in TerminusDB-compliant multi-language array format (`@documentation: [{@language: "en", ...}]`)
 - Field-level documentation consolidated into `@properties` on each type
 - API constraints documented directly on affected fields
-- 32 ADR files (`schema/docs/adr/`, 0001–0027, 0032, 0033, 0054, 0055). All Accepted and implemented except ADR-0019 (Proposed; promoted with the coverage algorithm in Phase 4). Reserved by the plan and not yet written: 0028–0031, 0034. Numbers 0035–0053 are research candidates, not ADRs.
+- 34 ADR files (`schema/docs/adr/`, 0001–0027, 0029, 0032, 0033, 0054–0057), indexed with their statuses in `schema/docs/adr/README.md`. ADR-0057 is Proposed; 0006 and 0016 are superseded (0016 in part); 0007 and 0029 are superseded in part by 0056; the rest are Accepted. Reserved by the plan and not yet written: 0028, 0030, 0031, 0034. Numbers 0035–0053 are research candidates, not ADRs.
 
 ### Infrastructure
 
@@ -106,7 +106,8 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 - 48 documents across all major schema types (was 69 before `Response` was embedded; `User/demo-designer` added 2026-10-08 as the author of Phase 2 writes)
 - Covers: 2 LearningNeeds + evidence, 7 LearningObjectives, 4 PrerequisiteRecords, 3 Modules, 3 Assessments, 6 AssessmentItems each with a stem fragment and 4 embedded options (real option text, fragment ids, one general feedback, two `purpose` notes), 7 ItemInstances (item reuse demonstrated), 7 ModuleObjectives, 2 DesignNotes (one on a ModuleObjective junction via `@capture`/`@ref`), 1 DesignFinding
 - Item statuses: 4 Approved, 1 InReview (`appropriate-use-mc`), 1 Draft (`hallucination-mc`, the finding's subject); ItemInstance statuses match (ADR-0018)
-- One objective intentionally Uncovered in ModuleObjective.coverageStatus for demo interest. Coverage values are hand-seeded until Phase 4 recomputes them; `identify-ai-limitations` is seeded FullyAssessed although its only item is Draft (ADR-0019 will change that)
+- Coverage is not seeded; the coverage read computes it (ADR-0056). On the seed, `describe-model-training` reads Uncovered on both figures, `identify-ai-limitations` and `evaluate-appropriate-use` read Uncovered delivered and PartiallyAssessed projected (each has one unreviewed item), and no declaration reaches FullyAssessed
+- The seed has no LearningActivity, ActivityGroup, LearningDataset or LearningMetric, so the alignment read reports every objective without an activity and Narrative 1 needs a scratch-branch dataset
 
 ### Demo API
 
@@ -115,7 +116,7 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 ### Next.js App (`armature/app/`)
 
 - Scaffolded with `create-next-app` — TypeScript, Tailwind CSS, App Router, React Compiler enabled
-- Node 23.5 in use; `eslint-visitor-keys` engine warning is cosmetic — Node 23 works fine
+- Node: CI uses 22; local development has used 23.5 and now 24.21, both fine (an `eslint-visitor-keys` engine warning under Node 23 was cosmetic). No `engines` field or `.nvmrc` pins a version
 - `app/app/api/[[...route]]/route.ts` is the only route file; the Hono app in `app/lib/api/` is the API (ADR-0054), reaching the store through `store.ts` only (ADR-0055)
 - Root `.gitignore` — Next.js paths unanchored, `.vscode/` intentionally committed, `docs/vendor/terminusdb/_all/` ignored, test-coverage output anchored as `/app/coverage/`
 - `app/.env.local` — TerminusDB connection vars (not committed); `ARMATURE_IDENTITY` selects the resolver (`header` by default)
@@ -136,9 +137,12 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 1. **Decide ADR-0057.** If accepted: `asOf: Optional<xsd:string>` on `LearningDataset`, `LearningMetric` and `DesignFinding` (non-breaking), the pipeline fills it with the branch head when absent (like `createdBy`), constraint 13 validates a supplied id (commit exists via `ValidCommit`; the subject exists at it), the trace summary carries it. A platform check for reading a document at a commit from another branch is already covered by O and U
 2. **Fix the branch-route race.** `GET /branches` and the delete's holder search read the branch list and then each head in separate calls; a branch deleted in between surfaces as an error. Seen once as a failed `app.test.ts` branch-delete case during a full run with three test files in parallel. Tolerate a vanished branch in both places
-3. **Seed:** no declaration is `FullyAssessed`; a second Approved item placed for one objective would show the full story. Content decision
-4. **Phase 5 of `docs/development-plan.md`:** ADR-0028 Attestation (with `asOf` from ADR-0057), findings and attestations as the review vocabulary
-5. Carried, not blocking: merge policy (plan §6); `If-None-Match` unsupported; the merge-base and branch-holder walks are log-based (capped at 5,000 commits per branch); `oidc` resolver when a deployment leaves the local demo; `User` edits when a client needs them; the research exporter treating `asOf` as a reference type (ADR-0057 open)
+3. **Fix the list route's filter gap.** `GET /api/v1/documents/:type?<field>=` on an `Optional` or `Set` reference field (`?createdBy=`, `?generatedBy=`, `?assesses=`) returns a 500, because the store answers that template query with an internal error (check Y; reproduced 2026-10-08). List and filter in the hub as `Graph.where` does, or refuse with 400; Phase 5's non-aggregation guard refuses `createdBy` anyway (plan §6)
+4. **Decide the item statistics.** `difficultyIndex` and `discriminationIndex` are described as written back by the API, which ADR-0056 would forbid for derived values; decide stored observation or computed read before Phase 6 (plan §6)
+5. **Decide how `ModuleObjective` is written.** ADR-0007 said the API would create declarations "programmatically" and they would not be edited through a UI; what was built lets any client write them through the generic document routes, and the docs now describe that. Either amend ADR-0007 to record the generic path as the decision, or restrict writes (plan §6)
+6. **Seed:** no declaration is `FullyAssessed`; a second Approved item placed for one objective would show the full story. Content decision
+7. **Phase 5 of `docs/development-plan.md`:** ADR-0028 Attestation (with `asOf` from ADR-0057), findings and attestations as the review vocabulary
+8. Carried, not blocking: lossless writes across schema versions (ADR-0024, candidate 0035; plan §6); `GET /api/v1/schema` unbuilt and unowned (ADR-0027; plan §6); the ordered module-content view ADR-0005 assigns to the API, unbuilt and unowned (plan §6); the running store's schema still carries the pre-2026-10-08 `@documentation` strings until `node scripts/load_schema.js` is re-run (harmless; no instance data changes); merge policy (plan §6); `If-None-Match` unsupported; the merge-base and branch-holder walks are log-based (capped at 5,000 commits per branch); `oidc` resolver when a deployment leaves the local demo; `User` edits when a client needs them; the research exporter treating `asOf` as a reference type (ADR-0057 open)
 
 ---
 
@@ -152,15 +156,15 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 - **One placement per item per assessment** (`ItemInstance` Hash key over `(assessment, implements)`): two forms are two `Assessment`s; reopened only by a container inside `Assessment` or an importer meeting a source that references one item twice (plan §6)
 - **The app's pages call the Hono app in-process** and never the store; they are clients of the API like any plugin
 - The two-client test: a CoQui ask enters the hub only in the generic form a second reference client would need; CoQui's round, craft grid, claim version and workflow states never enter the schema
-- Generic document API (`/api/v1/documents/:type/:id`, batch `POST /api/v1/documents`, list `GET /api/v1/documents/:type`) with the invariants engine replaced the per-type routes (Phase 3, 2026-10-08); type behaviour is a validator in `app/lib/api/invariants/`, request shape is the generated `schemas.ts`. Shape failures are 400 `invalid_document`; rule failures are 422 `invariant_violation` with every violation
+- Generic document API (`/api/v1/documents/:type/:id`, batch `POST /api/v1/documents`, list `GET /api/v1/documents/:type`) with the invariants engine replaced the per-type routes (Phase 3, 2026-10-08); type behavior is a validator in `app/lib/api/invariants/`, request shape is the generated `schemas.ts`. Shape failures are 400 `invalid_document`; rule failures are 422 `invariant_violation` with every violation
 - **ADR-0032 (Accepted 2026-10-08):** identity is resolved by a pluggable resolver (`ARMATURE_IDENTITY`: `header` now, `oidc` later); `main` is the `User` registry; author and `createdBy` come from the resolved identity, never the body; a branch that lacks the `User` gets `main`'s copy in the same commit; users are created on `main` only; agents are `User`s with an `agent:` `externalId`
-- **Branch delete (ADR-0025 decision 6, amended 2026-10-08):** only when another branch holds the head; never `main`; no force; `If-Match` honoured and the head re-read before deleting
+- **Branch delete (ADR-0025 decision 6, amended 2026-10-08):** only when another branch holds the head; never `main`; no force; `If-Match` honored and the head re-read before deleting
 - **The hub never uses `POST overwrite=true`:** it merges values into a list rather than replacing (check X3a). The upsert is `PUT create=true` over a list
 - Attachments are references with a mandatory content hash and optional revision and path; the graph never embeds binaries; the backend is a deployment choice; tool-managed stores write through the ordinary path (ADR-0030)
-- Items are a tree of fragments; `ItemOption` is a `Fragment` specialisation so generic kinds can sit beside it (ADR-0033); behaviour is a versioned `InteractionType`, and the hub never serves executable content from a graph document (ADR-0034)
+- Items are a tree of fragments; `ItemOption` is a `Fragment` specialization so generic kinds can sit beside it (ADR-0033); behavior is a versioned `InteractionType`, and the hub never serves executable content from a graph document (ADR-0034)
 - **ADR-0025 (Accepted 2026-10-08):** design process data lives in the commit graph; the graph is a projection of any asset store's history, never a replay. No version fields, ever. Author is the resolved `User` id; reason is a required message in a JSON write envelope; reads at a named ref; `ETag`/`If-Match` carry bare commit ids and a stale match is 412; shared history is never rewritten; merge commits record the source head in commit metadata under `armature.mergeSource`
 - **ADR-0055 (Accepted 2026-10-08):** the API layer reaches TerminusDB only through one `fetch`-based adapter under `app/lib/api/` that owns URLs, credentials, `author` and `message`, the data-version header and typed `@type` errors. The JavaScript client stays in `scripts/` and may re-enter the API layer only to build WOQL JSON. Supersedes "keep the JS client" (2026-03-03) and the later "client for reads, HTTP for writes" split. Evidence: the client welds author to the connection user, keeps a supplied data version in instance headers forever, flattens errors to strings, and lacks the history `diff` option
-- Next.js routes remain the API host for this phase under `/api/v1` (ADR-0026); separate service stays the destination
+- Next.js remains the API's host for this phase, serving the Hono app under `/api/v1` (ADR-0026 as amended by ADR-0054); a separate service stays the destination
 - **ADR-0054 (Accepted 2026-10-07):** the API is a Hono app in `app/lib/api/`, mounted in Next.js through one catch-all route via `@hono/vercel`; nothing under `app/lib/api/` imports from `next`. ADR-0026 decision 1 now reads "Next.js is the host, Hono is the API". New routes are Hono routes only; the legacy Next.js handlers are not ported and die in Phase 3; Zod request validation derives from `schema.json` via the generator (Phase 3)
 - One ADR-0054 knock-on still open: the standalone build step that resolves the `@/` alias (Phase 7). The data-version token shape was decided by ADR-0025 decision 7
 - `npm test` is Vitest, integration-only against the running container; not in CI until Phase 7's service container
@@ -204,7 +208,7 @@ Phase 4 facts worth carrying forward:
 
 Phase 3 facts worth carrying forward:
 - The store's `POST overwrite=true` merges, never replaces (X3a). The only upsert is `PUT create=true`, which takes a list and returns the written ids as IRIs in input order (`idFromIri` strips the base).
-- A Hash-keyed document is found for replace by querying its key fields (X1c); `CLASS_KEY` says which. `ModuleObjective`'s key is `(module, references)`, so the recompute can replace one by those fields without knowing its id.
+- A Hash-keyed document is found for replace by querying its key fields (X1c); `CLASS_KEY` says which. `ModuleObjective`'s key is `(module, references)`, so a declaration can be found and replaced by those fields without knowing its id (the recompute that first used this was removed by ADR-0056).
 - `createWriteContext(branch, batch, replacing, alongside)`: `alongside` documents are resolvable but not validated; that is how the carried `User` copy passes constraint 0.
 - `siblings(type, template)` returns the branch as it will look after the write; validators compare documents by object identity (`d !== doc`) to exclude themselves, since batch documents may lack ids.
 - Every string in a request is non-empty and at most 10,000 characters; a `Set`/`List` without `@min_cardinality` may be omitted.
@@ -216,10 +220,10 @@ Phase 2 facts worth carrying forward:
 - A merge commit has one parent. The source head is in `commit.metadata.armature.mergeSource` (from `/api/log`, not `/api/history`); anything that reasons about merges reads it there (check V).
 - The store's conflict witness is `{ "@op": "Conflict", "@expected", "@found" }` per field; the source value is not in it, so the merge route reads it from the source head.
 - `ETag` is the branch head, not a document hash; a stale `If-Match` means the branch moved, not necessarily this document.
-- Tests write only on scratch branches they create and delete through the adapter; `main` and the seed are never touched by `npm test`.
+- Tests write only on scratch branches they create and delete through the adapter; `main` and the seed are never touched by `npm test` (exception since Phase 3: the users tests write test users to `main` and delete them).
 
 Phase 1 facts worth carrying forward:
-- `scripts/platform_checks.js` is the place to prove a store behaviour before an ADR relies on it. Checks A–L exist; add a lettered check, run it, cite it in the ADR.
+- `scripts/platform_checks.js` is the place to prove a store behavior before an ADR relies on it. Checks A–L existed then (A–Z now); add a lettered check, run it, cite it in the ADR.
 - The store accepts wrong-class references. The generic reference-class check (CLAUDE.md constraint 0) is `app/lib/api/invariants/references.ts`, run on every write since Phase 3.
 - `load_schema.js --clear-instances` then `seed_data.js` is the reload procedure for any breaking schema change at demo scale.
 - Subdocument store ids are not stable across replaces. Routes and tests must address parts by `fragmentId`.
@@ -228,13 +232,13 @@ Phase 1 facts worth carrying forward:
 Phase 0 facts worth carrying forward:
 - Anything under a directory named `coverage` was silently ignored by git until 2026-10-07. Check `git ls-files` when a route seems to exist locally but not in history.
 - `addDocument(json, params, dbId, message)`: the commit message is the fourth positional argument. There is no `commit_info` parameter. `full_replace: true` replaces a whole graph atomically and is the right way to reload the schema or the seed.
-- The client passes URL parameters through unvalidated. A document template query (`query: { '@type': ..., field: value }`) filters server-side and is used by the coverage route. The HTTP API's `ids` list parameter has not been verified on the store; verify before relying on it.
+- The client passes URL parameters through unvalidated. A document template query (`query: { '@type': ..., field: value }`) filters server-side and was used by the (since retired) coverage route; today the list route and `Graph.where` use it. The HTTP API's `ids` list parameter was verified later by checks X4 and X4b.
 - TerminusDB is running in Docker (container recreated 2026-10-07); the app connects with `app/.env.local` as is.
 
 Key context:
 - The plan's §9 lists every TerminusDB platform fact relied on, with two corrections to what the CoQui handoff assumed (merge exists; JS client cannot set commit author). The CoQui handoff's "no three-way merge" line should be corrected on CoQui's side when PR 6 is picked up.
 - For any TerminusDB question, load the `terminusdb` skill; the installed client source outranks the docs.
-- `docs/research/adr-candidates.md` contains amendments to the reserved ADRs 0024–0034 and new candidates from 0035. Nothing in it is accepted. Items 0035 and 0036 must be read before Phase 1 schema work.
+- `docs/research/adr-candidates.md` contains amendments to the reserved ADRs 0024–0034 and new candidates from 0035. Nothing in it is accepted as written: 0036's no-rewrite rule was absorbed by ADR-0025 decision 6, 0037 and 0046 were deferred by ADR-0025, and 0035 (lossless writes) is still open (plan §6).
 - `docs/armature-asks-from-Coqui.md` remains the authoritative statement of what CoQui needs; the plan's §7 maps CoQui's PRs to phases.
 - The user's standing preference (saved to memory): judge scope by the position paper's full vision (complex learning objects, versioned asset development), not by near-term clients; record simplifications as timing decisions, never scope decisions.
 
@@ -252,14 +256,14 @@ Key context:
 - Started `phase-3/generic-writes`; added platform check W (template query over HTTP, identical and differing inserts under `apply`, list writes) and designed **ADR-0032** on its results: pluggable resolver, `main` as the `User` registry, carried copies on branches, author and `createdBy` from the resolved identity. Built `identity.ts`, `classes.ts`, `routes/users.ts`, `CLASS_ANCESTORS` in the generator; the merge route learned the `InsertConflict` witness
 - Added platform check X for the write path and found that `POST overwrite=true` merges rather than replaces; chose `PUT create=true` over a list as the only upsert
 - Extended the generator with the schema as data (`CLASS_KEY`, `CLASS_FIELDS`) and a Zod output (`app/lib/schemas.ts`); wrote the write pipeline, the batch route, the list route and the invariants engine; every CLAUDE.md constraint got a failing and a passing test (`write.test.ts`)
-- Retired the nine unversioned routes, the client singleton, `routeHelpers.ts` and `validate.ts`; the `terminusdb` package left `app/`; `demo-api.md` marked Retired
+- Retired the eleven unversioned routes (eight GET lists, the coverage route, two POSTs), the client singleton, `routeHelpers.ts` and `validate.ts`; the `terminusdb` package left `app/`; `demo-api.md` marked Retired
 - Decided and built `DELETE /api/v1/branches/:name` (ADR-0025 decision 6 amended): only when another branch holds the head; fixed the automated security review's two findings (check-then-delete race, unbounded holder walk) with `If-Match`, a head re-read and a `main`-first bounded search
 - Nineteen commits, merged as PR #7 (rebase merge); CI green on `main`; ADR-0032 promoted to Accepted at session close
 
 ### 2026-10-08 (Phase 2)
 
 - Answered how the JS client differs from the HTTP API by reading the installed client source; wrote **ADR-0055** (Accepted): one `fetch` adapter under `app/lib/api/`, client confined to `scripts/`. Merged into the Phase 2 branch rather than a PR of its own
-- Added platform checks M to V and ran them repeatedly against the scratch database; corrected five vendored-doc claims (apply refs and witness shape, stale-token status, rebase direction, DELETE body) and found two store behaviours the ADR had to design around (500 on an unknown commit path; single-parent merge commits)
+- Added platform checks M to V and ran them repeatedly against the scratch database; corrected five vendored-doc claims (apply refs and witness shape, stale-token status, rebase direction, DELETE body) and found two store behaviors the ADR had to design around (500 on an unknown commit path; single-parent merge commits)
 - Wrote **ADR-0025** (Accepted) with the verification table; amended ADR-0010; decided `ETag`/`If-Match` bare commit ids, the write envelope, and the no-rewrite rule
 - Built `store.ts`, `http.ts`, `identity.ts`, `errors.ts`, `routes/documents.ts`, `routes/branches.ts`; rewired `app.ts`; rewrote the tests as the Phase 2 walkthrough (25 passing). Seeded `User/demo-designer`
 - Found during the walkthrough that a second merge from the same branch replayed the fork's insert; fixed by recording the merged source head, first as a message trailer, then as commit metadata once check V showed `apply` keeps `commit_info.metadata`

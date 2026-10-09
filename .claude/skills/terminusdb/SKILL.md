@@ -46,14 +46,14 @@ terminusdb.org/docs. There is no llms.txt and no MCP server. The older
 
 ## Trust levels, in order
 
-1. **The installed client source is authoritative for client behaviour.** Read
-   `app/node_modules/<client>/lib/woqlClient.js` and `lib/typedef.js` before stating what a
+1. **The installed client source is authoritative for client behavior.** Read
+   `scripts/node_modules/terminusdb/lib/woqlClient.js` (the only installed copy; `app/` has no client since ADR-0055) and `lib/typedef.js` before stating what a
    client method does. The docs describe the client loosely; the source does not. Example: the
    docs do not mention that every write method hardcodes the commit author from the connection
    user. The source shows it in one line. Since ADR-0055 the client is used only by `scripts/`;
    the API layer's contract is the HTTP API, so for route work read `http-documents-api.md` and
    the version-control pages, and consult the client source only to see how it built a URL.
-2. **The running store is authoritative for server behaviour.** When an ADR depends on a platform
+2. **The running store is authoritative for server behavior.** When an ADR depends on a platform
    fact (a key type on subdocuments, whether `@metadata` survives a load, a four-level inheritance
    chain), test it against the Docker container before encoding the decision. ADR-0013 and
    ADR-0017 call this the gating discipline.
@@ -61,7 +61,7 @@ terminusdb.org/docs. There is no llms.txt and no MCP server. The older
    `VERSION.json`.
 4. **The live site and the server release notes** (`github.com/terminusdb/terminusdb/releases`)
    are the check when the question is version-sensitive, when `VERSION.json` is behind the latest
-   release, or when a vendored page says something that contradicts observed behaviour.
+   release, or when a vendored page says something that contradicts observed behavior.
 
 ## When to re-sync
 
@@ -74,7 +74,7 @@ Run the sync when any of these is true:
 
 ```bash
 # from the repo root
-node scripts/sync-terminusdb-docs.js                   # everything, ~10 seconds
+node scripts/sync-terminusdb-docs.js                   # everything, ~10 seconds (also: npm run sync:terminusdb-docs in app/ or scripts/)
 node scripts/sync-terminusdb-docs.js --curated-only    # only the committed set
 node scripts/sync-terminusdb-docs.js --only merge-howto,branch-howto
 ```
@@ -118,7 +118,7 @@ Recorded in `docs/development-plan.md` §9 as of v12.0.7. The ones most often ne
   `create=true` to upsert. **`POST overwrite=true` is not a replace: it merged the old and new
   values of a field into a list (check X3a).** The hub upserts only with `PUT create=true`, which
   also takes a list, writes a Hash-keyed document without an `@id` by deriving it from the key
-  fields, honours `@capture`/`@ref` within the list, returns the written ids as IRIs, and fails
+  fields, honors `@capture`/`@ref` within the list, returns the written ids as IRIs, and fails
   the whole list on one bad document (checks X1, X2b, X5). `GET` with `ids=[...]` reads several
   documents and silently drops missing ids (X4).
 - The `TerminusDB-Data-Version` header gives optimistic concurrency; without it the server retries
