@@ -1,5 +1,13 @@
 # ADR-0019: Coverage Semantics Account for Item Readiness
 
+> **In brief.** This decision answered: when Armature reports whether a module's learning objectives
+> are adequately assessed ("coverage"), should test questions that nobody has reviewed yet count? It
+> decided to report two figures: coverage counting only approved questions, and a "projected" coverage
+> counting every question not retired, so the gap between the two shows the review backlog. The two
+> figures still stand, but since ADR-0056 (an Architecture Decision Record, or ADR, made the same day)
+> they are calculated each time someone asks rather than stored in the database, so the stored fields,
+> the `CoverageStatus` list of values and the recalculation rule described below are history.
+
 ## Status
 Accepted (2026-10-08), with ADR-0029, which defines the algorithm this ADR left open, adopts its
 eligibility rule as its decision 2, and specifies the population counted and the verdict
@@ -9,6 +17,13 @@ is the read's `projected` figure, and decision 4's recompute trigger has nothing
 2026-10-07. The seed no longer hand-writes coverage; on the seed this rule reads
 `identify-ai-limitations` in `how-ai-works` as `Uncovered` with `PartiallyAssessed` projected,
 because its only item, `hallucination-mc`, is `Draft`.
+
+Amends ADR-0007 (decision 4 adds `AssessmentItem.status` to its recompute triggers; moot under
+ADR-0056). **Note 2026-10-08:** no `coverageStatus` or `projectedCoverageStatus` field and no `CoverageStatus`
+enum remain in the schema. The coverage read, `GET /api/v1/intelligence/coverage/:moduleId`, returns
+the two figures as `coverageStatus` and `projectedCoverageStatus` in its response, with the items
+counted for each (`app/lib/api/intelligence/coverage.ts`). Decision 4 and its tech-debt remark are
+moot: nothing is recomputed on write.
 
 ## Context
 
@@ -46,6 +61,9 @@ Both of Armature's stated demo narratives need an answer, and they need differen
 
 Two fields, one enum. A designer sees where the work is heading; a reviewer sees where it actually stands; the gap between them is itself informative — it is the review backlog, expressed as coverage.
 
+> **Later change (2026-10-08):** under ADR-0056 these are two outputs of the coverage read, not two
+> stored fields; the eligibility rules of decisions 1 and 2 are unchanged and are ADR-0029 decision 2.
+
 ### 3. Rejected: a new `CoverageStatus` value such as `ProvisionallyAssessed`
 
 This keeps one field but collapses two independent dimensions — *how much coverage* and *how ready* — into a single enum. The cross-product is eight states, and every future refinement to either dimension multiplies against the other. Two fields keep the dimensions separable.
@@ -57,6 +75,10 @@ Add: **any change to `AssessmentItem.status`.**
 Approving an item now affects coverage for every objective it assesses, in every module declaring those objectives. This is a meaningful increase in recompute frequency — approval becomes a graph-wide event rather than a local one.
 
 Acceptable at demo scale. SESSION.md already records that `ModuleObjective` filtering happens in application code rather than WOQL as known tech debt; this ADR increases the cost of that shortcut and should be cited when it is revisited.
+
+> **Later change (2026-10-08):** this decision has nothing left to trigger, since ADR-0056 computes
+> coverage on read and no write recomputes anything. SESSION.md no longer records the tech-debt item
+> mentioned here.
 
 ## Consequences
 
@@ -72,11 +94,18 @@ Acceptable at demo scale. SESSION.md already records that `ModuleObjective` filt
 - Depends on ADR-0018; meaningless without it.
 - Recompute frequency rises materially, and the trigger set is now wide enough that missing one produces silently stale data. The ADR-0007 warning that "any write that affects coverage must trigger a recompute" becomes harder to honour.
 - `docs/demo-api.md`'s `GET /coverage/:moduleId` response and its `summary` block need the second figure.
+
+  > **Later change (2026-10-08):** `docs/demo-api.md` and the unversioned coverage route are retired;
+  > `GET /api/v1/intelligence/coverage/:moduleId` returns both figures.
+
 - Seeded data will show different coverage than it does today. The demo's intentionally-`Uncovered` objective may need revisiting so the two figures tell a legible story rather than an accidental one.
 
 **Neutral**
 
 - No new enum. `CoverageStatus` is reused for both fields.
+
+  > **Later change (2026-10-08):** ADR-0056 removed the `CoverageStatus` enum from the schema; its
+  > four values are now the coverage read's vocabulary in `app/lib/api/intelligence/coverage.ts`.
 
 ## Open
 
@@ -88,4 +117,5 @@ assessments, with both fields using the same algorithm over the two populations 
 - ADR-0007 — `ModuleObjective` as programmatic junction; amended by decision 4
 - ADR-0029 — the coverage algorithm; adopts this ADR's eligibility rule and promotes it
 - ADR-0018 — item readiness, which this depends on
-- ADR-0006 — the API's responsibility for constraints and computed consistency
+- ADR-0006 — the API's responsibility for constraints and computed consistency (superseded by ADR-0013)
+- ADR-0056 — coverage computed on read, never stored; amends this ADR

@@ -1,10 +1,21 @@
 # ADR-0018: Item Readiness Belongs on AssessmentItem, Not Only on ItemInstance
 
+> **In brief.** This decision answered: where should the review state of a test question (Draft, In
+> Review, Approved, Retired) be recorded? It gave every question in the item bank its own required
+> review status, kept a separate status on each placement of that question in a particular test (is it
+> cleared for use *here*?), and added a rule that a placement cannot be Approved before the question
+> itself is. It still holds and is implemented; the application programming interface (API) has
+> enforced the rule since 2026-10-08 as constraint 10.
+
 ## Status
 Accepted and implemented (2026-10-07). `AssessmentItem.status: ItemStatus` is required in
 `schema.json`; `ItemInstance.status` documentation narrowed to placement clearance. The constraint
 in Decision 4 is API-enforced from Phase 3; the seed respects it (the Draft item's placement is
 Draft, the InReview item's placement is InReview).
+
+**Note 2026-10-08:** decision 4 is enforced since Phase 3 as constraint 10, checked from both sides
+(`app/lib/api/invariants/itemInstance.ts` and `assessmentItem.ts`). The documentation change in
+§Consequences refers to `docs/demo-api.md`, which has since been retired.
 
 ## Context
 
@@ -50,6 +61,10 @@ An `ItemInstance` may not be `Approved` while its `AssessmentItem.status` is `Dr
 
 TerminusDB cannot express a cross-document conditional, so this is enforced by the API on write, following ADR-0006.
 
+> **Later change (2026-10-08):** ADR-0006 has been superseded by ADR-0013; the API's responsibility
+> for rules the store cannot express now lives in the invariants engine, where this rule is
+> constraint 10 (`app/lib/api/invariants/index.ts`).
+
 ### 5. The hub carries the minimum vocabulary; plugins carry their own workflow
 
 `ItemStatus`'s four values are meaningful to any tool. Finer workflow states — "revision needed", "parked pending a policy decision", "awaiting second reviewer" — are plugin concerns and are not added here. A tool with a richer lifecycle maps its states onto these four at the boundary.
@@ -71,6 +86,11 @@ This is deliberate: importing one application's workflow vocabulary into the sch
 - Schema change requiring `npm run generate:types` and a paired commit.
 - Six seeded `AssessmentItem` documents need a status backfilled. Varying them (rather than setting all to `Approved`) will make the coverage demo more informative once ADR-0019 lands.
 - `docs/demo-api.md` needs the field added to `GET /items` and `POST /items`.
+
+  > **Later change (2026-10-08):** `docs/demo-api.md` is retired, `POST /items` never existed and
+  > the unversioned `GET /items` was removed in Phase 3. Items are read and written through the
+  > generic `/api/v1/documents` routes, which carry `status` like every other field.
+
 - A new API-enforced invariant (decision 4) to implement and test.
 - Two fields named `status` now exist on related types. Mitigated by documentation and by the fact that they are genuinely different states; the shared enum is what makes the relationship between them legible.
 

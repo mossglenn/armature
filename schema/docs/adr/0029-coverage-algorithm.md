@@ -1,5 +1,14 @@
 # ADR-0029: Coverage Algorithm
 
+> **In brief.** This decision answered: how does Armature judge whether a module's assessments
+> adequately cover each learning objective the module declares? It counts the distinct test questions
+> placed in the module's assessments that assess the objective, twice (once counting only approved
+> questions, once counting everything not retired), and turns each count into a verdict: none is
+> Uncovered, one is Partially Assessed, two to four is Fully Assessed, five or more is Over-Assessed.
+> Decisions 1 to 3 still hold, with the thresholds now adjustable on each request; decisions 4 to 7,
+> which stored the verdict in the database and recalculated it on every change, were reversed the same
+> day by ADR-0056 (an Architecture Decision Record, or ADR), which calculates coverage only when asked.
+
 ## Status
 
 Accepted (2026-10-08) for decisions 1 to 3: the population counted, the two eligibility rules
@@ -11,6 +20,15 @@ Decision 7 (the seed computes coverage) is moot: the seed writes no coverage. Cl
 question PROJECT_CONTEXT recorded under "Coverage computation algorithm". The context and the
 rejected alternatives below are kept as written; ADR-0056 records what building decisions 4 to 6
 revealed.
+
+**Superseded in part by ADR-0056** (decisions 4 to 6; decision 7 moot). Amends ADR-0007 (decisions 1 to 3 define what
+its coverage counts; decisions 4 to 6 amended its computed field and triggers, both now superseded
+by ADR-0056) and ADR-0019 decision 4, and adopts ADR-0019's eligibility rule as decision 2. **Clarified 2026-10-08:** the
+Verification and Consequences sections also describe the superseded stored-field design; notes
+below mark the lines that no longer hold. The default thresholds are
+`DEFAULT_THRESHOLDS = { fullyAssessedAt: 2, overAssessedAbove: 4 }` in
+`app/lib/api/intelligence/coverage.ts`, overridden per request by the `fullyAssessedAt` and
+`overAssessedAbove` query parameters of `GET /api/v1/intelligence/coverage/:moduleId`.
 
 ## Context
 
@@ -69,6 +87,9 @@ pipeline, such as the seed, is judged by the same rule.
 For `projectedCoverageStatus`, an item is eligible when neither its placement nor the item is
 `Retired`.
 
+> **Later change (2026-10-08):** these are no longer stored fields (ADR-0056). The coverage read
+> returns the two verdicts under these names, with the items counted for each.
+
 ### 3. The verdict, by the number of distinct eligible items
 
 | Eligible items | Verdict |
@@ -83,7 +104,18 @@ not stored on the `Module`: a per-module threshold enters the schema only when t
 clients need modules to differ, which none does yet (the two-client test). Both thresholds are
 provisional. What would revise them is recorded in §Consequences.
 
+> **Later change (2026-10-08):** both thresholds are defaults, not a single constant:
+> `DEFAULT_THRESHOLDS = { fullyAssessedAt: 2, overAssessedAbove: 4 }` in
+> `app/lib/api/intelligence/coverage.ts`. A caller overrides either with a query parameter of the
+> same name, and the response echoes the thresholds used (ADR-0056 decision 2). Still nothing is
+> stored on the `Module`.
+
 ### 4. The computed fields are the hub's; a client that sends one gets 400
+
+> **Later change (2026-10-08):** decisions 4, 5 and 6 are superseded by ADR-0056. No coverage field
+> exists, `@metadata.armature.computed` was removed, the write pipeline recomputes nothing and the
+> merge route is the store's `apply` alone. A `ModuleObjective` carrying a coverage field is
+> rejected with 400 as an unknown key, because the field does not exist.
 
 `coverageStatus` and `projectedCoverageStatus` are listed in `@metadata.armature.computed` on
 the `ModuleObjective` class. The generator reads that list: the fields stay on the TypeScript
@@ -144,6 +176,10 @@ recorded as open until it lands; until then such a conflict is reported like any
 
 ### 7. The seed computes coverage with the hub's algorithm
 
+> **Later change (2026-10-08):** moot under ADR-0056. The seed writes no coverage and imports
+> nothing from the algorithm module. (Continuous integration runs Node 22, not the Node 24 named
+> below.)
+
 `scripts/seed_data.js` no longer carries coverage values. It imports the algorithm module, which
 is dependency-free for this reason, and computes both fields over its own in-memory documents
 before inserting them. Node 24 imports the TypeScript module directly. Any script that writes
@@ -161,6 +197,11 @@ declaration carrying one is a 400, and a sequence of item and placement writes w
 declaration through `Uncovered`, `PartiallyAssessed`, `FullyAssessed` and `OverAssessed` with the
 projected figure running ahead, each change in the commit of the write that caused it.
 
+> **Later change (2026-10-08):** these `write.test.ts` tests no longer exist. The walk through every
+> verdict is now done by writes followed by coverage reads, in `app/lib/api/intelligence.test.ts`
+> ("a declaration walked through every verdict by writes and reads"), which also covers the
+> thresholds as query parameters and a read at an earlier commit.
+
 ## Consequences
 
 **Positive**
@@ -169,6 +210,10 @@ projected figure running ahead, each change in the commit of the write that caus
   defensible and tested.
 - Coverage can never be wrong by construction: the hub is the only writer of the fields and
   writes them in the commit that changes their inputs.
+
+  > **Later change (2026-10-08):** nothing is written. Coverage cannot be stale because it is
+  > computed from the graph at the requested commit on every read (ADR-0056).
+
 - The two figures tell the review backlog as coverage, as ADR-0019 intended. On the seed,
   `identify-ai-limitations` in `how-ai-works` reads `Uncovered` with `PartiallyAssessed` projected,
   and `evaluate-appropriate-use` in `risks-and-ethics` the same, each because of one unreviewed
@@ -183,6 +228,11 @@ projected figure running ahead, each change in the commit of the write that caus
   event, but clients that reason about "what did I change" must expect it.
 - Until the merge recompute lands, two branches that move the same declaration conflict on merge
   and the conflict is reported as a 409.
+
+  > **Later change (2026-10-08):** none of these three applies under ADR-0056. Writes cost nothing
+  > extra and touch only the caller's documents; the cost moved to the coverage read. No coverage
+  > value exists to conflict on merge.
+
 - The thresholds are a guess. `FullyAssessed` at two items follows the usual practice of
   wanting more than one observation per objective; `OverAssessed` above four has no evidence
   behind it. Item statistics from the outcomes importer (Phase 6) are the first evidence that
@@ -191,19 +241,27 @@ projected figure running ahead, each change in the commit of the write that caus
 - Adding `projectedCoverageStatus` as a required field is a breaking schema change at demo
   scale: `load_schema.js --clear-instances` then `seed_data.js`.
 
+  > **Later change (2026-10-08):** ADR-0056 removed both coverage fields instead, with the same
+  > reload.
+
 **Neutral**
 
 - `CoverageStatus` is unchanged; its documentation gains the thresholds.
 - The seed's document count is unchanged; its coverage values change to the computed ones.
 
+  > **Later change (2026-10-08):** the `CoverageStatus` enum was removed from the schema
+  > (ADR-0056); its four values live in `app/lib/api/intelligence/coverage.ts`. The seed carries no
+  > coverage values.
+
 ## Related
 
-- ADR-0006 — constraints and computed consistency are the API's responsibility
+- ADR-0006 — constraints and computed consistency are the API's responsibility (superseded by ADR-0013)
 - ADR-0007 — `ModuleObjective` as programmatic junction; amended by decisions 4 to 6
 - ADR-0018 — item readiness; constraint 10 is why decision 2's second condition is redundant for API writes
 - ADR-0019 — eligibility by readiness; adopted and promoted by this ADR
 - ADR-0024 — Hash keys on junctions, which let the recompute replace a declaration by its fields
 - ADR-0025 — the commit is the unit of design process data; decision 5 keeps the recompute inside it
-- ADR-0027 — schema self-description; `@metadata.armature.computed` extends it
+- ADR-0027 — schema self-description; `@metadata.armature.computed` extends it (removed by ADR-0056)
 - ADR-0032 — the resolved identity authors the commit the recompute rides in
 - Candidate ADR-0043 (`docs/research/adr-candidates.md`) — alignment models; not adopted
+- ADR-0056 — coverage computed on read, never stored; supersedes decisions 4 to 6

@@ -1,5 +1,10 @@
 # ADR-0011: Placeholder Objectives for Incomplete Authoring States
 
+> **In brief.** A prerequisite record connects a learning objective to the objective that must come
+> before it. This decision said both ends must always be real objectives: if the earlier objective
+> has not been written yet, create a draft placeholder objective first, and if even that is too
+> early, write a free-form design note instead. It still holds as written.
+
 ## Status
 Accepted
 

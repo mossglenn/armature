@@ -1,7 +1,20 @@
 # ADR-0024: Client-Supplied Identifiers and Replace Semantics
 
+> **In brief.** This decision answered: who chooses a record's identifier, and what happens when the
+> same identifier is written twice? It decided that a client tool may choose the permanent identifier
+> of any primary record on its first write (otherwise the database assigns one), that a later write
+> under the same identifier replaces the record, that reusing an identifier for a different type of
+> record is refused, and that tools never delete records but change their status instead. It still
+> holds and is implemented, except one consequence it recorded: protecting fields that an older client
+> cannot see from being lost when it replaces a record has not been built and remains open.
+
 ## Status
 Accepted (2026-10-07). Resolves ADR-0016 decision 5 and the open question in ADR-0023.
+
+**Note 2026-10-08:** implemented in Phase 3's generic write path (`app/lib/api/write.ts`);
+decision 4 is constraint 12 (409 `type_conflict`). **Open:** the lossless-write requirement in
+§Consequences (research candidate ADR-0035) was not implemented in Phase 3 and no phase of
+`docs/development-plan.md` currently owns it.
 
 ## Context
 
@@ -10,6 +23,9 @@ Two identifier conventions have coexisted since the first seed: the seed script 
 mint opaque ids. ADR-0016 decision 5 recorded this as the weakest decision in that ADR and
 recommended store-assigned ids with slugs as a display concern, "driven by consistency rather than
 by a demonstrated failure."
+
+> **Later change (2026-10-08):** both routes were removed in Phase 3 with the other unversioned
+> routes; every write now goes through the generic `/api/v1/documents` routes.
 
 A demonstrated failure has since arrived from two directions.
 
@@ -80,11 +96,20 @@ overflowed by a sequence all broke downstream references silently.
   collides if two clients choose the same one, at which point the 409 in decision 4 is the only
   guard (and only when the types differ). ADR-0047 (instance IRIs) is where cross-instance identity
   would be addressed if a second Armature instance ever exchanges documents with the first.
+
+  > **Later change (2026-10-08):** ADR-0047 is a research candidate in
+  > `docs/research/adr-candidates.md` (candidate ADR-0047), not a written ADR.
+
 - Replace semantics with a growing schema is the lossy-write hazard the research names as
   ADR-0035: a client built against an older schema reads, edits and writes back a document without
   the fields it cannot see. Decision 3 is therefore paired with a requirement on Phase 3's write
   path: the hub carries forward fields the writing client's declared schema version could not see.
   That ADR is written with the write path; this one records the dependency.
+
+  > **Later change (2026-10-08):** not done. Phase 3's write path shipped without carrying
+  > forward unseen fields, and candidate ADR-0035 was not written. The hazard is open; no phase
+  > currently owns it.
+
 - The hub's 409 check costs one read per write. Acceptable; it also serves the type-mismatch and
   optimistic-concurrency checks Phase 2 and 3 add.
 

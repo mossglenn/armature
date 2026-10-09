@@ -1,9 +1,24 @@
 # ADR-0033: Items Are a Tree of Fragments
 
+> **In brief.** This decision answered: how should the parts of a test question be structured so that
+> richer question types (drag-and-drop, hotspot, image or audio) can be added later without reworking
+> existing data? Every part is a "fragment", an embedded part with a permanent `fragmentId`; the stem
+> or feedback text (`TextFragment`) and the answer option (`ItemOption`) are the two kinds today, and a
+> generic kind carrying free-form JSON (JavaScript Object Notation) data is to be added when the first
+> non-text question type arrives. It still holds; the typed shape is implemented, while the generic kind
+> is not yet built and the two Architecture Decision Records (ADRs) it looks ahead to, ADR-0030 and
+> ADR-0034, are planned but not yet written.
+
 ## Status
 Accepted (2026-10-07) for the shape: abstract `Fragment` subdocument, `TextFragment` and
 `ItemOption` as its specialisations. Generic fragment kinds with a JSON payload are decided here but
 not yet added to the schema; they land with the first non-text item type.
+
+Amends ADR-0002, with ADR-0022: item parts are embedded subdocuments, the one exception to
+references rather than ownership. Generalizes ADR-0022 and ADR-0023. **Note 2026-10-08:** the
+invariants listed in §Consequences are enforced since Phase 3 as constraints 8 and 9
+(`app/lib/api/invariants/assessmentItem.ts`). ADR-0030 and ADR-0034, cited below, are planned in
+`docs/development-plan.md` §5 and not yet written.
 
 ## Context
 
@@ -39,6 +54,9 @@ Platform behaviour, verified on TerminusDB v12.0.7 (`scripts/platform_checks.js`
    migration. The `@key` is `Random`: `ValueHash` would change a part's store id when its text
    changes, the defect ADR-0016 diagnosed, and in any case the store id is not the part's identity.
 
+   > **Later change (2026-10-08):** ADR-0030 (external references and attachments) is planned for
+   > Phase 6 and not yet written; `text` is still required.
+
 2. **`TextFragment` and `ItemOption` are its specialisations.** `TextFragment` adds nothing and
    exists so stem and feedback slots are typed to text rather than to the abstract, which would
    also accept an option. `ItemOption` adds `isCorrect`, optional `feedback` and optional
@@ -57,6 +75,9 @@ Platform behaviour, verified on TerminusDB v12.0.7 (`scripts/platform_checks.js`
    stores `sys:JSON` unchecked; a kind that settles is promoted to a typed subdocument. This is
    ADR-0010's progressive formalisation applied to item parts.
 
+   > **Later change (2026-10-08):** not yet added; the schema has no `GenericFragment` and no
+   > `parts` field.
+
 5. **A tool that does not know an item type can still enumerate its fragments**, read each one's
    text, and attach a finding or attestation to one by `fragmentId`. This is the contract the plan
    §8 records as "no item type whose parts cannot be enumerated generically."
@@ -65,6 +86,9 @@ Platform behaviour, verified on TerminusDB v12.0.7 (`scripts/platform_checks.js`
    typeVersion}` on every item so migrations can select items by type version. The eight values of
    `ItemType` are the interaction types today; a version field is meaningless until the renderer
    registry exists. It is added with ADR-0034, and `ItemType` becomes the built-in registry.
+
+   > **Later change (2026-10-08):** ADR-0034 (interaction types and renderers as versioned
+   > artifacts) is planned and not yet written.
 
 ## Consequences
 
@@ -78,6 +102,9 @@ Platform behaviour, verified on TerminusDB v12.0.7 (`scripts/platform_checks.js`
 - The invariants engine (Phase 3) owns: `fragmentId` unique across all fragments of one item;
   option text unique within an item; option text present; number of correct options consistent
   with `itemType`.
+
+  > **Later change (2026-10-08):** built in Phase 3 as constraints 8 and 9.
+
 - Diffs into fragments work at field level (check J3: the changed option's `text` is reported with
   `@before` and `@after`), but list diffs are positional, so a reordering reads as many changes.
   Fragment-aware diffing stays in the plugin, as CoQui concluded.

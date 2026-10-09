@@ -1,11 +1,22 @@
 # ADR-0057: Records That Refer to a State of the Graph Name Its Commit
 
+> **In brief.** This proposal asks: when a record describes or judges the design as it stood at some
+> moment (the results of a test given to a group of learners, say, or a finding about a question), how
+> does it say which moment? It proposes an optional `asOf` field holding the identifier of the commit
+> (the saved version of the design) the record refers to, filled in with the current version when a
+> client leaves it out and checked by Armature when a client supplies it. It is Proposed, not accepted
+> or built, and is meant to be adopted before the Phase 6 outcomes importer.
+
 ## Status
 
 Proposed (2026-10-08). Follows from ADR-0056, which removed stored coverage and left one question
 it had been answering: what the graph looked like when something was observed or judged. Adopt
 before Phase 6's outcomes importer and alongside ADR-0028's Attestation, which already carries
 `asOf`.
+
+**Note 2026-10-08:** ADR-0028 (Attestation) and ADR-0031 (export profiles), cited below, are
+planned and not yet written. The Attestation's `asOf` exists only in the specification for ADR-0028
+in `docs/development-plan.md` Phase 5.
 
 ## Context
 
@@ -22,6 +33,9 @@ field that records which commit an administration happened against. The same gap
 record that describes or judges a state: a `DesignFinding` says an item's stem cues its answer, but
 of which version of the item? ADR-0028's Attestation already answers this for itself with `asOf`,
 "the commit of the target the attestation was made against".
+
+> **Later change (2026-10-08):** ADR-0028 is not yet written; this refers to the Attestation
+> specified for ADR-0028 in `docs/development-plan.md` Phase 5.
 
 The two-client test: the outcomes importer needs it to put results beside the right design; the
 research exporter needs it to pair outcomes with the design that produced them (plan §4 Phase 6,
@@ -47,6 +61,9 @@ Added to:
   dataset's `asOf` and the hub rejects a disagreeing value (decision 3).
 - `DesignFinding` — the state of the subject the finding describes.
 - Attestation, when ADR-0028 lands, as that ADR already specifies.
+
+  > **Later change (2026-10-08):** as the plan's Phase 5 specification for ADR-0028 specifies;
+  > ADR-0028 is planned and not yet written.
 
 Not added to `DescriptiveEvidence`, `LearningNeed`, or any artifact: evidence gathered before the
 course existed refers to no graph state, and an artifact's own history is its history.
@@ -111,13 +128,17 @@ ref to read the rest at. The coverage read gains nothing: it already takes `ref=
 
 - Whether the research exporter (ADR-0031) should treat `asOf` as a reference type that an export
   profile resolves, so a corpus carries the referenced state inline.
+
+  > **Later change (2026-10-08):** ADR-0031 (export profiles and schema slices) is planned and not
+  > yet written.
+
 - Whether `LearningActivity` outcomes, when they exist, want the same field. Likely yes, by the
   same rule; not decided here.
 
 ## Related
 
 - ADR-0025 — commits as the unit of design process data; `ref=` reads; bare commit ids
-- ADR-0028 — Attestation's `asOf`, the precedent this generalizes
+- ADR-0028 — Attestation's `asOf`, the precedent this generalizes (planned; not yet written)
 - ADR-0032 — a provenance field the pipeline fills from context, the pattern decision 2 follows
 - ADR-0056 — why coverage at delivery became a question only a ref can answer
 - Platform checks O, T2, U — commits are global, outlive their branch, and can be checked

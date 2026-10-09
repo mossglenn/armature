@@ -1,7 +1,21 @@
 # ADR-0021: Armature Does Not Model Practitioner Performance
 
+> **In brief.** This decision answered: should Armature be used to measure the performance of the
+> designers and reviewers whose work it records? It decided no, permanently. Records name who made them
+> so that others know whom to ask, but Armature offers no feature that summarizes one person's work
+> across records, and tools built on it should not either, partly because people who know they are
+> being scored stop being candid, and candor is the data Armature exists to capture. It still holds as
+> a policy; the guard that would stop the generic list feature from filtering by author is planned
+> (development plan Phase 5) but not yet built.
+
 ## Status
 Accepted
+
+**Note 2026-10-08:** unchanged as policy. Identity resolution, which the deferred section below
+describes as unbuilt, is built (ADR-0032). The non-aggregation guard on the generic list route
+(refusing `createdBy` as a filter key) is planned for Phase 5 of `docs/development-plan.md` and not
+yet built. Export-time anonymization is planned for ADR-0031 (export profiles), which is not yet
+written.
 
 ## Context
 
@@ -55,6 +69,12 @@ The boundary is genuinely fuzzy — the two are the same query with a different 
 ## Deferred: anonymisation
 
 Worth building eventually; premature now. No multi-user deployment exists, no authentication system is implemented (`User` resolution is designed but unbuilt), and the right design depends on knowing actual sharing and export patterns. Recorded so the direction is not rediscovered from scratch.
+
+> **Later change (2026-10-08):** `User` resolution is built (ADR-0032, `app/lib/api/identity.ts`):
+> every API write resolves an identity to a `User` and records it as commit author and `createdBy`.
+> No authentication system is built; the default resolver trusts an `Armature-User` header and is
+> for local and demo use only. The export profiles this section anticipates are planned as ADR-0031
+> (not yet written).
 
 ### The tension to resolve first
 

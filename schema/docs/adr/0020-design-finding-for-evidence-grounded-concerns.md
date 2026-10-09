@@ -1,9 +1,20 @@
 # ADR-0020: DesignFinding — Evidence-Grounded Concerns About Design Artifacts
 
+> **In brief.** This decision answered: how can someone record that a design artifact might be wrong,
+> as distinct from explaining why it was designed the way it was? It added `DesignFinding`, a record
+> that points at any design record, can carry supporting evidence and a confidence level, and has a
+> status of Open, Addressed or Dismissed, with a written reason required to dismiss one. A finding
+> never edits the thing it is about, so a tool for one kind of artifact can raise a concern about
+> another. It still holds and is implemented; the application programming interface (API) has enforced
+> the dismissal rule since 2026-10-08 as constraint 11.
+
 ## Status
 Accepted and implemented (2026-10-07), with ADR-0017. `DesignFinding` and `FindingStatus` are in
 `schema.json`; the seed carries one Open finding on the Draft item. The constraint in Decision 5
 (Dismissed requires `resolutionRationale`) is API-enforced from Phase 3.
+
+**Note 2026-10-08:** enforced since Phase 3 as constraint 11 (`app/lib/api/invariants/designFinding.ts`).
+ADR-0057 (Proposed) would add an optional `asOf` commit id to `DesignFinding`.
 
 ## Context
 
@@ -76,6 +87,9 @@ This is deliberate: an exported graph must not contain findings whose evidence h
 
 TerminusDB cannot express a conditional requirement, so the API enforces it (ADR-0006). `Addressed` does not require one; the revision itself is usually the explanation.
 
+> **Later change (2026-10-08):** ADR-0006 has been superseded by ADR-0013; the rule is constraint 11
+> in the invariants engine (`app/lib/api/invariants/index.ts`).
+
 ## Consequences
 
 **Positive**
@@ -114,3 +128,4 @@ But it is a general-purpose slot justified by one case, and general-purpose slot
 - ADR-0012 — `DesignNote`; the type this is deliberately *not*
 - ADR-0016 — key strategy; `Random` declared explicitly
 - ADR-0017 — `DesignRecord`, which `subject` and `regarding` depend on
+- ADR-0057 (Proposed) — `asOf` on findings, naming the commit of the subject the finding describes

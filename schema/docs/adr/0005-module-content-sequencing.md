@@ -1,7 +1,16 @@
 # ADR-0005: Module Content Sequencing via Shared Integer Space
 
+> **In brief.** A module mixes standalone activities and groups of activities in a teaching order.
+> This decision gave each level its own plain whole-number position (1, 2, 3 and so on) instead of
+> combined codes like "2.1", which become ambiguous. It still holds. Armature's application
+> programming interface (API) now rejects a write that gives two items in one module, or two
+> activities in one group, the same position.
+
 ## Status
 Accepted
+
+**Note (2026-10-08):** the uniqueness rules this ADR assigns to the API are enforced since Phase 3
+as constraints 3 and 4; see the note under Consequences.
 
 ## Context
 A module's content is heterogeneous — it can contain standalone LearningActivities and ActivityGroups, interleaved in a pedagogically meaningful order. These are stored in two separate junction document types: `ModuleActivityLink` and `ModuleActivityGroupLink`.
@@ -36,3 +45,9 @@ Module
 - Gaps are permitted (1, 2, 10 is valid) to allow insertion without full renumbering. The schema does not enforce uniqueness or contiguity — that is the API's responsibility.
 - The API is responsible for merging `ModuleActivityLink` and `ModuleActivityGroupLink` records, sorting by `sequence`, and composing the hierarchical view.
 - A standalone activity and a group at the same sequence value is a data error — the API must prevent it.
+
+  > **Later change (2026-10-08):** Uniqueness is enforced on every write as constraint 3 (one
+  > namespace across both link types per module) and constraint 4 (unique within a group), in
+  > `app/lib/api/invariants/moduleContent.ts`, answered with 422 `invariant_violation`. Contiguity
+  > is not required. A composed, ordered view of a module's content is not yet an API route: clients
+  > read the link documents through `GET /api/v1/documents/:type` and sort them.

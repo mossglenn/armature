@@ -1,8 +1,25 @@
 # ADR-0017: DesignRecord Abstract Root, and Category as Metadata
 
+> **In brief.** This decision answered: which records can a design note or a finding be attached to?
+> It created `DesignRecord`, an empty parent type shared by every design artifact and every
+> relationship record, so a note can explain a relationship (such as "this activity is third in this
+> module") and not only a named thing; and it made a type's category (artifact, relationship and so
+> on) a label in the schema's metadata rather than a class. It still holds. Since then `Response` was
+> removed, `DesignFinding` was added, the categories became four (see Architecture Decision Record,
+> or ADR, 0027), and the application programming interface (API) now enforces the rule that a `User`
+> cannot be a note's subject.
+
 ## Status
 Accepted and implemented (2026-10-07). Verification results are in the §Verification section below;
 one finding amends the enforcement claim in Decision 1.
+
+Amends ADR-0012 and ADR-0014 (`ArmatureDocument` now inherits `DesignRecord`; `DesignNote.subject`
+is retyped from `Set<ArmatureDocument>` to `Set<DesignRecord>`).
+**Amended 2026-10-07 by ADR-0027:** there are four categories, not three (`fragment` was added for
+the embedded parts of an item), and the generator's `JUNCTION_IDS` constant was deleted rather than
+derived from the metadata. **Note 2026-10-08:** the exclusion of `User` from `DesignRecord`, which
+§Verification records as unenforced, has been enforced since Phase 3 by invariant constraint 0 in
+`app/lib/api/invariants/references.ts`.
 
 ## Context
 
@@ -50,6 +67,9 @@ It has not, and the reasoning is worth recording here because this is the ADR wh
 
 **The split does not mean every connection becomes a node.** Plain reference fields remain the default and carry most traversal traffic — `Response.item`, `Assessment.module`, `Module.course`, `LearningObjective.generatedBy`, `LearningDataset.producedBy`, `createdBy`. The `relationship` category names the seven types that earned reification under ADR-0003 by carrying data. It is a label for what exists, not a mandate to convert more. **The failure mode to guard against is symmetry pressure** — naming a category invites reifying things for tidiness. ADR-0003's rule still governs: reify when the relationship carries data.
 
+> **Later change (2026-10-08):** `Response.item` no longer exists; ADR-0022 removed `Response`, and
+> answer options are `ItemOption` parts embedded in `AssessmentItem.options`.
+
 **What the graph is actually buying.** Three capabilities, none of which this ADR erodes:
 
 - **Heterogeneous references.** `DesignNote.subject` pointing at any `DesignRecord` is trivial here and genuinely painful relationally — polymorphic association means either a type column plus an id column with no referential integrity, or a table per subject type. This ADR *exercises* the graph model rather than straining it.
@@ -85,6 +105,13 @@ DesignRecord (abstract)
 User -- outside DesignRecord entirely
 ```
 
+> **Later change (2026-10-08):** this diagram is the hierarchy as of 2026-10-07. `Response` was
+> removed by ADR-0022 and `DesignFinding` (ADR-0020) inherits `ArmatureDocument`. Today
+> `ArmatureDocument` has 13 direct subtypes (LearningEvidence, LearningDataset, LearningNeed,
+> LearningObjective, PrerequisiteRecord, AssessmentItem, Assessment, LearningActivity,
+> ActivityGroup, Module, DesignNote, DesignFinding, Course). The item parts `Fragment`,
+> `TextFragment` and `ItemOption` (ADR-0033) are embedded subdocuments outside this tree.
+
 `DesignRecord` carries **no fields**. Its purpose is to be referenceable.
 
 `DesignNote.subject` retypes from `Set<ArmatureDocument>` to `Set<DesignRecord>`, retaining `@min_cardinality: 1`.
@@ -109,6 +136,10 @@ Armature has two mechanisms available, and they answer different questions:
 Categories: `artifact`, `relationship`, `infrastructure`.
 
 `scripts/generate-types.js` derives `JUNCTION_IDS` from this metadata instead of hardcoding it, and any future tool can read the same declaration.
+
+> **Later change (2026-10-08):** ADR-0027 implemented this with four categories (`infrastructure`,
+> `fragment`, `artifact`, `relationship`). `JUNCTION_IDS` and `CLASS_ORDER` were deleted; the
+> generator emits a `CLASS_CATEGORY` map instead.
 
 **The governing rule:** *a category becomes a class when something must reference it; otherwise it is metadata.*
 
@@ -139,6 +170,9 @@ This also avoids a structural problem. `PrerequisiteRecord` is simultaneously a 
 
 **Does `createdBy` move to `DesignRecord`?** Provenance on relationships is arguably meaningful — *"who declared this objective belongs to this module?"* is a design decision with an author, even when the record is API-created (ADR-0007). But ADR-0015 placed `createdBy` on `ArmatureDocument` deliberately, and moving it expands the scope of this change without a demonstrated need. Left where it is; revisit if relationship provenance is actually queried.
 
+> **Later change (2026-10-08):** `ModuleObjective` is not created by the API itself; clients write it
+> through the generic document API like any other record.
+
 **Is `roleRationale` redundant once `ModuleObjective` is annotatable?** Possibly, but see the note in Context — it follows an existing inline-rationale pattern. Any change is a separate decision requiring migration of seeded values, and it should not ride along with this one.
 
 ## Verification
@@ -161,9 +195,17 @@ Same gating discipline ADR-0013 applied to `@min_cardinality`: verify platform b
 
    This amends the premise ADR-0014 stated and this ADR repeated: typing `DesignNote.subject` to `DesignRecord` gives referential integrity in the sense that the target must exist, not in the sense that it must be a `DesignRecord`. The typing still does three jobs: it documents intent, it drives the generated types and the appendix, and it tells a tool what the slot is for. The fourth job, rejecting a `User` or any other wrong-class target, is the API's (ADR-0006), as a generic invariant on every write: *every reference field's target must be an instance of the declared class or a subclass*. The invariants engine (Phase 3) implements it once for all types. Until then the exclusion of `User` from `DesignRecord` is a documented rule the seed respects and nothing enforces.
 
+   > **Later change (2026-10-08):** enforced since Phase 3. The invariants engine checks every
+   > reference field's target class on every write (constraint 0, `app/lib/api/invariants/references.ts`),
+   > so a `DesignNote` or `DesignFinding` whose subject is a `User` is rejected with 422. ADR-0006,
+   > cited here, is superseded by ADR-0013; the API's general responsibility for rules the store
+   > cannot express now lives in the invariants engine (`app/lib/api/invariants/index.ts`).
+
 ## Related
 
 - ADR-0012 — `DesignNote` and the original `xsd:anyURI` subject
 - ADR-0014 — `ArmatureDocument`, the junction exclusion, and the retyping of `DesignNote.subject`
 - ADR-0015 — `User` deliberately outside the artifact hierarchy
 - ADR-0016 — key strategy; the other place a single mechanism was doing two jobs
+- ADR-0020 — `DesignFinding`, the second type whose `subject` is `Set<DesignRecord>`
+- ADR-0027 — implements §2; adds the `fragment` category
