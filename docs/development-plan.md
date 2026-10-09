@@ -532,13 +532,15 @@ Work:
       assessments, not the bank. Adopts ADR-0019's eligibility rule (Approved only for
       `coverageStatus`; non-Retired for `projectedCoverageStatus`) and promotes ADR-0019 to
       Accepted. The thresholds are provisional (P9); the ADR says what would revise them.
-- [x] **`deriveCoverage(ctx)`** in `app/lib/api/invariants/recompute.ts`, run by the write pipeline
-      after the invariants and before the one PUT, so the recomputed declarations land in the
-      caller's commit (ADR-0029 decision 5). The computed fields are declared in
-      `@metadata.armature.computed`, omitted from the generated request schemas (400 if sent) and
-      exported as `CLASS_COMPUTED`. The seed computes coverage with the same module instead of
-      hand-writing it. Still open from decision 6: the merge route recomputing affected modules
-      after `apply`.
+- [x] ~~`deriveCoverage(ctx)` in the write pipeline~~ **Reversed the same day by ADR-0056.** Built
+      first as a pre-commit recompute with the fields declared computed in the schema metadata,
+      then a merge-route recompute with a resolution path for conflicts on the computed fields
+      alone (platform check Z). Weighing that machinery showed the stored field was the mistake:
+      a verdict is a reading of the structure, not a design fact, and a derived value in a
+      versioned graph conflicts on merge without any disagreement behind it. `coverageStatus`,
+      `projectedCoverageStatus` and the `CoverageStatus` enum left the schema; coverage is
+      computed by the read at any ref, with the counts returned and the thresholds as parameters.
+      Coverage stops being seeded at all.
 - [ ] **`GET /api/v1/intelligence/coverage/:moduleId`** replacing the current route, returning
       the summary block `demo-api.md` promised, both coverage figures, and the items behind each.
 - [x] **`GET /api/v1/intelligence/alignment?module=`** (2026-10-08): items whose `bloomsLevel`
@@ -558,11 +560,16 @@ Work:
       and Set references are listed and filtered rather than queried.
 - [x] Redundancy detection ("a new item is redundant in the bank") is deferred: it needs text
       similarity and is not structural (P4). Recorded in the routes' header comment.
-- [ ] A first read-only Coverage View page in the app, as SESSION.md intended, consuming the
-      intelligence route.
+- [x] A first read-only Coverage View page in the app (2026-10-08): `/` lists a branch's modules,
+      `/coverage/<module>` renders the coverage read with both figures, their counts and the cut
+      in force, both calling the Hono app in-process so the page is a client of the API like any
+      plugin. `?branch=` reads another branch; `?fullyAssessedAt=&overAssessedAbove=` change the cut.
 
 Exit: both PROJECT_CONTEXT narratives can be walked through on seed data using only intelligence
-routes.
+routes. **Met 2026-10-08:** `app/lib/api/intelligence.test.ts` walks Narrative 2 through the
+coverage and alignment reads and Narrative 1 from a metric to the declaring module through the
+trace read. What Narrative 1 still lacks is the commit an administration was taken from, which is
+ADR-0057's proposal.
 
 CoQui receives: the coverage and alignment reads its Narrative 2 integration needs; nothing it
 asked for, which is the point. This phase exists for every client.
@@ -721,6 +728,8 @@ reading TerminusDB documentation.
 | 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Abstract `Fragment` subdocument; `ItemOption` as a specialisation; generic kinds with `sys:JSON` payload and per-kind validation; promotion path to typed subdocuments. Verify polymorphic subdocument lists first |
 | 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI as precedents); the hub never serves executable content from a graph document, renderers load sandboxed under CSP |
 
+| 0056 | Coverage is computed on read, never stored | 4 (accepted 2026-10-08) | Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6; the graph stores decisions and observations, the reads derive the rest |
+| 0057 | Records that refer to a state of the graph name its commit (`asOf`) | 6 (proposed 2026-10-08) | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head when absent and validates a supplied id; closes Narrative 1's "adequate when" |
 | 0054 | The API is a Hono application | 0 (accepted 2026-10-07) | Amends ADR-0026 decision 1; host-neutral app in `app/lib/api/`, one catch-all mount; numbered past the reserved and candidate blocks |
 | 0055 | The API layer reaches TerminusDB over HTTP | 2 (accepted 2026-10-08) | One `fetch` adapter under `app/lib/api/`; the JavaScript client stays in `scripts/`; supersedes the "keep the JS client" decision and the §3 split |
 
@@ -923,6 +932,10 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   id; list fields diff positionally (`CopyList`, `SwapList`).
 - Patch: applying a patch whose `@before` no longer matches returns 409 with `api:PatchError` and
   `api:witnesses`. This is the behaviour CoQui's handoff relied on.
+- *Verified (2026-10-08, check Z):* a conflict on a field is cleared by restoring the base value
+  on the target in a new commit: `apply` with the same `before_commit` and `after_commit` then
+  succeeds, the source's value lands, and the target's other changes are kept. Verified for the
+  merge recompute ADR-0029 decision 6 called for; nothing uses it since ADR-0056.
 - Change requests are an unmaintained dashboard feature, not an API.
 - Reset and squash exist; reset moves the head and keeps commits.
 

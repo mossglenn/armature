@@ -104,6 +104,10 @@ Recorded in `docs/development-plan.md` §9 as of v12.0.7. The ones most often ne
   filters only on a required field: a template on an `Optional` reference field, or on a `Set`
   reference field in either value form, is a 500 `api:InternalServerError` (check Y).** The hub
   lists the type and filters in `Graph.where` for those.
+- A field conflict is cleared by restoring the base value on the target in a new commit; `apply`
+  with the same `before_commit`/`after_commit` then succeeds, the source's value lands and the
+  target's other work is kept (check Z). Verified for a merge recompute that ADR-0056 then made
+  unnecessary; recorded as a fact about `apply`.
 - A commit's existence is checked by reading `ValidCommit/<id>` from `local/_commits`; a document
   read at a commit path that does not exist is a 500 (check U). A stale `TerminusDB-Data-Version`
   is HTTP 400 `api:DataVersionMismatch`; a bare commit id as the token is rejected (check M).

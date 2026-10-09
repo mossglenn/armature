@@ -42,12 +42,14 @@ scripts/
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
   load_schema.js           # Replaces the schema graph in one full_replace; --clear-instances empties data first for breaking changes
   platform_checks.js       # Probes store behaviours the ADRs depend on, in a scratch database it creates and deletes (run before encoding a platform assumption)
-  seed_data.js             # Inserts demo artifact graph (69 documents); computes coverage with the hub's algorithm, never hand-writes it (ADR-0029)
+  seed_data.js             # Inserts demo artifact graph (69 documents)
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill)
 app/
   app/api/
     [[...route]]/route.ts  # The ONLY file that knows Next.js hosts the API: exports handle(app) per method (ADR-0054); the only route file
+  app/page.tsx             # Index: a branch's modules, each linking to its Coverage View; calls the Hono app in-process, never the store
+  app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4)
   lib/
     api/
       app.ts               # The Armature API: Hono app, basePath /api/v1, mounts routes/, onError mapping. Never imports from next
@@ -58,17 +60,17 @@ app/
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
       identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
       classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy
-      write.ts             # The one write pipeline: Zod shape → 409 on a foreign id → createdBy → invariants → coverage derived → one commit
-      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), one module per constrained type; recompute.ts derives coverage before the commit (ADR-0029)
+      write.ts             # The one write pipeline: Zod shape → 409 on a foreign id → createdBy → invariants → one commit
+      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), one module per constrained type
       intelligence/
-        coverage.ts        # The coverage algorithm (ADR-0029): pure and dependency-free, so the write pipeline and scripts/seed_data.js call the same code
+        coverage.ts        # The coverage algorithm (ADR-0029 decisions 1 to 3) and its vocabulary; computed on read, never stored (ADR-0056)
         graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
       errors.ts            # ApiError: status + stable code + message, rendered by onError
       routes/
         documents.ts       # list with field filters, GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
-        intelligence.ts    # coverage/:moduleId, alignment, trace/:type/:id, impact/:type/:id: design intelligence from structure alone (plan P4)
+        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id: design intelligence from structure alone, at any ref (plan P4, ADR-0056)
     types.ts               # GENERATED — do not edit; run npm run generate:types. Interfaces plus the schema as data: CLASS_CATEGORY, CLASS_ANCESTORS, CLASS_KEY, CLASS_FIELDS
     schemas.ts             # GENERATED — do not edit; Zod request schemas, one per concrete class, from the same generator
   vitest.config.mts        # Vitest: '@' alias, reads .env.local so tests hit the same store as the app
@@ -127,7 +129,7 @@ To add a new type: (1) update `schema.json` (with ADR), giving the class `@metad
 | `Fragment` / `TextFragment` / `ItemOption` | Subdocument parts of an item, returned inline; identity is the client-assigned `fragmentId`, never the nested store id (ADR-0022, ADR-0023, ADR-0033) |
 | `ItemInstance` | Assessment-context wrapper around an `AssessmentItem`; its `status` is placement clearance, distinct from the item's own (ADR-0018) |
 | `DesignFinding` | An evidence-grounded concern about any design record, with `status` and resolution rationale (ADR-0020) |
-| `ModuleObjective` | Programmatic junction; carries the computed `coverageStatus` and `projectedCoverageStatus`, which clients may not write (ADR-0029) |
+| `ModuleObjective` | Programmatic junction carrying the declaration's design intent (`role`, `roleRationale`, `sequence`); it stores no coverage, which is computed on read (ADR-0056) |
 | `PrerequisiteRecord` | Junction doc; carries `rationale` and `prerequisiteType` — design decision preserved as data |
 | `NeedEvidenceLink` | Junction doc; links LearningNeed to LearningEvidence with `confidence` weighting |
 | `ModuleActivityLink` | Junction doc; places LearningActivity in Module with `sequence` |
@@ -145,7 +147,7 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 4. `ActivityGroupMember.sequence` — must be unique within a group
 5. `ItemInstance.sequence` — must be unique within an Assessment
 6. `ActivityGroup` — must not contain other `ActivityGroup` instances (flatness constraint)
-7. `ModuleObjective.coverageStatus` and `projectedCoverageStatus` — computed by the hub (ADR-0029): the number of distinct items placed in the module's assessments that assess the objective, Approved placements of Approved items for the first and everything not Retired for the second (0 `Uncovered`, 1 `PartiallyAssessed`, 2 to 4 `FullyAssessed`, 5 or more `OverAssessed`). Recomputed in the same commit as any write of a `ModuleObjective`, `ItemInstance`, `AssessmentItem` or `Assessment`, including the assessment or module a replace leaves. A client that sends either field gets 400; the fields are listed in `@metadata.armature.computed` and the generator leaves them out of the request schemas
+7. Coverage is never stored (ADR-0056). `GET /api/v1/intelligence/coverage/:moduleId` computes it at the requested ref from the distinct items placed in the module's assessments that assess each declared objective, twice: Approved placements of Approved items, and everything not Retired (ADR-0029 decisions 1 to 3; default cut 0 `Uncovered`, 1 `PartiallyAssessed`, 2 to 4 `FullyAssessed`, 5 or more `OverAssessed`, with the thresholds as query parameters and the counts in the response). No write recomputes anything; a `ModuleObjective` with a coverage field is an unknown key, 400
 8. `fragmentId` — unique across all fragments (stem, options, feedbacks) of one `AssessmentItem`; never regenerated by the hub (ADR-0023, ADR-0033)
 9. `ItemOption.text` — present, and unique within one item; the number of correct options must suit `itemType` (ADR-0022)
 10. `ItemInstance.status` — may not be `Approved` while its `AssessmentItem.status` is `Draft` or `InReview` (ADR-0018)
@@ -201,7 +203,8 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0006** — Minimum cardinality enforced by API (affects all create/update validators)
 - **ADR-0007** — ModuleObjective as programmatic junction (affects coverage computation)
 - **ADR-0026** — API host and route versioning (Next.js routes are the API; new routes under `/api/v1`)
-- **ADR-0029** — Coverage algorithm (counted over the module's placements; the verdict thresholds; recomputed in the same commit as the write that caused it; computed fields rejected on write)
+- **ADR-0029** — Coverage algorithm (decisions 1 to 3: counted over the module's placements, two eligibility rules, the default thresholds)
+- **ADR-0056** — Coverage is computed on read, never stored (the graph holds decisions and observations; derived values are reads at a ref; supersedes the stored field)
 - **ADR-0032** — Identity resolution (`main` is the `User` registry; author and `createdBy` come from the resolved identity, never the body; a branch that lacks the `User` gets `main`'s copy in the same commit)
 - **ADR-0054** — The API is a Hono application (host-neutral; nothing under `app/lib/api/` imports from `next`)
 - **ADR-0055** — The API layer reaches TerminusDB over HTTP through one adapter (the JavaScript client stays in `scripts/`)
@@ -253,5 +256,5 @@ Follow the guide in `.claude/prompts/commit-message-guide.md`. Descriptive, conv
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)
 - **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6). A branch is deleted only when another branch holds its head; there is no force
 - **Don't** take the commit author or `createdBy` from a request body — both come from the identity the request resolved to; `User` documents are created on `main` only (ADR-0032)
-- **Don't** accept `coverageStatus` or `projectedCoverageStatus` from a client, and don't write a `ModuleObjective` outside the pipeline without computing them with `app/lib/api/intelligence/coverage.ts` — the fields are the hub's (ADR-0029)
+- **Don't** store a derived value in the graph — coverage, alignment and any future score are computed by the intelligence reads at a ref, never written into a document (ADR-0056); a judgment someone wants on record is a `DesignFinding` or an Attestation with a person's name on it
 - **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will
