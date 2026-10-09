@@ -1,9 +1,12 @@
 // platform_checks.js
-// Probes the TerminusDB behaviours Phase 1 of docs/development-plan.md depends on,
+// Probes the TerminusDB behaviors the phases of docs/development-plan.md depend on,
 // in a scratch database that is created and deleted by this script. Nothing here
 // touches the armature database.
 //
-// Checks (each prints PASS / FAIL / INFO with the evidence):
+// Checks (each prints PASS / FAIL / INFO with the evidence; ADR-NNNN names the
+// architecture decision record that relies on it):
+//
+// Phase 1 checks:
 //   A. An abstract class with no properties is a valid inheritance root (ADR-0017 §3)
 //   B. Four-level inheritance; a reference typed as the abstract root accepts a
 //      leaf instance (ADR-0017 §1)
@@ -58,6 +61,14 @@
 //      the list forms return (ids?); does POST overwrite=true upsert a list; does the GET `ids`
 //      parameter read several documents at once
 //
+// Phase 4 checks (ADR-0029, ADR-0056), added 2026-10-08:
+//   Y. Template queries on a required, an Optional and a Set reference field (the intelligence
+//      reads look documents up by what they reference; Graph.where lists and filters the
+//      field forms the store cannot query)
+//   Z. A conflict on one field is cleared by restoring the base value on the target before
+//      apply. Verified for the merge-time coverage recompute that ADR-0056 removed; nothing
+//      uses it now
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -98,7 +109,7 @@ const schema = [
   { "@type": "Class", "@id": "Holder", "@key": { "@type": "Random" }, "one": "Artifact", "many": { "@type": "Set", "@class": "Artifact" }, "maybe": { "@type": "Optional", "@class": "Artifact" } },
   // X: a Hash-keyed junction, as Armature's relationship documents are
   { "@type": "Class", "@id": "Link", "@key": { "@type": "Hash", "@fields": ["a", "b"] }, "a": "Artifact", "b": "Artifact", "note": { "@type": "Optional", "@class": "xsd:string" } },
-  // D–J: abstract subdocument with typed and generic specialisations
+  // D–J: abstract subdocument with typed and generic specializations
   { "@type": "Class", "@id": "Fragment", "@subdocument": [], "@abstract": [], "@key": { "@type": "Random" },
     "fragmentId": "xsd:string", "kind": "xsd:string", "text": { "@type": "Optional", "@class": "xsd:string" } },
   { "@type": "Class", "@id": "ItemOption", "@subdocument": [], "@inherits": "Fragment", "@key": { "@type": "Random" }, "isCorrect": "xsd:boolean" },
@@ -558,8 +569,8 @@ async function main() {
   record("Y3b", "INFO", `template on a Set reference field with an array value: ${r.status} ${short(r.json)}`);
 
   // Z: a conflict on one field, resolved by restoring the base value on the target before apply
-  // (ADR-0029 decision 6: both branches recompute the same declaration; the hub restores the
-  // base values of the computed fields on the target, applies, then recomputes).
+  // (verified for the merge recompute ADR-0029 decision 6 called for; ADR-0056 removed stored
+  // coverage and that recompute, so nothing uses this now; kept as a fact about apply).
   r = await api("POST", at("branch/main", commit("z base")), { "@type": "Artifact", "@id": "Artifact/z", label: "base" });
   const zBase = (await log("main", 1))?.[0]?.identifier;
   r = await api("POST", `/api/branch/admin/${DB}/local/branch/z-src`, { origin: `admin/${DB}/local/branch/main` });

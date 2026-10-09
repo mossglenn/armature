@@ -33,8 +33,9 @@ import { createStore, type TerminusDocument } from '../store';
  *   GET /impact/:type/:id?branch=|ref=         every document that references this one, with
  *                                              the artifact each junction sits in
  *
- * All four are reads at a ref with the commit in ETag (ADR-0025 decision 7).
- * They derive everything from structure (P4): no text similarity, no model.
+ * All four are reads at a ref with the commit in ETag, the entity tag
+ * (architecture decision record ADR-0025, decision 7). They derive
+ * everything from structure (plan principle P4): no text similarity, no model.
  * Redundancy detection ("a new item duplicates one in the bank") needs text
  * similarity and is deferred; it is not a structural question.
  *

@@ -11,8 +11,9 @@
  * document at two commits, list its history with diffs, merge, and provoke
  * one conflict, all through /api/v1. It works on scratch branches it creates
  * and deletes, so the seed is untouched. The one write to `main` is the
- * users suite (ADR-0032): users live on main, so registering one writes
- * there; the suite deletes what it registered through the adapter.
+ * users suite (architecture decision record ADR-0032): users live on main,
+ * so registering one writes there; the suite deletes what it registered
+ * through the adapter.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './app';

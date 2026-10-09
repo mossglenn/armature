@@ -1,8 +1,9 @@
 import type { ItemStatus } from '../../types';
 
 /**
- * The coverage algorithm (ADR-0029 decisions 1 to 3; eligibility from
- * ADR-0019), computed on read and never stored (ADR-0056).
+ * The coverage algorithm (architecture decision record ADR-0029, decisions 1
+ * to 3; eligibility from ADR-0019), computed on read and never stored
+ * (ADR-0056).
  *
  * Coverage is a property of a module's declaration of an objective, counted
  * over the items placed in that module's assessments: an item contributes

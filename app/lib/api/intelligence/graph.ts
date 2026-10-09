@@ -5,11 +5,11 @@ import { StoreError, type Store, type TerminusDocument } from '../store';
 
 /**
  * A read-only view of the graph at one ref for the intelligence routes
- * (plan §3 layer 4). Every read goes through the store adapter (ADR-0055)
- * and is cached for the life of the request, so a route that walks the same
- * objective from three items fetches it once. `commit` is the commit the
- * first read was served from; every read in one request is at the same ref,
- * so it is the ETag for the response.
+ * (plan §3 layer 4). Every read goes through the store adapter (architecture
+ * decision record ADR-0055) and is cached for the life of the request, so a
+ * route that walks the same objective from three items fetches it once.
+ * `commit` is the commit the first read was served from; every read in one
+ * request is at the same ref, so it is the ETag (entity tag) for the response.
  *
  * Reverse lookups are schema-driven: `referencing` reads CLASS_FIELDS for
  * every reference field whose declared class the target is or inherits
@@ -19,8 +19,8 @@ import { StoreError, type Store, type TerminusDocument } from '../store';
  * template on an Optional reference field with a 500, unknown_type_casting_error
  * (platform check Y2, plan §9). A Set or List is listed and filtered too:
  * a template on a Set reference field is a 500 in both value forms (Y3). All
- * are a few reads at demo scale; a WOQL query over the adapter is where this
- * goes when it is not.
+ * are a few reads at demo scale; a WOQL (TerminusDB's Web Object Query
+ * Language) query over the adapter is where this goes when it is not.
  */
 export class Graph {
   private readonly docs = new Map<string, Promise<TerminusDocument | undefined>>();
@@ -135,7 +135,7 @@ export function otherReferences(doc: TerminusDocument, except: string): Array<{ 
   return out;
 }
 
-/** A node as the intelligence routes report it: identity, label and the attributes that bear on judgement. */
+/** A node as the intelligence routes report it: identity, label and the attributes that bear on judgment. */
 export interface Summary {
   id: string;
   type: string;

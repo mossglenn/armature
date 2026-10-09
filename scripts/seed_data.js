@@ -9,10 +9,12 @@
  *   7 LearningObjectives (4 with PrerequisiteRecords)
  *   3 Modules → 3 Assessments → 7 ItemInstances
  *   6 AssessmentItems, each with embedded stem and 4 options (24 options)
- *   7 ModuleObjectives (design intent only; coverage is computed on read, ADR-0056)
+ *   7 ModuleObjectives (design intent only; coverage is computed on read,
+ *     architecture decision record ADR-0056)
  *   2 DesignNotes (one on an AssessmentItem, one on a ModuleObjective junction)
  *   1 DesignFinding (on the Draft item)
  *   1 Course
+ *   1 User (User/demo-designer, the identity the tests and local clients send)
  *
  * Safe to re-run: clears existing instance data before inserting.
  *

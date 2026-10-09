@@ -2,12 +2,14 @@
 /**
  * sync-terminusdb-docs.js
  * Vendors the TerminusDB documentation as markdown so it is available offline,
- * version-stamped, and usable for AI-assisted development and ADR verification.
+ * version-stamped, and usable for AI-assisted development and for verifying
+ * ADRs (architecture decision records).
  *
  * Why this exists
  * ---------------
- * TerminusDB publishes no llms.txt and no MCP server, and its old GitHub docs
- * repository is explicitly out of date. The repo previously carried one
+ * TerminusDB publishes no llms.txt and no MCP (Model Context Protocol) server,
+ * and its old GitHub docs repository is explicitly out of date. The repo
+ * previously carried one
  * hand-copied page (docs/terminusdb-schema-doc.md, March 2026) that went stale
  * across four server releases without anyone noticing. This script replaces
  * that practice with a reproducible, dated, pinned sync.
@@ -22,7 +24,7 @@
  *      sitemap (so a page that exists only as a rendered route is not missed).
  *   2. Fetches each page's raw markdown and converts its Markdoc tags
  *      ({% table %}, {% callout %}, {% http-example %}, ...) to plain
- *      CommonMark/GFM.
+ *      CommonMark/GFM (GitHub Flavored Markdown).
  *   3. Falls back to fetching the rendered HTML and converting it with
  *      turndown when no page.md exists. The `javascript` and `python` API
  *      references are generated pages and always take this path.

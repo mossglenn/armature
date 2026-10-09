@@ -7,7 +7,7 @@ import { validateActivityGroupMember, validateModuleContentLink } from './module
 import { checkReferences } from './references';
 
 /**
- * The invariants engine (ADR-0006, plan §4 Phase 3).
+ * The invariants engine (architecture decision record ADR-0006, plan §4 Phase 3).
  *
  * TerminusDB enforces field types, required fields, @min_cardinality, enum
  * values and that a referenced document exists. It does not check the class
@@ -16,7 +16,7 @@ import { checkReferences } from './references';
  * every write regardless of route:
  *
  *   0  reference class            references.ts (generic, every type)
- *   1  AssessmentItem.assesses    Zod .min(1) from @min_cardinality (schemas.ts)
+ *   1  AssessmentItem.assesses    Zod .min(1) from @min_cardinality (schemas.ts, the generated Zod validation schemas)
  *   2  LearningActivity.targets   Zod .min(1)
  *   3  module content sequence    moduleContent.ts (one namespace for both link types)
  *   4  group member sequence      moduleContent.ts

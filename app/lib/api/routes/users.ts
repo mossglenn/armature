@@ -5,9 +5,9 @@ import { findUserByExternalId, mintUserId, registry, resolveAuthor, resolveUser,
 import { createStore, isRecord, StoreError } from '../store';
 
 /**
- * /api/v1/users (ADR-0032 decision 6).
+ * /api/v1/users (architecture decision record ADR-0032, decision 6).
  *
- *   GET  /?branch=|ref=    every User at a ref; ETag is the commit
+ *   GET  /?branch=|ref=    every User at a ref; ETag (entity tag) is the commit
  *   GET  /me               the User the request resolved to (401 otherwise)
  *   POST /                 { message, user }  register a User on main → 201
  *

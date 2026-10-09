@@ -4,7 +4,7 @@ import { ApiError } from './errors';
 import { createStore, StoreError, type Store, type TerminusDocument } from './store';
 
 /**
- * Identity resolution (ADR-0032).
+ * Identity resolution (architecture decision record ADR-0032).
  *
  * A request's identity is a set of claims produced by a pluggable resolver;
  * the routes never see the mechanism. The claims name an `externalId`, which
@@ -16,7 +16,7 @@ import { createStore, StoreError, type Store, type TerminusDocument } from './st
  * Resolvers, chosen by `ARMATURE_IDENTITY`:
  *   header  (default) `Armature-User: <externalId>`; trusts the caller, so
  *           the mutating routes stay local while it is configured
- *   oidc    named, not yet built: bearer token, `sub` as externalId, `name`
+ *   oidc    named, not yet built: OpenID Connect (OIDC) bearer token, `sub` as externalId, `name`
  *           and `email` as the other claims
  */
 

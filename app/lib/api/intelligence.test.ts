@@ -1,5 +1,6 @@
 /**
- * The design-intelligence reads (plan §4 Phase 4; ADR-0029 for coverage).
+ * The design-intelligence reads (plan §4 Phase 4; architecture decision
+ * record ADR-0029 for coverage).
  *
  * Integration tests like app.test.ts: the container must be up with the seed
  * loaded. Reads run against `main`; the cases that need documents the seed

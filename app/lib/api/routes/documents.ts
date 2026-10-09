@@ -16,18 +16,19 @@ import { createStore, isRecord, type Ref } from '../store';
 import { parseDocuments, writeDocuments } from '../write';
 
 /**
- * /api/v1/documents (ADR-0024, ADR-0025 decisions 3, 7, 8 and 9; Phase 3).
+ * /api/v1/documents (architecture decision records ADR-0024 and ADR-0025
+ * decisions 3, 7, 8 and 9; Phase 3).
  *
  *   GET  /:type?branch=|ref=&<field>=&count=&skip=   list, filtered by field values
- *   GET  /:type/:id?branch=|ref=                      one document at a ref; ETag is the commit
+ *   GET  /:type/:id?branch=|ref=                      one document at a ref; ETag (entity tag) is the commit
  *   PUT  /:type/:id?branch=                           { message, document }  replace or create
  *   POST /?branch=                                    { message, documents: [...] }  one commit
- *   GET  /:type/:id/history?branch=                   the commits that touched it, with diffs
+ *   GET  /:type/:id/history?branch=&start=&count=&diff=  the commits that touched it, with diffs
  *   GET  /:type/:id/diff?from=&to=                    the structural diff between two commits
  *
  * Both writes run the same pipeline (../write.ts): generated Zod shape,
  * 409 on an id held by another type, createdBy from the resolved identity,
- * the invariants engine, one commit, If-Match honoured. A batch may use
+ * the invariants engine, one commit, If-Match honored. A batch may use
  * @capture and { "@ref" } to reference a document it creates, which is how
  * a note attaches to a Hash-keyed junction written in the same request.
  */
