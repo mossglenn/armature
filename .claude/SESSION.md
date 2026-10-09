@@ -6,13 +6,23 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Phase 4 (design intelligence) complete and merged on 2026-10-08 (PRs #8, #9 and #10, rebase merges, 19 commits, CI green on `main`); its exit criterion is met → next is deciding ADR-0057 (`asOf`) and then Phase 5 of `docs/development-plan.md` (findings and attestations).** Phases 0 to 3 merged 2026-10-07 and 2026-10-08 (PRs #1 to #7). The intelligence reads (coverage, alignment, trace, impact) derive everything from structure at any ref; nothing derived is stored in the graph (ADR-0056); a read-only Coverage View is the app's first page.
+**Phase 4 (design intelligence) complete and merged on 2026-10-08 (PRs #8, #9 and #10, rebase merges, 19 commits, CI green on `main`); its exit criterion is met. A documentation overhaul followed on 2026-10-09 (PR #11, eight commits, CI green): every document reconciled with the code, all 34 ADRs annotated, an API reference, a schema guide and `docs/how-armature-works.md` added. Next is deciding ADR-0057 (`asOf`) and then Phase 5 of `docs/development-plan.md` (findings and attestations).** Phases 0 to 3 merged 2026-10-07 and 2026-10-08 (PRs #1 to #7). The intelligence reads (coverage, alignment, trace, impact) derive everything from structure at any ref; nothing derived is stored in the graph (ADR-0056); a read-only Coverage View is the app's first page.
 
-History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 → ADR-0054 Hono → Phase 1 schema catch-up → ADR-0055, ADR-0025, Phase 2 version control → ADR-0032, generic writes, invariants engine, legacy retired → ADR-0029 coverage algorithm, intelligence reads, ADR-0056 nothing derived is stored, Coverage View (October 2026).
+History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 → ADR-0054 Hono → Phase 1 schema catch-up → ADR-0055, ADR-0025, Phase 2 version control → ADR-0032, generic writes, invariants engine, legacy retired → ADR-0029 coverage algorithm, intelligence reads, ADR-0056 nothing derived is stored, Coverage View → documentation overhaul and the explainer for learning scientists (October 2026).
 
 ---
 
 ## What's Done
+
+### Documentation overhaul (2026-10-09, PR #11)
+
+- **Audit first:** a line-by-line audit of every human-written document against the code (about 150 findings, 17 cross-document conflicts, 15 holes) drove the edits. The code is the truth; docs were changed to match it, never the reverse
+- **New documents:** `docs/how-armature-works.md` (about 23,700 words, for learning scientists: purpose, development history including the AI-assisted method, every mechanism, decisions with rejected alternatives, future, limitations; `[Brevity candidate]` and `[Interpretive framing]` markers, † on citations added for it), `docs/api.md` (every route, envelope, query parameter and error code), `docs/schema-guide.md` (was a stub), `app/README.md` (was boilerplate)
+- **README rewritten** with a documentation map and working `/api/v1` setup. **All 34 ADRs annotated, not rewritten:** an "In brief" block, two-way status links, dated "Later change" notes; `schema/docs/adr/README.md` is now the full index
+- **Schema `@documentation` corrected** (strings only) and regenerated; the generators no longer emit `validateEnum()` or "coverage recompute". Code comments corrected in 24 files (comment-only)
+- **Reconciled:** the development plan (§5 one table with statuses; §6 gains six open questions), CLAUDE.md (delivery workflow, constraint response codes, current ADR list), PROJECT_CONTEXT (Narrative 1's real path), prompts and skill. Historical docs (demo API, CoQui handoff, research) got dated status banners
+- **Verified:** every example request in the README and schema guide run against the live store on a scratch branch; lint, `check:types`, `tsc` clean; 95 tests pass; every relative link resolves
+- **Found:** the list route's 500 on Optional/Set reference filters (reproduced); four decisions surfaced and recorded in What's Next and plan §6
 
 ### Phase 4: design intelligence (2026-10-08)
 
@@ -193,6 +203,8 @@ None. One intermittent: a branch-delete test in `app.test.ts` failed once in a f
 
 ## Notes for Next Session
 
+Documentation now has four current, human-facing documents besides the ADRs: `README.md`, `docs/api.md`, `docs/schema-guide.md` and `docs/how-armature-works.md`. Any session that changes a route, the schema or a decision updates them too (the update-session prompt says so); conventions are American spelling, acronyms expanded per section, historical records annotated rather than rewritten.
+
 Start with ADR-0057: read it, decide, and if accepted implement it on a branch (`phase-5/asof` or fold into Phase 5's attestation branch). The `asOf` fill belongs in `write.ts` step 3 beside `createdBy`; the validation is a new module in `invariants/` registered for the three types; the branch head is `branch.head()` on the store. Then the branch-route race (What's Next, item 2), which is a small change in `routes/branches.ts`.
 
 Phase 4 facts worth carrying forward:
@@ -245,6 +257,13 @@ Key context:
 ---
 
 ## Recent Sessions
+
+### 2026-10-08 to 2026-10-09 (documentation overhaul)
+
+- Read the whole repository; asked eight scoping questions (ADRs annotated not rewritten; `.claude/` files accuracy plus light clarity; explainer as Markdown in `docs/`; AI-assisted method described; American spelling; learning-science framing flagged as interpretive; third person; schema docs and code comments in scope)
+- Ran parallel audits (docs against code; code comments), then two agents annotated the ADRs from a shared brief while the living docs, the API reference, the schema guide and the explainer were written; an independent review fixed 24 errors in the explainer
+- Recorded the decisions the audit surfaced: list-route filter 500, item statistics, how `ModuleObjective` is written, and three unbuilt, unowned capabilities (lossless writes, `GET /api/v1/schema`, the ordered module-content view)
+- Eight commits on `docs/documentation-overhaul`, merged as PR #11 (rebase merge); CI green on `main`
 
 ### 2026-10-08 (Phase 4)
 
