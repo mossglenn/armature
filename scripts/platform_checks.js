@@ -557,6 +557,26 @@ async function main() {
   r = await yq({ many: ["Artifact/y-b"] });
   record("Y3b", "INFO", `template on a Set reference field with an array value: ${r.status} ${short(r.json)}`);
 
+  // Z: a conflict on one field, resolved by restoring the base value on the target before apply
+  // (ADR-0029 decision 6: both branches recompute the same declaration; the hub restores the
+  // base values of the computed fields on the target, applies, then recomputes).
+  r = await api("POST", at("branch/main", commit("z base")), { "@type": "Artifact", "@id": "Artifact/z", label: "base" });
+  const zBase = (await log("main", 1))?.[0]?.identifier;
+  r = await api("POST", `/api/branch/admin/${DB}/local/branch/z-src`, { origin: `admin/${DB}/local/branch/main` });
+  r = await api("PUT", at("branch/z-src", commit("z source change")), { "@type": "Artifact", "@id": "Artifact/z", label: "source" });
+  const zSrc = (await log("z-src", 1))?.[0]?.identifier;
+  r = await api("PUT", at("branch/main", commit("z target change")), { "@type": "Artifact", "@id": "Artifact/z", label: "target" });
+  r = await api("POST", at("branch/main", commit("z target other doc")), { "@type": "Artifact", "@id": "Artifact/z-other", label: "kept" });
+  r = await api("POST", applyUrl, { before_commit: zBase, after_commit: zSrc, commit_info: { author: "merger@example", message: "z merge (expect conflict)" } });
+  record("Z1", r.status === 409 ? "PASS" : "INFO", `apply when both sides changed Artifact/z.label: ${r.status} ${errType(r)}`);
+  r = await api("PUT", at("branch/main", commit("z restore base value")), { "@type": "Artifact", "@id": "Artifact/z", label: "base" });
+  r = await api("POST", applyUrl, { before_commit: zBase, after_commit: zSrc, commit_info: { author: "merger@example", message: "z merge after restore" } });
+  record("Z2", r.status === 200 ? "PASS" : "INFO", `apply after the target restored the base value: ${r.status} ${r.status === 200 ? "" : errType(r)}`);
+  r = await api("GET", at("branch/main", "id=Artifact/z"));
+  const zOther = (await api("GET", at("branch/main", "id=Artifact/z-other"))).json;
+  record("Z3", r.json?.label === "source" && zOther?.label === "kept" ? "PASS" : "INFO", `after the merge: Artifact/z.label=${r.json?.label} (source wins), Artifact/z-other.label=${zOther?.label} (target's other work kept)`);
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/z-src`, {});
+
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
 }
