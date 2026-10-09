@@ -2,93 +2,178 @@
 
 **Graph-based infrastructure for learning engineering.**
 
-Armature is an open schema and API for preserving design rationale in the relationships between instructional artifacts — objectives, assessments, activities, and modules. It treats the artifact graph as a first-class data structure, making the decisions behind a course design inspectable, queryable, and reusable.
+Armature is an open schema and API (application programming interface) for recording instructional design as data. It stores design artifacts (learning needs, objectives, assessment items, activities, modules), the relationships between them, and the full history of how both changed, by whom and why. Tools built on Armature can then inspect the design: which objectives lack assessment coverage, which items sit below their objective's cognitive level, which evidence an objective traces back to, and what would be affected by a change.
 
-## The Problem
+New to the project? Start with **[How Armature Works](docs/how-armature-works.md)**, a complete explainer written for learning scientists and other readers who know the basics of software but not its details.
 
-Current instructional design tools capture _what was built_ but not _why design decisions were made_ or _how artifacts relate to each other_. Objectives live in one document. Assessments live in another. The reasoning behind a prerequisite relationship — why one objective must precede another — lives in a designer's head or a Slack thread, if it lives anywhere at all.
+## The problem
 
-This makes learning engineering difficult to study, reproduce, or improve. You can analyze what learners did. You can't easily analyze what the designer decided, or trace a learning outcome back through the design decisions that shaped it.
+Current instructional design tools capture *what was built* but not *why design decisions were made* or *how artifacts relate to each other*. Objectives live in one document and assessments in another. The reasoning behind a prerequisite (why one objective must come before another) lives in a designer's head or a chat thread, if it lives anywhere at all.
 
-## What Armature Does
+This makes learning engineering hard to study, reproduce or improve. You can analyze what learners did. You cannot easily analyze what the designer decided, or trace a learning outcome back through the design decisions that shaped it. The position paper (`docs/positionpaper/`) calls the missing thing **design data**: a structured, queryable, versioned record of the design process, as distinct from the **learning data** that learning management systems and analytics platforms already capture.
 
-Armature models the full design process as a graph, from problem definition through outcome evaluation:
+## What Armature does
 
-- **LearningNeeds** grounded in **LearningEvidence** (quantitative metrics and qualitative findings)
-- **LearningObjectives** generated from needs, connected by **PrerequisiteRecords** that carry rationale
-- **AssessmentItems** that assess objectives, placed into **Assessments** via **ItemInstances**
-- **LearningActivities** that target objectives, organized into **Modules** and **ActivityGroups**
-- **ModuleObjectives** that declare what each module intends to cover and compute how well its assessments actually do
+Armature models the design process as a graph, from problem definition through outcome evaluation:
 
-Every relationship in the graph is a first-class artifact. A prerequisite isn't just an edge — it's a document with a rationale and a type (Hard, Soft, or Corequisite). A module's coverage status isn't a manual field — it's computed from the graph after each change to the assessment structure.
+- **Learning needs** grounded in **learning evidence** (quantitative metrics and qualitative findings), each link carrying the designer's confidence in that evidence
+- **Learning objectives** generated from needs, connected by **prerequisite records** that carry a type (hard, soft or corequisite) and a rationale
+- **Assessment items** in a reusable item bank that assess objectives, placed into **assessments** through **item instances**, with a review status on both the item and each placement
+- **Learning activities** that target objectives, organized into **modules** and **activity groups** in a defined order
+- **Module objectives** that record which objectives each module declares, and the role each plays there
+- **Design notes** (why a decision was made) and **design findings** (an evidence-grounded concern that something is wrong, and what became of it)
 
-## What This Enables
+Every relationship that carries meaning is a first-class record. A prerequisite is not just a line between two objectives; it is a document with its own rationale and type. Every change is a commit with an author and a stated reason, and every read can be made at any point in history.
 
-Tools built on Armature can:
+Coverage is not a field anyone maintains: it is computed from the graph whenever it is read, at any commit, so it can never be stale.
 
-- Surface which objectives have no assessment coverage before a course launches
-- Trace a low-performing item back through its objective to the learning need that generated it
-- Show a designer which instructional strategies have been applied to an objective and which are missing
-- Answer "why is this prerequisite here?" with a recorded rationale rather than institutional memory
+## What this enables
+
+Through the design-intelligence reads under `/api/v1/intelligence/`, tools built on Armature can:
+
+- show which objectives a module declares but does not adequately assess, both as it stands and as it will stand once items in review are approved (**coverage**)
+- flag items whose Bloom's level is below the objective they assess, and objectives no activity targets (**alignment**)
+- trace an assessment result back through items and objectives to the learning need and evidence behind them, with every design note and finding along the way (**trace**)
+- list everything that depends on an artifact before it changes (**impact**)
+- answer "why is this prerequisite here?" with a recorded rationale and a commit history, rather than institutional memory
 
 ## Status
 
-Early development. The schema is defined and documented. The API and first plugin (CoQui, an assessment authoring tool) are in progress.
+As of 8 October 2026, Phases 0 to 4 of the [development plan](docs/development-plan.md) are complete:
 
-## Repository Structure
+- the schema (27 classes, 12 controlled vocabularies) with every accepted decision applied
+- a version-controlled API: reads at any branch or commit, history and differences per document, branches, three-way merges with conflict reports
+- one write path for every document type, enforcing every rule the database cannot (the invariants engine), with the author and reason recorded on every change
+- identity resolution for people and AI agents
+- the four design-intelligence reads and a read-only Coverage View page
+- 95 integration tests
 
-```
-schema/
-  schema.json          # TerminusDB schema — all types, enums, and relationships
-  docs/
-    adr/               # Architecture Decision Records — one per design decision
-      README.md        # ADR index
-      0001-*.md        # Abstract base type for evidence
-      0002-*.md        # References, not ownership
-      ...
+**Next:** a decision on [ADR-0057](schema/docs/adr/0057-records-name-the-commit-they-refer-to.md) (records that name the commit they refer to), then Phase 5 (attestations and the review vocabulary). The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
-docs/
-  schema-guide.md      # Conceptual guide to the schema (in progress)
-```
+**Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
-## Architecture Decisions
+## Documentation map
 
-Every significant schema design decision is documented as an [Architecture Decision Record](schema/docs/adr/README.md). This is Armature practicing what it preaches: design rationale preserved as structured, inspectable artifacts.
+| If you want to... | Read |
+|---|---|
+| Understand what Armature is, how it works and why | [How Armature Works](docs/how-armature-works.md) |
+| Understand the schema's concepts and patterns | [Schema guide](docs/schema-guide.md) |
+| Look up a type or field | [Schema appendix](docs/SCHEMA_APPENDIX.md) (generated from `schema/schema.json`) |
+| Call the API | [API reference](docs/api.md) |
+| See why a decision was made | [Architecture Decision Records](schema/docs/adr/README.md) |
+| See the roadmap and open questions | [Development plan](docs/development-plan.md) |
+| Read the argument for Armature | [Position paper](docs/positionpaper/Armature-Position-Paper.html) |
+| See what the first plugin asked for | [CoQui handoff](docs/armature-asks-from-Coqui.md) |
+| See the standards precedents and literature | [docs/research/](docs/research/) |
+| Work on the code (including with an AI assistant) | [.claude/CLAUDE.md](.claude/CLAUDE.md), [.claude/SESSION.md](.claude/SESSION.md) |
 
-## Getting Started
+## Getting started
 
-The schema is designed for [TerminusDB](https://terminusdb.com) v12. The repository runs the store in Docker and the API as a Next.js app on the host.
+You need [Docker](https://www.docker.com/) (to run the database) and [Node.js](https://nodejs.org/) 22 or later (CI uses 22).
 
 ```bash
-# 1. Start TerminusDB (pinned to v12.0.7 in docker/docker-compose.yml)
+# 1. Start TerminusDB, the graph database (pinned to v12.0.7 in docker/docker-compose.yml)
 cd docker && docker compose up -d && cd ..
 
 # 2. Install dependencies for the scripts and the app
 (cd scripts && npm install)
 (cd app && npm install)
 
-# 3. Configure the app's connection (not committed)
-#    app/.env.local needs TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS, TERMINUS_DB.
+# 3. Configure the app's connection to the database (app/.env.local is not committed)
+cat > app/.env.local <<'ENV'
+TERMINUS_URL=http://localhost:6363
+TERMINUS_USER=admin
+TERMINUS_PASS=admin
+TERMINUS_DB=armature
+# Optional: which identity resolver to use (default: header)
+# ARMATURE_IDENTITY=header
+ENV
 #    TERMINUS_PASS must match TERMINUSDB_ADMIN_PASS given to the container (default: admin).
+#    The scripts read the same TERMINUS_* variables from your shell, defaulting to admin/admin.
 
-# 4. Load the schema and the demo seed data
+# 4. Load the schema and the demonstration course
 node scripts/load_schema.js
 node scripts/seed_data.js
 
-# 5. Run the API
+# 5. Run the app, which serves the API and the Coverage View
 cd app && npm run dev
-# GET http://localhost:3000/api/objectives, /api/coverage/<moduleId>, ...
 ```
 
-The API is a [Hono](https://hono.dev) application in `app/lib/api/`, mounted under `/api/v1/` by one catch-all Next.js route (ADR-0054); the Next.js app is its host for now and a standalone process is the destination (ADR-0026). It reaches TerminusDB only through the HTTP adapter in `app/lib/api/store.ts` (ADR-0055). Phase 2 landed the version-control surface (ADR-0025): documents read at a branch or commit with the commit in `ETag`, a provisional write with `If-Match`, per-document history with diffs, diff between commits, branches (deletable only once another branch holds the head), a three-way merge with a 409 conflict report, and changes since a commit. Identity is resolved by a pluggable resolver (ADR-0032): locally the `Armature-User` header carries the caller's `externalId`, which the hub resolves to a `User` document on `main` and records as the commit author and `createdBy`; `/api/v1/users` lists users, answers `/me`, and registers new ones. Phase 3 added the generic write path: `PUT /api/v1/documents/:type/:id` and a batch `POST /api/v1/documents` share one pipeline that checks shape against Zod schemas generated from the schema, then every constraint in the invariants engine (422 with all violations), then commits once; `GET /api/v1/documents/:type?field=value` lists with filters. The demo-era unversioned routes described in `docs/demo-api.md` were retired on 2026-10-08; a module's coverage is two list reads (`ModuleObjective?module=` and `LearningObjective`) until Phase 4's intelligence route. Phase 4 settled where design intelligence lives: nothing derived is stored in the graph (ADR-0056). The reads under `/api/v1/intelligence/` compute everything from structure at any commit: `coverage/:moduleId` and `coverage?course=` (per declaration, the distinct items placed in the module's assessments that assess it, counted over Approved items with Approved placements and over everything not Retired, with the hub's default verdicts, the counts, and the thresholds as parameters; plus the objectives a module assesses without declaring; ADR-0029 decisions 1 to 3), `alignment` (Bloom's mismatches between items, objectives and activities), `trace/:type/:id` (the provenance chain from evidence to metric, both ways from any document on it, with the notes and findings about what it reaches) and `impact/:type/:id` (everything that references a document, found from the schema). The app's own pages, `/` and `/coverage/<module>`, are a read-only Coverage View that calls the API in-process. `docs/development-plan.md` specifies the rest of the `/api/v1/` surface.
+Then open <http://localhost:3000> for the module list and Coverage View, or call the API directly:
 
-After any change to `schema/schema.json`, run `npm run generate:types` in `app/`; CI fails if the generated types drift. `npm test` in `app/` runs the in-process API tests against the running TerminusDB container.
+```bash
+# Every learning objective on main
+curl http://localhost:3000/api/v1/documents/LearningObjective
+
+# Coverage of one module (both figures, the counts, and the items behind them)
+curl http://localhost:3000/api/v1/intelligence/coverage/how-ai-works
+
+# The same read as the design stood at an earlier commit
+curl "http://localhost:3000/api/v1/intelligence/coverage/how-ai-works?ref=<commit-id>"
+
+# A write: every change names who made it and says why
+curl -X POST http://localhost:3000/api/v1/branches \
+  -H 'Content-Type: application/json' -d '{"name":"my-experiment"}'
+curl -X PUT "http://localhost:3000/api/v1/documents/DesignNote/my-note?branch=my-experiment" \
+  -H 'Content-Type: application/json' \
+  -H 'Armature-User: demo-designer@example.edu' \
+  -d '{"message":"Record why the module order changed",
+       "document":{"label":"Module order","rationale":"Ethics before limitations, per SME feedback",
+                   "subject":["Module/how-ai-works"],"category":"SequencingDecision"}}'
+```
+
+Writes need the `Armature-User` header carrying a registered user's external identifier; the seed registers `demo-designer@example.edu`. The [API reference](docs/api.md) documents every route.
+
+**Tests.** `npm test` in `app/` runs the 95 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
+
+**After a schema change.** Run `npm run generate:types` in `app/` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
+
+## How it is built
+
+```
+Plugins (CoQui, future tools)  →  Armature API (/api/v1)  →  TerminusDB
+                                   this repository
+```
+
+- **TerminusDB** stores the design graph as typed documents and keeps every change as a commit, with branches and merges built in.
+- **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). For now a Next.js app hosts it through a single catch-all route; a standalone process is the planned destination (ADR-0026).
+- **Plugins never talk to the database directly.** The API is where the rules, identity and history are enforced.
+- **The schema is the single source of truth.** Type definitions, request validation and the schema appendix are generated from `schema/schema.json`.
+
+## Repository structure
+
+```
+schema/
+  schema.json                 The schema: every type, field, controlled vocabulary and relationship
+  docs/adr/                   Architecture Decision Records, with an index in README.md
+docs/
+  how-armature-works.md       The complete explainer (start here)
+  schema-guide.md             Conceptual guide to the schema
+  api.md                      Reference for every /api/v1 route
+  SCHEMA_APPENDIX.md          Generated reference for every type and field
+  development-plan.md         The phased roadmap, principles, open questions and platform facts
+  armature-asks-from-Coqui.md What the first plugin asked for and learned (a dated handoff)
+  demo-api.md                 The retired demo-era API (historical)
+  positionpaper/              The position paper (March 2026)
+  research/                   Standards-precedents survey, candidate ADRs, reading list
+  vendor/terminusdb/          Generated: vendored, version-stamped TerminusDB documentation
+app/                          The Next.js app: hosts the API and the Coverage View (see app/README.md)
+  app/                        Pages and the one catch-all API route
+  lib/api/                    The Armature API (Hono): routes, write path, invariants, intelligence
+  lib/types.ts, lib/schemas.ts  Generated from schema.json; never edit by hand
+scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync
+docker/                       Docker Compose for TerminusDB
+.github/workflows/ci.yml      CI: lint and the generated-types drift check
+.claude/                      Context for AI-assisted development sessions: CLAUDE.md, PROJECT_CONTEXT.md, SESSION.md
+```
+
+## Architecture decisions
+
+Every significant decision is recorded as an [Architecture Decision Record](schema/docs/adr/README.md) (ADR): the context, the decision, its consequences, and usually the alternatives rejected. Superseded decisions are kept and marked, not deleted. This is Armature practicing what it preaches: design rationale preserved as structured, inspectable artifacts.
 
 ## Contributing
 
-Armature is in early development. Architecture decisions are being established now — the best way to contribute at this stage is to read the [ADRs](schema/docs/adr/README.md) and open an issue if you see a gap or disagree with a decision.
-
-Contribution guidelines coming as the project matures.
+Armature is in early development and its architecture is still being settled. The best way to contribute now is to read the [ADRs](schema/docs/adr/README.md) and open an issue if you see a gap or disagree with a decision. Contribution guidelines will follow as the project matures.
 
 ## License
 
