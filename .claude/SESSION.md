@@ -6,13 +6,25 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Phase 3 (generic writes and the invariants engine) complete and merged on 2026-10-08 (PR #7, rebase merge, 19 commits, CI green on `main`) → Phase 4 of `docs/development-plan.md` (design intelligence) is next.** Phases 0 to 2 merged 2026-10-07 and 2026-10-08 (PRs #1 to #5). The demo-era per-type routes are gone; every write goes through one pipeline and the invariants engine.
+**Phase 4 (design intelligence) complete and merged on 2026-10-08 (PRs #8, #9 and #10, rebase merges, 19 commits, CI green on `main`); its exit criterion is met → next is deciding ADR-0057 (`asOf`) and then Phase 5 of `docs/development-plan.md` (findings and attestations).** Phases 0 to 3 merged 2026-10-07 and 2026-10-08 (PRs #1 to #7). The intelligence reads (coverage, alignment, trace, impact) derive everything from structure at any ref; nothing derived is stored in the graph (ADR-0056); a read-only Coverage View is the app's first page.
 
-History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 → ADR-0054 Hono → Phase 1 schema catch-up → ADR-0055, ADR-0025, Phase 2 version control → ADR-0032, generic writes, invariants engine, legacy retired (October 2026).
+History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 → ADR-0054 Hono → Phase 1 schema catch-up → ADR-0055, ADR-0025, Phase 2 version control → ADR-0032, generic writes, invariants engine, legacy retired → ADR-0029 coverage algorithm, intelligence reads, ADR-0056 nothing derived is stored, Coverage View (October 2026).
 
 ---
 
 ## What's Done
+
+### Phase 4: design intelligence (2026-10-08)
+
+- **ADR-0029 (Accepted, decisions 1 to 3):** the coverage algorithm. A module's declaration is covered by the distinct `AssessmentItem`s placed in the module's assessments whose `assesses` names the objective, never the bank; two populations, Approved items with Approved placements and everything not Retired (ADR-0019 adopted and promoted); the default cut 0 `Uncovered`, 1 `PartiallyAssessed`, 2 to 4 `FullyAssessed`, 5 or more `OverAssessed`, provisional (P9). Decisions 4 to 6 (stored fields, write-time recompute, merge recompute) were built, weighed and superseded the same day
+- **ADR-0056 (Accepted):** coverage is computed on read, never stored. The graph stores what people decided and what was observed; the intelligence reads derive the rest at a ref. `coverageStatus`, `projectedCoverageStatus` and the `CoverageStatus` enum left the schema; `ModuleObjective` is design intent only; the generators lost computed-field support; the write pipeline lost its coverage step; a merge is the store's `apply` and nothing else. Reversed ADR-0007's computed field, which PROJECT_CONTEXT had listed as settled, on the evidence of the machinery it required
+- **ADR-0057 (Proposed):** records that refer to a state of the graph name its commit: an optional `asOf` on `LearningDataset`, `LearningMetric`, `DesignFinding` and Attestation, filled from the branch head when absent, validated as constraint 13 when supplied. Closes Narrative 1's "adequate when". Awaiting decision
+- **Intelligence reads** in `app/lib/api/routes/intelligence.ts` over a per-request cached `Graph` (`intelligence/graph.ts`): `coverage/:moduleId` and `coverage?course=` (both figures with counts, thresholds as parameters, items behind each with eligibility, undeclared assessment), `alignment?module=` (items below an objective's level, objectives no item reaches at level, objectives without an activity, the unleveled), `trace/:type/:id` (the lifecycle walk evidence to metric both ways, hops naming field and junction, modules as context, notes and findings about what is reached), `impact/:type/:id` (every referencing document from `CLASS_FIELDS`, with the artifact each junction sits in). All at `?branch=|ref=` with the commit in `ETag`
+- **Platform checks Y and Z.** Y: a template query filters on a required reference field; on an Optional or a Set reference field it is a 500 (`Graph.where` lists and filters). Z: a field conflict is cleared by restoring the base value on the target before `apply`; kept as a fact nothing now uses
+- **Two 400 fixes:** each unrecognized key is reported at its own path; a client id on a Hash-keyed type is `bad_id`, not a 500
+- **Placement key kept:** one placement per item per assessment (`ItemInstance`'s Hash key); two forms are two `Assessment`s; the reopening triggers are in the schema comment and plan §6
+- **Coverage View:** `/` lists a branch's modules, `/coverage/<module>` renders the coverage read; both call the Hono app in-process. The app is titled Armature
+- **Exit criterion met:** `intelligence.test.ts` walks Narrative 2 through coverage and alignment and Narrative 1 from a metric to the declaring module through trace. 95 tests; lint, types drift, `tsc` and `next build` clean
 
 ### Phase 3: generic writes and the invariants engine (2026-10-08)
 
@@ -122,21 +134,23 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ## What's Next
 
-**Phase 4 of `docs/development-plan.md` — design intelligence (2 to 3 sessions), on a new branch:**
-
-1. **ADR-0029: coverage algorithm.** Defines the verdicts (`Uncovered` 0 eligible items, `PartiallyAssessed` 1, `FullyAssessed` 2+, `OverAssessed` above a threshold), adopts ADR-0019's eligibility rule (Approved only for `coverageStatus`; non-Retired for a projected figure) and promotes ADR-0019 to Accepted. Thresholds provisional (P9)
-2. **`recomputeCoverage`** as the body of `app/lib/api/invariants/recompute.ts`, which already names the affected modules and runs after every `AssessmentItem`, `ItemInstance` and `ModuleObjective` write. Decide how the recompute is committed (same commit by rewriting the batch's `ModuleObjective`s, or a follow-on commit by the same author) and whether `coverageStatus` stays writable by clients at all
-3. **`GET /api/v1/intelligence/coverage/:moduleId`** with the summary block, both coverage figures and the items behind each verdict; then `alignment`, `trace/:type/:id`, `impact/:type/:id`
-4. A first read-only Coverage View page consuming the intelligence route
-5. Seed: coverage values are hand-seeded and `identify-ai-limitations` is seeded `FullyAssessed` with only a Draft item; the recompute will change them
-
-Carried, not blocking: merge policy (who may merge, per-type filtering, fragment-level conflict view) in plan §6; `If-None-Match` unsupported; the merge-base and branch-holder walks are log-based (capped at 5,000 commits per branch) and can move to a commit-graph query; `oidc` resolver when a deployment leaves the local demo; `User` edits when a client needs them.
+1. **Decide ADR-0057.** If accepted: `asOf: Optional<xsd:string>` on `LearningDataset`, `LearningMetric` and `DesignFinding` (non-breaking), the pipeline fills it with the branch head when absent (like `createdBy`), constraint 13 validates a supplied id (commit exists via `ValidCommit`; the subject exists at it), the trace summary carries it. A platform check for reading a document at a commit from another branch is already covered by O and U
+2. **Fix the branch-route race.** `GET /branches` and the delete's holder search read the branch list and then each head in separate calls; a branch deleted in between surfaces as an error. Seen once as a failed `app.test.ts` branch-delete case during a full run with three test files in parallel. Tolerate a vanished branch in both places
+3. **Seed:** no declaration is `FullyAssessed`; a second Approved item placed for one objective would show the full story. Content decision
+4. **Phase 5 of `docs/development-plan.md`:** ADR-0028 Attestation (with `asOf` from ADR-0057), findings and attestations as the review vocabulary
+5. Carried, not blocking: merge policy (plan §6); `If-None-Match` unsupported; the merge-base and branch-holder walks are log-based (capped at 5,000 commits per branch); `oidc` resolver when a deployment leaves the local demo; `User` edits when a client needs them; the research exporter treating `asOf` as a reference type (ADR-0057 open)
 
 ---
 
 ## Active Decisions
 
 - `docs/development-plan.md` is the roadmap; SESSION.md tracks state against it
+- **ADR-0056 (Accepted 2026-10-08): nothing derived is stored in the graph.** Coverage, alignment and any future score are computed by the intelligence reads at a ref; a judgment someone wants on record is a `DesignFinding` or an Attestation with a person's name. The schema holds what people decided and what was observed. Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6
+- **ADR-0029 decisions 1 to 3 (Accepted 2026-10-08):** coverage counts distinct items placed in the module's assessments, over two populations (ADR-0019); the default thresholds are the hub's provisional cut and the coverage read takes them as parameters and returns the counts
+- **ADR-0057 (Proposed 2026-10-08):** `asOf`, a bare commit id, on records that refer to a state of the graph; hub-filled from the branch head when absent, validated when supplied
+- **The intelligence reads are the only place coverage exists**: `GET /api/v1/intelligence/coverage/:moduleId`, `coverage?course=`, `alignment`, `trace/:type/:id`, `impact/:type/:id`, all at `?branch=|ref=`. Reverse lookups go through `Graph.where`: a required reference is a store template, an Optional or Set reference is listed and filtered (check Y)
+- **One placement per item per assessment** (`ItemInstance` Hash key over `(assessment, implements)`): two forms are two `Assessment`s; reopened only by a container inside `Assessment` or an importer meeting a source that references one item twice (plan §6)
+- **The app's pages call the Hono app in-process** and never the store; they are clients of the API like any plugin
 - The two-client test: a CoQui ask enters the hub only in the generic form a second reference client would need; CoQui's round, craft grid, claim version and workflow states never enter the schema
 - Generic document API (`/api/v1/documents/:type/:id`, batch `POST /api/v1/documents`, list `GET /api/v1/documents/:type`) with the invariants engine replaced the per-type routes (Phase 3, 2026-10-08); type behaviour is a validator in `app/lib/api/invariants/`, request shape is the generated `schemas.ts`. Shape failures are 400 `invalid_document`; rule failures are 422 `invariant_violation` with every violation
 - **ADR-0032 (Accepted 2026-10-08):** identity is resolved by a pluggable resolver (`ARMATURE_IDENTITY`: `header` now, `oidc` later); `main` is the `User` registry; author and `createdBy` come from the resolved identity, never the body; a branch that lacks the `User` gets `main`'s copy in the same commit; users are created on `main` only; agents are `User`s with an `agent:` `externalId`
@@ -169,13 +183,24 @@ Carried, not blocking: merge policy (who may merge, per-type filtering, fragment
 
 ## Blockers
 
-None. The 2026-10-05 credentials failure was the previously running container having been started with a different `TERMINUSDB_ADMIN_PASS`; `docker compose up -d` recreated it from the compose defaults and `app/.env.local` authenticates. If it recurs, recreate the container rather than editing `.env.local`.
+None. One intermittent: a branch-delete test in `app.test.ts` failed once in a full run and passed alone and in two further full runs; the three test files run in parallel against one store and the branch routes assume the branch set is stable across two calls (What's Next, item 2). The 2026-10-05 credentials failure was the previously running container having been started with a different `TERMINUSDB_ADMIN_PASS`; `docker compose up -d` recreated it from the compose defaults and `app/.env.local` authenticates. If it recurs, recreate the container rather than editing `.env.local`.
 
 ---
 
 ## Notes for Next Session
 
-Start Phase 4 on a new branch with ADR-0029. The recompute attaches in `app/lib/api/invariants/recompute.ts`, whose `afterWriteCoverage` already runs after every write of the three types and whose `affectedModules` names the modules (it does not yet follow an `AssessmentItem` to its placements; Phase 4 reads them). Intelligence routes are read routes in a new `app/lib/api/routes/intelligence.ts`, using `queryDocuments` and `getDocuments` on the adapter. Every write, including the recompute's, goes through `writeDocuments` in `app/lib/api/write.ts` so the invariants run.
+Start with ADR-0057: read it, decide, and if accepted implement it on a branch (`phase-5/asof` or fold into Phase 5's attestation branch). The `asOf` fill belongs in `write.ts` step 3 beside `createdBy`; the validation is a new module in `invariants/` registered for the three types; the branch head is `branch.head()` on the store. Then the branch-route race (What's Next, item 2), which is a small change in `routes/branches.ts`.
+
+Phase 4 facts worth carrying forward:
+- The store answers a template query on an `Optional` reference field, or on a `Set` reference field in either value form, with a 500; only required reference fields filter (check Y). `Graph.where` in `intelligence/graph.ts` is the one place that knows this.
+- `Graph` caches every read for one request and records the first commit it was served from, which is the ETag; `Graph.referencing(id, type)` is constraint 0 read backwards through `CLASS_FIELDS` and is what the impact route is.
+- The trace walks a fixed lifecycle (evidence to metric) in `upstream` and `downstream` tables in `routes/intelligence.ts`; `Module` is attached as context after the walk and never walked through. Adding a type to the lifecycle is a case in each table.
+- Node 24 imports a `.ts` module from a plain script with no flag (type-only imports erased), which the seed used for one commit and no longer needs; `scripts/` can import from `app/lib/` this way when it must.
+- A client can never supply an id for a Hash-keyed type (`SubmittedIdDoesNotMatchGeneratedId`, now a 400 `bad_id`); writing the same key fields again is a replace. One item appears once per assessment and many times per module, which is why coverage counts distinct items.
+- Zod's strict object reports unknown keys as one issue with an empty path and a `keys` list; `parseDocuments` splits them into one issue per key at its path.
+- Check Z: a conflict on a field is cleared by restoring the base value on the target in a new commit, after which the same `apply` succeeds and the target's other work is kept. Nothing uses it since ADR-0056.
+- The Next.js pages fetch through `app.request()` on the imported Hono app; `export const dynamic = 'force-dynamic'`; `params` and `searchParams` are Promises (Next 16). An `<a>` to an `/api` URL trips `no-html-link-for-pages` because the catch-all route matches; disable it with the reason.
+- The reload procedure (`load_schema.js --clear-instances`, `seed_data.js`) was run three times this session; the store now carries the schema without coverage fields and only `main` with `User/demo-designer`.
 
 Phase 3 facts worth carrying forward:
 - The store's `POST overwrite=true` merges, never replaces (X3a). The only upsert is `PUT create=true`, which takes a list and returns the written ids as IRIs in input order (`idFromIri` strips the base).
@@ -217,7 +242,12 @@ Key context:
 
 ## Recent Sessions
 
-### 2026-10-08 (Phase 3)
+### 2026-10-08 (Phase 4)
+
+- Started `phase-4/design-intelligence` with the two open decisions explained and confirmed (same-commit recompute; computed fields rejected on write); wrote **ADR-0029**, added `projectedCoverageStatus` and `@metadata.armature.computed`, taught the generator to omit computed fields, built the pre-commit recompute and the pure algorithm module the seed also imported; ten constraint 7 tests; two 400 fixes the tests exposed. Kept the one-placement-per-assessment key and recorded its reopening triggers. Merged as PR #8
+- `phase-4/intelligence-routes`: platform check Y (template queries on reference shapes), the `Graph` reader and the four reads, fifteen tests including Narrative 1 from a metric to the declaring module. Merged as PR #9
+- `phase-4/merge-recompute-and-coverage-view`: built the merge-route recompute and the resolution path for computed-only conflicts (check Z), then, on the question whether a computed field belongs in the graph at all, reversed the stored-field decision: **ADR-0056** (Accepted) and **ADR-0057** (Proposed) written, the fields and enum removed, the pipeline and merge machinery removed, the coverage read given counts, thresholds and a course-wide form, the Coverage View added. A first commit script failed partway and pushed a broken sequence; rebuilt the seven commits from `origin/main` and force-pushed with a lease before opening the PR. Merged as PR #10
+- Phase 4's exit criterion met; 95 tests; the store reloaded three times for the schema changes
 
 - Started `phase-3/generic-writes`; added platform check W (template query over HTTP, identical and differing inserts under `apply`, list writes) and designed **ADR-0032** on its results: pluggable resolver, `main` as the `User` registry, carried copies on branches, author and `createdBy` from the resolved identity. Built `identity.ts`, `classes.ts`, `routes/users.ts`, `CLASS_ANCESTORS` in the generator; the merge route learned the `InsertConflict` witness
 - Added platform check X for the write path and found that `POST overwrite=true` merges rather than replaces; chose `PUT create=true` over a list as the only upsert
