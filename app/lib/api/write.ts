@@ -1,10 +1,9 @@
-import { CLASS_COMPUTED, CLASS_KEY } from '@/lib/types';
+import { CLASS_KEY } from '@/lib/types';
 import { DOCUMENT_SCHEMAS } from '@/lib/schemas';
 import { hasCreatedBy, isWritable } from './classes';
 import { ApiError } from './errors';
 import { userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext } from './invariants';
-import { deriveCoverage } from './invariants/recompute';
 import { StoreError, type Store, type TerminusDocument } from './store';
 
 /**
@@ -20,13 +19,11 @@ import { StoreError, type Store, type TerminusDocument } from './store';
  *      every class that carries it; a User the branch lacks is carried in
  *      the same commit (ADR-0032 decisions 4 and 5)
  *   4. invariants: every constraint, over the whole batch (422)
- *   5. computed fields: coverage is recomputed for every module the batch
- *      affects; declarations in the batch are filled, declarations on the
- *      branch whose values change join the list (ADR-0029 decision 5)
- *   6. the write: one PUT with create=true for the whole list, so it is one
+ *   5. the write: one PUT with create=true for the whole list, so it is one
  *      commit and fails together (platform checks X1, X2b, X5); If-Match
- *      honoured (412). The caller's documents, the carried User and the
- *      recomputed declarations land as one commit under the caller's reason
+ *      honoured (412). The caller's documents and the carried User land as
+ *      one commit under the caller's reason, and nothing else: the graph
+ *      stores no derived values (ADR-0056)
  */
 
 export interface WriteOptions {
@@ -62,17 +59,13 @@ export function parseDocuments(inputs: unknown[]): TerminusDocument[] {
     const schema = (DOCUMENT_SCHEMAS as Record<string, (typeof DOCUMENT_SCHEMAS)[keyof typeof DOCUMENT_SCHEMAS]>)[type];
     const result = schema.safeParse(input);
     if (!result.success) {
-      const computed = (CLASS_COMPUTED as Record<string, readonly string[]>)[type] ?? [];
       for (const issue of result.error.issues) {
         if (issue.code === 'unrecognized_keys') {
           // One issue per key, at the key's path, so a client learns which
-          // field was refused; a computed field says why (ADR-0029 decision 4).
+          // field was refused.
           for (const key of issue.keys) {
             const path = [...issue.path, key].map(String).join('.');
-            const message = issue.path.length === 0 && computed.includes(key)
-              ? `${key} is computed by the hub and may not be written`
-              : `${key} is not a field of ${issue.path.length ? issue.path.map(String).join('.') : type}`;
-            issues.push({ index, path, message });
+            issues.push({ index, path, message: `${key} is not a field of ${issue.path.length ? issue.path.map(String).join('.') : type}` });
           }
           continue;
         }
@@ -140,15 +133,12 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   const ctx = createWriteContext(branch, documents, replacing, copy ? [copy] : []);
   await checkInvariants(ctx);
 
-  // Step 5: computed fields, over the batch now known to be valid.
-  const derived = await deriveCoverage(ctx);
-
-  // Step 6: the write. The carried User first, then the caller's documents,
-  // then the recomputed declarations; `ids` reports the caller's only.
+  // Step 5: the write. The carried User first, then the caller's documents;
+  // `ids` reports the caller's only.
   const carried = copy ? [copy] : [];
   let result: { commit: string; ids: string[] };
   try {
-    result = await branch.putDocuments([...carried, ...documents, ...derived], {
+    result = await branch.putDocuments([...carried, ...documents], {
       author: who.id,
       message: opts.message,
       ifMatch: opts.ifMatch,

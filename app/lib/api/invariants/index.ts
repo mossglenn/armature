@@ -22,8 +22,8 @@ import { checkReferences } from './references';
  *   4  group member sequence      moduleContent.ts
  *   5  ItemInstance sequence      itemInstance.ts
  *   6  ActivityGroup flatness     constraint 0: a member's activity is typed LearningActivity
- *   7  coverage recompute         recompute.ts: deriveCoverage, run by the pipeline after
- *                                the checks and before the commit, in it (ADR-0029)
+ *   7  coverage                   nothing to check: computed on read by the intelligence
+ *                                routes, never stored (ADR-0056)
  *   8  fragmentId unique          assessmentItem.ts
  *   9  option text, correct count assessmentItem.ts
  *  10  placement not ahead of item itemInstance.ts and assessmentItem.ts (both sides)
