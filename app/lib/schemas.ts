@@ -37,7 +37,7 @@ export const ItemOptionSchema = z.strictObject({
 /** @abstract: any concrete Fragment */
 export const FragmentSchema = z.discriminatedUnion('@type', [TextFragmentSchema, ItemOptionSchema]);
 
-// ── Documents (concrete classes; the route fills @id and @type; computed fields omitted) ───
+// ── Documents (concrete classes; the route fills @id and @type) ───────────────
 
 export const UserSchema = z.strictObject({
   '@id': z.string().min(1).optional(),
@@ -206,7 +206,6 @@ export const ActivityGroupMemberSchema = z.strictObject({
   sequence: z.number().int().optional(),
 });
 
-/** Without coverageStatus, projectedCoverageStatus: computed by the hub (ADR-0029). */
 export const ModuleObjectiveSchema = z.strictObject({
   '@id': z.string().min(1).optional(),
   '@type': z.literal('ModuleObjective').optional(),
