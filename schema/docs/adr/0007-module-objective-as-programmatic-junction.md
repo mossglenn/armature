@@ -1,11 +1,12 @@
 # ADR-0007: ModuleObjective as Programmatic Junction with Computed Fields
 
 ## Status
-Accepted. Amended by ADR-0019 decision 4 (a change to `AssessmentItem.status` is a recompute
-trigger) and by ADR-0029 decisions 4 to 6 (the computed fields are never accepted from a client;
-the recompute lands in the same commit as the write that caused it; `ItemInstance.status`,
-`Assessment.module` and the assessment or module a replace leaves are triggers; coverage is
-counted over the module's placements, not the bank).
+Accepted for `ModuleObjective` as the reified, programmatic declaration carrying `role`,
+`roleRationale` and `sequence`. **Superseded in part by ADR-0056 (2026-10-08):** `coverageStatus`
+is no longer a field. Coverage is computed at read time by the intelligence routes from the
+module's placements, at any commit, and never stored; the recompute triggers this ADR and ADR-0019
+decision 4 listed have nothing to trigger. The "double duty" this ADR's consequences describe has
+ended: the junction is a design record only.
 
 ## Context
 The relationship between a Module and a LearningObjective it declares is not a simple association — it carries meaningful design data: the role the objective plays in the module (Primary, Supporting, Prerequisite), an optional rationale for that role, a sequence position, and a computed coverage status.

@@ -2,12 +2,15 @@
 
 ## Status
 
-Accepted (2026-10-08). Closes the open question PROJECT_CONTEXT recorded under "Coverage
-computation algorithm". Adopts ADR-0019's eligibility rule and promotes ADR-0019 to Accepted.
-Amends ADR-0007: its recompute triggers widen (decision 6), its computed field is never accepted
-from a client (decision 4), and the recompute's commit is specified (decision 5). The verdict
-thresholds in decision 3 are provisional under the plan's principle P9; §Consequences says what
-would revise them.
+Accepted (2026-10-08) for decisions 1 to 3: the population counted, the two eligibility rules
+adopted from ADR-0019, and the default thresholds, which are provisional under the plan's
+principle P9 and which the coverage read now takes as parameters. **Decisions 4 to 6 are
+superseded by ADR-0056, the same day:** coverage is computed on read and never stored, so there
+is no computed field to refuse, no recompute to run inside a write, and no merge recompute.
+Decision 7 (the seed computes coverage) is moot: the seed writes no coverage. Closes the open
+question PROJECT_CONTEXT recorded under "Coverage computation algorithm". The context and the
+rejected alternatives below are kept as written; ADR-0056 records what building decisions 4 to 6
+revealed.
 
 ## Context
 

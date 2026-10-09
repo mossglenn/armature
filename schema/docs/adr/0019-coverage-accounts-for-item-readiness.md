@@ -2,8 +2,10 @@
 
 ## Status
 Accepted (2026-10-08), with ADR-0029, which defines the algorithm this ADR left open, adopts its
-eligibility rule as its decision 2, and specifies the population counted, the verdict thresholds
-and the commit the recompute lands in. Its dependency, ADR-0018, was accepted and implemented on
+eligibility rule as its decision 2, and specifies the population counted and the verdict
+thresholds. **Amended by ADR-0056 the same day:** the two figures are two outputs of the coverage
+read, computed at the requested commit, not two stored fields; decision 2's `projectedCoverageStatus`
+is the read's `projected` figure, and decision 4's recompute trigger has nothing to trigger. Its dependency, ADR-0018, was accepted and implemented on
 2026-10-07. The seed no longer hand-writes coverage; on the seed this rule reads
 `identify-ai-limitations` in `how-ai-works` as `Uncovered` with `PartiallyAssessed` projected,
 because its only item, `hallucination-mc`, is `Draft`.
