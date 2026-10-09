@@ -5,7 +5,7 @@
     "@base": "http://armature.design/data/",
     "@documentation": {
       "@title": "Armature Graph Schema",
-      "@description": "Graph-based infrastructure for learning engineering. Models the full artifact graph from problem definition through outcome evaluation, preserving design rationale in relationships between instructional artifacts. See docs/adr/ for architecture decisions."
+      "@description": "Graph-based infrastructure for learning engineering. Models the full artifact graph from problem definition through outcome evaluation, preserving design rationale in relationships between instructional artifacts. See schema/docs/adr/ for architecture decisions (ADRs, Architecture Decision Records) and docs/SCHEMA_APPENDIX.md for a readable reference generated from this file."
     }
   },
   {
@@ -65,7 +65,7 @@
       {
         "@language": "en",
         "@label": "ItemType",
-        "@comment": "The question format of an AssessmentItem. Determines the valid Response structure (e.g., MultipleChoice has exactly one correct Response; MultipleSelect has one or more).",
+        "@comment": "The question format of an AssessmentItem. Determines the valid option structure, API-enforced (constraint 9): MultipleChoice has at least two options and exactly one correct option; TrueFalse exactly two options, one correct; MultipleSelect at least two options, one or more correct. The other formats carry no option rule yet; per-type data shapes arrive with interaction types (planned ADR-0034). See ADR-0022, ADR-0033.",
         "@values": {
           "MultipleChoice": "",
           "MultipleSelect": "",
@@ -96,7 +96,7 @@
       {
         "@language": "en",
         "@label": "ItemStatus",
-        "@comment": "Review lifecycle state of an ItemInstance within a specific Assessment. Draft: not yet reviewed. InReview: under SME or editorial review. Approved: cleared for administration. Retired: removed from active use.",
+        "@comment": "Review lifecycle state, used twice (ADR-0018). On AssessmentItem.status it is the item's own review: is the question correct and properly aligned? On ItemInstance.status it is placement clearance: is the item cleared for administration in this particular Assessment? Draft: not yet reviewed. InReview: under subject-matter-expert (SME) or editorial review. Approved: reviewed and cleared (for a placement, cleared for administration in that Assessment). Retired: removed from active use. API CONSTRAINT: a placement may not be Approved while its item is Draft or InReview (constraint 10). Plugins with richer review workflows map their states onto these four.",
         "@values": {
           "Draft": "",
           "InReview": "",
@@ -317,7 +317,7 @@
       {
         "@language": "en",
         "@label": "User",
-        "@comment": "A person or system agent who participates in the design process. Intentionally minimal — Armature does not manage authentication or access control. Those concerns belong to the external auth system (identity) and TerminusDB (database access). User is a domain document: it represents who someone is as a design process participant, not whether they are allowed to operate the database. externalId is the stable identifier from the auth system (e.g., OIDC sub claim) — the API uses this to resolve an authenticated identity to a User document at write time. email and institution make the record self-describing in exports and across deployments, where the original auth system may not be available. User does not inherit ArmatureDocument — it is infrastructure for the design process, not an instructional design artifact, and should not be a valid subject of a DesignNote. See ADR-0015.",
+        "@comment": "A person or system agent who participates in the design process. Intentionally minimal — Armature does not manage authentication or access control. Those concerns belong to the external auth system (identity) and TerminusDB (database access). User is a domain document: it represents who someone is as a design process participant, not whether they are allowed to operate the database. externalId is the stable identifier from the auth system (e.g., OIDC sub claim) — the API resolves each request's identity to the User with this externalId on the main branch, the registry of record; User documents are created on main only, and agents are Users whose externalId begins with agent: (ADR-0032). email and institution make the record self-describing in exports and across deployments, where the original auth system may not be available. User does not inherit ArmatureDocument — it is infrastructure for the design process, not an instructional design artifact, and should not be a valid subject of a DesignNote (the API enforces this through the reference-class check, constraint 0). See ADR-0015, ADR-0032.",
         "@properties": {
           "email": "The user's email address. Optional — may not be available in all deployments or for system agents. In many deployments this will match externalId, but the two serve different purposes: externalId is for machine resolution, email is for human-readable identity in UIs and exports.",
           "institution": "The user's organizational affiliation. Makes the User record meaningful in exported graphs and collaborative contexts where participants come from different organizations."
@@ -365,9 +365,9 @@
       {
         "@language": "en",
         "@label": "ArmatureDocument",
-        "@comment": "Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Junction documents and structural types (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, a system agent for API-generated records. Optional to accommodate the demo context and deployments without a full auth system. See ADR-0014, ADR-0015. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).",
+        "@comment": "Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Six of the seven junction documents (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. The seventh, PrerequisiteRecord, is a relationship that also carries a name and so inherits it. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, an agent User for records an AI or other tool wrote. The API sets it on every document it creates (ADR-0032); it is optional because records written outside the API may lack it. See ADR-0014, ADR-0015, ADR-0032. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).",
         "@properties": {
-          "createdBy": "The User responsible for this record entering the graph. Set by the API at document creation using the authenticated identity — not authored directly. Optional to accommodate single-user and demo contexts without a full auth system. Never updated after creation — change history is tracked at the TerminusDB commit level, not via schema fields. See ADR-0015."
+          "createdBy": "The User responsible for this record entering the graph. Set by the API at document creation from the resolved identity of the request (ADR-0032) — not authored directly; a value in a request body is ignored. Optional because documents written outside the API (the seed, administrative scripts, imports) may lack it; a replace preserves its absence. Never updated after creation — change history is tracked at the TerminusDB commit level, not via schema fields. See ADR-0015."
         }
       }
     ],
@@ -396,7 +396,7 @@
       {
         "@language": "en",
         "@label": "LearningEvidence",
-        "@comment": "Abstract base for all evidence of learning need. Cannot be instantiated directly — tools always create LearningMetric or DescriptiveEvidence instances. Inherits label, description from ArmatureDocument. The NeedEvidenceLink.evidence field references this abstract type, accepting either subtype at runtime via TerminusDB polymorphism. See ADR-0001, ADR-0014."
+        "@comment": "Abstract base for all evidence of learning need. Cannot be instantiated directly — tools always create LearningMetric or DescriptiveEvidence instances. Inherits label, description from ArmatureDocument. The NeedEvidenceLink.evidence field references this abstract type, accepting either subtype (the store checks that the target exists; the API checks that it is a LearningEvidence, constraint 0). See ADR-0001, ADR-0014."
       }
     ],
     "collectedAt": "xsd:dateTime",
@@ -469,11 +469,11 @@
       {
         "@language": "en",
         "@label": "LearningDataset",
-        "@comment": "A named collection of learning performance data, typically produced when an Assessment is administered to a cohort. Inherits label, description from ArmatureDocument. Serves as the source for LearningMetrics derived from that administration. producedBy links back to the Assessment that generated this dataset, closing the provenance chain: Assessment → LearningDataset → LearningMetric. Optional because a dataset may come from an external source or a pre-Armature assessment not yet modeled in the graph. API CONSTRAINT: producedBy is required when a dataset is created by an Armature-administered assessment.",
+        "@comment": "A named collection of learning performance data, typically produced when an Assessment is administered to a cohort. Inherits label, description from ArmatureDocument. Serves as the source for LearningMetrics derived from that administration. producedBy links back to the Assessment that generated this dataset, closing the provenance chain: Assessment → LearningDataset → LearningMetric. Optional because a dataset may come from an external source or a pre-Armature assessment not yet modeled in the graph. PLANNED API CONSTRAINT (docs/development-plan.md Phase 6, not yet enforced): producedBy will be required when a dataset is created by an Armature-administered assessment.",
         "@properties": {
           "administrationDate": "The date the assessment was administered to produce this dataset. xsd:date (not dateTime) — datasets are associated with a day, not a precise moment.",
           "cohort": "A label identifying the learner group (e.g., 'Q3 2024 Onboarding Cohort'). Optional — not all datasets have a named cohort.",
-          "producedBy": "The Assessment whose administration produced this dataset. Optional at the schema level to accommodate externally-imported datasets. API enforces as required when the dataset is created by an Armature-administered assessment. Completes the provenance chain: Assessment → LearningDataset → LearningMetric → (item analysis back to AssessmentItem)."
+          "producedBy": "The Assessment whose administration produced this dataset. Optional at the schema level to accommodate externally-imported datasets. The API will enforce it as required when the dataset is created by an Armature-administered assessment (planned, Phase 6; not yet enforced). Completes the provenance chain: Assessment → LearningDataset → LearningMetric → (item analysis back to AssessmentItem)."
         }
       }
     ],
@@ -537,7 +537,7 @@
       {
         "@language": "en",
         "@label": "NeedEvidenceLink",
-        "@comment": "Reifies the many-to-many relationship between a LearningNeed and the LearningEvidence that informs it. A first-class graph node — the relationship itself carries data. The evidence field accepts any LearningEvidence subtype (LearningMetric or DescriptiveEvidence) at runtime via TerminusDB polymorphism. confidence records how much weight the designer gave this piece of evidence during analysis. See ADR-0003, ADR-0009.",
+        "@comment": "Reifies the many-to-many relationship between a LearningNeed and the LearningEvidence that informs it. A first-class graph node — the relationship itself carries data. The evidence field accepts any LearningEvidence subtype (LearningMetric or DescriptiveEvidence); the API checks the class (constraint 0). confidence records how much weight the designer gave this piece of evidence during analysis. See ADR-0003, ADR-0009.",
         "@properties": {
           "confidence": "The designer's assessment of this evidence's reliability. Makes the weighting of evidence inspectable in the graph. Optional — can be set after initial link creation."
         }
@@ -567,7 +567,7 @@
       {
         "@language": "en",
         "@label": "LearningObjective",
-        "@comment": "A measurable statement of intended learning outcome. Inherits label, description from ArmatureDocument. The central node in the Armature artifact graph — connected upstream to LearningNeeds (via generatedBy), laterally to prerequisites (via PrerequisiteRecord), and downstream to AssessmentItems (via AssessmentItem.assesses), LearningActivities (via LearningActivity.targets), and Modules (via ModuleObjective). The back-reference pattern (ADR-0004) is used throughout: connection fields live on related documents, not here, except for generatedBy which follows ADR-0004 by placing the foreign key on the child.",
+        "@comment": "A measurable statement of intended learning outcome. Inherits label, description from ArmatureDocument. The central node in the Armature artifact graph — connected upstream to LearningNeeds (via generatedBy), laterally to prerequisites (via PrerequisiteRecord), and downstream to AssessmentItems (via AssessmentItem.assesses), LearningActivities (via LearningActivity.targets), and Modules (via ModuleObjective). Following the back-reference pattern (ADR-0004), the connection fields live on the related documents (items, activities, declarations, prerequisite records), not here. generatedBy is the one connection this type carries, because in that relationship the objective is the child: one need may generate many objectives.",
         "@properties": {
           "bloomsLevel": "The cognitive level this objective targets. Optional to allow drafting objectives before the cognitive level is determined. When set, enables alignment queries with AssessmentItem.bloomsLevel — items should assess at the same or higher cognitive level as the objective they target.",
           "generatedBy": "The LearningNeed that produced this objective. Optional because an objective may be created independently of a formal needs analysis (e.g., a regulatory requirement or organizational standard). When present, preserves the traceability chain from evidence through need to objective. Multiple objectives may reference the same LearningNeed — this is the correct way to express one need generating multiple objectives (ADR-0004 back-reference pattern)."
@@ -636,10 +636,10 @@
       {
         "@language": "en",
         "@label": "Fragment",
-        "@comment": "Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a note, finding or attestation can point at a part through the compound reference { document @id, fragmentId } rather than at the whole document. Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (ADR-0030) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.",
+        "@comment": "Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a record about a part points at it through the compound reference { document @id, fragmentId } rather than at the whole document: the planned Attestation (ADR-0028, not yet written) and, from Phase 5, DesignNote and DesignFinding through an optional fragmentId. Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (planned ADR-0030, not yet written) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.",
         "@properties": {
           "fragmentId": "Client-assigned, immutable identifier of this part, unique within the parent document. Generated once at creation by the authoring tool (UUID, nanoid or similar), never derived from array position or display order, never regenerated. Armature validates uniqueness within one document on write and otherwise treats it as opaque authored content. Named fragmentId, never id, so it cannot be mistaken for a document identifier. See ADR-0023.",
-          "text": "The inline text of this part. Required until attachment references exist (ADR-0030)."
+          "text": "The inline text of this part. Required until attachment references exist (planned ADR-0030, not yet written)."
         }
       }
     ]
@@ -748,17 +748,17 @@
       {
         "@language": "en",
         "@label": "AssessmentItem",
-        "@comment": "A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). difficultyIndex and discriminationIndex are computed from LearningDataset analysis and written back by the API. API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.",
+        "@comment": "A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). difficultyIndex and discriminationIndex hold classical item-analysis statistics from LearningDataset analysis. No API code computes or writes them yet, and whether they stay as imported observations or are computed on read instead (ADR-0056 names difficulty summaries among derived values) is an open question for the outcomes importer (docs/development-plan.md Phase 6). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.",
         "@properties": {
           "stem": "The question or prompt, as a TextFragment with its own fragmentId so a reviewer can address the stem rather than the whole item.",
           "options": "The ordered answer options, embedded as ItemOption subdocuments. Order is presentation order; identity is fragmentId, never position. Empty for item types with no options (Essay, ShortAnswer). See ADR-0022.",
           "correctFeedback": "General feedback shown on a correct response, as a TextFragment. Optional. Distractor-specific feedback lives on the option.",
           "incorrectFeedback": "General feedback shown on an incorrect response, as a TextFragment. Optional.",
-          "status": "The item's own review lifecycle: Draft on creation, InReview, Approved, Retired. Required so that absence is never ambiguous. Shares the ItemStatus enum with ItemInstance.status so the consistency check \"placements Approved whose item is not\" is a graph query. Only Approved items count toward coverageStatus (ADR-0019). See ADR-0018.",
+          "status": "The item's own review lifecycle: Draft on creation, InReview, Approved, Retired. Required so that absence is never ambiguous. Shares the ItemStatus enum with ItemInstance.status so the consistency check \"placements Approved whose item is not\" is a graph query. Readiness bears on coverage, which is computed on read and never stored: the delivered figure counts Approved items in Approved placements, the projected figure counts every item and placement not Retired (ADR-0019, ADR-0029, ADR-0056). See ADR-0018.",
           "bloomsLevel": "The cognitive level this item assesses. Optional at authoring time. When set, enables Bloom's alignment queries against the objectives in the assesses set.",
           "assesses": "The LearningObjectives this item provides evidence of. Minimum 1 enforced at the schema level. An item that assesses no objective has no place in the artifact graph. See ADR-0013.",
-          "difficultyIndex": "Proportion of learners who answered correctly (0.0–1.0). Computed from LearningDataset analysis by the API — not authored. A lower value indicates a harder item. Written back to the item to enable item bank queries by difficulty.",
-          "discriminationIndex": "Measure of how well the item distinguishes high performers from low performers (typically -1.0 to 1.0, with higher values indicating better discrimination). Computed from LearningDataset analysis by the API — not authored."
+          "difficultyIndex": "Proportion of learners who answered correctly (0.0–1.0). From LearningDataset analysis, not authored. A lower value indicates a harder item. Stored on the item to enable item bank queries by difficulty. No API code writes it yet; see the class comment for the open question.",
+          "discriminationIndex": "Measure of how well the item distinguishes high performers from low performers (typically -1.0 to 1.0, with higher values indicating better discrimination). From LearningDataset analysis, not authored. No API code writes it yet; see the class comment for the open question."
         }
       }
     ]
@@ -816,7 +816,7 @@
         "@properties": {
           "passingScore": "Minimum score required to pass. Optional — formative assessments and practice activities typically do not have pass/fail thresholds.",
           "retakes": "Maximum number of times a learner may retake this assessment. Optional — informal assessments may have no limit. A value of 0 means no retakes permitted.",
-          "randomize": "Whether the items in this assessment should be presented in random order. Applies at the assessment level; ItemInstance.randomize controls response-level randomization.",
+          "randomize": "Whether the items in this assessment should be presented in random order. Applies at the assessment level; ItemInstance.randomize controls option-level randomization (the order of one item's options).",
           "module": "The Module this assessment belongs to."
         }
       }
@@ -881,7 +881,7 @@
       {
         "@language": "en",
         "@label": "ActivityGroup",
-        "@comment": "A reusable, named collection of LearningActivities with a defined pedagogical sequence. Inherits label, description from ArmatureDocument. Can appear in multiple Modules via ModuleActivityGroupLink. Intentionally flat — ActivityGroups do not contain other ActivityGroups. Membership and sequence are managed through ActivityGroupMember junction documents. See ADR-0003."
+        "@comment": "A reusable, named collection of LearningActivities with a defined pedagogical sequence. Inherits label, description from ArmatureDocument. Can appear in multiple Modules via ModuleActivityGroupLink. Intentionally flat — ActivityGroups do not contain other ActivityGroups; the API enforces this because ActivityGroupMember.activity must be a LearningActivity (constraints 0 and 6). Membership and sequence are managed through ActivityGroupMember junction documents. See ADR-0003."
       }
     ],
     "@metadata": {
@@ -906,7 +906,7 @@
         "@label": "ActivityGroupMember",
         "@comment": "Places a LearningActivity into an ActivityGroup with a sub-sequence position. sequence is the activity's position within the group only — it is independent of the module-level sequence on ModuleActivityGroupLink and must never be combined with it. See ADR-0005.",
         "@properties": {
-          "sequence": "Position of this activity within the ActivityGroup. Sub-sequence only — independent of the module-level sequence. API CONSTRAINT: values should be unique within a group. Gaps are permitted to allow insertion without renumbering."
+          "sequence": "Position of this activity within the ActivityGroup. Sub-sequence only — independent of the module-level sequence. API CONSTRAINT: values must be unique within a group (constraint 4). Gaps are permitted to allow insertion without renumbering."
         }
       }
     ],
@@ -1067,9 +1067,9 @@
       {
         "@language": "en",
         "@label": "DesignNote",
-        "@comment": "A free-form rationale record attached to any design record in the Armature graph. Inherits label, description, createdBy from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject is typed Set<DesignRecord>: any artifact or any reified relationship (a sequencing decision, an evidence weighting) can carry a note. TerminusDB enforces referential integrity natively. See ADR-0012, ADR-0014, ADR-0017.",
+        "@comment": "A free-form rationale record attached to any design record in the Armature graph. Inherits label, description, createdBy from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject is typed Set<DesignRecord>: any artifact or any reified relationship (a sequencing decision, an evidence weighting) can carry a note. TerminusDB checks that each subject exists; the API checks that it is a DesignRecord (constraint 0; platform check L found the store does not check class). A structured DesignDecision type is deferred (ADR-0010); when it exists, a relatesToDecision field on DesignNote will point to it. See ADR-0012, ADR-0014, ADR-0017.",
         "@properties": {
-          "subject": "The design record(s) this note pertains to. Typed to DesignRecord, so it accepts any artifact or junction document at runtime via TerminusDB polymorphism; User is excluded by design (ADR-0015). Minimum 1 enforced at schema level: a note without a subject is orphaned. See ADR-0017.",
+          "subject": "The design record(s) this note pertains to. Typed to DesignRecord, so it accepts any artifact or junction document; User is excluded by design (ADR-0015). The store checks only that each subject exists; the API checks its class (constraint 0). Minimum 1 enforced at schema level: a note without a subject is orphaned. See ADR-0017.",
           "category": "Optional categorization of the design decision type. Enables queries like 'show all rationale related to Bloom's level choices' or 'show all prerequisite intent notes'. Not all notes fit neatly into a category."
         }
       }
