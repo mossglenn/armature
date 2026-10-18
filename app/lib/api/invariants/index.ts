@@ -1,5 +1,6 @@
 import { ApiError } from '../errors';
 import { StoreError, type Store, type TerminusDocument } from '../store';
+import { checkAsOf, hasAsOf } from './asOf';
 import { validateAssessmentItem } from './assessmentItem';
 import { validateDesignFinding } from './designFinding';
 import { validateItemInstance } from './itemInstance';
@@ -29,6 +30,9 @@ import { checkReferences } from './references';
  *  10  placement not ahead of item itemInstance.ts and assessmentItem.ts (both sides)
  *  11  dismissal needs rationale  designFinding.ts
  *  12  id held by another type    the write pipeline, 409 (ADR-0024)
+ *  13  asOf names a state          asOf.ts (generic, every class carrying asOf; ADR-0057):
+ *                                the commit exists, the record's subjects exist at it,
+ *                                a metric agrees with its dataset
  *
  * A validator sees the whole batch and the branch being written, never main
  * by default. Every violation is collected and reported at once as a 422.
@@ -62,6 +66,12 @@ export interface WriteContext {
   /** Ids of documents on the branch this write replaces. */
   replacing: Set<string>;
   /**
+   * Batch documents whose `asOf` the pipeline filled from the branch head or
+   * copied from a parent record, rather than the client supplying it or a
+   * replace keeping it (ADR-0057 decision 2). Constraint 13 does not check them.
+   */
+  asOfFilled: Set<TerminusDocument>;
+  /**
    * The document a reference names: a batch document first (by id, or by
    * capture for `{ "@ref" }`), then the branch. Undefined when it is nowhere.
    */
@@ -91,6 +101,7 @@ export async function checkInvariants(ctx: WriteContext): Promise<void> {
   const violations: Violation[] = [];
   for (const [index, doc] of ctx.batch.entries()) {
     violations.push(...(await checkReferences(doc, index, ctx)));
+    if (hasAsOf(doc['@type'])) violations.push(...(await checkAsOf(doc, index, ctx)));
     const validator = VALIDATORS[doc['@type']];
     if (validator) violations.push(...(await validator(doc, index, ctx)));
   }
@@ -137,6 +148,7 @@ export function createWriteContext(
     batch,
     byCapture,
     replacing,
+    asOfFilled: new Set(),
     async resolve(ref) {
       if (typeof ref === 'string') return byId.get(ref) ?? read(ref);
       if (ref && typeof ref === 'object' && typeof (ref as Record<string, unknown>)['@ref'] === 'string') {

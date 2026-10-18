@@ -377,6 +377,132 @@ describe('generic write path and invariants (Phase 3)', () => {
     });
   });
 
+  describe('asOf: records name the state they refer to (constraint 13, ADR-0057)', () => {
+    const headOf = async () => (await get(`/api/v1/branches/${BRANCH}`)).headers.get('etag')!.replace(/"/g, '');
+    const finding = (overrides: Record<string, unknown> = {}) => ({
+      label: 'Stem is ambiguous',
+      finding: 'Two readings of the stem.',
+      subject: ['AssessmentItem/hallucination-mc'],
+      status: 'Open',
+      ...overrides,
+    });
+    const path = `/api/v1/documents/DesignFinding/asof-${stamp}${q}`;
+    const dataset = { '@type': 'LearningDataset', '@capture': 'ds', label: 'Spring cohort', producedBy: 'Assessment/mod1-assessment' };
+    const metric = (overrides: Record<string, unknown> = {}) => ({
+      '@type': 'LearningMetric',
+      label: 'Pass rate',
+      collectedAt: '2026-06-01T00:00:00Z',
+      source: 'LMS export',
+      value: 0.8,
+      unit: 'proportion',
+      derivedFrom: { '@ref': 'ds' },
+      ...overrides,
+    });
+
+    it('fills asOf with the head the write started from, and keeps it on replace', async () => {
+      const before = await headOf();
+      const created = await put(path, { message: 'Report', document: finding() });
+      expect(created.status).toBe(200);
+      const after = (await created.json()).commit;
+      expect(after).not.toBe(before);
+      expect((await (await get(`/api/v1/documents/DesignFinding/asof-${stamp}${q}`)).json()).asOf).toBe(before);
+
+      const addressed = await put(path, { message: 'Address', document: finding({ status: 'Addressed', resolutionRationale: 'Stem rewritten.' }) });
+      expect(addressed.status).toBe(200);
+      expect((await (await get(`/api/v1/documents/DesignFinding/asof-${stamp}${q}`)).json()).asOf).toBe(before);
+    });
+
+    it('rejects a supplied asOf that is not a commit', async () => {
+      for (const asOf of ['nosuchcommit0000000000000000000', 'not/a commit']) {
+        const res = await put(path, { message: 'x', document: finding({ asOf }) });
+        expect(res.status).toBe(422);
+        expect(await codes(res)).toEqual(['unknown_commit']);
+      }
+    });
+
+    it('rejects a supplied asOf at which the subject does not exist, and accepts one at which it does', async () => {
+      const before = await headOf();
+      const made = await put(`/api/v1/documents/AssessmentItem/asof-item-${stamp}${q}`, { message: 'Add item', document: item(`asof-item-${stamp}`) });
+      expect(made.status).toBe(200);
+      const withItem = (await made.json()).commit;
+      const subject = [`AssessmentItem/asof-item-${stamp}`];
+
+      const early = await put(path, { message: 'x', document: finding({ subject, regarding: OBJECTIVE, asOf: before }) });
+      expect(early.status).toBe(422);
+      const body = await early.json();
+      expect(body.violations).toEqual([expect.objectContaining({ code: 'absent_at_commit', field: 'subject[0]' })]);
+
+      const right = await put(path, { message: 'Judged at the item', document: finding({ subject, regarding: OBJECTIVE, asOf: withItem }) });
+      expect(right.status).toBe(200);
+    });
+
+    it('validates a kept asOf against the subjects of the replace', async () => {
+      // The finding now names withItem; a replace adding a subject created after it fails.
+      const later = await put(`/api/v1/documents/AssessmentItem/asof-later-${stamp}${q}`, { message: 'Add item', document: item(`asof-later-${stamp}`) });
+      expect(later.status).toBe(200);
+      const res = await put(path, {
+        message: 'x',
+        document: finding({ subject: [`AssessmentItem/asof-item-${stamp}`, `AssessmentItem/asof-later-${stamp}`] }),
+      });
+      expect(res.status).toBe(422);
+      expect(await codes(res)).toEqual(['absent_at_commit']);
+    });
+
+    it('fills a finding about a subject created in the same write, but refuses a supplied asOf for it', async () => {
+      const before = await headOf();
+      const documents = [
+        { ...item(`asof-batch-${stamp}`), '@capture': 'it' },
+        { '@type': 'DesignFinding', ...finding({ subject: [{ '@ref': 'it' }] }) },
+      ];
+      const filled = await post(`/api/v1/documents${q}`, { message: 'Item and finding', documents });
+      expect(filled.status).toBe(200);
+      const [, findingId] = (await filled.json()).ids;
+      expect((await (await get(`/api/v1/documents/${findingId}${q}`)).json()).asOf).toBe(before);
+
+      const supplied = await post(`/api/v1/documents${q}`, {
+        message: 'x',
+        documents: [
+          { ...item(`asof-batch2-${stamp}`), '@capture': 'it' },
+          { '@type': 'DesignFinding', ...finding({ subject: [{ '@ref': 'it' }], asOf: before }) },
+        ],
+      });
+      expect(supplied.status).toBe(422);
+      expect(await codes(supplied)).toEqual(['absent_at_commit']);
+    });
+
+    it("copies a dataset's asOf onto a metric derived from it, and rejects a metric that disagrees", async () => {
+      const before = await headOf();
+      const ok = await post(`/api/v1/documents${q}`, { message: 'Results', documents: [dataset, metric()] });
+      expect(ok.status).toBe(200);
+      const [dsId, metricId] = (await ok.json()).ids;
+      expect((await (await get(`/api/v1/documents/${dsId}${q}`)).json()).asOf).toBe(before);
+      expect((await (await get(`/api/v1/documents/${metricId}${q}`)).json()).asOf).toBe(before);
+
+      // The dataset is filled with the current head; the metric names an older commit.
+      const bad = await post(`/api/v1/documents${q}`, { message: 'x', documents: [dataset, metric({ asOf: before })] });
+      expect(bad.status).toBe(422);
+      expect(await codes(bad)).toEqual(['as_of_disagrees']);
+
+      // A historical import names the commit on both.
+      const historical = await post(`/api/v1/documents${q}`, {
+        message: 'Import',
+        documents: [{ ...dataset, asOf: before }, metric({ asOf: before })],
+      });
+      expect(historical.status).toBe(200);
+    });
+
+    it('takes If-Match as the head', async () => {
+      const head = await headOf();
+      const res = await app.request(`/api/v1/documents/DesignFinding/asof-ifm-${stamp}${q}`, {
+        method: 'PUT',
+        headers: { ...HEADERS, 'If-Match': `"${head}"` },
+        body: JSON.stringify({ message: 'Report', document: finding() }),
+      });
+      expect(res.status).toBe(200);
+      expect((await (await get(`/api/v1/documents/DesignFinding/asof-ifm-${stamp}${q}`)).json()).asOf).toBe(head);
+    });
+  });
+
   describe('batch writes with @capture and @ref', () => {
     it('attaches a note to a junction minted in the same request', async () => {
       const res = await post(`/api/v1/documents${q}`, {
