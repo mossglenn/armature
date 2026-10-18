@@ -206,6 +206,7 @@ export interface LearningMetric extends LearningEvidence {
   value: number;
   unit: string;
   derivedFrom?: string;  // LearningDataset @id
+  asOf?: string;
 }
 
 export interface DescriptiveEvidence extends LearningEvidence {
@@ -217,6 +218,7 @@ export interface LearningDataset extends ArmatureDocument {
   administrationDate?: string;  // ISO 8601 date
   cohort?: string;
   producedBy?: string;  // Assessment @id
+  asOf?: string;
 }
 
 export interface LearningNeed extends ArmatureDocument {
@@ -276,6 +278,7 @@ export interface DesignFinding extends ArmatureDocument {
   confidence?: ConfidenceLevel;
   status: FindingStatus;
   resolutionRationale?: string;
+  asOf?: string;
 }
 
 export type Course = ArmatureDocument;  // no additional fields
@@ -477,6 +480,7 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     value: {"type":"xsd:decimal","kind":"primitive","optional":false,"many":false},
     unit: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     derivedFrom: {"type":"LearningDataset","kind":"reference","optional":true,"many":false},
+    asOf: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
   },
   DescriptiveEvidence: {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
@@ -494,6 +498,7 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     administrationDate: {"type":"xsd:date","kind":"primitive","optional":true,"many":false},
     cohort: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     producedBy: {"type":"Assessment","kind":"reference","optional":true,"many":false},
+    asOf: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
   },
   LearningNeed: {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
@@ -631,6 +636,7 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     confidence: {"type":"ConfidenceLevel","kind":"enum","optional":true,"many":false},
     status: {"type":"FindingStatus","kind":"enum","optional":false,"many":false},
     resolutionRationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    asOf: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
   },
   Course: {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
