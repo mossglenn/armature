@@ -242,6 +242,7 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
   });
 
   it('traces a metric back through its dataset and assessment to the objectives and the module (Narrative 1)', async () => {
+    const delivered = (await get(`/api/v1/branches/${BRANCH}`)).headers.get('etag')!.replace(/"/g, '');
     const write = await post(`/api/v1/documents${q}`, {
       message: 'Spring cohort results for the Module 1 check',
       documents: [
@@ -266,6 +267,14 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
     ]));
     const declaration = body.edges.find((e: { from: string; to: string }) => e.from === 'LearningObjective/identify-ai-limitations' && e.to === 'Module/how-ai-works');
     expect(declaration).toMatchObject({ via: 'module', role: 'Primary' });
+
+    // The state the cohort met (ADR-0057): the metric and its dataset name the
+    // commit the write started from, and the module's coverage is read there.
+    expect(body.root.asOf).toBe(delivered);
+    expect(body.nodes.find((n: { type: string }) => n.type === 'LearningDataset').asOf).toBe(delivered);
+    const atDelivery = await get(`/api/v1/intelligence/coverage/how-ai-works?ref=${body.root.asOf}`);
+    expect(atDelivery.status).toBe(200);
+    expect(atDelivery.headers.get('etag')).toBe(`"${delivered}"`);
   });
 
   describe('a declaration walked through every verdict by writes and reads (ADR-0029 decisions 1 to 3)', () => {

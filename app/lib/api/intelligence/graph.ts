@@ -148,9 +148,11 @@ export interface Summary {
   method?: string;
   value?: number;
   unit?: string;
+  /** The commit a dataset, metric or finding refers to: read the rest at `ref=<asOf>` (ADR-0057 decision 4). */
+  asOf?: string;
 }
 
-const SUMMARY_KEYS = ['label', 'bloomsLevel', 'status', 'state', 'role', 'confidence', 'method', 'value', 'unit'] as const;
+const SUMMARY_KEYS = ['label', 'bloomsLevel', 'status', 'state', 'role', 'confidence', 'method', 'value', 'unit', 'asOf'] as const;
 
 export function summarize(doc: TerminusDocument): Summary {
   const out: Record<string, unknown> = { id: doc['@id'], type: doc['@type'] };
