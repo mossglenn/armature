@@ -112,7 +112,7 @@ The structural difference in one document between two commits. Both are required
 
 1. **Shape.** Each document is checked against a validation schema generated from `schema/schema.json`: required fields, field kinds, allowed enum values, minimum set sizes, no unknown fields, every string non-empty and at most 10,000 characters. Failure: **400** `invalid_document` with an `issues` list (`{ index, path, message }` per problem).
 2. **Identity of the document.** An identifier held by another type: **409** `type_conflict`. An existing document (found by `@id`, or for a junction by its key fields) makes this write a replace.
-3. **Provenance.** `createdBy` is set to the resolved user on create and preserved on replace (a value in the body is ignored). On a branch that lacks the user's `User` document, a copy from `main` is written in the same commit.
+3. **Provenance.** `createdBy` is set to the resolved user on create and preserved on replace (a value in the body is ignored). On a branch that lacks the user's `User` document, a copy from `main` is written in the same commit. `asOf`, the commit a `LearningDataset`, `LearningMetric` or `DesignFinding` refers to (ADR-0057), is filled when the body omits it: on create, with the branch head the write starts from (the `If-Match` commit when one is sent); on replace, with the stored value; on a metric with a `derivedFrom` dataset, with the dataset's value. A body may supply `asOf`, for example when importing historical results, and rule 13 checks it.
 4. **Rules.** Every invariant is checked against the branch as it will be after the write. Failure: **422** `invariant_violation` with every violation at once, as `violations: [ { code, id?, index, field?, message } ]`.
 5. **One commit**, authored by the resolved user with the request's message, honoring `If-Match` (**412** when the branch has moved).
 
@@ -132,6 +132,7 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 10 | A placement is not `Approved` while its item is `Draft` or `InReview`, in either direction | `instance_ahead_of_item` |
 | 11 | A `Dismissed` finding has a `resolutionRationale` | `rationale_required` |
 | 12 | An identifier is not reused across types | 409 `type_conflict` |
+| 13 | A supplied or kept `asOf` is a commit the database holds, at which the record's subjects exist (a dataset's `producedBy`, a finding's `subject` and `regarding`); a metric's `asOf` equals its dataset's | `unknown_commit`, `absent_at_commit`, `as_of_disagrees` |
 
 There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5).
 
@@ -251,7 +252,7 @@ evidence ← need-evidence link → need ← objective ← item ← placement �
 
 with modules attached as context to every objective (through its declarations) and assessment reached. Accepted types: `LearningMetric`, `LearningDataset`, `Assessment`, `AssessmentItem`, `LearningObjective`, `LearningNeed`, `DescriptiveEvidence`, `Module`, `LearningActivity`. Any other type is a 400 `untraceable_type`.
 
-Response: `{ root, nodes: [ summary ], edges: [ { from, to, via, through?, confidence?, status?, role? } ], annotations: [ design notes and findings about any node reached ] }`. `via` is the field followed; `through` is the junction document passed through, with its data.
+Response: `{ root, nodes: [ summary ], edges: [ { from, to, via, through?, confidence?, status?, role? } ], annotations: [ design notes and findings about any node reached ] }`. `via` is the field followed; `through` is the junction document passed through, with its data. A dataset, metric or finding summary carries its `asOf`: read the rest of the design as that cohort met it, or as that finding judged it, at `?ref=<asOf>`.
 
 ### `GET /intelligence/impact/:type/:id`
 
