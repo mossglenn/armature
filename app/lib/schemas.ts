@@ -61,6 +61,7 @@ export const LearningMetricSchema = z.strictObject({
   value: z.number(),
   unit: z.string().min(1).max(10_000),
   derivedFrom: ReferenceSchema.optional(),
+  asOf: z.string().min(1).max(10_000).optional(),
 });
 
 export const DescriptiveEvidenceSchema = z.strictObject({
@@ -86,6 +87,7 @@ export const LearningDatasetSchema = z.strictObject({
   administrationDate: z.iso.date().optional(),
   cohort: z.string().min(1).max(10_000).optional(),
   producedBy: ReferenceSchema.optional(),
+  asOf: z.string().min(1).max(10_000).optional(),
 });
 
 export const LearningNeedSchema = z.strictObject({
@@ -272,6 +274,7 @@ export const DesignFindingSchema = z.strictObject({
   confidence: z.enum(VALID_ConfidenceLevel).optional(),
   status: z.enum(VALID_FindingStatus),
   resolutionRationale: z.string().min(1).max(10_000).optional(),
+  asOf: z.string().min(1).max(10_000).optional(),
 });
 
 export const CourseSchema = z.strictObject({

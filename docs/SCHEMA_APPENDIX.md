@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-10-09_
+_Schema snapshot · Generated 2026-10-18_
 
 ---
 
@@ -52,6 +52,7 @@ classDiagram
     +decimal value
     +string unit
     +LearningDataset? derivedFrom
+    +string? asOf
   }
 
   class DescriptiveEvidence {
@@ -63,6 +64,7 @@ classDiagram
     +date? administrationDate
     +string? cohort
     +Assessment? producedBy
+    +string? asOf
   }
 
   class LearningNeed {
@@ -195,6 +197,7 @@ classDiagram
     +ConfidenceLevel? confidence
     +FindingStatus status
     +string? resolutionRationale
+    +string? asOf
   }
 
   class Course
@@ -321,6 +324,7 @@ _category: artifact · extends `LearningEvidence` · key: Random_
 | `value` | `decimal` | required |
 | `unit` | `string` | required |
 | `derivedFrom` | `LearningDataset?` | optional |
+| `asOf` | `string?` | optional |
 
 ### `DescriptiveEvidence`
 _category: artifact · extends `LearningEvidence` · key: Random_
@@ -342,6 +346,7 @@ _category: artifact · extends `ArmatureDocument` · key: Random_
 | `administrationDate` | `date?` | optional |
 | `cohort` | `string?` | optional |
 | `producedBy` | `Assessment?` | optional |
+| `asOf` | `string?` | optional |
 
 ### `LearningNeed`
 _category: artifact · extends `ArmatureDocument` · key: Random_
@@ -580,6 +585,7 @@ _category: artifact · extends `ArmatureDocument` · key: Random_
 | `confidence` | `ConfidenceLevel?` | optional |
 | `status` | `FindingStatus` | required |
 | `resolutionRationale` | `string?` | optional |
+| `asOf` | `string?` | optional |
 
 ---
 

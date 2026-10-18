@@ -420,7 +420,8 @@
         "@label": "LearningMetric",
         "@comment": "A quantitative measurement of learning performance at a point in time. Inherits label, description, collectedAt, source from LearningEvidence. Typically derived from a LearningDataset produced by an administered Assessment — the derivedFrom link preserves that provenance. Examples: pass rate, average score, completion rate.",
         "@properties": {
-          "derivedFrom": "The LearningDataset this metric was computed from. Optional because a metric may come from a third-party study or benchmark not produced by an Armature Assessment."
+          "derivedFrom": "The LearningDataset this metric was computed from. Optional because a metric may come from a third-party study or benchmark not produced by an Armature Assessment.",
+          "asOf": "The commit (a bare commit id) the measurement refers to. A metric with a derivedFrom dataset takes the dataset's asOf: the API copies it when omitted and rejects a different value (absent when the dataset has none). A metric without a dataset is filled from the branch head on create and kept on replace, like a dataset. API CONSTRAINT 13. See ADR-0057."
         }
       }
     ],
@@ -434,6 +435,10 @@
       "armature": {
         "category": "artifact"
       }
+    },
+    "asOf": {
+      "@type": "Optional",
+      "@class": "xsd:string"
     }
   },
   {
@@ -473,7 +478,8 @@
         "@properties": {
           "administrationDate": "The date the assessment was administered to produce this dataset. xsd:date (not dateTime) — datasets are associated with a day, not a precise moment.",
           "cohort": "A label identifying the learner group (e.g., 'Q3 2024 Onboarding Cohort'). Optional — not all datasets have a named cohort.",
-          "producedBy": "The Assessment whose administration produced this dataset. Optional at the schema level to accommodate externally-imported datasets. The API will enforce it as required when the dataset is created by an Armature-administered assessment (planned, Phase 6; not yet enforced). Completes the provenance chain: Assessment → LearningDataset → LearningMetric → (item analysis back to AssessmentItem)."
+          "producedBy": "The Assessment whose administration produced this dataset. Optional at the schema level to accommodate externally-imported datasets. The API will enforce it as required when the dataset is created by an Armature-administered assessment (planned, Phase 6; not yet enforced). Completes the provenance chain: Assessment → LearningDataset → LearningMetric → (item analysis back to AssessmentItem).",
+          "asOf": "The commit (a bare commit id, as in ETag and ref=) the administered assessment was taken from: the state of the design the cohort met. Optional in the schema; the API fills it with the head of the branch being written when a create omits it, keeps the stored value when a replace omits it, and checks that a supplied one names an existing commit at which producedBy exists. An importer loading historical results supplies the real commit. Read the design as delivered at ref=<asOf>. API CONSTRAINT 13. See ADR-0057."
         }
       }
     ],
@@ -493,6 +499,10 @@
       "armature": {
         "category": "artifact"
       }
+    },
+    "asOf": {
+      "@type": "Optional",
+      "@class": "xsd:string"
     }
   },
   {
@@ -1137,10 +1147,15 @@
           "evidence": "Evidence grounding the concern, typically DescriptiveEvidence with method ExpertReview. Optional. Each evidence document must be self-contained: the substance in finding, a pointer to the originating system in source.",
           "confidence": "How sure the reporter is that the concern is real. A property of the finding, not of each evidence item.",
           "status": "Open on creation; Addressed when the design changed in response; Dismissed when judged not a problem. See FindingStatus.",
-          "resolutionRationale": "Why the finding was addressed or dismissed. Required for Dismissed (API-enforced): a concern waved away without explanation launders a judgment as a fact."
+          "resolutionRationale": "Why the finding was addressed or dismissed. Required for Dismissed (API-enforced): a concern waved away without explanation launders a judgment as a fact.",
+          "asOf": "The commit (a bare commit id) at which the subject was judged, so the finding stays readable after its subject changes. The API fills it with the head of the branch being written when a create omits it (the state the write started from, so a subject created in the same write is not yet in it), keeps the stored value when a replace omits it, and checks that a supplied one names an existing commit at which every subject and the regarding record exist. API CONSTRAINT 13. See ADR-0057."
         }
       }
-    ]
+    ],
+    "asOf": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    }
   },
   {
     "@type": "Class",
