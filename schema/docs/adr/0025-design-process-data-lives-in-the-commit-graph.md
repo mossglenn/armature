@@ -100,6 +100,10 @@ Phase 2's routes land (ADR-0054 consequences).
 > **Later change (2026-10-08):** ADR-0028 is planned (`docs/development-plan.md` Phase 5) and not
 > yet written. ADR-0057 (Proposed) would add the same commit-id field, `asOf`, to findings.
 
+> **Later change (2026-10-18):** ADR-0057 is Accepted and implemented: `LearningDataset`,
+> `LearningMetric` and `DesignFinding` store bare commit ids in `asOf`, which is why decision 6's
+> no-rewrite rule now protects stored data, not only clients.
+
 ## Decision
 
 1. **The commit is the unit of design process data.** No `version`, `createdAt`, `updatedAt`,
