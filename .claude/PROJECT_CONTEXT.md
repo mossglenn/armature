@@ -85,7 +85,7 @@ Show how outcome data can be traced back through the graph to identify at-risk o
 
 Flow: LearningMetric → (derivedFrom) LearningDataset → (producedBy) Assessment → ItemInstance → AssessmentItem → (assesses) LearningObjective → ModuleObjective → Module, then the coverage read for that module
 
-The trace read (`GET /api/v1/intelligence/trace/LearningMetric/<id>`) walks this path; the coverage read answers the last question. "Adequate *when*" needs the commit the cohort's assessment was taken from, which is ADR-0057's proposal (`asOf`); until it lands, coverage can be read at any commit but nothing records which one the administration used.
+The trace read (`GET /api/v1/intelligence/trace/LearningMetric/<id>`) walks this path; the coverage read answers the last question. "Adequate *when*" is the coverage read at `ref=<asOf>`: the dataset records the commit the cohort's assessment was taken from, the metric carries the same value, and the trace reports it on both nodes (ADR-0057).
 
 The demo should show: "Here's a cohort that performed poorly. Here are the items they struggled with. Here are the objectives those items assess. Here's the module that declared those objectives. Here's whether the module's assessment coverage was adequate."
 

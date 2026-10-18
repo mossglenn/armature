@@ -668,7 +668,7 @@ Every write passes two kinds of check before anything is saved.
 
 ### 13.2 The rules in plain language
 
-The project numbers the rules 0 to 12 (the numbering is used across the documentation and tests).
+The project numbers the rules 0 to 13 (the numbering is used across the documentation and tests).
 
 | # | Rule | Why |
 |---|---|---|
@@ -685,6 +685,7 @@ The project numbers the rules 0 to 12 (the numbering is used across the document
 | 10 | A placement cannot be approved while its item is still draft or in review, and an item cannot drop back to draft or review while a placement of it is approved | Placement clearance never runs ahead of the item's own review (Section 12.8) |
 | 11 | A dismissed finding must give a reason | Dismissals must be inspectable |
 | 12 | A write cannot reuse an identifier that belongs to a document of another type | Identifiers belong to one type for the life of the database (answered with 409, conflict) |
+| 13 | A dataset, metric or finding's `asOf` names a real commit at which what the record is about existed, and a metric agrees with the dataset it came from | A record that says "the design as it was then" must name a "then" that holds what it describes (Section 24.1) |
 
 Rules 1 and 2 are enforced both by the database (as minimum counts) and by the shape check. Rule 6 is a consequence of rule 0. The rest are code in the invariants engine.
 
@@ -816,7 +817,7 @@ The hub then:
 1. **Checks shape** against the generated rules for `AssessmentItem`: every required field present, the stem and options well-formed, `status` one of the four allowed values, at least one objective in `assesses`, no unknown fields. Failure is a 400 listing each problem and where it is.
 2. **Resolves identity.** It finds the `User` on `main` whose external identifier is `reviewer@example.edu`, or refuses with 401 (unknown user).
 3. **Checks identity of the document.** If the identifier already belongs to a document of another type, it refuses with 409. If a document with this identifier exists, this write is a *replace*.
-4. **Sets provenance.** On a new document it sets `createdBy` to the resolved user; on a replace it preserves whatever `createdBy` was stored, ignoring any value in the request. If the user does not yet exist on this branch, it prepares a copy from `main`.
+4. **Sets provenance.** On a new document it sets `createdBy` to the resolved user; on a replace it preserves whatever `createdBy` was stored, ignoring any value in the request. If the user does not yet exist on this branch, it prepares a copy from `main`. (Had the plugin been writing a dataset, a metric or a finding, this step would also fill `asOf`, the commit the record refers to; Section 24.1.)
 5. **Checks every rule** (Section 13) against the branch as it will be after the write. Here, rule 10 matters in the other direction: approving the item is always allowed, but if the plugin had tried to set it back to `Draft` while one of its placements was approved, the write would fail with 422.
 6. **Writes once.** The item (and the user copy, if needed) are written in a single commit, authored by the resolved user, with the plugin's message, and only if the branch is still at the commit in `If-Match` (otherwise 412).
 7. **Responds** with the new commit identifier in the `ETag` (entity tag) header.
@@ -932,7 +933,7 @@ This is one of the most instructive decisions in the project's history, and it p
 
 **The general principle** applies to every future derived quantity (alignment scores, redundancy, difficulty summaries): the hub stores what people decided and what was observed, and computes scores when they are read. A test the project now applies to any proposed stored value: *could this value appear in a commit under a person's name and be true as a record of what they did?* If not, it is derived and belongs in a read. A judgment that someone wants on record is recorded as a `DesignFinding`, or (once Phase 5 lands) an attestation, with a person's name and reason on it.
 
-**What was lost, and recovered as a new proposal.** One thing the stored verdict had seemed to answer was "was coverage adequate *when this cohort took the assessment*?" Answering that needs the commit the assessment was taken from. ADR-0057 (proposed, not yet decided) adds an optional `asOf` field (a commit identifier) to datasets, metrics and findings; coverage at delivery is then simply the coverage read at `ref=<asOf>`.
+**What was lost, and how it was recovered.** One thing the stored verdict had seemed to answer was "was coverage adequate *when this cohort took the assessment*?" Answering that needs the commit the assessment was taken from. ADR-0057, proposed the same day and accepted on 18 October 2026, added an optional `asOf` field (a commit identifier) to datasets, metrics and findings; coverage at delivery is the coverage read at `ref=<asOf>`.
 
 > **[Interpretive framing]** The distinction ADR-0056 draws, between recorded observations and the indicators computed from them, parallels the measurement distinction between data and the scoring model applied to it. Storing the counts and letting the cut vary is analogous to reporting raw scores alongside a provisional cut score.
 
@@ -953,7 +954,7 @@ The project's context document defines two narratives the system must be able to
 
 *"Here's a cohort that performed poorly. Here are the items they struggled with. Here are the objectives those items assess. Here's the module that declared those objectives. Here's whether the module's assessment coverage was adequate."*
 
-The path: metric → dataset → assessment → items → objectives → module declarations → module. The trace read walks it; the coverage read answers the last question. One part is not yet exact: "adequate *when*?" requires the commit the cohort's assessment was taken from, which is the proposal of ADR-0057 (an Architecture Decision Record). Today the coverage read can be asked at any commit, but nothing records *which* commit the administration used.
+The path: metric → dataset → assessment → items → objectives → module declarations → module. The trace read walks it; the coverage read answers the last question. "Adequate *when*?" is answered exactly since ADR-0057 (an Architecture Decision Record) was accepted on 18 October 2026: the dataset records the commit the cohort's assessment was taken from in `asOf`, the metric carries the same value, the trace reports it, and the coverage read at `ref=<asOf>` is the module as the cohort met it. The Narrative 1 test checks all of this.
 
 This narrative demonstrates Armature as post-delivery intelligence infrastructure.
 
@@ -1064,9 +1065,13 @@ Most decisions are explained where they matter in Part III. This part collects t
 
 ## 24. The road ahead: Phases 5 to 7
 
-### 24.1 Immediately next: deciding ADR-0057 (`asOf`)
+### 24.1 Done first: ADR-0057 (`asOf`), accepted 18 October 2026
 
-ADR-0057 (an Architecture Decision Record) is **proposed, not accepted**. It would add an optional `asOf` field, a commit identifier, to `LearningDataset`, `LearningMetric`, `DesignFinding`, and the future attestation type: records that describe or judge a *state* of the design. When a write omits it, the hub would fill it with the branch's latest commit (the way it fills `createdBy`); when a write supplies it, the hub would check that the commit exists and that the record's subject existed at that commit (a new rule 13). With it, "coverage at delivery" is the coverage read at `ref=<asOf>`, and a finding stays interpretable after its subject changes.
+ADR-0057 (an Architecture Decision Record) added an optional `asOf` field, a commit identifier, to `LearningDataset`, `LearningMetric` and `DesignFinding`, and the future attestation type will carry it too. These are the records that describe or judge a *state* of the design. With `asOf`, "coverage at delivery" is the coverage read at `ref=<asOf>`, and a finding stays interpretable after its subject changes.
+
+When a write omits `asOf`, the hub fills it, much as it fills `createdBy`. A new record gets the branch's latest commit at the moment the write begins. A replaced record keeps the value it already had, so marking a finding "Addressed" does not change which version of the item the finding was about. A metric derived from a dataset copies the dataset's value. When a write supplies `asOf` (an importer loading last year's results would), the hub checks rule 13: the commit exists, and the record's subjects existed at it.
+
+Building it settled one subtlety the proposal had not. A commit's identifier does not exist until the commit is made, so a record cannot name the commit that writes it. A finding written in the same request as the new item it is about therefore records the state just *before* that item existed. The project accepted this for filled values and refuses it for supplied ones, where the client would be claiming a state the item is not in.
 
 The session log also lists a small fix (a race condition in the branch routes when a branch is deleted between two reads) and a seed improvement (an objective that reaches `FullyAssessed`).
 
@@ -1205,13 +1210,14 @@ The survey also maps where Armature sits: upstream of delivery and outcome recor
 | **API (application programming interface)** | The set of requests other software can make of Armature. Armature's routes live under `/api/v1/` |
 | **Artifact** | A primary design product: an objective, item, activity, module, note, finding. A schema category |
 | **Assessment item** | A reusable question in the item bank (`AssessmentItem`) |
+| **`asOf`** | The commit a dataset, metric or finding refers to: the design as the cohort met it, or as the finding judged it (ADR-0057) |
 | **Attestation** | A planned record (ADR-0028) that a person affirmed or declined a claim about an artifact, as of a commit |
 | **Branch** | A named line of commits; `main` is the shared one |
 | **CI (continuous integration)** | An automated service that checks every proposed change. Armature's runs lint (automated style checks) and the generated-types check |
 | **Client / plugin** | A separate application that uses the Armature API, such as CoQui |
 | **Closed-world assumption** | The database treats what it does not contain as false, so queries have definite answers |
 | **Commit** | A permanent, attributed, explained change to the database |
-| **Constraint / invariant / rule** | A condition every write must satisfy. Armature's are numbered 0 to 12 (Section 13) |
+| **Constraint / invariant / rule** | A condition every write must satisfy. Armature's are numbered 0 to 13 (Section 13) |
 | **CoQui** | The first Armature plugin, an assessment-item review tool in a separate repository |
 | **Coverage** | How many distinct eligible items placed in a module's assessments assess each objective the module declares (Section 17.1) |
 | **`createdBy`** | The `User` responsible for a record entering the graph, set by the hub |
@@ -1265,7 +1271,7 @@ The survey also maps where Armature sits: upstream of delivery and outcome recor
 | `DesignRecord` | infrastructure (abstract) | none | — |
 | `ArmatureDocument` | infrastructure (abstract) | label, description?, createdBy? | — |
 | `LearningEvidence` | artifact (abstract) | collectedAt, source | — |
-| `LearningMetric` | artifact | value, unit, derivedFrom? | random |
+| `LearningMetric` | artifact | value, unit, derivedFrom?, asOf? | random |
 | `DescriptiveEvidence` | artifact | method, finding | random |
 | `LearningNeed` | artifact | rationale, priority? | random |
 | `NeedEvidenceLink` | relationship | need, evidence, confidence? | hash (need, evidence) |
@@ -1285,9 +1291,9 @@ The survey also maps where Armature sits: upstream of delivery and outcome recor
 | `ModuleActivityLink` | relationship | module, activity, sequence? | hash (module, activity) |
 | `ModuleActivityGroupLink` | relationship | module, group, sequence? | hash (module, group) |
 | `DesignNote` | artifact | rationale, subject (≥1), category? | random |
-| `DesignFinding` | artifact | finding, subject (≥1), regarding?, evidence (a set, may be empty), confidence?, status, resolutionRationale? | random |
+| `DesignFinding` | artifact | finding, subject (≥1), regarding?, evidence (a set, may be empty), confidence?, status, resolutionRationale?, asOf? | random |
 | `Course` | artifact | (label, description) | random |
-| `LearningDataset` | artifact | administrationDate?, cohort?, producedBy? | random |
+| `LearningDataset` | artifact | administrationDate?, cohort?, producedBy?, asOf? | random |
 
 *A question mark marks an optional field; "≥1" marks a set that must have at least one member. Every artifact also has `label`, `description?` and `createdBy?`.*
 
@@ -1331,7 +1337,7 @@ See `schema/docs/adr/README.md` for the full index with one-line summaries. In b
 | 0016–0023 | The CoQui fit analysis (August–September 2026): keys, the `DesignRecord` abstract root, readiness, coverage and readiness, findings, the non-goal on practitioner performance, embedded item parts, fragment identifiers |
 | 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0028, 0030, 0031 and 0034 are reserved and unwritten |
 | 0035–0053 | Research candidates, not decisions (`docs/research/adr-candidates.md`) |
-| 0054–0057 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf` (proposed) |
+| 0054–0057 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf` |
 
 ## Appendix E. References
 

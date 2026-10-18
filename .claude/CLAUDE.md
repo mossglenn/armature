@@ -67,8 +67,8 @@ app/
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
       identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
       classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy
-      write.ts             # The one write pipeline: Zod shape → 409 on a foreign id → createdBy → invariants → one commit
-      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), one module per constrained type
+      write.ts             # The one write pipeline: Zod shape → 409 on a foreign id → createdBy and asOf → invariants → one commit
+      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), asOf.ts (constraint 13), one module per constrained type
       intelligence/
         coverage.ts        # The coverage algorithm (ADR-0029 decisions 1 to 3) and its vocabulary; computed on read, never stored (ADR-0056)
         graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
@@ -166,8 +166,9 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 10. `ItemInstance.status` — may not be `Approved` while its `AssessmentItem.status` is `Draft` or `InReview` (ADR-0018)
 11. `DesignFinding.resolutionRationale` — required when `status` is `Dismissed` (ADR-0020)
 12. A write whose `@id` exists under a different `@type` — rejected with 409 `type_conflict` by the write pipeline (ADR-0024)
+13. `asOf` on `LearningDataset`, `LearningMetric` and `DesignFinding` — a bare commit id the store holds, at which the record's subjects exist (`producedBy`; `subject` and `regarding`); a metric with a `derivedFrom` dataset carries the dataset's value. The pipeline fills it from the branch head on create (the head the write starts from, or `If-Match`), keeps it on replace and copies it onto a metric; only supplied or kept values are checked (ADR-0057; `invariants/asOf.ts`)
 
-Pending, not yet enforced: 13 (`asOf` names an existing commit at which the subject exists) if ADR-0057 is accepted; `LearningDataset.producedBy` required for Armature-administered assessments (Phase 6). Known gap: the list route passes `?field=` filters on `Optional` or `Set` reference fields to the store, which answers with a 500 (check Y); see plan §6.
+Pending, not yet enforced: `LearningDataset.producedBy` required for Armature-administered assessments (Phase 6). Known gap: the list route passes `?field=` filters on `Optional` or `Set` reference fields to the store, which answers with a 500 (check Y); see plan §6.
 
 ### Junction document pattern
 
@@ -226,7 +227,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0032** — Identity resolution (`main` is the `User` registry; author and `createdBy` come from the resolved identity, never the body; a branch that lacks the `User` gets `main`'s copy in the same commit)
 - **ADR-0054** — The API is a Hono application (host-neutral; nothing under `app/lib/api/` imports from `next`)
 - **ADR-0055** — The API layer reaches TerminusDB over HTTP through one adapter (the JavaScript client stays in `scripts/`)
-- **ADR-0057** — (Proposed) records that refer to a state of the graph name its commit (`asOf`); would add constraint 13
+- **ADR-0057** — Records that refer to a state of the graph name its commit (`asOf`): filled from the branch head, kept on replace, constraint 13
 
 The full index, with every ADR's status, is `schema/docs/adr/README.md`.
 

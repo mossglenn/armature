@@ -138,6 +138,8 @@ A finding has a status (`Open`, `Addressed`, `Dismissed`); a `Dismissed` finding
 
 `createdBy` on every artifact is set by the API from the identity the request resolved to, on create, and preserved on replace (ADR-0032). A value in a request body is ignored. The commit author is the same user. Do not try to set either.
 
+`asOf` names the state of the design a record refers to: the commit (a saved version of the whole graph) a `LearningDataset`'s assessment was taken from, a `LearningMetric` was measured against, or a `DesignFinding`'s subject was judged at (ADR-0057). Unlike `createdBy`, a client may set it, and an importer of past results should. When it is left out, the API fills it with the branch head the write starts from, keeps the stored value on a replace (so marking a finding `Addressed` does not move what it was about), and copies a dataset's value onto the metrics derived from it. A supplied value must be a real commit at which the record's subjects exist (rule 13). Because a commit cannot name itself, a finding written together with a new item about that item records the state just before the item existed.
+
 ### 4.10 Nothing derived is stored (ADR-0056)
 
 The schema holds what people decided and what was observed. Coverage, alignment and any future score are computed by the intelligence reads at a ref. If a judgment needs to be on record under someone's name, it is a `DesignFinding` (or, from Phase 5, an attestation). Before proposing any stored score, ask: *could this value appear in a commit under a person's name and be true as a record of what they did?*
@@ -204,7 +206,7 @@ If even a draft objective is premature, record a `DesignNote` with `category: "P
 GET /api/v1/intelligence/trace/LearningMetric/<id>
 ```
 
-returns the dataset, assessment, items, objectives, needs and evidence the metric connects to, the modules that declare those objectives, and every note and finding about them. See [How Armature Works](how-armature-works.md#174-trace-follow-the-chain-from-evidence-to-outcomes).
+returns the dataset, assessment, items, objectives, needs and evidence the metric connects to, the modules that declare those objectives, and every note and finding about them. The metric and dataset carry `asOf`; `GET /api/v1/intelligence/coverage/<module>?ref=<asOf>` is the module's coverage as the cohort met it. See [How Armature Works](how-armature-works.md#174-trace-follow-the-chain-from-evidence-to-outcomes).
 
 ## 7. Adding or changing a type
 

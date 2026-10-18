@@ -1,7 +1,8 @@
 # Armature Development Plan
 
 **Date:** 2026-10-05 · **Status:** Adopted; the project's roadmap. Phases 0 to 4 are done (7 and 8
-October 2026, pull requests #1 to #10); next is the decision on ADR-0057 and Phase 5.
+October 2026, pull requests #1 to #10); ADR-0057 was accepted and built on 18 October 2026; next
+is the rest of Phase 5.
 `.claude/SESSION.md` tracks day-to-day state against this plan. **Last reconciled with the code:**
 2026-10-08.
 
@@ -596,8 +597,8 @@ Work:
 Exit: both PROJECT_CONTEXT narratives can be walked through on seed data using only intelligence
 routes. **Met 2026-10-08:** `app/lib/api/intelligence.test.ts` walks Narrative 2 through the
 coverage and alignment reads and Narrative 1 from a metric to the declaring module through the
-trace read. What Narrative 1 still lacks is the commit an administration was taken from, which is
-ADR-0057's proposal.
+trace read. What Narrative 1 then lacked, the commit an administration was taken from, is
+ADR-0057's `asOf`, accepted and built 2026-10-18; the test now reads coverage at it.
 
 CoQui receives: the coverage and alignment reads its Narrative 2 integration needs; nothing it
 asked for, which is the point. This phase exists for every client.
@@ -764,7 +765,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0054 | The API is a Hono application | 0 | Accepted 2026-10-07 | Amends ADR-0026 decision 1; host-neutral app in `app/lib/api/`, one catch-all mount; numbered past the reserved and candidate blocks |
 | 0055 | The API layer reaches TerminusDB over HTTP | 2 | Accepted 2026-10-08 | One `fetch` adapter under `app/lib/api/`; the JavaScript client stays in `scripts/`; supersedes the "keep the JS client" decision and the earlier §3 split |
 | 0056 | Coverage is computed on read, never stored | 4 | Accepted 2026-10-08 | Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6; the graph stores decisions and observations, the reads derive the rest |
-| 0057 | Records that refer to a state of the graph name its commit (`asOf`) | Before or with Phase 5 (needed by Phase 6) | Proposed 2026-10-08 | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head when absent and validates a supplied id (a new rule 13); closes Narrative 1's "adequate when" |
+| 0057 | Records that refer to a state of the graph name its commit (`asOf`) | Before or with Phase 5 (needed by Phase 6) | Accepted and implemented 2026-10-18 | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head on create, keeps it on replace, copies a dataset's onto its metrics, and validates a supplied or kept id (rule 13); closes Narrative 1's "adequate when" |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
