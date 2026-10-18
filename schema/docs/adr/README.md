@@ -129,7 +129,7 @@ and 0034, are not yet written; see [Numbering](#numbering).
 | [0054](0054-api-as-a-hono-app.md) | The Armature API is a Hono application | Accepted and implemented; amended by ADR-0032 (decision 4) | The API is a Hono application in `app/lib/api/`, independent of Next.js, which serves it through a single file so it can move to its own server without a rewrite. |
 | [0055](0055-store-access-over-http.md) | The API layer reaches TerminusDB over HTTP, not through the JavaScript client | Accepted and implemented | The API talks to the TerminusDB database through one small HyperText Transfer Protocol (HTTP) module instead of the JavaScript client library, so it can record each change's real author. |
 | [0056](0056-coverage-is-computed-on-read-never-stored.md) | Coverage Is Computed on Read, Never Stored | Accepted and implemented | Coverage, and any future score, is calculated when someone asks for it, at any point in the design's history, and is never stored in the database. |
-| [0057](0057-records-name-the-commit-they-refer-to.md) | Records That Refer to a State of the Graph Name Its Commit | Proposed | Proposes an `asOf` field naming the saved version of the design that a dataset, metric or finding refers to, so results can be compared with the design as it was. |
+| [0057](0057-records-name-the-commit-they-refer-to.md) | Records That Refer to a State of the Graph Name Its Commit | Accepted and implemented (2026-10-18) | Datasets, metrics and findings carry an `asOf` field naming the saved version of the design they refer to, so results can be compared with the design as it was. |
 
 ## How to add an ADR
 

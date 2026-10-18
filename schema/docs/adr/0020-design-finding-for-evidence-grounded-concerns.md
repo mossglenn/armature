@@ -14,7 +14,9 @@ Accepted and implemented (2026-10-07), with ADR-0017. `DesignFinding` and `Findi
 (Dismissed requires `resolutionRationale`) is API-enforced from Phase 3.
 
 **Note 2026-10-08:** enforced since Phase 3 as constraint 11 (`app/lib/api/invariants/designFinding.ts`).
-ADR-0057 (Proposed) would add an optional `asOf` commit id to `DesignFinding`.
+
+**Note 2026-10-18:** ADR-0057 (Accepted) added an optional `asOf` commit id to `DesignFinding`,
+filled from the branch head on create and checked as constraint 13.
 
 ## Context
 
@@ -128,4 +130,4 @@ But it is a general-purpose slot justified by one case, and general-purpose slot
 - ADR-0012 — `DesignNote`; the type this is deliberately *not*
 - ADR-0016 — key strategy; `Random` declared explicitly
 - ADR-0017 — `DesignRecord`, which `subject` and `regarding` depend on
-- ADR-0057 (Proposed) — `asOf` on findings, naming the commit of the subject the finding describes
+- ADR-0057 (Accepted) — `asOf` on findings, naming the commit of the subject the finding describes

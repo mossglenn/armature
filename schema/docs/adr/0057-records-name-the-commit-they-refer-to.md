@@ -4,12 +4,14 @@
 > moment (the results of a test given to a group of learners, say, or a finding about a question), how
 > does it say which moment? It proposes an optional `asOf` field holding the identifier of the commit
 > (the saved version of the design) the record refers to, filled in with the current version when a
-> client leaves it out and checked by Armature when a client supplies it. It is Proposed, not accepted
-> or built, and is meant to be adopted before the Phase 6 outcomes importer.
+> client leaves it out and checked by Armature when a client supplies it. Accepted and built on
+> 2026-10-18 for datasets, metrics and findings; the future attestation record will carry the same
+> field.
 
 ## Status
 
-Proposed (2026-10-08). Follows from ADR-0056, which removed stored coverage and left one question
+Accepted (2026-10-18), with decision 5 added at acceptance; implemented the same day on
+`phase-5/asof`. Proposed 2026-10-08. Follows from ADR-0056, which removed stored coverage and left one question
 it had been answering: what the graph looked like when something was observed or judged. Adopt
 before Phase 6's outcomes importer and alongside ADR-0028's Attestation, which already carries
 `asOf`.
@@ -96,6 +98,35 @@ No new route. A client that has a dataset reads anything at `ref=<asOf>`. The tr
 `asOf` to the summary of any node that carries it, so a client walking from a metric knows which
 ref to read the rest at. The coverage read gains nothing: it already takes `ref=`.
 
+### 5. Replace, same-write subjects and parents (added at acceptance, 2026-10-18)
+
+Building decisions 2 and 3 needed three answers the proposal left open.
+
+- **A replace keeps the stored `asOf`.** A replace that omits `asOf` keeps the stored value, as it
+  keeps `createdBy`. Refilling it would let a status change (a finding marked `Addressed`) silently
+  move the state the finding was about. A client that means to re-judge supplies a new `asOf`. A
+  stored document without one keeps none.
+- **The filled value is the head the write starts from.** A commit has no id until it exists, so a
+  document cannot name the commit that writes it. A subject created in the same write is therefore
+  not in the state `asOf` names. This is accepted for filled values: the finding is about the state
+  the author was looking at, plus what they added with it. A supplied `asOf` with a subject created
+  in the same write (a `{ "@ref" }`) is refused, because the client claims a state the subject is
+  not in. When the write carries `If-Match`, that commit is the head, so the filled value is exactly
+  the state the client read.
+- **A metric with a dataset copies the dataset's value.** A metric with a `derivedFrom` dataset
+  holds the dataset's `asOf` itself, copied by the hub when omitted (or absent when the dataset has
+  none), so every record that refers to a state carries the field and a reader needs no second
+  lookup. A supplied value that differs is refused. The copy happens after the records without a
+  parent are filled, so a dataset and its metrics written together agree.
+
+Constraint 13 therefore checks every `asOf` except those the hub filled or copied. That includes
+a value kept on a replace, because the replace may change the subjects, and the stored record must
+still hold. A finding's `regarding` record is checked with its `subject`s, since the finding
+relates the two at that state. The violations are `unknown_commit` (not a commit id, or not one
+the store holds; the check reads `ValidCommit/<id>` as in check U), `absent_at_commit` (a subject
+not in that state; read at `local/commit/<id>`, checks O and U) and `as_of_disagrees` (a metric
+against its dataset).
+
 ## Consequences
 
 **Positive**
@@ -108,6 +139,10 @@ ref to read the rest at. The coverage read gains nothing: it already takes `ref=
   case.
 
 **Negative**
+
+- A filled `asOf` can name a state that lacks a subject created in the same write (decision 5).
+  The trace and a reader at `ref=<asOf>` will not find that subject there; its own history starts
+  at the write's commit.
 
 - A commit id in a document is a reference the schema cannot check; the hub's invariant is the
   only guard, and data written outside the pipeline (a script, a migration) can hold an id that

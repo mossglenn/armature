@@ -117,6 +117,9 @@ the administration. ADR-0057 proposes `asOf` on `LearningDataset` and on the oth
 describe or judge a state of the graph; with it, coverage at delivery is the coverage read at
 `ref=<asOf>`.
 
+> **Later change (2026-10-18):** ADR-0057 is Accepted and implemented; a dataset written through
+> the API carries `asOf`, and the trace from a metric reports it.
+
 ## Consequences
 
 **Positive**
@@ -138,6 +141,7 @@ describe or judge a state of the graph; with it, coverage at delivery is the cov
 - `GET /documents/ModuleObjective?coverageStatus=Uncovered` no longer exists. The course-wide
   coverage read is its replacement.
 - Coverage at the time of an administration is not answerable until ADR-0057 lands.
+  **Later change (2026-10-18):** it landed; the answer is the coverage read at `ref=<asOf>`.
 - Removing two required fields and an enum is a breaking schema change at demo scale:
   `load_schema.js --clear-instances` then `seed_data.js`. In a deployment with data, the
   migration endpoint drops the fields.
