@@ -3,7 +3,8 @@ import { DOCUMENT_SCHEMAS } from '@/lib/schemas';
 import { hasCreatedBy, isWritable } from './classes';
 import { ApiError } from './errors';
 import { userCopyFor, type ResolvedUser } from './identity';
-import { checkInvariants, createWriteContext } from './invariants';
+import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
+import { AS_OF_PARENT, hasAsOf } from './invariants/asOf';
 import { StoreError, type Store, type TerminusDocument } from './store';
 
 /**
@@ -19,7 +20,9 @@ import { StoreError, type Store, type TerminusDocument } from './store';
  *      its key fields, so a replace is recognized either way
  *   3. provenance: createdBy is set on create and preserved on replace for
  *      every class that carries it; a User the branch lacks is carried in
- *      the same commit (ADR-0032 decisions 4 and 5)
+ *      the same commit (ADR-0032 decisions 4 and 5); asOf, on the records
+ *      that refer to a state of the graph, is filled from the branch head
+ *      on create, kept on replace, or copied from a parent record (ADR-0057)
  *   4. invariants: every constraint, over the whole batch (422)
  *   5. the write: one PUT with create=true for the whole list, so it is one
  *      commit and fails together (platform checks X1, X2b, X5); If-Match
@@ -130,9 +133,12 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   });
   const copy = carryUser ? await userCopyFor(branch, who) : undefined;
 
-  // Step 4: invariants. The carried User is resolvable so createdBy passes
-  // constraint 0 on a branch that does not hold it yet.
+  // The carried User is resolvable so createdBy passes constraint 0 on a
+  // branch that does not hold it yet.
   const ctx = createWriteContext(branch, documents, replacing, copy ? [copy] : []);
+  await fillAsOf(documents, existing, ctx, opts);
+
+  // Step 4: invariants.
   await checkInvariants(ctx);
 
   // Step 5: the write. The carried User first, then the caller's documents;
@@ -158,6 +164,60 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   }
 
   return { commit: result.commit, ids: result.ids.slice(carried.length, carried.length + documents.length) };
+}
+
+/**
+ * Step 3, the state each record refers to (ADR-0057 decision 2), for the
+ * classes that carry `asOf` when the client left it out:
+ *
+ *   - a record with a parent (a metric with a dataset) copies the parent's
+ *     value, absent when the parent has none
+ *   - otherwise a replace keeps the stored value, so a status change does
+ *     not move what a finding was about
+ *   - otherwise a create takes the head the write starts from. That is the
+ *     latest state a write can name: the commit it makes has no id until it
+ *     exists, so a subject created in the same write is not in it
+ *
+ * Filled and copied values go in `ctx.asOfFilled`, which constraint 13 skips.
+ * Records with a parent are filled last, so a metric copies the value its
+ * dataset in the same write was just given.
+ */
+async function fillAsOf(
+  documents: TerminusDocument[],
+  existing: Array<TerminusDocument | undefined>,
+  ctx: WriteContext,
+  opts: WriteOptions
+): Promise<void> {
+  // With If-Match the write lands on that commit or not at all (412).
+  let head: Promise<string | undefined> | undefined;
+  const headId = () => (head ??= opts.ifMatch ? Promise.resolve(opts.ifMatch) : opts.branch.head().then((c) => c?.id));
+  const parentOf = (doc: TerminusDocument): unknown => {
+    const field = AS_OF_PARENT[doc['@type']];
+    return field ? doc[field] : undefined;
+  };
+
+  const carrying = documents.filter((doc) => hasAsOf(doc['@type']));
+  for (const doc of carrying.filter((d) => parentOf(d) === undefined)) {
+    if (doc.asOf !== undefined) continue;
+    const found = existing[documents.indexOf(doc)];
+    if (found) {
+      if (found.asOf !== undefined) doc.asOf = found.asOf;
+      continue;
+    }
+    const id = await headId();
+    if (id) {
+      doc.asOf = id;
+      ctx.asOfFilled.add(doc);
+    }
+  }
+  for (const doc of carrying.filter((d) => parentOf(d) !== undefined)) {
+    if (doc.asOf !== undefined) continue;
+    const parent = await ctx.resolve(parentOf(doc));
+    if (parent?.asOf !== undefined) {
+      doc.asOf = parent.asOf;
+      ctx.asOfFilled.add(doc);
+    }
+  }
 }
 
 /**
