@@ -13,6 +13,8 @@
  *     architecture decision record ADR-0056)
  *   2 DesignNotes (one on an AssessmentItem, one on a ModuleObjective junction)
  *   1 DesignFinding (on the Draft item)
+ *   1 Attestation (a verdict on one option of an Approved item, in a second
+ *     commit so its asOf can name the first; ADR-0028)
  *   1 Course
  *   1 User (User/demo-designer, the identity the tests and local clients send)
  *
@@ -554,6 +556,23 @@ const documents = [
 
 ];
 
+// An expert affirmed the key of the bias item (ADR-0028). It is written in a
+// second commit because asOf names the commit the verdict is about, and a
+// commit cannot name itself. Hash-keyed: the store mints the id from subject,
+// fragmentId, claimRef and attestedBy, so the seed supplies none. The API
+// fills attestedBy and asOf; the seed writes the store directly and sets both.
+const attestation = (asOf) => ({
+  "@type": "Attestation",
+  "subject": id("AssessmentItem", "bias-type-mc"),
+  "fragmentId": "bias-type-mc-opt-a",
+  "claimRef": "seed:key-is-correct",
+  "claimText": "Training data bias is the only correct answer to this stem.",
+  "verdict": "Affirmed",
+  "reason": "The scenario describes an unrepresentative training set; the distractors name output or human biases.",
+  "asOf": asOf,
+  "attestedBy": id("User", "demo-designer"),
+});
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -581,6 +600,19 @@ async function main() {
     { full_replace: true },
     null,
     "Seed demo data: Introduction to AI for Instructional Designers",
+  );
+
+  // The head the attestation is about: the seed commit just written.
+  const auth = "Basic " + Buffer.from(`${TERMINUS_USER}:${TERMINUS_PASS}`).toString("base64");
+  const log = await fetch(`${TERMINUS_URL}/api/log/admin/${TERMINUS_DB}?count=1`, { headers: { Authorization: auth } });
+  const seedCommit = (await log.json())?.[0]?.identifier;
+  if (!seedCommit) throw new Error("could not read the seed commit from /api/log");
+  console.log("Recording the seed attestation...");
+  await client.addDocument(
+    [attestation(seedCommit)],
+    {},
+    null,
+    "Seed demo data: an expert affirms the key of the bias item",
   );
 
   console.log(`  → Done.\n`);
