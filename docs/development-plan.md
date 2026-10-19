@@ -125,7 +125,9 @@ shape is versioned-tree-capable from the start. See the note below the CoQui tab
 **Course builder, added 2026-10-18.** No row took the design out to a deliverable course; the
 outcomes importer only brought results back in. Mapping Tessera, a course framework designed for
 AI-assisted authoring, showed the gap (`docs/research/tessera-mapping.md`). With it, the ordered
-module-content view has a second client (§6).
+module-content view has a second client (§6). QuiQui, a live audience response tool, is a second
+real instance: a session file built from a module's items at a commit
+(`docs/research/quiqui-mapping.md`).
 
 **Applying the test to CoQui's asks.** The table below is the heart of the plan's answer to
 "how do we not over-fit."
@@ -880,6 +882,17 @@ what evidence would be enough.
   to twice, which would change the key anyway; or the outcomes importer meeting a source that
   references one item twice in one test, which QTI permits. Decided 2026-10-08 as a timing
   decision, not a scope decision.
+- **Items used formatively, inside activities.** *Raised 2026-10-18*
+  (`docs/research/quiqui-mapping.md` §4). Items reach a module only as placements in an
+  `Assessment`, which requires a module and carries summative fields; a `LearningActivity` names
+  the objectives it targets but cannot reference an item. So "lecture 3 polls the room with item
+  X" or "this practice page asks these questions" has no place in the graph. Coverage counting
+  only assessment placements is deliberate (ADR-0029); the question is whether formative use is
+  in the graph at all, and how: an item reference on `LearningActivity`, an activity-item junction
+  with its own `sequence`, or a formative `Assessment`. It touches ADR-0005, ADR-0019 and ADR-0029.
+  Evidence already in hand: QuiQui (live polls) and Tessera (standalone questions on content
+  pages), with the activity and strategy designer reference client. Decide before the ordered
+  module-content view is built, since that view is where an activity's items would appear.
 - **Separate API service.** When Phase 7's container and client package exist, the move is
   mechanical. Evidence: a plugin that cannot or should not depend on a Next.js deployment, or
   the hosted demo needing independent scaling.
