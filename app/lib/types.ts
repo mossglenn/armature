@@ -207,6 +207,7 @@ export interface LearningMetric extends LearningEvidence {
   unit: string;
   derivedFrom?: string;  // LearningDataset @id
   asOf?: string;
+  subject?: string;  // DesignRecord @id
 }
 
 export interface DescriptiveEvidence extends LearningEvidence {
@@ -241,8 +242,6 @@ export interface AssessmentItem extends ArmatureDocument {
   status: ItemStatus;
   bloomsLevel?: BloomsLevel;
   assesses: string[];  // LearningObjective @id[]
-  difficultyIndex?: number;
-  discriminationIndex?: number;
 }
 
 export interface Assessment extends ArmatureDocument {
@@ -481,6 +480,7 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     unit: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     derivedFrom: {"type":"LearningDataset","kind":"reference","optional":true,"many":false},
     asOf: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    subject: {"type":"DesignRecord","kind":"reference","optional":true,"many":false},
   },
   DescriptiveEvidence: {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
@@ -556,8 +556,6 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     status: {"type":"ItemStatus","kind":"enum","optional":false,"many":false},
     bloomsLevel: {"type":"BloomsLevel","kind":"enum","optional":true,"many":false},
     assesses: {"type":"LearningObjective","kind":"reference","optional":false,"many":true,"min":1},
-    difficultyIndex: {"type":"xsd:decimal","kind":"primitive","optional":true,"many":false},
-    discriminationIndex: {"type":"xsd:decimal","kind":"primitive","optional":true,"many":false},
   },
   ItemInstance: {
     sequence: {"type":"xsd:integer","kind":"primitive","optional":false,"many":false},

@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-10-18_
+_Schema snapshot · Generated 2026-10-19_
 
 ---
 
@@ -53,6 +53,7 @@ classDiagram
     +string unit
     +LearningDataset? derivedFrom
     +string? asOf
+    +DesignRecord? subject
   }
 
   class DescriptiveEvidence {
@@ -120,8 +121,6 @@ classDiagram
     +ItemStatus status
     +BloomsLevel? bloomsLevel
     +Set<LearningObjective> assesses
-    +decimal? difficultyIndex
-    +decimal? discriminationIndex
   }
 
   class ItemInstance {
@@ -231,6 +230,7 @@ classDiagram
   %% Relationships (solid: reference; dotted: optional; diamond: embedded subdocument)
   ArmatureDocument ..> User : createdBy
   LearningMetric ..> LearningDataset : derivedFrom
+  LearningMetric ..> DesignRecord : subject
   LearningDataset ..> Assessment : producedBy
   NeedEvidenceLink --> LearningNeed : need
   NeedEvidenceLink --> LearningEvidence : evidence
@@ -317,7 +317,7 @@ _category: artifact · **abstract** · extends `ArmatureDocument`_
 ### `LearningMetric`
 _category: artifact · extends `LearningEvidence` · key: Random_
 
-> A quantitative measurement of learning performance at a point in time. Inherits label, description, collectedAt, source from LearningEvidence. Typically derived from a LearningDataset produced by an administered Assessment — the derivedFrom link preserves that provenance. Examples: pass rate, average score, completion rate.
+> A quantitative measurement of learning performance at a point in time. Inherits label, description, collectedAt, source from LearningEvidence. Typically derived from a LearningDataset produced by an administered Assessment — the derivedFrom link preserves that provenance. Examples: pass rate, average score, completion rate. A metric about one design record names it in subject: an item statistic (difficulty, discrimination) is a metric whose subject is the AssessmentItem, derivedFrom the administration's dataset (ADR-0058). Summaries over metrics, such as an item's latest difficulty, are computed on read, never stored (ADR-0056).
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -325,6 +325,7 @@ _category: artifact · extends `LearningEvidence` · key: Random_
 | `unit` | `string` | required |
 | `derivedFrom` | `LearningDataset?` | optional |
 | `asOf` | `string?` | optional |
+| `subject` | `DesignRecord?` | optional |
 
 ### `DescriptiveEvidence`
 _category: artifact · extends `LearningEvidence` · key: Random_
@@ -431,7 +432,7 @@ _category: fragment · **subdocument** · extends `Fragment` · key: Random_
 ### `AssessmentItem`
 _category: artifact · extends `ArmatureDocument` · key: Random_
 
-> A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). difficultyIndex and discriminationIndex hold classical item-analysis statistics from LearningDataset analysis. No API code computes or writes them yet, and whether they stay as imported observations or are computed on read instead (ADR-0056 names difficulty summaries among derived values) is an open question for the outcomes importer (docs/development-plan.md Phase 6). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.
+> A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). Item statistics (difficulty, discrimination) are not stored on the item: each is a LearningMetric whose subject is the item, derived from the dataset of one administration and carrying that dataset's asOf (ADR-0058). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -443,8 +444,6 @@ _category: artifact · extends `ArmatureDocument` · key: Random_
 | `status` | `ItemStatus` | required |
 | `bloomsLevel` | `BloomsLevel?` | optional |
 | `assesses` | `Set<LearningObjective>` | required, min 1 |
-| `difficultyIndex` | `decimal?` | optional |
-| `discriminationIndex` | `decimal?` | optional |
 
 ### `ItemInstance`
 _category: relationship · extends `DesignRecord` · key: Hash(assessment, implements)_
