@@ -5,8 +5,9 @@
 > This decision also made that record store a coverage status (how well the module's assessments
 > test the objective) and said only the application programming interface (API) would create it.
 > Both parts have since changed: coverage is no longer stored but calculated each time it is asked
-> for (ADR-0056), and any client creates these records through the ordinary document routes. The
-> role, rationale and order fields still stand. (ADR stands for Architecture Decision Record.)
+> for (ADR-0056), and any client creates these records through the ordinary document routes, which
+> was confirmed as the decision on 2026-10-18. The role, rationale and order fields still stand.
+> (ADR stands for Architecture Decision Record.)
 
 ## Status
 Accepted for `ModuleObjective` as the reified, programmatic declaration carrying `role`,
@@ -20,7 +21,8 @@ ended: the junction is a design record only.
 ADR-0029** (decisions 4 to 6: how the stored field was to be kept true), both 2026-10-08. Those
 amendments fell with the stored field under ADR-0056. ADR-0029 decisions 1 to 3 (the population
 counted, the two eligibility rules and the default thresholds) are the coverage read's default
-algorithm. **Not built as written (noted 2026-10-08):** no API code creates `ModuleObjective`
+algorithm. **Amended 2026-10-18:** the generic write path below is the decision (see the note under
+Decision). **Not built as written (noted 2026-10-08):** no API code creates `ModuleObjective`
 "programmatically". Clients write it like any other document through
 `PUT /api/v1/documents/:type/:id` and `POST /api/v1/documents`, as the seed does. The title's
 "Computed Fields" no longer describes the type.
@@ -43,6 +45,21 @@ Making ModuleObjective UI-editable adds complexity for what is often a mechanica
 > the generic document API (`PUT /api/v1/documents/:type/:id`, `POST /api/v1/documents`), like every
 > other type, and the invariants engine checks it on the way in. Whether a designer edits it
 > directly is a choice for each client's interface, not the hub's.
+
+> **Later change (2026-10-18): the generic path is the decision.** Declarations are written by
+> clients through the generic document routes, and the hub does not restrict who writes them.
+> Reasons: (1) the "programmatic" rule existed to protect the stored coverage status, which ADR-0056
+> removed, so what remains (`role`, `roleRationale`, `sequence`) is a designer's decision, which is
+> what the graph exists to store; (2) "a designer assigns an objective to a module" is the write
+> itself, and the only other trigger, inferring declarations from where items are placed, would
+> erase the declared-but-unassessed case coverage reports as `Uncovered`; (3) the two-client test:
+> the curriculum mapper and the AI design assistant both write declarations; (4) the existing
+> guards suffice: the Hash key on (`module`, `references`) makes a second declaration of the same
+> objective a replace, constraint 0 checks both references' classes, and every write is an
+> attributed commit, with branches and merge as the review step. A restriction would need a per-type
+> route (CLAUDE.md forbids them) or a permission model the hub does not have, and no client has
+> asked for one. Whether an interface lets designers edit declarations directly stays the client's
+> choice (Development Principle 5).
 
 `coverageStatus` is a computed field updated by the API after any change that affects the coverage calculation:
 - When an `AssessmentItem.assesses` set is modified
