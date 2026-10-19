@@ -622,9 +622,11 @@ Work:
       for any part-level reference, and applies it immediately: `DesignNote` and `DesignFinding`
       gain an optional `fragmentId` beside their existing `subject`, so "why did we replace this
       image" and "this drop zone is ambiguous" point at a part rather than a whole item.
-- [ ] **Non-aggregation guard (ADR-0021).** The generic list route refuses `attestedBy` and
+- [x] **Non-aggregation guard (ADR-0021).** The generic list route refuses `attestedBy` and
       `createdBy` as filter keys, and the ADR records why this one restriction lives in the
-      generic layer.
+      generic layer. **Done 2026-10-18, ahead of the phase:** any field targeting `User` is
+      refused (400 `person_filter_refused`), so `attestedBy` needs no change; it landed with the
+      list route's hub filtering, which would otherwise have made `?createdBy=` work.
 - [ ] An `Attestation` validator in the invariants registry (the `DesignFinding` validator, rule
       11, has existed since Phase 3).
 - [ ] Seed one attestation so the trace route can show "affirmed by an expert at <institution>
@@ -806,12 +808,11 @@ what evidence would be enough.
   (constraints 3 and 4), but the composed view has not been built; clients sort the links
   themselves. Evidence: the activity and strategy designer reference client, or a Coverage View
   that shows a module's activities.
-- **Filtering the list route on optional and multi-valued references.** The store answers a
-  template query on an `Optional` or `Set` reference field with a 500 (check Y), and
-  `GET /api/v1/documents/:type?<field>=` passes such filters through, so `?createdBy=` or
-  `?assesses=` fail with a 500. The intelligence reads work around it in `Graph.where`. Fixing the
-  list route (list and filter in the hub, or refuse with 400) should happen with Phase 5's
-  non-aggregation guard, which refuses `createdBy` as a filter anyway.
+- **Filtering the list route on optional and multi-valued references.** *Resolved 2026-10-18.*
+  The store answers a template query on an `Optional` enum or reference, or on a `Set`, with a
+  500 (checks Y2, Y3, Y5). The list route now lists the type and filters those in the hub, then
+  pages, as `Graph.where` does; Phase 5's non-aggregation guard landed with it. A WOQL query over
+  the adapter replaces the full listing when a type outgrows it.
 - **Merge policy.** The store's three-way merge lands in Phase 2; what remains open is policy:
   who may merge a branch, whether findings and attestations merge without approval (CoQui's
   O-P), which needs a per-type filtered merge the store does not offer, and where a
@@ -1089,5 +1090,9 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   field, whether the value is one member or an array (Y2, Y3). The intelligence reads therefore
   look documents up by an Optional or Set reference by listing the type and filtering in the hub
   (`Graph.where`); a WOQL query over the adapter replaces that when a type outgrows a list.
+- *Verified (2026-10-18, check Y):* the same holds for enums, which the store treats as classes:
+  a template filters on a required enum field (Y4) and is a 500 on an `Optional` enum field (Y5).
+  A template on an `Optional` string field filters (Y6). The list route filters `Optional` enum
+  and reference fields and every `Set` in the hub.
 - Turtle and RDF/XML content negotiation appear under enterprise-labeled pages; treat JSON and
   JSON-LD as the guaranteed export formats until verified.

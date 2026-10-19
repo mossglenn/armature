@@ -5,8 +5,7 @@
 > so that others know whom to ask, but Armature offers no feature that summarizes one person's work
 > across records, and tools built on it should not either, partly because people who know they are
 > being scored stop being candid, and candor is the data Armature exists to capture. It still holds as
-> a policy; the guard that would stop the generic list feature from filtering by author is planned
-> (development plan Phase 5) but not yet built.
+> a policy, and since 2026-10-18 the generic list feature refuses to filter by author.
 
 ## Status
 Accepted
@@ -16,6 +15,14 @@ describes as unbuilt, is built (ADR-0032). The non-aggregation guard on the gene
 (refusing `createdBy` as a filter key) is planned for Phase 5 of `docs/development-plan.md` and not
 yet built. Export-time anonymization is planned for ADR-0031 (export profiles), which is not yet
 written.
+
+**Note 2026-10-18:** the non-aggregation guard is built, ahead of Phase 5. Making the list route
+filter optional and multi-valued fields in the hub (they had failed with a 500, platform check Y)
+would otherwise have made `?createdBy=` work, so the guard landed with that fix. The route refuses
+any filter on a field whose target is `User` with 400 `person_filter_refused`, read from the
+generated field map, so a future `attestedBy` is refused without a change. It lives in the generic
+layer because the generic list is the one place a filter by person is one parameter away; a
+plugin that needs "my own work" asks for it under the plugin's own name, outside the hub.
 
 ## Context
 

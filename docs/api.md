@@ -58,12 +58,12 @@ Lists the documents of a type at a ref, optionally filtered.
 | Query parameter | Meaning |
 |---|---|
 | `branch` or `ref` | The ref (see conventions) |
-| `<field>=<value>` | Keep documents whose field equals the value. Numbers and `true`/`false` are converted for numeric and boolean fields |
+| `<field>=<value>` | Keep documents whose field equals the value; for a multi-valued field, documents whose set contains it. Numbers and `true`/`false` are converted for numeric and boolean fields |
 | `count`, `skip` | Paging: at most `count` documents, after skipping `skip` |
 
-Returns an array of documents. Unknown type: 404 `unknown_type`. A filter on a field the type does not have, or on an embedded part: 400 `unknown_field`.
+Returns an array of documents. Unknown type: 404 `unknown_type`. A filter on a field the type does not have, or on an embedded part: 400 `unknown_field`. A filter on a field that names a person (`createdBy`): 400 `person_filter_refused`, because the API does not list documents by who made them (ADR-0021).
 
-> **Known limitation.** Filtering on a *required* reference field works (for example `/documents/Assessment?module=Module/how-ai-works`). Filtering on an *optional* or *multi-valued* reference field (for example `?createdBy=`, `?generatedBy=`, `?assesses=`) is passed to the database, which answers such a query with an internal error (platform check Y), so the route returns 500. The intelligence reads work around this internally; the list route does not yet. Filter in the client for now.
+Filters on required single-valued fields are applied by the database (for example `/documents/Assessment?module=Module/how-ai-works`). The database cannot answer a filter on an optional enumerated or reference field, or on a multi-valued one (platform check Y), so the hub lists the type and applies those filters itself, then pages (for example `?assesses=`, `?generatedBy=`, `?bloomsLevel=`). The result is the same either way; the second form reads the whole type, which matters only for very large types.
 
 ### `GET /documents/:type/:id`
 
@@ -275,7 +275,7 @@ Every document that references this one, found from the schema's reference field
 | 400 | `ambiguous_ref`, `branch_required`, `write_at_commit` | Misused `branch` / `ref` parameters |
 | 400 | `bad_if_match`, `bad_query`, `range_required`, `since_required` | Malformed headers or query parameters |
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
-| 400 | `untraceable_type`, `users_live_on_main` | Route-specific refusals |
+| 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused` | Route-specific refusals |
 | 401 | `identity_required`, `unknown_user` | No identity, or an unregistered one |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit |
 | 409 | `type_conflict` | An identifier held by another type (rule 12) |
