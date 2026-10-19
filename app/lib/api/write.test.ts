@@ -565,5 +565,37 @@ describe('generic write path and invariants (Phase 3)', () => {
       expect((await get(`/api/v1/documents/AssessmentItem${q}&colour=red`)).status).toBe(400);
       expect((await get(`/api/v1/documents/Widget${q}`)).status).toBe(404);
     });
+
+    // The store answers these with a 500 (platform check Y); the hub filters them.
+    const idsOf = async (res: Response) => ((await res.json()) as Array<{ '@id': string }>).map((d) => d['@id']);
+
+    it('filters on a Set reference by membership', async () => {
+      const all = (await (await get(`/api/v1/documents/AssessmentItem${q}`)).json()) as Array<{ '@id': string; assesses: string[] }>;
+      const expected = all.filter((d) => d.assesses.includes(OBJECTIVE)).map((d) => d['@id']);
+      expect(expected.length).toBeGreaterThan(1);
+      const res = await get(`/api/v1/documents/AssessmentItem${q}&assesses=${OBJECTIVE}`);
+      expect(res.status).toBe(200);
+      expect((await idsOf(res)).sort()).toEqual(expected.sort());
+    });
+
+    it('filters on an Optional enum, combined with a store filter, and pages after filtering', async () => {
+      const all = (await (await get(`/api/v1/documents/LearningObjective${q}`)).json()) as Array<{ '@id': string; bloomsLevel?: string; state: string }>;
+      const level = all.find((d) => d.bloomsLevel)!.bloomsLevel!;
+      const expected = all.filter((d) => d.bloomsLevel === level && d.state === 'Active').map((d) => d['@id']);
+      expect(expected.length).toBeGreaterThan(0);
+      const res = await get(`/api/v1/documents/LearningObjective${q}&bloomsLevel=${level}&state=Active`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('etag')).toMatch(/^"[a-z0-9]+"$/);
+      const found = await idsOf(res);
+      expect([...found].sort()).toEqual([...expected].sort());
+      const second = await get(`/api/v1/documents/LearningObjective${q}&bloomsLevel=${level}&state=Active&skip=1&count=1`);
+      expect(await idsOf(second)).toEqual(found.slice(1, 2));
+    });
+
+    it('refuses to list by who made a document (ADR-0021)', async () => {
+      const res = await get(`/api/v1/documents/Module${q}&createdBy=${AUTHOR}`);
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('person_filter_refused');
+    });
   });
 });

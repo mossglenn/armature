@@ -12,14 +12,14 @@ import {
   setEtag,
 } from '../http';
 import { resolveUser } from '../identity';
-import { createStore, isRecord, type Ref } from '../store';
+import { createStore, isRecord, type Ref, type TerminusDocument } from '../store';
 import { parseDocuments, writeDocuments } from '../write';
 
 /**
  * /api/v1/documents (architecture decision records ADR-0024 and ADR-0025
  * decisions 3, 7, 8 and 9; Phase 3).
  *
- *   GET  /:type?branch=|ref=&<field>=&count=&skip=   list, filtered by field values
+ *   GET  /:type?branch=|ref=&<field>=&count=&skip=   list, filtered by field values (never by a User field)
  *   GET  /:type/:id?branch=|ref=                      one document at a ref; ETag (entity tag) is the commit
  *   PUT  /:type/:id?branch=                           { message, document }  replace or create
  *   POST /?branch=                                    { message, documents: [...] }  one commit
@@ -39,22 +39,48 @@ const fieldsOf = (type: string): Record<string, FieldShape> =>
 
 const RESERVED_QUERY = new Set(['branch', 'ref', 'count', 'skip']);
 
-/** A template for the store's query from `?field=value` pairs the class has. */
-function templateFromQuery(type: string, query: Record<string, string>): Record<string, unknown> {
+interface Filters {
+  /** Required single-valued fields: the store's template query. */
+  template: Record<string, unknown>;
+  /** Optional or multi-valued fields: applied by the hub to the listed documents. */
+  inHub: Array<{ field: string; many: boolean; value: unknown }>;
+}
+
+/**
+ * The `?field=value` pairs the class has, split by who applies them. The
+ * store filters a required single-valued field by template query, but
+ * answers one on an Optional enum or reference, or on a Set, with a 500
+ * (platform check Y), so the hub lists and filters those, as `Graph.where`
+ * does. A Set matches when it contains the value. A field naming a `User`
+ * is refused: the API offers no enumeration of a person's work (ADR-0021
+ * decision 3, the non-aggregation guard).
+ */
+function filtersFromQuery(type: string, query: Record<string, string>): Filters {
   const fields = fieldsOf(type);
-  const template: Record<string, unknown> = {};
+  const filters: Filters = { template: {}, inHub: [] };
   for (const [key, raw] of Object.entries(query)) {
     if (RESERVED_QUERY.has(key)) continue;
     const shape = fields[key];
     if (!shape || shape.kind === 'subdocument') {
       throw new ApiError(400, 'unknown_field', `${type} has no filterable field ${key}`);
     }
-    if (shape.type === 'xsd:boolean') template[key] = raw === 'true';
-    else if (shape.type === 'xsd:integer' || shape.type === 'xsd:decimal') template[key] = Number(raw);
-    else template[key] = raw;
+    if (shape.type === 'User') {
+      throw new ApiError(400, 'person_filter_refused', `${key} names a person; the API does not list documents by who made them (ADR-0021)`);
+    }
+    let value: unknown = raw;
+    if (shape.type === 'xsd:boolean') value = raw === 'true';
+    else if (shape.type === 'xsd:integer' || shape.type === 'xsd:decimal') value = Number(raw);
+    if (shape.optional || shape.many) filters.inHub.push({ field: key, many: shape.many, value });
+    else filters.template[key] = value;
   }
-  return template;
+  return filters;
 }
+
+const sameValue = (stored: unknown, wanted: unknown): boolean =>
+  stored === wanted || (typeof wanted === 'number' && stored !== undefined && Number(stored) === wanted);
+
+const matches = (doc: TerminusDocument, { field, many, value }: Filters['inHub'][number]): boolean =>
+  many ? Array.isArray(doc[field]) && doc[field].some((v) => sameValue(v, value)) : sameValue(doc[field], value);
 
 function writeRef(c: Context): Ref & { branch: string } {
   const ref = refFromQuery(c);
@@ -68,12 +94,20 @@ documents.get('/:type', async (c) => {
   const ref = refFromQuery(c);
   const store = createStore(ref);
   if ('commit' in ref) await requireCommit(store, ref.commit);
-  const template = templateFromQuery(type, c.req.query());
+  const { template, inHub } = filtersFromQuery(type, c.req.query());
   const count = c.req.query('count') === undefined ? undefined : intQuery(c, 'count', 0);
   const skip = c.req.query('skip') === undefined ? undefined : intQuery(c, 'skip', 0);
-  const { documents: found, commit } = await store.queryDocuments(type, template, { count, skip });
+  if (!inHub.length) {
+    const { documents: found, commit } = await store.queryDocuments(type, template, { count, skip });
+    setEtag(c, commit);
+    return c.json(found);
+  }
+  // The hub filters, so it pages too: the store's count and skip would apply before the filter.
+  const { documents: listed, commit } = await store.queryDocuments(type, template);
+  const kept = listed.filter((doc) => inHub.every((f) => matches(doc, f)));
+  const from = skip ?? 0;
   setEtag(c, commit);
-  return c.json(found);
+  return c.json(kept.slice(from, count === undefined ? undefined : from + count));
 });
 
 documents.get('/:type/:id', async (c) => {
