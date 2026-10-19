@@ -8,6 +8,8 @@
 > - **Superseded statements:** TerminusDB *does* have a three-way merge with field-level conflict reports (§4's "no three-way merge with markers" is wrong for v12; plan §9). The API is no longer "eight unpaginated GET-all routes": those were retired, and `/api/v1` has filtered, paged list reads (`docs/api.md`). The hub no longer takes a `User` id on trust: the `Armature-User` header now carries an `externalId` that the hub resolves to a `User` (ADR-0032), and every write through the API sets `createdBy`. The API's location is settled (ADR-0026, ADR-0054) and so is the coverage algorithm (ADR-0029, computed on read by ADR-0056).
 > - **One recorded divergence:** this handoff gives each option's own feedback a `{ fragmentId, text }` shape (§2), but the schema has `ItemOption.feedback` as plain text, so per-option feedback is not separately addressable. The difference has not been decided either way.
 >
+> **What CoQui must act on is now kept in [`client-changes.md`](client-changes.md)** (from 2026-10-18): dated entries, newest first, each saying what changed and what a client does, with CoQui's mappings. This banner records status against the asks only.
+>
 > Every path written `coqui/…` refers to the CoQui repository, not this one.
 
 **Date:** 2026-10-05 (Session 22) · **Status: a handoff, for whoever continues Armature's

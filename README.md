@@ -64,6 +64,7 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 | See the roadmap and open questions | [Development plan](docs/development-plan.md) |
 | Read the argument for Armature | [Position paper](docs/positionpaper/Armature-Position-Paper.html) |
 | See what the first plugin asked for | [CoQui handoff](docs/armature-asks-from-Coqui.md) |
+| Catch a client tool up with what changed | [Changes for client tools](docs/client-changes.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
 | Work on the code (including with an AI assistant) | [.claude/CLAUDE.md](.claude/CLAUDE.md), [.claude/SESSION.md](.claude/SESSION.md) |
 

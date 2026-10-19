@@ -939,7 +939,8 @@ what evidence would be enough.
 CoQui's `armature:check` can begin printing accepted and refused asks as soon as Phase 2 lands;
 Armature's own contract test in Phase 7 is the durable version of the same check. The CoQui
 handoff's statement that TerminusDB "has no three-way merge with markers" is out of date for
-v12 and should be corrected on CoQui's side when PR 6 is picked up.
+v12 and should be corrected on CoQui's side when PR 6 is picked up. What CoQui, or any client,
+must act on as each phase lands is kept in `docs/client-changes.md`, newest first.
 
 ---
 
