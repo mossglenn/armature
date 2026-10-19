@@ -142,7 +142,7 @@ real instance: a session file built from a module's items at a commit
 | `Attestation` with grid, claim lineage, claim version | Curriculum mapper (SME affirms alignment), AI assistant (human accepts proposal) | Verdict by a `User` about a target plus optional fragment, as of a commit, with an optional claim; without one it is an endorsement, which the AI assistant and any sign-off tool need (ADR-0028) | `grid`, `claimVersion` as named fields; they travel in `claimRef` |
 | Users: read and create | Every client | `GET /users`, `POST /users`, identity resolution hook (ADR-0032) | Reviewer roles |
 | Item history and changed-since | Outcomes importer (what changed since last pull), research exporter | Per-document history and branch diff for any type | Nothing withheld |
-| `assesses` optional while Draft | None yet; CoQui withdrew it | Not adopted | Keep `@min_cardinality: 1` |
+| `assesses` optional while Draft | None yet; CoQui withdrew it (*2026-10-18: DQ QuestionBank Core is a second tool that needs unaligned items; reassessment opened in §6*) | Not adopted | Keep `@min_cardinality: 1` |
 | Merge with per-document conflict report | Curriculum mapper eventually | The store's three-way merge, wrapped with a computed base and a three-value conflict report (built in Phase 2); merge *policy* deferred until a second writer exists (§6) | Per-type filtered merge |
 
 Three CoQui concepts never enter the hub: the **round**, the **craft grid**, and CoQui's
@@ -882,6 +882,22 @@ what evidence would be enough.
   to twice, which would change the key anyway; or the outcomes importer meeting a source that
   references one item twice in one test, which QTI permits. Decided 2026-10-08 as a timing
   decision, not a scope decision.
+- **Must every item assess an objective? (Rule 1, reassessed.)** *Raised 2026-10-18*
+  (`docs/research/dq-questionbank-mapping.md` §4.1). `AssessmentItem.assesses` has
+  `@min_cardinality: 1` (ADR-0013), so an item cannot exist in the hub before it is aligned.
+  CoQui asked for it to be optional while `Draft`, then withdrew the ask because its items always
+  arrive from Armature already aligned (§2). A second tool now shows the other case: DQ
+  QuestionBank Core holds banks of questions that exist before anyone aligns them, and an
+  adapter could satisfy rule 1 only by inventing placeholder objectives, which writes a fiction
+  into the graph. The question is whether alignment is a precondition of an item existing, or a
+  state the reads already report (an unaligned item covers nothing). Options: keep rule 1, with
+  importers holding unaligned items outside the hub; optional while `Draft`, as CoQui first
+  asked; or optional always, with the alignment read listing items that assess nothing. Any
+  change amends ADR-0013 and is a weakening schema change, so it needs no migration; rule 2
+  (`LearningActivity.targets`) follows the same reasoning and would be considered with it.
+  Evidence for change: DQ, with the outcomes importer (items arriving from an LMS unaligned) and
+  the AI design assistant (drafts) as reference clients. Evidence to settle it: the first real
+  import of an unaligned bank.
 - **Items used formatively, inside activities.** *Raised 2026-10-18*
   (`docs/research/quiqui-mapping.md` §4). Items reach a module only as placements in an
   `Assessment`, which requires a module and carries summative fields; a `LearningActivity` names

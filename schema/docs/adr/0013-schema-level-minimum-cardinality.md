@@ -19,6 +19,10 @@ contains a `@min_cardinality: 1` Set; and the generated Zod request schemas turn
 which `app/lib/api/write.test.ts` exercises ("enforces @min_cardinality from the schema (constraints
 1 and 2)"). The title's "(Conditional)" and the conditional sections below are historical.
 
+**Note 2026-10-18:** `AssessmentItem.assesses`' minimum of one (CLAUDE.md constraint 1) is open for
+reassessment in `docs/development-plan.md` §6, on evidence from a second tool that holds unaligned
+questions (`docs/research/dq-questionbank-mapping.md` §4.1). Still binding; nothing is decided.
+
 ## Context
 ADR-0006 established that minimum cardinality constraints on `Set` fields — specifically `AssessmentItem.assesses` and `LearningActivity.targets` must each contain at least one element — are enforced by the API because TerminusDB's `Set` type does not support minimum cardinality at the schema level.
 
