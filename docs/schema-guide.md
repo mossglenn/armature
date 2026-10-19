@@ -35,6 +35,8 @@ LearningObjective ────────────────────�
                                                            LearningDataset.producedBy ────┘
                                                                 ▲
                                           LearningMetric.derivedFrom
+                                          LearningMetric.subject ──▶ the record it measures
+                                                                     (an item, for an item statistic)
 ```
 
 The arrows point from the document holding the reference to the document it names.
@@ -144,7 +146,7 @@ A finding has a status (`Open`, `Addressed`, `Dismissed`); a `Dismissed` finding
 
 The schema holds what people decided and what was observed. Coverage, alignment and any future score are computed by the intelligence reads at a ref. If a judgment needs to be on record under someone's name, it is a `DesignFinding` (or, from Phase 5, an attestation). Before proposing any stored score, ask: *could this value appear in a commit under a person's name and be true as a record of what they did?*
 
-`AssessmentItem.difficultyIndex` and `discriminationIndex` predate this rule; whether they remain as imported observations is an open question for the Phase 6 outcomes importer.
+Item statistics show the line between an observation and a summary (ADR-0058). A difficulty or discrimination figure arrives from the tool that holds learners' responses, so it is an observation, but it describes one cohort meeting one version of the item. It is therefore not a field on the item: it is a `LearningMetric` whose `subject` is the item, `derivedFrom` the dataset of the administration, with that dataset's `asOf`, so each cohort's figures sit beside the others instead of overwriting them. "The metrics about this item" is `GET /api/v1/documents/LearningMetric?subject=<item>`; a summary such as an item's latest difficulty is a read, built when a client needs one.
 
 ## 5. What TerminusDB checks and what the API checks
 
@@ -163,7 +165,7 @@ The database does **not** check that a reference points at the right *class* of 
 
 ### 6.1 A module declares an objective, with a note on the declaration
 
-Because `ModuleObjective`'s identifier is derived from its key fields, a request that creates one and annotates it in the same commit uses `@capture` and `@ref`:
+Any client writes declarations through the generic routes, as it writes any other relationship (ADR-0007, confirmed 2026-10-18); whether its interface lets designers edit them directly is the client's choice. Because `ModuleObjective`'s identifier is derived from its key fields, a request that creates one and annotates it in the same commit uses `@capture` and `@ref`:
 
 ```
 POST /api/v1/documents?branch=my-branch

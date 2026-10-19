@@ -142,7 +142,8 @@ To add a new type: (1) update `schema.json` (with ADR), giving the class `@metad
 | `Fragment` / `TextFragment` / `ItemOption` | Subdocument parts of an item, returned inline; identity is the client-assigned `fragmentId`, never the nested store id (ADR-0022, ADR-0023, ADR-0033) |
 | `ItemInstance` | Assessment-context wrapper around an `AssessmentItem`; its `status` is placement clearance, distinct from the item's own (ADR-0018) |
 | `DesignFinding` | An evidence-grounded concern about any design record, with `status` and resolution rationale (ADR-0020) |
-| `ModuleObjective` | Junction carrying a module's declaration of an objective and its design intent (`role`, `roleRationale`, `sequence`); written by clients through the generic document API (ADR-0007's "programmatic, not UI-editable" was not what was built); it stores no coverage, which is computed on read (ADR-0056) |
+| `ModuleObjective` | Junction carrying a module's declaration of an objective and its design intent (`role`, `roleRationale`, `sequence`); written by clients through the generic document API, which ADR-0007 records as the decision since 2026-10-18; it stores no coverage, which is computed on read (ADR-0056) |
+| `LearningMetric` | A measurement from a `LearningDataset` (`derivedFrom`), naming the design record it measures in `subject`; an item statistic is a metric whose `subject` is the item, never a field on the item (ADR-0058) |
 | `PrerequisiteRecord` | Junction doc; carries `rationale` and `prerequisiteType` — design decision preserved as data |
 | `NeedEvidenceLink` | Junction doc; links LearningNeed to LearningEvidence with `confidence` weighting |
 | `ModuleActivityLink` | Junction doc; places LearningActivity in Module with `sequence` |
@@ -166,7 +167,7 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 10. `ItemInstance.status` — may not be `Approved` while its `AssessmentItem.status` is `Draft` or `InReview` (ADR-0018)
 11. `DesignFinding.resolutionRationale` — required when `status` is `Dismissed` (ADR-0020)
 12. A write whose `@id` exists under a different `@type` — rejected with 409 `type_conflict` by the write pipeline (ADR-0024)
-13. `asOf` on `LearningDataset`, `LearningMetric` and `DesignFinding` — a bare commit id the store holds, at which the record's subjects exist (`producedBy`; `subject` and `regarding`); a metric with a `derivedFrom` dataset carries the dataset's value. The pipeline fills it from the branch head on create (the head the write starts from, or `If-Match`), keeps it on replace and copies it onto a metric; only supplied or kept values are checked (ADR-0057; `invariants/asOf.ts`)
+13. `asOf` on `LearningDataset`, `LearningMetric` and `DesignFinding` — a bare commit id the store holds, at which the record's subjects exist (a dataset's `producedBy`; a metric's `subject`; a finding's `subject` and `regarding`); a metric with a `derivedFrom` dataset carries the dataset's value. The pipeline fills it from the branch head on create (the head the write starts from, or `If-Match`), keeps it on replace and copies it onto a metric; every value not taken from the head is checked (ADR-0057, ADR-0058; `invariants/asOf.ts`)
 
 Pending, not yet enforced: `LearningDataset.producedBy` required for Armature-administered assessments (Phase 6). The list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021's non-aggregation guard) and filters `Optional` enum or reference and `Set` fields in the hub, since the store answers those template queries with a 500 (checks Y2, Y3, Y5).
 
@@ -228,6 +229,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0054** — The API is a Hono application (host-neutral; nothing under `app/lib/api/` imports from `next`)
 - **ADR-0055** — The API layer reaches TerminusDB over HTTP through one adapter (the JavaScript client stays in `scripts/`)
 - **ADR-0057** — Records that refer to a state of the graph name its commit (`asOf`): filled from the branch head, kept on replace, constraint 13
+- **ADR-0058** — Item statistics are `LearningMetric`s about the item (`subject`), not fields on it; summaries are reads
 
 The full index, with every ADR's status, is `schema/docs/adr/README.md`.
 
@@ -282,5 +284,5 @@ Say "update session" and follow the prompt in `.claude/prompts/update-session.md
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)
 - **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6). A branch is deleted only when another branch holds its head; there is no force
 - **Don't** take the commit author or `createdBy` from a request body — both come from the identity the request resolved to; `User` documents are created on `main` only (ADR-0032)
-- **Don't** store a derived value in the graph — coverage, alignment and any future score are computed by the intelligence reads at a ref, never written into a document (ADR-0056); a judgment someone wants on record is a `DesignFinding` or an Attestation with a person's name on it
+- **Don't** store a derived value in the graph — coverage, alignment and any future score are computed by the intelligence reads at a ref, never written into a document (ADR-0056); a judgment someone wants on record is a `DesignFinding` or an Attestation with a person's name on it; an imported measurement is a `LearningMetric` with a `subject`, never a field on what it measures (ADR-0058)
 - **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will
