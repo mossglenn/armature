@@ -142,7 +142,7 @@ There is no route that deletes a document. Lifecycle changes are status changes 
 
 ### `GET /branches`
 
-Every branch with its latest commit: `[ { name, head: { commit, author, message, timestamp, metadata? } } ]`.
+Every branch with its latest commit: `[ { name, head: { commit, author, message, timestamp, metadata? } } ]`. A branch deleted by another request while the list is being read is left out.
 
 ### `POST /branches`
 
@@ -169,7 +169,7 @@ The documents inserted, deleted or updated on the branch since a commit: `{ bran
 
 ### `DELETE /branches/:name`
 
-Deletes a branch, under three rules (ADR-0025 decision 6, amended): `main` is never deleted (400 `protected_branch`); a branch is deleted only when another branch already holds its latest commit (otherwise 409 `unmerged_branch` with its `head`); there is no force option. Headers: `Armature-User` (required), `If-Match` (optional; 412 if the branch moved). If a commit lands during the check: 409 `branch_moved`. Response: `{ deleted, head, heldBy }`.
+Deletes a branch, under three rules (ADR-0025 decision 6, amended): `main` is never deleted (400 `protected_branch`); a branch is deleted only when another branch already holds its latest commit (otherwise 409 `unmerged_branch` with its `head`); there is no force option. Headers: `Armature-User` (required), `If-Match` (optional; 412 if the branch moved). If a commit lands during the check: 409 `branch_moved`. A branch already deleted, including by a concurrent request: 404 `unknown_ref`. Another branch deleted during the check is skipped as a holder. Response: `{ deleted, head, heldBy }`.
 
 There are no reset, squash or rebase routes: shared history is never rewritten.
 
