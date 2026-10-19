@@ -1,4 +1,4 @@
-import { CLASS_ANCESTORS, CLASS_CATEGORY } from '@/lib/types';
+import { CLASS_ANCESTORS, CLASS_CATEGORY, CLASS_FIELDS } from '@/lib/types';
 
 /**
  * What the schema says about a class, read from the generated maps
@@ -27,3 +27,10 @@ export const inheritsFrom = (type: string, ancestor: string): boolean =>
 
 /** Classes that carry `createdBy` (ADR-0015, ADR-0032 decision 4). */
 export const hasCreatedBy = (type: string): boolean => inheritsFrom(type, 'ArmatureDocument');
+
+/**
+ * Classes whose attester is a field filled from the resolved identity
+ * (ADR-0028 decision 4): `attestedBy`, part of the record's key.
+ */
+export const hasAttestedBy = (type: string): boolean =>
+  Object.prototype.hasOwnProperty.call((CLASS_FIELDS as Record<string, Record<string, unknown>>)[type] ?? {}, 'attestedBy');

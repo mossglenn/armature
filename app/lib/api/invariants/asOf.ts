@@ -31,15 +31,37 @@ export const hasAsOf = (type: string): boolean =>
 /** The reference field through which a class takes its `asOf` from a parent record. */
 export const AS_OF_PARENT: Record<string, string> = { LearningMetric: 'derivedFrom' };
 
+/**
+ * Classes whose `asOf` a replace refills from the head instead of keeping
+ * (ADR-0028 decision 5, amending ADR-0057 decision 5 for these alone). Every
+ * field of an attestation outside its key is part of the verdict, so any
+ * write of one is the attester judging again, now; a finding's status, by
+ * contrast, changes without anyone re-judging its subject.
+ */
+export const AS_OF_REFILLED_ON_REPLACE: ReadonlySet<string> = new Set(['Attestation']);
+
 /** The reference fields naming what a record is about, which must exist at its `asOf`. */
 const AS_OF_SUBJECTS: Record<string, readonly string[]> = {
   LearningDataset: ['producedBy'],
   LearningMetric: ['subject'],
   DesignFinding: ['subject', 'regarding'],
+  Attestation: ['subject'],
 };
 
 /** A bare commit id as the store mints them (lowercase base 36). */
 const COMMIT_ID = /^[a-z0-9]+$/;
+
+/**
+ * The commit a record's `asOf` names, when constraint 13 checks it and it is
+ * a commit the store holds; undefined otherwise (absent, filled from the
+ * head, or not a commit, which `checkAsOf` reports). Other rules that read
+ * the subject at its state (constraint 16) use it.
+ */
+export async function checkedAsOf(doc: TerminusDocument, ctx: WriteContext): Promise<string | undefined> {
+  const asOf = doc.asOf;
+  if (typeof asOf !== 'string' || ctx.asOfFilled.has(doc) || !COMMIT_ID.test(asOf)) return undefined;
+  return (await ctx.branch.getCommit(asOf)) ? asOf : undefined;
+}
 
 export async function checkAsOf(doc: TerminusDocument, index: number, ctx: WriteContext): Promise<Violation[]> {
   const type = doc['@type'];
