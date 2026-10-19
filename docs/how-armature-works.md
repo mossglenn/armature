@@ -445,7 +445,7 @@ Read left to right, this is the instructional design process: **evidence** groun
 **Evidence and needs (needs analysis).**
 
 - **`LearningEvidence`** (abstract) is evidence of a learning need, with a collection date and a source. It has two concrete forms (ADR-0001):
-  - **`LearningMetric`**: a quantitative measurement at a point in time (a pass rate, an average score), with a value and a unit, optionally derived from a `LearningDataset`.
+  - **`LearningMetric`**: a quantitative measurement at a point in time (a pass rate, an average score, an item's difficulty), with a value and a unit, optionally derived from a `LearningDataset` and optionally naming the design record it measures (`subject`; ADR-0058).
   - **`DescriptiveEvidence`**: a qualitative finding from a needs-analysis activity, with the method used (`Interview`, `Survey`, `Observation`, `FocusGroup`, `DocumentReview`, `ExpertReview`, `Other`) and what was found.
 - **`LearningNeed`**: a documented gap between current and desired learner performance, with a required rationale and an optional triage priority (`Critical`, `High`, `Medium`, `Low`). A need is connected to its evidence through `NeedEvidenceLink` (Section 12.4).
 
@@ -460,11 +460,11 @@ Read left to right, this is the instructional design process: **evidence** groun
 
 **Assessment.**
 
-- **`AssessmentItem`**: a single reusable question in the **item bank**. It exists independently of any test. It has a stem (the question), an ordered list of options, optional general feedback for correct and incorrect responses, an item type (eight formats: `MultipleChoice`, `MultipleSelect`, `TrueFalse`, `ShortAnswer`, `Essay`, `Matching`, `Ordering`, `FillInTheBlank`), a review status, an optional Bloom's level, and the set of objectives it **assesses** (at least one; an item that assesses nothing "has no place in the artifact graph"). It also has two optional item-analysis statistics, `difficultyIndex` and `discriminationIndex` (Section 12.14).
+- **`AssessmentItem`**: a single reusable question in the **item bank**. It exists independently of any test. It has a stem (the question), an ordered list of options, optional general feedback for correct and incorrect responses, an item type (eight formats: `MultipleChoice`, `MultipleSelect`, `TrueFalse`, `ShortAnswer`, `Essay`, `Matching`, `Ordering`, `FillInTheBlank`), a review status, an optional Bloom's level, and the set of objectives it **assesses** (at least one; an item that assesses nothing "has no place in the artifact graph"). Its statistics are not stored on it but recorded as measurements about it (Section 12.14).
 - **`Assessment`**: a named collection of placed items for a purpose within one module, with settings such as whether to randomize order, a passing score and the number of retakes allowed.
 - **`ItemInstance`**: the placement of a bank item into one assessment, with its position (`sequence`), point value, whether its options are randomized, and its placement status (Section 12.8).
 
-> **[Interpretive framing]** The `difficultyIndex` (proportion answering correctly) and `discriminationIndex` (how well the item separates higher from lower performers) are the two classic item statistics of classical test theory.
+> **[Interpretive framing]** Difficulty (the proportion answering correctly) and discrimination (how well the item separates higher from lower performers) are the two classic item statistics of classical test theory. Both are properties of an item *for a population*, which is why Armature records each with the cohort and design version it came from (Section 12.14).
 
 **Instruction.**
 
@@ -516,7 +516,7 @@ A central pattern in Armature is that some relationships are not just references
 
 These seven junction types are tagged with the category `relationship` in the schema (Section 12.11).
 
-**How declarations are written.** ADR-0007 (February 2026) said a `ModuleObjective` would be "created programmatically by the API" (the application programming interface) when a designer assigned an objective to a module, and not edited directly through a user interface. That is not what was built: clients write `ModuleObjective` documents through the same generic write route as everything else, and the seed writes seven. Its stored coverage field, the other half of ADR-0007, was removed by ADR-0056 (Section 17.6). Because they are documents, they can themselves be annotated: a design note can explain why an activity is third in a module, or why a piece of evidence carries only preliminary confidence (ADR-0017).
+**How declarations are written.** ADR-0007 (February 2026) said a `ModuleObjective` would be "created programmatically by the API" (the application programming interface) when a designer assigned an objective to a module, and not edited directly through a user interface. That is not what was built: clients write `ModuleObjective` documents through the same generic write route as everything else, and the seed writes seven. On 18 October 2026 the project recorded the built behavior as the decision. The rule had existed to protect the stored coverage field, which ADR-0056 removed (Section 17.6), so what remains is a designer's decision of the kind the graph exists to hold. And the hub had no other event to react to: inferring declarations from where items are placed would erase exactly the "declared but never assessed" case that coverage reports. Because they are documents, they can themselves be annotated: a design note can explain why an activity is third in a module, or why a piece of evidence carries only preliminary confidence (ADR-0017).
 
 ADR-0017 records a caution against overdoing this: naming a "relationship" category invites turning every connection into a document for tidiness. Plain references remain the default and carry most of the traversal; a relationship earns a junction document only by carrying data.
 
@@ -647,13 +647,13 @@ Every document has an identifier of the form `Type/local-part`, such as `Learnin
 
 The reasoning is partly ethical (practitioners have a legitimate interest in their design process not becoming a productivity dashboard), but ADR-0021 makes a sharper argument specific to Armature's purpose: **the instrument would perturb what it measures.** The rationale Armature exists to capture is produced when people are candid: a designer declining an expert's suggestion and saying why, a reviewer saying plainly that an item is wrong. A designer who knows declines are counted declines less often; a reviewer who knows comments are tallied writes fewer and softer ones. "A graph whose participants are performing for it records performances."
 
-The ADR admits the boundary cannot be enforced structurally (anyone with bulk access can aggregate) and that it is fuzzy: "How often do subject experts dispute designers' cognitive-level judgments?" is a question about the field and is in scope; the same query narrowed to one person is not. It states the norm so that crossing it requires a deliberate decision. Phase 5 will add one concrete guard: the generic list route will refuse to filter by `createdBy`. For research exports, the ADR sketches options (pseudonymization, institution-only attribution, minimum group sizes) and notes that small design teams defeat pseudonymization.
+The ADR admits the boundary cannot be enforced structurally (anyone with bulk access can aggregate) and that it is fuzzy: "How often do subject experts dispute designers' cognitive-level judgments?" is a question about the field and is in scope; the same query narrowed to one person is not. It states the norm so that crossing it requires a deliberate decision. One concrete guard has been built (18 October 2026, ahead of its planned Phase 5): the generic list route refuses to filter by any field that names a person, such as `createdBy`. For research exports, the ADR sketches options (pseudonymization, institution-only attribution, minimum group sizes) and notes that small design teams defeat pseudonymization.
 
-### 12.14 A tension to note: item statistics
+### 12.14 Item statistics: from fields on the item to measurements about it
 
-> **[Brevity candidate]** This subsection documents an unresolved inconsistency; it could move to Part V.
+`AssessmentItem.difficultyIndex` and `discriminationIndex` were added in February 2026 (ADR-0009) as item-analysis values "computed from LearningDataset results" and "written back to the item by the Armature API after analysis." In October 2026 ADR-0056 established that "the graph stores decisions and observations," and named "difficulty summaries" among the derived quantities that should be computed when read rather than stored. For ten days the two fields sat in the schema, unused, in tension with that rule.
 
-`AssessmentItem.difficultyIndex` and `discriminationIndex` were added in February 2026 (ADR-0009) as item-analysis values "computed from LearningDataset results" and "written back to the item by the Armature API after analysis." In October 2026 ADR-0056 established that "the graph stores decisions and observations," and named "difficulty summaries" among the derived quantities that should be computed when read rather than stored. The two fields remain in the schema, unused by any code. Whether they are observations imported from an external analysis (and so legitimately stored) or derived values (and so better computed from datasets) has not been decided. The outcomes importer planned for Phase 6 is where the question will have to be answered.
+ADR-0058 (18 October 2026) resolved the tension by noticing that neither framing fitted. The statistics cannot be computed on read, because Armature holds no learner responses; they arrive from the tool that does. So they are observations. But a difficulty figure describes one cohort meeting one version of the item, and a single field on the item records neither and is overwritten by the next import. Writing it there would also mix outcome data into an authored document's history. The fields were removed, and each statistic is now a `LearningMetric` whose `subject` is the item, derived from the dataset of the administration and carrying that dataset's `asOf` (Section 24.1). Figures from different cohorts and item versions accumulate side by side; a summary such as an item's latest difficulty is a read, to be built when a client says which summary it needs.
 
 ## 13. The rules: the invariants engine
 
@@ -1093,7 +1093,7 @@ The session log also lists a small fix (a race condition in the branch routes wh
 - **External references and attachments (ADR-0030, reserved).** Two optional sets on every artifact. *External references* point to identifiers in other systems, with the system named: CASE (Competencies and Academic Standards Exchange), QTI (Question and Test Interoperability), xAPI (Experience API), LTI (Learning Tools Interoperability) or other. *Attachments* reference files, or a specific revision of a tree of files, in a store the hub may or may not operate, always with a content hash (a fingerprint that detects a missing or altered file), and with revision and path when the store is versioned. The graph never holds the files themselves.
 - **Externally versioned artifacts (ADR-0025 amendment).** For an artifact whose files live in an asset store, the graph records the commits that move its reference, each with author and reason; the asset store keeps its own fine-grained history, reachable through the reference. "A projection, not a replay."
 - **Export profiles and schema slices (ADR-0031, reserved).** Export the whole graph or a declared slice at a commit, as JSON-LD (JSON for Linked Data, a variant of JavaScript Object Notation that carries the meaning of fields), under a profile: `full`, `pseudonymous` (stable tokens instead of user identities) or `institutional` (institution only). A slice, such as needs → objectives → outcomes, is a configuration file, not code.
-- **An outcomes import path.** Datasets, metrics and item statistics written through the ordinary write route; one dataset seeded so Narrative 1 is live end to end.
+- **An outcomes import path.** Datasets, metrics and item statistics (metrics about the item, ADR-0058) written through the ordinary write route; one dataset seeded so Narrative 1 is live end to end.
 - **A guide for researchers** (`docs/research-path.md`): how to stand up a constrained Armature for one study.
 - **Exit criterion:** an export at a commit, re-imported into an empty database, reproduces the graph; the pseudonymous profile contains no names or emails.
 
@@ -1157,7 +1157,6 @@ The development plan (§6) lists questions to be decided deliberately, each with
 - **One placement per item per assessment.** *Evidence:* sections inside assessments, or an import source that repeats an item.
 - **A separate API (application programming interface) service.** *Evidence:* a plugin that should not depend on a Next.js deployment, or independent scaling needs.
 - **Which file store the hub operates, and when.** *Evidence:* the first tool that develops multi-file assets on Armature.
-- **Item statistics** (Section 12.14): stored observations or computed reads?
 
 The research survey adds its own open questions: whether alignment models belong in the demonstration; whether a change of an objective's *meaning* should create a new objective linked by `replacedBy` (as CASE, the Competencies and Academic Standards Exchange, does) rather than editing in place; whether to tag seed activities with coarse activity types so published learning-design analytics studies could be rerun on Armature data; and which export target a pilot partner would actually use.
 
@@ -1194,7 +1193,7 @@ The survey also maps where Armature sits: upstream of delivery and outcome recor
 - **Some list filters read a whole type.** The database cannot filter on an optional or multi-valued reference or an optional enumerated field (platform check Y), so the hub lists the type and filters it (for example, all items that assess a given objective). The answer is correct; the cost grows with the type, and a query in TerminusDB's own query language will replace it when a type outgrows a list.
 - **Some decided capabilities are unbuilt.** The schema-discovery route promised by ADR-0027 (an Architecture Decision Record) and the ordered module-content view assigned by ADR-0005 do not exist yet; neither is currently assigned to a phase.
 - **Lossless writes are unsolved.** A tool built against an older schema can erase newer fields by replacing a document (research lesson 1).
-- **Item statistics and ADR-0056 are in tension** (Section 12.14).
+- **Item statistics have no bank-wide summary yet** (Section 12.14). Each figure is recorded with its cohort and design version, but "items by latest difficulty" is not yet a read.
 - **The non-aggregation commitment is policy, not structure.** Anyone with bulk access can compute what ADR-0021 forbids; the hub only declines to make it easy.
 - **Pedagogical assumptions are built in.** The schema makes the learning objective the central node and uses Bloom's taxonomy. The research survey recommends stating such assumptions explicitly, framed as pedagogical pluralism rather than neutrality (candidate ADR-0050), which has not yet been done.
 
@@ -1271,13 +1270,13 @@ The survey also maps where Armature sits: upstream of delivery and outcome recor
 | `DesignRecord` | infrastructure (abstract) | none | — |
 | `ArmatureDocument` | infrastructure (abstract) | label, description?, createdBy? | — |
 | `LearningEvidence` | artifact (abstract) | collectedAt, source | — |
-| `LearningMetric` | artifact | value, unit, derivedFrom?, asOf? | random |
+| `LearningMetric` | artifact | value, unit, derivedFrom?, subject?, asOf? | random |
 | `DescriptiveEvidence` | artifact | method, finding | random |
 | `LearningNeed` | artifact | rationale, priority? | random |
 | `NeedEvidenceLink` | relationship | need, evidence, confidence? | hash (need, evidence) |
 | `LearningObjective` | artifact | state, bloomsLevel?, generatedBy? | random |
 | `PrerequisiteRecord` | relationship (also named, so inherits `ArmatureDocument`) | objective, prerequisite, prerequisiteType, rationale | hash (objective, prerequisite) |
-| `AssessmentItem` | artifact | stem, options, correctFeedback?, incorrectFeedback?, itemType, status, bloomsLevel?, assesses (≥1), difficultyIndex?, discriminationIndex? | random |
+| `AssessmentItem` | artifact | stem, options, correctFeedback?, incorrectFeedback?, itemType, status, bloomsLevel?, assesses (≥1) | random |
 | `Fragment` | fragment (abstract) | fragmentId, text | embedded |
 | `TextFragment` | fragment | (as Fragment) | embedded |
 | `ItemOption` | fragment | isCorrect, feedback?, purpose? | embedded |
@@ -1337,7 +1336,7 @@ See `schema/docs/adr/README.md` for the full index with one-line summaries. In b
 | 0016–0023 | The CoQui fit analysis (August–September 2026): keys, the `DesignRecord` abstract root, readiness, coverage and readiness, findings, the non-goal on practitioner performance, embedded item parts, fragment identifiers |
 | 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0028, 0030, 0031 and 0034 are reserved and unwritten |
 | 0035–0053 | Research candidates, not decisions (`docs/research/adr-candidates.md`) |
-| 0054–0057 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf` |
+| 0054–0058 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item |
 
 ## Appendix E. References
 

@@ -132,7 +132,7 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 10 | A placement is not `Approved` while its item is `Draft` or `InReview`, in either direction | `instance_ahead_of_item` |
 | 11 | A `Dismissed` finding has a `resolutionRationale` | `rationale_required` |
 | 12 | An identifier is not reused across types | 409 `type_conflict` |
-| 13 | A supplied or kept `asOf` is a commit the database holds, at which the record's subjects exist (a dataset's `producedBy`, a finding's `subject` and `regarding`); a metric's `asOf` equals its dataset's | `unknown_commit`, `absent_at_commit`, `as_of_disagrees` |
+| 13 | An `asOf` not taken from the branch head is a commit the database holds, at which the record's subjects exist (a dataset's `producedBy`, a metric's `subject`, a finding's `subject` and `regarding`); a metric's `asOf` equals its dataset's | `unknown_commit`, `absent_at_commit`, `as_of_disagrees` |
 
 There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5).
 
@@ -250,7 +250,7 @@ Walks the design lifecycle in both directions from one document:
 evidence ← need-evidence link → need ← objective ← item ← placement → assessment ← dataset ← metric
 ```
 
-with modules attached as context to every objective (through its declarations) and assessment reached. Accepted types: `LearningMetric`, `LearningDataset`, `Assessment`, `AssessmentItem`, `LearningObjective`, `LearningNeed`, `DescriptiveEvidence`, `Module`, `LearningActivity`. Any other type is a 400 `untraceable_type`.
+with modules attached as context to every objective (through its declarations) and assessment reached, and a metric's `subject`, the record it measures, followed in both directions (an item statistic leads to its item, and an item to the metrics about it; ADR-0058). Accepted types: `LearningMetric`, `LearningDataset`, `Assessment`, `AssessmentItem`, `LearningObjective`, `LearningNeed`, `DescriptiveEvidence`, `Module`, `LearningActivity`. Any other type is a 400 `untraceable_type`.
 
 Response: `{ root, nodes: [ summary ], edges: [ { from, to, via, through?, confidence?, status?, role? } ], annotations: [ design notes and findings about any node reached ] }`. `via` is the field followed; `through` is the junction document passed through, with its data. A dataset, metric or finding summary carries its `asOf`: read the rest of the design as that cohort met it, or as that finding judged it, at `?ref=<asOf>`.
 

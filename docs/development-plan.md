@@ -110,7 +110,7 @@ adopted into the hub when at least two reference clients would need the same cap
 | **Objective and curriculum mapper** | Author objectives, prerequisites, module declarations; link to CASE competencies | Transitive prerequisite queries; objective history and impact analysis; external competency references; ModuleObjective writes; coverage reads |
 | **Needs-analysis intake** | Record evidence, needs, priorities; the LEED-tracker decision log as a graph | Evidence and need writes; NeedEvidenceLink confidence; DesignNote and a future DesignDecision; provenance trace from objective back to evidence |
 | **Activity and strategy designer** | Plan activities and groups per module; see strategy coverage | Sequenced module content (ADR-0005); "which objectives have no Practice activity" queries; ActivityGroup flatness enforced |
-| **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistics (stored or computed: see §6); xAPI and QTI references; bulk atomic writes |
+| **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistics as metrics about the item (ADR-0058); xAPI and QTI references; bulk atomic writes |
 | **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description; attachments resolvable or deliberately excluded per profile |
 | **AI design assistant** | Propose items, objectives or alignments inside another tool | Agent `User` provenance; design-intelligence reads for context; the same write path and constraints as humans |
 | **Rich item authoring tool** | Author drag-and-drop, hotspot and media-bearing items on a shared item bank | Items as a tree of addressable fragments, typed or generic; attachment references on fragments; interaction types with versioned renderers; impact analysis when a renderer or an image changes; the same review surface CoQui uses |
@@ -700,9 +700,11 @@ Work:
       (institution only, per ADR-0021's cheapest option). Slices are declared as lists of
       classes in a small JSON file, so the needs-to-objectives-to-outcomes slice the paper
       describes is a configuration, not code.
-- [ ] **Outcomes import path.** `LearningDataset`, `LearningMetric` and item statistics (stored
-      or computed: decide first, §6) through the generic write route, with an invariant for `producedBy` when the
-      assessment is Armature's. Seed one dataset so Narrative 1 is live end to end.
+- [ ] **Outcomes import path.** `LearningDataset`, `LearningMetric` and item statistics
+      (metrics whose `subject` is the item, ADR-0058, decided and built 2026-10-18) through the
+      generic write route, with an invariant for `producedBy` when the assessment is Armature's.
+      Seed one dataset so Narrative 1 is live end to end. A bank-wide summary read ("items by
+      latest difficulty") is built when the importer or a reviewing client names the summary it needs.
 - [ ] A short `docs/research-path.md` describing how a scientist would stand up a constrained
       Armature for one study: which slice, which profile, what the collection instrument writes.
 
@@ -768,6 +770,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0055 | The API layer reaches TerminusDB over HTTP | 2 | Accepted 2026-10-08 | One `fetch` adapter under `app/lib/api/`; the JavaScript client stays in `scripts/`; supersedes the "keep the JS client" decision and the earlier §3 split |
 | 0056 | Coverage is computed on read, never stored | 4 | Accepted 2026-10-08 | Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6; the graph stores decisions and observations, the reads derive the rest |
 | 0057 | Records that refer to a state of the graph name its commit (`asOf`) | Before or with Phase 5 (needed by Phase 6) | Accepted and implemented 2026-10-18 | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head on create, keeps it on replace, copies a dataset's onto its metrics, and validates a supplied or kept id (rule 13); closes Narrative 1's "adequate when" |
+| 0058 | Item statistics are metrics about the item | With Phase 6's importer (decided early) | Accepted and implemented 2026-10-18 | `LearningMetric.subject: Optional<DesignRecord>`; `difficultyIndex` and `discriminationIndex` removed; constraint 13 checks a metric's subject at its `asOf`; the trace follows `subject` both ways |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -785,17 +788,17 @@ what evidence would be enough.
   fields forward (research candidate ADR-0035, "High"); Phase 3 shipped without it, and the
   generated request schemas reject unknown fields rather than preserving them. Evidence that
   forces it: the first schema change that adds a field to a type a deployed plugin already writes.
-- **Item statistics: stored or computed?** `AssessmentItem.difficultyIndex` and
-  `discriminationIndex` (ADR-0009) are described as values written back after dataset analysis, but
-  ADR-0056 names difficulty summaries among derived values to compute on read. Either they are
-  observations imported from an external analysis (and stay), or they are computed from datasets
-  at read time (and leave the schema). No code writes them today. Evidence: the outcomes importer
-  in Phase 6.
+- **Item statistics: stored or computed?** *Resolved 2026-10-18 by ADR-0058.* They are imported
+  observations, since Armature holds no responses to compute them from, but each describes one
+  cohort meeting one version of the item, so they are `LearningMetric`s whose `subject` is the item
+  rather than fields on it. `difficultyIndex` and `discriminationIndex` left the schema; summaries
+  are reads.
 - **`GET /api/v1/schema`.** ADR-0027 decision 4 scheduled a route returning the schema graph so a
   tool can discover types from the hub, for "Phase 2 or 3"; it was not built, and no phase owns it
   now. Phase 7's toolkit is the natural home. Evidence: a second plugin that needs to discover
   types at run time rather than from generated files.
-- **How `ModuleObjective` declarations are written.** ADR-0007 decided the API would create a
+- **How `ModuleObjective` declarations are written.** *Resolved 2026-10-18: the generic path is
+  the decision, recorded on ADR-0007.* ADR-0007 decided the API would create a
   declaration "programmatically" when a designer assigned an objective to a module, and that it
   would not be created or edited directly through a UI. What was built treats it like any other
   relationship: clients write it through `PUT`/`POST /api/v1/documents`, and the seed writes seven.
