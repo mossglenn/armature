@@ -6,13 +6,22 @@ This file tracks current work state across sessions. Update it at the end of eve
 
 ## Current Phase
 
-**Phase 4 (design intelligence) complete and merged on 2026-10-08 (PRs #8, #9 and #10, rebase merges, 19 commits, CI green on `main`); its exit criterion is met. A documentation overhaul followed on 2026-10-09 (PR #11, eight commits, CI green): every document reconciled with the code, all 34 ADRs annotated, an API reference, a schema guide and `docs/how-armature-works.md` added. Next is deciding ADR-0057 (`asOf`) and then Phase 5 of `docs/development-plan.md` (findings and attestations).** Phases 0 to 3 merged 2026-10-07 and 2026-10-08 (PRs #1 to #7). The intelligence reads (coverage, alignment, trace, impact) derive everything from structure at any ref; nothing derived is stored in the graph (ADR-0056); a read-only Coverage View is the app's first page.
+**Phase 4 (design intelligence) complete and merged on 2026-10-08 (PRs #8 to #10); documentation overhaul merged 2026-10-09 (PR #11). On 2026-10-18 the open decisions and fixes queued after Phase 4 were cleared (PRs #12 to #15, 12 commits, CI green on `main` after each): ADR-0057 (`asOf`) accepted and built, the branch-route race fixed, the list route's filter 500 fixed with the non-aggregation guard pulled forward from Phase 5, ADR-0058 (item statistics as metrics about the item) accepted and built, and ADR-0007's generic write path for `ModuleObjective` confirmed. Next is the rest of Phase 5 of `docs/development-plan.md` (ADR-0028 Attestation, part-level notes and findings).** Phases 0 to 3 merged 2026-10-07 and 2026-10-08 (PRs #1 to #7). The intelligence reads (coverage, alignment, trace, impact) derive everything from structure at any ref; nothing derived is stored in the graph (ADR-0056); a read-only Coverage View is the app's first page.
 
-History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 → ADR-0054 Hono → Phase 1 schema catch-up → ADR-0055, ADR-0025, Phase 2 version control → ADR-0032, generic writes, invariants engine, legacy retired → ADR-0029 coverage algorithm, intelligence reads, ADR-0056 nothing derived is stored, Coverage View → documentation overhaul and the explainer for learning scientists (October 2026).
+History: Schema loaded → Seed data inserted → Demo API documented → Next.js scaffolded → GET endpoints live → Types generator implemented → POST /courses + POST /modules live → CoQui fit analysis (ADRs 0016–0023) → Development plan, TerminusDB verification, docs vendoring, research survey → Phase 0 hygiene, CI, ADR-0026 → ADR-0054 Hono → Phase 1 schema catch-up → ADR-0055, ADR-0025, Phase 2 version control → ADR-0032, generic writes, invariants engine, legacy retired → ADR-0029 coverage algorithm, intelligence reads, ADR-0056 nothing derived is stored, Coverage View → documentation overhaul and the explainer for learning scientists → ADR-0057 `asOf`, branch-route race, list filters and the non-aggregation guard, ADR-0058 item statistics as metrics, ADR-0007 confirmed (October 2026).
 
 ---
 
 ## What's Done
+
+### Post-Phase 4 decisions and fixes (2026-10-18, PRs #12 to #15)
+
+- **ADR-0057 Accepted and built (PR #12):** `asOf: Optional<xsd:string>` on `LearningDataset`, `LearningMetric`, `DesignFinding`. The pipeline (`write.ts` step 3, `fillAsOf`) fills it on create with the head the write starts from (the `If-Match` commit when sent), keeps it on replace, and copies a dataset's value onto a derived metric. Decision 5, added at acceptance, records those three answers and that a commit cannot name itself, so a filled `asOf` predates a subject created in the same write (accepted when filled, refused when supplied). **Constraint 13** (`invariants/asOf.ts`): `unknown_commit`, `absent_at_commit`, `as_of_disagrees`; the write context's `asOfFilled` set holds the values taken from the head, which are not checked. Trace summaries carry `asOf`; Narrative 1 reads coverage at it
+- **Branch-route race (PR #13):** a branch deleted between the list read and a log read made the store answer `api:UnresolvableAbsoluteDescriptor` (400), which failed `GET /branches` and the delete's holder search for every other branch. Both now skip the vanished branch (`gone()` in `routes/branches.ts`). Deleting an already-gone branch answers `api:BranchDoesNotExistError`, which was a 500; the unknown-ref set moved into the adapter as `isUnknownRef()` and gained it
+- **List filters and the non-aggregation guard (PR #14):** the store also 500s on a template query over an Optional *enum* (checks Y4 to Y6 added: required enum filters, Optional enum 500, Optional string filters). The list route now applies required single-valued filters in the store and Optional or Set filters in the hub, paging after filtering. A filter on any field targeting `User` is refused, 400 `person_filter_refused` (ADR-0021 decision 3, pulled forward from Phase 5 because hub filtering would otherwise have made `?createdBy=` work); ADR-0021 annotated
+- **ADR-0058 Accepted and built (PR #15):** item statistics are `LearningMetric`s whose `subject` (new, `Optional<DesignRecord>`) is the item, `derivedFrom` the administration's dataset and carrying its `asOf`; `AssessmentItem.difficultyIndex` and `discriminationIndex` removed (never written, so the schema loaded without clearing data). Constraint 13 checks a metric's `subject` at its `asOf`, and a value copied from a stored dataset is now checked too. The trace follows `subject` both ways; `?subject=` on the list route lists an item's metrics. ADR-0009 decision 1 superseded, ADR-0056's open question resolved
+- **ADR-0007 confirmed (PR #15, docs only):** clients write `ModuleObjective` through the generic routes; the dated note gives the four reasons (the rule protected a field ADR-0056 removed; assigning is the write itself and inferring declarations from placements would erase `Uncovered`; two reference clients write them; Hash key, constraint 0 and attributed commits already guard them)
+- Every change propagated to CLAUDE.md, PROJECT_CONTEXT, `api.md`, the schema guide, the explainer, the plan (§6 three questions resolved, Phase 5 guard checked, ADR queue 0057 and 0058) and the ADR index (35 ADRs). 109 tests; lint, `check:types`, `tsc` clean; platform checks all pass on v12.0.7
 
 ### Documentation overhaul (2026-10-09, PR #11)
 
@@ -95,11 +104,11 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 ### Schema
 
 - TerminusDB schema fully designed and documented (`schema/schema.json`)
-- 12 enums (`CoverageStatus` left with ADR-0056), 27 classes: `User`; abstract roots `DesignRecord` and `ArmatureDocument`; subdocument fragments `Fragment`, `TextFragment`, `ItemOption`; 14 artifacts including `DesignNote` and `DesignFinding`; 7 relationship (junction) documents. Every class carries `@metadata.armature.category` and an explicit `@key`
+- 12 enums (`CoverageStatus` left with ADR-0056), 27 classes (`AssessmentItem` lost its two statistics fields and `LearningMetric` gained `subject` with ADR-0058; `asOf` on three classes with ADR-0057): `User`; abstract roots `DesignRecord` and `ArmatureDocument`; subdocument fragments `Fragment`, `TextFragment`, `ItemOption`; 14 artifacts including `DesignNote` and `DesignFinding`; 7 relationship (junction) documents. Every class carries `@metadata.armature.category` and an explicit `@key`
 - All types documented in TerminusDB-compliant multi-language array format (`@documentation: [{@language: "en", ...}]`)
 - Field-level documentation consolidated into `@properties` on each type
 - API constraints documented directly on affected fields
-- 34 ADR files (`schema/docs/adr/`, 0001–0027, 0029, 0032, 0033, 0054–0057), indexed with their statuses in `schema/docs/adr/README.md`. ADR-0057 is Proposed; 0006 and 0016 are superseded (0016 in part); 0007 and 0029 are superseded in part by 0056; the rest are Accepted. Reserved by the plan and not yet written: 0028, 0030, 0031, 0034. Numbers 0035–0053 are research candidates, not ADRs.
+- 35 ADR files (`schema/docs/adr/`, 0001–0027, 0029, 0032, 0033, 0054–0058), indexed with their statuses in `schema/docs/adr/README.md`. 0006 and 0016 are superseded (0016 in part); 0007 and 0029 are superseded in part by 0056; 0009 decision 1 is superseded by 0058; the rest are Accepted. Reserved by the plan and not yet written: 0028, 0030, 0031, 0034. Numbers 0035–0053 are research candidates, not ADRs.
 
 ### Infrastructure
 
@@ -145,14 +154,10 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ## What's Next
 
-1. **Decide ADR-0057.** If accepted: `asOf: Optional<xsd:string>` on `LearningDataset`, `LearningMetric` and `DesignFinding` (non-breaking), the pipeline fills it with the branch head when absent (like `createdBy`), constraint 13 validates a supplied id (commit exists via `ValidCommit`; the subject exists at it), the trace summary carries it. A platform check for reading a document at a commit from another branch is already covered by O and U
-2. **Fix the branch-route race.** `GET /branches` and the delete's holder search read the branch list and then each head in separate calls; a branch deleted in between surfaces as an error. Seen once as a failed `app.test.ts` branch-delete case during a full run with three test files in parallel. Tolerate a vanished branch in both places
-3. **Fix the list route's filter gap.** `GET /api/v1/documents/:type?<field>=` on an `Optional` or `Set` reference field (`?createdBy=`, `?generatedBy=`, `?assesses=`) returns a 500, because the store answers that template query with an internal error (check Y; reproduced 2026-10-08). List and filter in the hub as `Graph.where` does, or refuse with 400; Phase 5's non-aggregation guard refuses `createdBy` anyway (plan §6)
-4. **Decide the item statistics.** `difficultyIndex` and `discriminationIndex` are described as written back by the API, which ADR-0056 would forbid for derived values; decide stored observation or computed read before Phase 6 (plan §6)
-5. **Decide how `ModuleObjective` is written.** ADR-0007 said the API would create declarations "programmatically" and they would not be edited through a UI; what was built lets any client write them through the generic document routes, and the docs now describe that. Either amend ADR-0007 to record the generic path as the decision, or restrict writes (plan §6)
-6. **Seed:** no declaration is `FullyAssessed`; a second Approved item placed for one objective would show the full story. Content decision
-7. **Phase 5 of `docs/development-plan.md`:** ADR-0028 Attestation (with `asOf` from ADR-0057), findings and attestations as the review vocabulary
-8. Carried, not blocking: lossless writes across schema versions (ADR-0024, candidate 0035; plan §6); `GET /api/v1/schema` unbuilt and unowned (ADR-0027; plan §6); the ordered module-content view ADR-0005 assigns to the API, unbuilt and unowned (plan §6); the running store's schema still carries the pre-2026-10-08 `@documentation` strings until `node scripts/load_schema.js` is re-run (harmless; no instance data changes); merge policy (plan §6); `If-None-Match` unsupported; the merge-base and branch-holder walks are log-based (capped at 5,000 commits per branch); `oidc` resolver when a deployment leaves the local demo; `User` edits when a client needs them; the research exporter treating `asOf` as a reference type (ADR-0057 open)
+1. **Phase 5 of `docs/development-plan.md`:** ADR-0028 Attestation (subject, optional `fragmentId`, claim, optional plugin-scoped claim reference, verdict, reason, `asOf` from ADR-0057, `attestedBy`; identity derived from subject, fragment, claim and attester; staleness derived from commits since `asOf`). Add Attestation to `AS_OF_SUBJECTS` in `invariants/asOf.ts`; its `attestedBy` is refused as a list filter automatically (it targets `User`). Optional `fragmentId` on `DesignNote` and `DesignFinding`. Exit criterion: an attestation made on a branch is reported stale after a later commit changes the same fragment. The non-aggregation guard item is already done
+2. **Seed:** no declaration is `FullyAssessed`; a second Approved item placed for one objective would show the full story. The seed also has no dataset or metric, so Narrative 1 and item statistics are shown only in tests (Phase 6 seeds one). Content decision
+3. **Item-statistics summary read:** "items by latest difficulty" or similar, over metrics whose `subject` is an item (ADR-0058 decision 3). Built when the outcomes importer or a reviewing client names the summary it needs; never a stored field
+4. Carried, not blocking: lossless writes across schema versions (ADR-0024, candidate 0035; plan §6); `GET /api/v1/schema` unbuilt and unowned (ADR-0027; plan §6); the ordered module-content view ADR-0005 assigns to the API, unbuilt and unowned (plan §6); merge policy (plan §6); `If-None-Match` unsupported; the merge-base and branch-holder walks are log-based (capped at 5,000 commits per branch); hub-filtered list reads and `Graph.where` read a whole type (a WOQL query over the adapter when a type outgrows it); `oidc` resolver when a deployment leaves the local demo; `User` edits when a client needs them; whether the research exporter treats `asOf` as a reference type (ADR-0057 open); a `measure` enum beside `LearningMetric.unit` when usage shows recurring measures (ADR-0058)
 
 ---
 
@@ -161,7 +166,11 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 - `docs/development-plan.md` is the roadmap; SESSION.md tracks state against it
 - **ADR-0056 (Accepted 2026-10-08): nothing derived is stored in the graph.** Coverage, alignment and any future score are computed by the intelligence reads at a ref; a judgment someone wants on record is a `DesignFinding` or an Attestation with a person's name. The schema holds what people decided and what was observed. Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6
 - **ADR-0029 decisions 1 to 3 (Accepted 2026-10-08):** coverage counts distinct items placed in the module's assessments, over two populations (ADR-0019); the default thresholds are the hub's provisional cut and the coverage read takes them as parameters and returns the counts
-- **ADR-0057 (Proposed 2026-10-08):** `asOf`, a bare commit id, on records that refer to a state of the graph; hub-filled from the branch head when absent, validated when supplied
+- **ADR-0057 (Accepted 2026-10-18):** `asOf`, a bare commit id, on records that refer to a state of the graph: filled from the head the write starts from on create (or `If-Match`), kept on replace, copied from a dataset onto its metrics; constraint 13 checks every value not taken from the head (`asOfFilled`)
+- **ADR-0058 (Accepted 2026-10-18):** an imported measurement is a `LearningMetric` with a `subject`, never a field on what it measures; item statistics are metrics about the item; summaries over metrics are reads
+- **ADR-0007 confirmed 2026-10-18:** `ModuleObjective` is written by any client through the generic routes; no hub restriction
+- **List route filters:** required single-valued fields go to the store as a template; Optional enum or reference fields and every Set are filtered in the hub, then paged (checks Y2, Y3, Y5). A filter on a field targeting `User` is 400 `person_filter_refused` (ADR-0021's non-aggregation guard, built 2026-10-18)
+- **The adapter owns the store's error vocabulary:** `isUnknownRef()` in `store.ts` is the one test for "branch, commit or document does not exist"; routes that read several branches skip one that vanished between calls
 - **The intelligence reads are the only place coverage exists**: `GET /api/v1/intelligence/coverage/:moduleId`, `coverage?course=`, `alignment`, `trace/:type/:id`, `impact/:type/:id`, all at `?branch=|ref=`. Reverse lookups go through `Graph.where`: a required reference is a store template, an Optional or Set reference is listed and filtered (check Y)
 - **One placement per item per assessment** (`ItemInstance` Hash key over `(assessment, implements)`): two forms are two `Assessment`s; reopened only by a container inside `Assessment` or an importer meeting a source that references one item twice (plan §6)
 - **The app's pages call the Hono app in-process** and never the store; they are clients of the API like any plugin
@@ -197,15 +206,24 @@ History: Schema loaded → Seed data inserted → Demo API documented → Next.j
 
 ## Blockers
 
-None. One intermittent: a branch-delete test in `app.test.ts` failed once in a full run and passed alone and in two further full runs; the three test files run in parallel against one store and the branch routes assume the branch set is stable across two calls (What's Next, item 2). The 2026-10-05 credentials failure was the previously running container having been started with a different `TERMINUSDB_ADMIN_PASS`; `docker compose up -d` recreated it from the compose defaults and `app/.env.local` authenticates. If it recurs, recreate the container rather than editing `.env.local`.
+None. The branch-delete flake is fixed (PR #13). Watch: the history-with-diffs test in `app.test.ts` hit Vitest's 5-second timeout once (5,016 ms) in a run started right after `platform_checks.js`; it passed in every run since. Raise its timeout if it recurs. The 2026-10-05 credentials failure was the previously running container having been started with a different `TERMINUSDB_ADMIN_PASS`; `docker compose up -d` recreated it from the compose defaults and `app/.env.local` authenticates. If it recurs, recreate the container rather than editing `.env.local`.
 
 ---
 
 ## Notes for Next Session
 
-Documentation now has four current, human-facing documents besides the ADRs: `README.md`, `docs/api.md`, `docs/schema-guide.md` and `docs/how-armature-works.md`. Any session that changes a route, the schema or a decision updates them too (the update-session prompt says so); conventions are American spelling, acronyms expanded per section, historical records annotated rather than rewritten.
+Documentation has four current, human-facing documents besides the ADRs: `README.md`, `docs/api.md`, `docs/schema-guide.md` and `docs/how-armature-works.md`. Any session that changes a route, the schema or a decision updates them too; conventions are American spelling, acronyms expanded per section, historical records annotated rather than rewritten.
 
-Start with ADR-0057: read it, decide, and if accepted implement it on a branch (`phase-5/asof` or fold into Phase 5's attestation branch). The `asOf` fill belongs in `write.ts` step 3 beside `createdBy`; the validation is a new module in `invariants/` registered for the three types; the branch head is `branch.head()` on the store. Then the branch-route race (What's Next, item 2), which is a small change in `routes/branches.ts`.
+Start with Phase 5: write ADR-0028 (Attestation) on a `phase-5/attestation` branch. The reserved number and the specification are in `docs/development-plan.md` Phase 5. The `asOf` machinery is ready: add Attestation to `AS_OF_SUBJECTS` (its subject must exist at `asOf`) and it is filled and checked like a finding. Its Hash key over (subject, fragment, claim, attester) means a client never supplies its id. Staleness is a read: commits touching the subject (or its fragment) since `asOf`, from `history`. Platform check first for anything the staleness read assumes about per-document history with a fragment path.
+
+2026-10-18 facts worth carrying forward:
+- A filled `asOf` is the head the write *starts* from: a commit cannot name itself. With `If-Match` it is that commit exactly.
+- `asOfFilled` in the write context holds documents whose `asOf` came from the head; a value copied from a parent joins it only if the parent's did. Everything else (supplied, kept on replace, copied from a stored dataset) is checked by constraint 13.
+- The store's answers for a branch that no longer exists: a log read is 400 `api:UnresolvableAbsoluteDescriptor`; a delete is 400 `api:BranchDoesNotExistError`. Both are unknown refs (`isUnknownRef`).
+- The store treats enums as classes: a template query on an Optional enum is a 500 like an Optional reference (Y5); on an Optional string it works (Y6).
+- To test a race between two store calls, make `Store.prototype.listBranches` (via `vi.spyOn`) name a branch the store does not hold; that is the state the race leaves. Run each new race test against the previous route to prove it bites.
+- Removing a schema field that no document holds needs no `--clear-instances`; `node scripts/load_schema.js` applies it. The running store carries the current schema (reloaded twice this session).
+- Splitting one file's changes across two commits without interactive staging: write the intermediate version, `git hash-object -w`, then `git update-index --cacheinfo`.
 
 Phase 4 facts worth carrying forward:
 - The store answers a template query on an `Optional` reference field, or on a `Set` reference field in either value form, with a 500; only required reference fields filter (check Y). `Graph.where` in `intelligence/graph.ts` is the one place that knows this.
@@ -257,6 +275,14 @@ Key context:
 ---
 
 ## Recent Sessions
+
+### 2026-10-18 (post-Phase 4 decisions and fixes)
+
+- Started Docker and the store; flagged three gaps in ADR-0057 (replace, same-write subjects, metric parents), agreed answers, accepted it with decision 5 and built `asOf` and constraint 13 (PR #12)
+- Fixed the branch-route race with a `listBranches` spy that names a vanished branch, and found and fixed the 500 on deleting an already-gone branch (PR #13)
+- Fixed the list route's filter 500, finding Optional enums fail too (checks Y4 to Y6), and built ADR-0021's non-aggregation guard with it, since hub filtering would otherwise have enabled `?createdBy=` (PR #14)
+- Laid out options for item statistics and `ModuleObjective` writes; on the user's choice wrote and built ADR-0058 (statistics as `LearningMetric.subject`, the item fields removed) and confirmed ADR-0007's generic path (PR #15)
+- Four PRs, 12 commits, each rebase-merged with CI green on `main`; 109 tests
 
 ### 2026-10-08 to 2026-10-09 (documentation overhaul)
 
