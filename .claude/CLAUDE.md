@@ -89,6 +89,7 @@ docs/
   SCHEMA_APPENDIX.md       # GENERATED — do not edit; run node scripts/generate-schema-appendix.js (not drift-checked in CI)
   development-plan.md      # Phased plan; §6 open questions; §9 lists verified TerminusDB platform facts
   armature-asks-from-Coqui.md  # CoQui's dated handoff (2026-10-05): its asks and lessons; a status banner says what landed
+  client-changes.md        # What client tools (CoQui first) must act on, newest first: what changed, what a client does, CoQui's mappings. Add an entry for every change to /api/v1 or the schema a client would act on
   demo-api.md              # RETIRED demo-era API spec, kept for history
   positionpaper/           # The position paper (March 2026); not edited
   research/                # Standards-precedents survey, candidate ADRs 0035–0053, reading list (2026-10-06 snapshot)
