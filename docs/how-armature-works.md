@@ -228,7 +228,7 @@ Every significant decision is written up as an **Architecture Decision Record (A
 
 ADRs are never deleted. When a decision is overturned, the old ADR is marked "Superseded by ADR-XXXX" and the new ADR explains what changed and why. This produces a readable history of the project's reasoning, including its mistakes. The repository calls this "Armature practicing what it preaches: design rationale preserved as structured, inspectable artifacts." The research survey in `docs/research/` notes that ADRs are one of the few rationale-capture practices that have survived in software engineering, where heavier argumentation tools did not, because they are short, live beside the work, and are superseded rather than edited.
 
-**Numbering.** ADR numbers are mostly sequential, with deliberate gaps. Numbers 0028, 0030, 0031 and 0034 are reserved by the development plan for decisions not yet written (attestations, external references and attachments, export profiles, interaction types). Numbers 0035 to 0053 are provisional candidates from the research survey. ADR-0054 onward are decisions made after those blocks were reserved. Appendix D lists all of them.
+**Numbering.** ADR numbers are mostly sequential, with deliberate gaps. Numbers 0030, 0031 and 0034 are reserved by the development plan for decisions not yet written (external references and attachments, export profiles, interaction types); 0028, attestations, was written on 18 October 2026. Numbers 0035 to 0053 are provisional candidates from the research survey. ADR-0054 onward are decisions made after those blocks were reserved. Appendix D lists all of them.
 
 ### 8.2 Verify the platform before relying on it
 
@@ -1079,8 +1079,8 @@ The session log also lists a small fix (a race condition in the branch routes wh
 
 **Goal:** a minimal, tool-neutral way to record that someone judged an artifact, so the paper's "how those alignments were established and whether they have since changed" becomes answerable.
 
-- **Attestation (ADR-0028, reserved).** A `User` affirms or declines a claim about a target (a document, optionally one fragment of it), as of a commit. Planned fields: subject, optional `fragmentId`, the claim text, an optional plugin-scoped claim reference (where CoQui would put its own vocabulary), a verdict (`Affirmed` or `Declined`), an optional reason, `asOf`, and who attested. Its identity would be derived from (subject, fragment, claim, attester), so "the latest attestation per claim per reviewer" is guaranteed by the database. Whether an attestation is **stale** would be derived from commits to its subject since `asOf`, never stored.
-- **Part-level notes and findings.** `DesignNote` and `DesignFinding` gain an optional `fragmentId`, so "this drop zone is ambiguous" can point at a part.
+- **Attestation (ADR-0028, accepted 18 October 2026, not yet built).** A `User` gives a verdict, `Affirmed` or `Declined`, about one design record or one fragment of it, as the record stood at a commit (`asOf`). The verdict may concern a written **claim** ("this option is the only correct answer"), identified by a plugin-scoped claim reference and carrying its wording, or no claim at all, in which case it is an **endorsement** of the record itself. The claim was made optional while the decision was written: requiring one would have built one tool's review method (affirming discrete claims) into the hub, and a sign-off tool or an AI assistant whose human accepts a proposal has no claims to give. The record's identity is derived from (subject, fragment, claim, attester), so each person holds one current verdict per part and claim, guaranteed by the database; earlier verdicts remain in the commit history. The attester is always the person the request identifies, never a value the tool supplies. Whether an attestation is **stale** is computed when asked, by comparing the judged fragment, matched by its `fragmentId`, as it was at `asOf` and as it is now. The database's own difference report could not serve: it compares list positions, so reordering options would look like a change (platform check AB).
+- **Part-level notes and findings.** `DesignNote` and `DesignFinding` gain an optional `fragmentId`, so "this drop zone is ambiguous" can point at a part. ADR-0028 makes the pairing of a record with a `fragmentId` the general rule for anything that refers to a part.
 - **The non-aggregation guard (ADR-0021).** The generic list route refuses `createdBy` and `attestedBy` as filters. *Built early, on 18 October 2026:* the route refuses a filter on any field that names a person, so `attestedBy` will be refused when it exists.
 - **Exit criterion:** an attestation made on a branch at one commit is reported stale after a later commit changes the same fragment, without the plugin computing anything.
 
@@ -1137,7 +1137,7 @@ CoQui is an assessment-item review tool built in a separate repository. It struc
 | Create or replace notes and findings on a branch | The generic write path | Done (Phase 3) |
 | Read users and create one | `/api/v1/users` (ADR-0032) | Done (Phase 3) |
 | Item history and changes since a commit | History, differences and branch changes for any type | Done (Phase 2) |
-| An `Attestation` type | ADR-0028, in tool-neutral form | Planned (Phase 5) |
+| An `Attestation` type | ADR-0028, in tool-neutral form, with the claim optional | Accepted 18 October 2026; built in Phase 5 |
 | A merge with a conflict report | The wrapped three-way merge | Done (Phase 2); merge policy still open |
 
 **What failed the two-client test and stays in CoQui:** the review *round* (a branch at the boundary), the *craft grid* and *claim version* (they travel inside an attestation's plugin-scoped claim reference), and CoQui's review *workflow states* (mapped onto the four `ItemStatus` values).
@@ -1210,7 +1210,7 @@ The survey also maps where Armature sits: upstream of delivery and outcome recor
 | **Artifact** | A primary design product: an objective, item, activity, module, note, finding. A schema category |
 | **Assessment item** | A reusable question in the item bank (`AssessmentItem`) |
 | **`asOf`** | The commit a dataset, metric or finding refers to: the design as the cohort met it, or as the finding judged it (ADR-0057) |
-| **Attestation** | A planned record (ADR-0028) that a person affirmed or declined a claim about an artifact, as of a commit |
+| **Attestation** | A record (ADR-0028, accepted, not yet built) of one person's verdict about an artifact or one fragment of it, as of a commit: affirming or declining a claim, or endorsing the artifact when there is no claim |
 | **Branch** | A named line of commits; `main` is the shared one |
 | **CI (continuous integration)** | An automated service that checks every proposed change. Armature's runs lint (automated style checks) and the generated-types check |
 | **Client / plugin** | A separate application that uses the Armature API, such as CoQui |
@@ -1334,7 +1334,7 @@ See `schema/docs/adr/README.md` for the full index with one-line summaries. In b
 | 0001–0010 | Foundational modeling (February 2026): evidence types, references, junctions, back-references, sequencing, cardinality, module objectives, enums, enrichments, deferrals |
 | 0011–0015 | Schema review (February 2026): placeholder objectives, design notes, schema-level cardinality, the common base class, users and authorship |
 | 0016–0023 | The CoQui fit analysis (August–September 2026): keys, the `DesignRecord` abstract root, readiness, coverage and readiness, findings, the non-goal on practitioner performance, embedded item parts, fragment identifiers |
-| 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0028, 0030, 0031 and 0034 are reserved and unwritten |
+| 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0030, 0031 and 0034 are reserved and unwritten; 0028 (attestations) was written 18 October 2026 |
 | 0035–0053 | Research candidates, not decisions (`docs/research/adr-candidates.md`) |
 | 0054–0058 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item |
 
