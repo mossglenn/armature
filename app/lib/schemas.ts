@@ -62,6 +62,7 @@ export const LearningMetricSchema = z.strictObject({
   unit: z.string().min(1).max(10_000),
   derivedFrom: ReferenceSchema.optional(),
   asOf: z.string().min(1).max(10_000).optional(),
+  subject: ReferenceSchema.optional(),
 });
 
 export const DescriptiveEvidenceSchema = z.strictObject({
@@ -150,8 +151,6 @@ export const AssessmentItemSchema = z.strictObject({
   status: z.enum(VALID_ItemStatus),
   bloomsLevel: z.enum(VALID_BloomsLevel).optional(),
   assesses: z.array(ReferenceSchema).min(1),
-  difficultyIndex: z.number().optional(),
-  discriminationIndex: z.number().optional(),
 });
 
 export const ItemInstanceSchema = z.strictObject({

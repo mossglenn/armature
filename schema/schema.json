@@ -418,10 +418,11 @@
       {
         "@language": "en",
         "@label": "LearningMetric",
-        "@comment": "A quantitative measurement of learning performance at a point in time. Inherits label, description, collectedAt, source from LearningEvidence. Typically derived from a LearningDataset produced by an administered Assessment — the derivedFrom link preserves that provenance. Examples: pass rate, average score, completion rate.",
+        "@comment": "A quantitative measurement of learning performance at a point in time. Inherits label, description, collectedAt, source from LearningEvidence. Typically derived from a LearningDataset produced by an administered Assessment — the derivedFrom link preserves that provenance. Examples: pass rate, average score, completion rate. A metric about one design record names it in subject: an item statistic (difficulty, discrimination) is a metric whose subject is the AssessmentItem, derivedFrom the administration's dataset (ADR-0058). Summaries over metrics, such as an item's latest difficulty, are computed on read, never stored (ADR-0056).",
         "@properties": {
           "derivedFrom": "The LearningDataset this metric was computed from. Optional because a metric may come from a third-party study or benchmark not produced by an Armature Assessment.",
-          "asOf": "The commit (a bare commit id) the measurement refers to. A metric with a derivedFrom dataset takes the dataset's asOf: the API copies it when omitted and rejects a different value (absent when the dataset has none). A metric without a dataset is filled from the branch head on create and kept on replace, like a dataset. API CONSTRAINT 13. See ADR-0057."
+          "asOf": "The commit (a bare commit id) the measurement refers to. A metric with a derivedFrom dataset takes the dataset's asOf: the API copies it when omitted and rejects a different value (absent when the dataset has none). A metric without a dataset is filled from the branch head on create and kept on replace, like a dataset. API CONSTRAINT 13. See ADR-0057.",
+          "subject": "The design record this metric measures: an AssessmentItem for an item statistic, a LearningObjective for a mastery rate, a LearningActivity or Module for a completion rate. Optional: a metric without one is about its cohort as a whole. API CONSTRAINT 13: it must exist at the metric's asOf. See ADR-0058."
         }
       }
     ],
@@ -439,6 +440,10 @@
     "asOf": {
       "@type": "Optional",
       "@class": "xsd:string"
+    },
+    "subject": {
+      "@type": "Optional",
+      "@class": "DesignRecord"
     }
   },
   {
@@ -746,19 +751,11 @@
       "@class": "LearningObjective",
       "@min_cardinality": 1
     },
-    "difficultyIndex": {
-      "@type": "Optional",
-      "@class": "xsd:decimal"
-    },
-    "discriminationIndex": {
-      "@type": "Optional",
-      "@class": "xsd:decimal"
-    },
     "@documentation": [
       {
         "@language": "en",
         "@label": "AssessmentItem",
-        "@comment": "A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). difficultyIndex and discriminationIndex hold classical item-analysis statistics from LearningDataset analysis. No API code computes or writes them yet, and whether they stay as imported observations or are computed on read instead (ADR-0056 names difficulty summaries among derived values) is an open question for the outcomes importer (docs/development-plan.md Phase 6). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.",
+        "@comment": "A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). Item statistics (difficulty, discrimination) are not stored on the item: each is a LearningMetric whose subject is the item, derived from the dataset of one administration and carrying that dataset's asOf (ADR-0058). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.",
         "@properties": {
           "stem": "The question or prompt, as a TextFragment with its own fragmentId so a reviewer can address the stem rather than the whole item.",
           "options": "The ordered answer options, embedded as ItemOption subdocuments. Order is presentation order; identity is fragmentId, never position. Empty for item types with no options (Essay, ShortAnswer). See ADR-0022.",
@@ -766,9 +763,7 @@
           "incorrectFeedback": "General feedback shown on an incorrect response, as a TextFragment. Optional.",
           "status": "The item's own review lifecycle: Draft on creation, InReview, Approved, Retired. Required so that absence is never ambiguous. Shares the ItemStatus enum with ItemInstance.status so the consistency check \"placements Approved whose item is not\" is a graph query. Readiness bears on coverage, which is computed on read and never stored: the delivered figure counts Approved items in Approved placements, the projected figure counts every item and placement not Retired (ADR-0019, ADR-0029, ADR-0056). See ADR-0018.",
           "bloomsLevel": "The cognitive level this item assesses. Optional at authoring time. When set, enables Bloom's alignment queries against the objectives in the assesses set.",
-          "assesses": "The LearningObjectives this item provides evidence of. Minimum 1 enforced at the schema level. An item that assesses no objective has no place in the artifact graph. See ADR-0013.",
-          "difficultyIndex": "Proportion of learners who answered correctly (0.0–1.0). From LearningDataset analysis, not authored. A lower value indicates a harder item. Stored on the item to enable item bank queries by difficulty. No API code writes it yet; see the class comment for the open question.",
-          "discriminationIndex": "Measure of how well the item distinguishes high performers from low performers (typically -1.0 to 1.0, with higher values indicating better discrimination). From LearningDataset analysis, not authored. No API code writes it yet; see the class comment for the open question."
+          "assesses": "The LearningObjectives this item provides evidence of. Minimum 1 enforced at the schema level. An item that assesses no objective has no place in the artifact graph. See ADR-0013."
         }
       }
     ]
