@@ -107,6 +107,10 @@ const schema = [
   { "@type": "Class", "@id": "Other", "@key": { "@type": "Random" }, "label": "xsd:string" },
   // Y: a required, an Optional and a Set reference, for the template-query probes
   { "@type": "Class", "@id": "Holder", "@key": { "@type": "Random" }, "one": "Artifact", "many": { "@type": "Set", "@class": "Artifact" }, "maybe": { "@type": "Optional", "@class": "Artifact" } },
+  // Y4–Y6: a required and an Optional enum and an Optional string, for the list route's filters
+  { "@type": "Enum", "@id": "Tone", "@value": ["Warm", "Cool"] },
+  { "@type": "Class", "@id": "Graded", "@key": { "@type": "Random" }, "tone": "Tone",
+    "maybeTone": { "@type": "Optional", "@class": "Tone" }, "memo": { "@type": "Optional", "@class": "xsd:string" } },
   // X: a Hash-keyed junction, as Armature's relationship documents are
   { "@type": "Class", "@id": "Link", "@key": { "@type": "Hash", "@fields": ["a", "b"] }, "a": "Artifact", "b": "Artifact", "note": { "@type": "Optional", "@class": "xsd:string" } },
   // D–J: abstract subdocument with typed and generic specializations
@@ -567,6 +571,21 @@ async function main() {
   record("Y3", "INFO", `template on a Set reference field with one member as the value: ${r.status} ${short(r.json)}`);
   r = await yq({ many: ["Artifact/y-b"] });
   record("Y3b", "INFO", `template on a Set reference field with an array value: ${r.status} ${short(r.json)}`);
+
+  // Y4–Y6: the same probe on enum and string fields (2026-10-18, for the list route's filters).
+  // The store treats an enum as a class, and an Optional enum fails as an Optional reference does.
+  r = await api("POST", at("branch/main", commit("y enum fixtures")), [
+    { "@type": "Graded", "@id": "Graded/y-g1", tone: "Warm", maybeTone: "Cool", memo: "m" },
+    { "@type": "Graded", "@id": "Graded/y-g2", tone: "Cool" },
+  ]);
+  if (r.status !== 200) record("Y4", "FAIL", `enum fixtures: ${r.status} ${errType(r)}`);
+  const gq = (query) => api("POST", at("branch/main", ""), { type: "Graded", as_list: true, query }, override);
+  r = await gq({ tone: "Warm" });
+  record("Y4", r.status === 200 && r.json?.length === 1 ? "PASS" : "INFO", `template on a required enum field: ${r.status} ${short(r.json)}`);
+  r = await gq({ maybeTone: "Cool" });
+  record("Y5", r.status === 500 ? "PASS" : "INFO", `template on an Optional enum field: ${r.status} ${errType(r)} (PASS records the 500 the list route works around by filtering in the hub)`);
+  r = await gq({ memo: "m" });
+  record("Y6", r.status === 200 && r.json?.length === 1 ? "PASS" : "INFO", `template on an Optional string field: ${r.status} ${short(r.json)}`);
 
   // Z: a conflict on one field, resolved by restoring the base value on the target before apply
   // (verified for the merge recompute ADR-0029 decision 6 called for; ADR-0056 removed stored
