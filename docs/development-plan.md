@@ -100,7 +100,7 @@ the minimal generic form and lets the client carry its own vocabulary in a refer
 
 ## 2. Reference clients: the test for every ask
 
-To avoid shaping the hub for CoQui, the plan names eight plausible tools the paper implies or the
+To avoid shaping the hub for CoQui, the plan names nine plausible tools the paper implies or the
 project has discussed, beside CoQui. They are not commitments to build anything. They are a checklist: an ask is
 adopted into the hub when at least two reference clients would need the same capability.
 
@@ -114,12 +114,18 @@ adopted into the hub when at least two reference clients would need the same cap
 | **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description; attachments resolvable or deliberately excluded per profile |
 | **AI design assistant** | Propose items, objectives or alignments inside another tool | Agent `User` provenance; design-intelligence reads for context; the same write path and constraints as humans |
 | **Rich item authoring tool** | Author drag-and-drop, hotspot and media-bearing items on a shared item bank | Items as a tree of addressable fragments, typed or generic; attachment references on fragments; interaction types with versioned renderers; impact analysis when a renderer or an image changes; the same review surface CoQui uses |
+| **Course builder** | Generate a deliverable course (SCORM, cmi5, xAPI) from the design at one commit, for instance by an AI assistant writing a course framework's pages | The ordered module-content view (ADR-0005); the course tree read at one commit; interaction types with renderable data shapes, keyed to `cmi.interaction` (ADR-0034); its source commit, stamped into the package as the results' `asOf` (ADR-0057); assessment settings as data |
 | **Complex learning object designer** (distant) | Develop simulations and other multi-file learning objects, with their own asset store or the hub's | References to a revision of an asset tree, with hash and reason; impact analysis when an asset revision moves; attestations and findings against a revision; the asset store's history reachable, not replayed |
 
 Three of these need **binary attachments** today or soon: the needs-analysis intake tool
 (evidence documents), CoQui (item media, eventually), and the outcomes importer (raw dataset
 exports). The last row needs **versioned asset references**, and is the reason the reference
 shape is versioned-tree-capable from the start. See the note below the CoQui table.
+
+**Course builder, added 2026-10-18.** No row took the design out to a deliverable course; the
+outcomes importer only brought results back in. Mapping Tessera, a course framework designed for
+AI-assisted authoring, showed the gap (`docs/research/tessera-mapping.md`). With it, the ordered
+module-content view has a second client (§6).
 
 **Applying the test to CoQui's asks.** The table below is the heart of the plan's answer to
 "how do we not over-fit."
@@ -834,7 +840,9 @@ what evidence would be enough.
   module, with each group's members in their own order. The uniqueness rules are enforced
   (constraints 3 and 4), but the composed view has not been built; clients sort the links
   themselves. Evidence: the activity and strategy designer reference client, or a Coverage View
-  that shows a module's activities.
+  that shows a module's activities. *Since 2026-10-18 the course builder reference client needs
+  it too, so it passes the two-client test* (`docs/research/tessera-mapping.md` §5); it is built
+  when the next phase touches module content.
 - **Filtering the list route on optional and multi-valued references.** *Resolved 2026-10-18.*
   The store answers a template query on an `Optional` enum or reference, or on a `Set`, with a
   500 (checks Y2, Y3, Y5). The list route now lists the type and filters those in the hub, then
