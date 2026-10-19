@@ -74,7 +74,7 @@ app/
         graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
       errors.ts            # ApiError: status + stable code + message, rendered by onError
       routes/
-        documents.ts       # list with field filters, GET at ref, PUT, batch POST (@capture/@ref), history, diff
+        documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
         intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id: design intelligence from structure alone, at any ref (plan P4, ADR-0056)
@@ -168,7 +168,7 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 12. A write whose `@id` exists under a different `@type` — rejected with 409 `type_conflict` by the write pipeline (ADR-0024)
 13. `asOf` on `LearningDataset`, `LearningMetric` and `DesignFinding` — a bare commit id the store holds, at which the record's subjects exist (`producedBy`; `subject` and `regarding`); a metric with a `derivedFrom` dataset carries the dataset's value. The pipeline fills it from the branch head on create (the head the write starts from, or `If-Match`), keeps it on replace and copies it onto a metric; only supplied or kept values are checked (ADR-0057; `invariants/asOf.ts`)
 
-Pending, not yet enforced: `LearningDataset.producedBy` required for Armature-administered assessments (Phase 6). Known gap: the list route passes `?field=` filters on `Optional` or `Set` reference fields to the store, which answers with a 500 (check Y); see plan §6.
+Pending, not yet enforced: `LearningDataset.producedBy` required for Armature-administered assessments (Phase 6). The list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021's non-aggregation guard) and filters `Optional` enum or reference and `Set` fields in the hub, since the store answers those template queries with a 500 (checks Y2, Y3, Y5).
 
 ### Junction document pattern
 
