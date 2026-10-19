@@ -576,6 +576,122 @@ describe('generic write path and invariants (Phase 3)', () => {
     });
   });
 
+  describe('Attestation and part references (constraints 14, 15, 16; ADR-0028)', () => {
+    const ITEM = `AssessmentItem/att-${stamp}`;
+    const headOf = async () => (await get(`/api/v1/branches/${BRANCH}`)).headers.get('etag')!.replace(/"/g, '');
+    const attest = (overrides: Record<string, unknown> = {}) => ({ '@type': 'Attestation', subject: ITEM, verdict: 'Affirmed', ...overrides });
+    const write = (...documents: unknown[]) => post(`/api/v1/documents${q}`, { message: 'Attest', documents });
+    const read = async (id: string) => (await get(`/api/v1/documents/${id}${q}`)).json();
+
+    beforeAll(async () => {
+      const res = await put(`/api/v1/documents/${ITEM}${q}`, { message: 'Item to attest', document: item(`att-${stamp}`) });
+      expect(res.status).toBe(200);
+    });
+
+    let endorsement: string;
+
+    it('records an endorsement without a claim: hub-minted id, attestedBy the caller, asOf the head', async () => {
+      const before = await headOf();
+      const res = await write(attest());
+      expect(res.status).toBe(200);
+      endorsement = (await res.json()).ids[0];
+      expect(endorsement).toMatch(/^Attestation\/[0-9a-f]{64}$/);
+      expect(await read(endorsement)).toMatchObject({ subject: ITEM, verdict: 'Affirmed', attestedBy: AUTHOR, asOf: before });
+    });
+
+    it('replaces it under the same key with a new verdict, refilling asOf (decision 5)', async () => {
+      const before = await headOf();
+      const res = await write(attest({ verdict: 'Declined', reason: 'Option c is also defensible.' }));
+      expect(res.status).toBe(200);
+      expect((await res.json()).ids).toEqual([endorsement]);
+      const now = await read(endorsement);
+      expect(now).toMatchObject({ verdict: 'Declined', asOf: before });
+      expect(now.claimRef).toBeUndefined();
+    });
+
+    it('keeps a claim verdict and a part verdict beside the endorsement', async () => {
+      const res = await write(
+        attest({ claimRef: 'grid:key-correct', claimText: 'Option a is the only correct answer.' }),
+        attest({ fragmentId: 'b' })
+      );
+      expect(res.status).toBe(200);
+      const minted: string[] = (await res.json()).ids;
+      expect(new Set([...minted, endorsement]).size).toBe(3);
+      const list = await (await get(`/api/v1/documents/Attestation${q}&subject=${ITEM}`)).json();
+      expect(list).toHaveLength(3);
+    });
+
+    it('refuses half a claim (constraint 14)', async () => {
+      for (const half of [{ claimRef: 'grid:x' }, { claimText: 'Option a is correct.' }]) {
+        const res = await write(attest(half));
+        expect(res.status).toBe(422);
+        expect(await codes(res)).toEqual(['claim_incomplete']);
+      }
+    });
+
+    it('refuses an attestedBy naming someone else, and accepts one naming the caller (constraint 15)', async () => {
+      const other = await write(attest({ fragmentId: 'c', attestedBy: 'User/someone-else' }));
+      expect(other.status).toBe(422);
+      expect(await codes(other)).toContain('attester_not_caller');
+      const self = await write(attest({ fragmentId: 'c', attestedBy: AUTHOR }));
+      expect(self.status).toBe(200);
+    });
+
+    it('refuses an attestation written with its subject, which asOf could not hold', async () => {
+      const res = await post(`/api/v1/documents${q}`, {
+        message: 'x',
+        documents: [{ ...item(`att-new-${stamp}`), '@capture': 'it' }, attest({ subject: { '@ref': 'it' } })],
+      });
+      expect(res.status).toBe(422);
+      expect(await codes(res)).toContain('subject_in_same_write');
+    });
+
+    it('refuses a client-supplied id: the key is the identity', async () => {
+      const res = await put(`/api/v1/documents/Attestation/mine-${stamp}${q}`, { message: 'x', document: attest({ fragmentId: 'a' }) });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('bad_id');
+    });
+
+    it('refuses a fragmentId the subject lacks (constraint 16)', async () => {
+      const res = await write(attest({ fragmentId: 'zz' }));
+      expect(res.status).toBe(422);
+      expect(await codes(res)).toEqual(['unknown_fragment']);
+    });
+
+    it('checks the part at a supplied asOf, and after the write when asOf is filled', async () => {
+      const withC = await headOf();
+      const dropped = item(`att-${stamp}`);
+      dropped.options = dropped.options.slice(0, 2);
+      expect((await put(`/api/v1/documents/${ITEM}${q}`, { message: 'Drop option c', document: dropped })).status).toBe(200);
+
+      const filled = await write(attest({ fragmentId: 'c', claimRef: 'grid:distractor', claimText: 'Option c is plausible.' }));
+      expect(filled.status).toBe(422);
+      expect(await codes(filled)).toEqual(['unknown_fragment']);
+      const atC = await write(attest({ fragmentId: 'c', claimRef: 'grid:distractor', claimText: 'Option c is plausible.', asOf: withC }));
+      expect(atC.status).toBe(200);
+    });
+
+    it('gives notes and findings a part of one subject (constraint 16)', async () => {
+      const two = await write({ '@type': 'DesignNote', label: 'Why b', rationale: 'b tests a misconception.', subject: [ITEM, 'AssessmentItem/hallucination-mc'], fragmentId: 'b' });
+      expect(two.status).toBe(422);
+      expect(await codes(two)).toEqual(['fragment_needs_one_subject']);
+      const missing = await write({ '@type': 'DesignFinding', label: 'Ambiguous', finding: 'Reads two ways.', subject: [ITEM], fragmentId: 'zz', status: 'Open' });
+      expect(missing.status).toBe(422);
+      expect(await codes(missing)).toEqual(['unknown_fragment']);
+      const ok = await write(
+        { '@type': 'DesignNote', label: 'Why b', rationale: 'b tests a misconception.', subject: [ITEM], fragmentId: 'b' },
+        { '@type': 'DesignFinding', label: 'Ambiguous', finding: 'Option b reads two ways.', subject: [ITEM], fragmentId: 'b', status: 'Open' }
+      );
+      expect(ok.status).toBe(200);
+    });
+
+    it('refuses to list attestations by attester (ADR-0021)', async () => {
+      const res = await get(`/api/v1/documents/Attestation${q}&attestedBy=${AUTHOR}`);
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('person_filter_refused');
+    });
+  });
+
   describe('list', () => {
     it('filters by a field, rejects an unknown one, and 404s an unknown type', async () => {
       const approved = await get(`/api/v1/documents/AssessmentItem${q}&status=Approved`);

@@ -1,10 +1,10 @@
-import { CLASS_KEY } from '@/lib/types';
+import { CLASS_FIELDS, CLASS_KEY, type FieldShape } from '@/lib/types';
 import { DOCUMENT_SCHEMAS } from '@/lib/schemas';
-import { hasCreatedBy, isWritable } from './classes';
+import { hasAttestedBy, hasCreatedBy, isWritable } from './classes';
 import { ApiError } from './errors';
 import { userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
-import { AS_OF_PARENT, hasAsOf } from './invariants/asOf';
+import { AS_OF_PARENT, AS_OF_REFILLED_ON_REPLACE, hasAsOf } from './invariants/asOf';
 import { StoreError, type Store, type TerminusDocument } from './store';
 
 /**
@@ -17,12 +17,15 @@ import { StoreError, type Store, type TerminusDocument } from './store';
  *      app/lib/schemas.ts (400 invalid_document)
  *   2. identity: an id held by another type is a 409 (ADR-0024 decision 4);
  *      an existing document is found by @id, or for a Hash-keyed class by
- *      its key fields, so a replace is recognized either way
+ *      its key fields, so a replace is recognized either way. An omitted
+ *      attestedBy is filled with the caller first, because it is part of
+ *      Attestation's key (ADR-0028 decision 4)
  *   3. provenance: createdBy is set on create and preserved on replace for
  *      every class that carries it; a User the branch lacks is carried in
  *      the same commit (ADR-0032 decisions 4 and 5); asOf, on the records
  *      that refer to a state of the graph, is filled from the branch head
- *      on create, kept on replace, or copied from a parent record (ADR-0057)
+ *      on create, kept on replace (refilled for an attestation, ADR-0028
+ *      decision 5), or copied from a parent record (ADR-0057)
  *   4. invariants: every constraint, over the whole batch (422)
  *   5. the write: one PUT with create=true for the whole list, so it is one
  *      commit and fails together (platform checks X1, X2b, X5); If-Match
@@ -103,6 +106,13 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
     }
   }
 
+  // The attester before step 2: attestedBy is part of the key, so the
+  // replace lookup must find the caller's own attestation. A value naming
+  // anyone else is left for constraint 15 to refuse.
+  for (const doc of documents) {
+    if (hasAttestedBy(doc['@type']) && doc.attestedBy === undefined) doc.attestedBy = who.id;
+  }
+
   // Step 2: what each document replaces, if anything.
   const existing = await Promise.all(documents.map((doc) => findExisting(branch, doc)));
   const replacing = new Set<string>();
@@ -119,7 +129,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   });
 
   // Step 3: provenance.
-  let carryUser = false;
+  let carryUser = documents.some((doc) => hasAttestedBy(doc['@type']) && doc.attestedBy === who.id);
   documents.forEach((doc, i) => {
     if (!hasCreatedBy(doc['@type'])) return;
     const found = existing[i];
@@ -135,7 +145,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
 
   // The carried User is resolvable so createdBy passes constraint 0 on a
   // branch that does not hold it yet.
-  const ctx = createWriteContext(branch, documents, replacing, copy ? [copy] : []);
+  const ctx = createWriteContext(branch, documents, replacing, who.id, copy ? [copy] : []);
   await fillAsOf(documents, existing, ctx, opts);
 
   // Step 4: invariants.
@@ -173,7 +183,8 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
  *   - a record with a parent (a metric with a dataset) copies the parent's
  *     value, absent when the parent has none
  *   - otherwise a replace keeps the stored value, so a status change does
- *     not move what a finding was about
+ *     not move what a finding was about; an attestation's replace is a new
+ *     verdict and takes the head like a create (AS_OF_REFILLED_ON_REPLACE)
  *   - otherwise a create takes the head the write starts from. That is the
  *     latest state a write can name: the commit it makes has no id until it
  *     exists, so a subject created in the same write is not in it
@@ -201,7 +212,7 @@ async function fillAsOf(
   for (const doc of carrying.filter((d) => parentOf(d) === undefined)) {
     if (doc.asOf !== undefined) continue;
     const found = existing[documents.indexOf(doc)];
-    if (found) {
+    if (found && !AS_OF_REFILLED_ON_REPLACE.has(doc['@type'])) {
       if (found.asOf !== undefined) doc.asOf = found.asOf;
       continue;
     }
@@ -225,6 +236,11 @@ async function fillAsOf(
  * The document on the branch this one replaces: by @id when it has one;
  * for a Hash-keyed class without one, by its key fields, since the store
  * derives the id from them (platform check X1c). Undefined when it is new.
+ *
+ * Required single-valued key fields go to the store as a template. Optional
+ * key fields (Attestation's fragmentId, claimRef and attestedBy) are matched
+ * here, absent only against absent, which is how the store hashes them
+ * (check AA3): a template on an Optional reference is a store 500 (Y2).
  */
 async function findExisting(branch: Store, doc: TerminusDocument): Promise<TerminusDocument | undefined> {
   if (typeof doc['@id'] === 'string' && doc['@id']) {
@@ -237,12 +253,16 @@ async function findExisting(branch: Store, doc: TerminusDocument): Promise<Termi
   }
   const key = keyOf(doc['@type']);
   if (key?.type !== 'Hash' || !key.fields) return undefined;
+  const fields = (CLASS_FIELDS as Record<string, Record<string, FieldShape>>)[doc['@type']] ?? {};
   const template: Record<string, string> = {};
+  const inHub: string[] = [];
   for (const field of key.fields) {
     const value = doc[field];
-    if (typeof value !== 'string') return undefined; // a { "@ref" } key: nothing to find yet
-    template[field] = value;
+    if (value !== undefined && typeof value !== 'string') return undefined; // a { "@ref" } key: nothing to find yet
+    if (fields[field]?.optional) inHub.push(field);
+    else if (value === undefined) return undefined; // the shape check requires it; nothing to find
+    else template[field] = value;
   }
   const { documents } = await branch.queryDocuments(doc['@type'], template);
-  return documents[0];
+  return documents.find((d) => inHub.every((field) => d[field] === doc[field]));
 }

@@ -1,8 +1,11 @@
 import { ApiError } from '../errors';
 import { StoreError, type Store, type TerminusDocument } from '../store';
+import { namesFragment } from '../fragments';
 import { checkAsOf, hasAsOf } from './asOf';
 import { validateAssessmentItem } from './assessmentItem';
+import { validateAttestation } from './attestation';
 import { validateDesignFinding } from './designFinding';
+import { checkFragmentRef } from './fragmentRef';
 import { validateItemInstance } from './itemInstance';
 import { validateActivityGroupMember, validateModuleContentLink } from './moduleContent';
 import { checkReferences } from './references';
@@ -33,6 +36,12 @@ import { checkReferences } from './references';
  *  13  asOf names a state          asOf.ts (generic, every class carrying asOf; ADR-0057):
  *                                the commit exists, the record's subjects exist at it,
  *                                a metric agrees with its dataset
+ *  14  a claim comes whole        attestation.ts (claimRef and claimText, both or neither; ADR-0028)
+ *  15  attester is the caller     attestation.ts (attestedBy is the resolved identity)
+ *                                attestation.ts also keeps constraint 13 meaningful for attestations:
+ *                                the subject is not written in the same request
+ *  16  a named part exists        fragmentRef.ts (generic, every class with a top-level fragmentId:
+ *                                one subject, and it has that part at asOf or after the write)
  *
  * A validator sees the whole batch and the branch being written, never main
  * by default. Every violation is collected and reported at once as a 422.
@@ -65,6 +74,8 @@ export interface WriteContext {
   byCapture: Map<string, TerminusDocument>;
   /** Ids of documents on the branch this write replaces. */
   replacing: Set<string>;
+  /** The `User` id the request resolved to (ADR-0032), which attestations must name (constraint 15). */
+  caller: string;
   /**
    * Batch documents whose `asOf` the pipeline filled from the branch head or
    * copied from a parent record, rather than the client supplying it or a
@@ -94,6 +105,7 @@ const VALIDATORS: Record<string, Validator> = {
   ModuleActivityGroupLink: validateModuleContentLink,
   ActivityGroupMember: validateActivityGroupMember,
   DesignFinding: validateDesignFinding,
+  Attestation: validateAttestation,
 };
 
 /** Runs every check over the batch; throws a 422 carrying all violations. */
@@ -102,6 +114,7 @@ export async function checkInvariants(ctx: WriteContext): Promise<void> {
   for (const [index, doc] of ctx.batch.entries()) {
     violations.push(...(await checkReferences(doc, index, ctx)));
     if (hasAsOf(doc['@type'])) violations.push(...(await checkAsOf(doc, index, ctx)));
+    if (namesFragment(doc['@type'])) violations.push(...(await checkFragmentRef(doc, index, ctx)));
     const validator = VALIDATORS[doc['@type']];
     if (validator) violations.push(...(await validator(doc, index, ctx)));
   }
@@ -120,6 +133,7 @@ export function createWriteContext(
   branch: Store,
   batch: TerminusDocument[],
   replacing: Set<string>,
+  caller: string,
   alongside: TerminusDocument[] = []
 ): WriteContext {
   const byId = new Map<string, TerminusDocument>();
@@ -148,6 +162,7 @@ export function createWriteContext(
     batch,
     byCapture,
     replacing,
+    caller,
     asOfFilled: new Set(),
     async resolve(ref) {
       if (typeof ref === 'string') return byId.get(ref) ?? read(ref);
