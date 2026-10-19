@@ -25,7 +25,9 @@ Attestation cited in decision 1 is planned as ADR-0028 (`docs/development-plan.m
 yet written. **Open:** decision 1 names difficulty summaries among derived values; whether
 `AssessmentItem.difficultyIndex` and `discriminationIndex` stay in the schema as imported
 observations or are removed is not decided. No code computes or writes them; the question is to be
-settled with the Phase 6 outcomes importer (see ADR-0009).
+settled with the Phase 6 outcomes importer (see ADR-0009). **Resolved 2026-10-18 by ADR-0058:**
+the fields are removed; each item statistic is an imported observation stored as a `LearningMetric`
+about the item, and summaries over them are reads.
 
 ## Context
 
