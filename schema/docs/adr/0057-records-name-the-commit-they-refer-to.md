@@ -11,7 +11,12 @@
 ## Status
 
 Accepted (2026-10-18), with decision 5 added at acceptance; implemented the same day on
-`phase-5/asof`. Proposed 2026-10-08. Follows from ADR-0056, which removed stored coverage and left one question
+`phase-5/asof`. Proposed 2026-10-08.
+
+**Note 2026-10-18 (later the same day):** ADR-0058 gave `LearningMetric` a `subject` (the record it
+measures), which constraint 13 checks at the metric's `asOf` like a finding's subject. A value a
+metric copies from its dataset is now checked too unless the dataset's own value came from the
+branch head, so a statistic cannot name an item created after the administration. Follows from ADR-0056, which removed stored coverage and left one question
 it had been answering: what the graph looked like when something was observed or judged. Adopt
 before Phase 6's outcomes importer and alongside ADR-0028's Attestation, which already carries
 `asOf`.

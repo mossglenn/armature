@@ -64,7 +64,7 @@ The sequence has deliberate gaps:
 
 ## Index
 
-All 34 ADRs, grouped by when they were written. Statuses are as of 2026-10-08.
+All 35 ADRs, grouped by when they were written. Statuses are as of 2026-10-18.
 
 ### 0001–0010: Foundational schema (February 2026)
 
@@ -78,7 +78,7 @@ All 34 ADRs, grouped by when they were written. Statuses are as of 2026-10-08.
 | [0006](0006-minimum-cardinality-enforced-by-api.md) | Minimum Cardinality Constraints Enforced by API, Not Schema | Superseded by ADR-0013 | Rules such as "a question must assess at least one objective" were to be checked by the API, until the database proved able to check them itself. |
 | [0007](0007-module-objective-as-programmatic-junction.md) | ModuleObjective as Programmatic Junction with Computed Fields | Superseded in part by ADR-0056; amended by ADR-0019 and ADR-0029; generic write path confirmed 2026-10-18 | A module's declaration that it teaches an objective is its own record, carrying the objective's role and the reason for it; the stored coverage field it also carried was removed. |
 | [0008](0008-top-level-enums.md) | Enums Defined as Top-Level Types | Accepted (its list of values is out of date; see the note in it) | Every controlled list of values, such as review status or Bloom's level, is defined once in the schema and shared wherever it is used. |
-| [0009](0009-semantic-enrichments.md) | Semantic Enrichments Beyond the Base Diagram | Accepted; decision 1 is an open question | Seven fields added to the original design to carry more meaning, such as the reason for an objective's role in a module and the confidence in each piece of needs-analysis evidence. |
+| [0009](0009-semantic-enrichments.md) | Semantic Enrichments Beyond the Base Diagram | Accepted; decision 1 superseded by ADR-0058 | Seven fields added to the original design to carry more meaning, such as the reason for an objective's role in a module and the confidence in each piece of needs-analysis evidence. |
 | [0010](0010-intentionally-deferred.md) | Intentionally Deferred Schema Features | Accepted; amended by ADR-0025 | Lists features deliberately left out until real use shows they are needed; several, including versioning and authorship, have since been settled by later ADRs. |
 
 ### 0011–0015: Schema review (February 2026)
@@ -122,7 +122,7 @@ and 0034, are not yet written; see [Numbering](#numbering).
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
-### 0054–0057: Later decisions (October 2026)
+### 0054–0058: Later decisions (October 2026)
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -130,6 +130,7 @@ and 0034, are not yet written; see [Numbering](#numbering).
 | [0055](0055-store-access-over-http.md) | The API layer reaches TerminusDB over HTTP, not through the JavaScript client | Accepted and implemented | The API talks to the TerminusDB database through one small HyperText Transfer Protocol (HTTP) module instead of the JavaScript client library, so it can record each change's real author. |
 | [0056](0056-coverage-is-computed-on-read-never-stored.md) | Coverage Is Computed on Read, Never Stored | Accepted and implemented | Coverage, and any future score, is calculated when someone asks for it, at any point in the design's history, and is never stored in the database. |
 | [0057](0057-records-name-the-commit-they-refer-to.md) | Records That Refer to a State of the Graph Name Its Commit | Accepted and implemented (2026-10-18) | Datasets, metrics and findings carry an `asOf` field naming the saved version of the design they refer to, so results can be compared with the design as it was. |
+| [0058](0058-item-statistics-are-metrics-about-the-item.md) | Item Statistics Are Metrics About the Item | Accepted and implemented (2026-10-18) | A question's difficulty and discrimination are recorded as measurements that name the question, the administration and the design version, not as fields on the question; summaries are calculated when asked for. |
 
 ## How to add an ADR
 

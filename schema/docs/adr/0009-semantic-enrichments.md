@@ -4,12 +4,13 @@
 > where useful design information had no field to live in. This decision added seven fields, such as
 > the kind of learning activity, the type of a prerequisite, the confidence placed in a piece of
 > evidence, and the priority of a learning need. Six still stand as written. The first, two item
-> statistics (difficulty and discrimination), is in question: no code fills them, and a later
-> decision (ADR-0056; ADR stands for Architecture Decision Record) says calculated values are
-> computed when read rather than stored, so whether they stay is an open question.
+> statistics (difficulty and discrimination) stored on each question, was replaced on 2026-10-18
+> by ADR-0058 (ADR stands for Architecture Decision Record): each statistic is now its own
+> measurement record that names the question, the administration and the version it describes.
 
 ## Status
-Accepted
+Accepted. **Decision 1 superseded by ADR-0058 (2026-10-18):** the two item statistics left
+`AssessmentItem`; each is a `LearningMetric` whose `subject` is the item.
 
 **Note (2026-10-08):** decisions 2 to 7 stand. Decision 1 is an open question; see the note under
 it.
@@ -33,6 +34,12 @@ Classic item analysis metrics computed from LearningDataset results after assess
 > conflicts with the write-back described here. Whether the two fields stay as imported observations
 > (statistics produced elsewhere and recorded as data) or are removed in favor of a computed read is
 > an open question, to be decided with the Phase 6 outcomes importer (`docs/development-plan.md`).
+
+> **Later change (2026-10-18):** decided by ADR-0058. Both: they are imported observations, and they
+> are stored as `LearningMetric`s about the item (`subject`), each with its dataset and `asOf`, not
+> as fields on the item; a summary such as an item's latest difficulty is a read. The query this
+> section motivates ("items assessing Objective X with difficulty above 0.8") becomes a read over
+> those metrics, which is not yet built.
 
 ### 2. LearningActivity: activityType
 The `ActivityType` enum (Reading, Video, Simulation, WorkedExample, Discussion, Practice, Reflection, Other) makes instructional strategy a queryable property. Without it, the graph cannot answer "what strategies have been applied to this objective?" Optional — designers are not forced to categorize during early authoring.
