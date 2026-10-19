@@ -87,6 +87,10 @@ Ask: does anything that changed this session require updating CLAUDE.md?
 
 If yes, update CLAUDE.md as well. Also check whether `README.md`, `docs/api.md`, `docs/schema-guide.md` or `docs/how-armature-works.md` describe something this session changed, and update them (or list them in What's Next).
 
+## Step 5: Check the client changelog
+
+Ask: did anything that reached `main` this session change what a client tool sends, receives or must do (a route, a field, a rule, an error code, an identity or ordering requirement)? If yes, add a dated entry at the top of `docs/client-changes.md`: what changed, what a client does, a **CoQui** note for anything CoQui maps at its boundary, and links to the ADR and the `docs/api.md` section. Keep entries tool-neutral; say how CoQui maps a change, never shape the change around CoQui.
+
 ---
 
 ## Commit
