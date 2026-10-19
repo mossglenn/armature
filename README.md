@@ -39,16 +39,16 @@ Through the design-intelligence reads under `/api/v1/intelligence/`, tools built
 
 ## Status
 
-As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-plan.md) are complete, and so are the decisions queued after them (commit ids on records that describe a state of the design, item statistics as measurements):
+As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-plan.md) are complete, and so are the decisions queued after them (commit ids on records that describe a state of the design, item statistics as measurements). Phase 5's attestations ([ADR-0028](schema/docs/adr/0028-attestation.md)) are built on a branch awaiting review:
 
-- the schema (27 classes, 12 controlled vocabularies) with every accepted decision applied
+- the schema (28 classes, 13 controlled vocabularies) with every accepted decision applied
 - a version-controlled API: reads at any branch or commit, history and differences per document, branches, three-way merges with conflict reports
 - one write path for every document type, enforcing every rule the database cannot (the invariants engine), with the author and reason recorded on every change
 - identity resolution for people and AI agents
-- the four design-intelligence reads and a read-only Coverage View page
-- 109 integration tests
+- the five design-intelligence reads (coverage, alignment, trace, impact, and attestation staleness) and a read-only Coverage View page
+- 126 integration tests
 
-**Next:** Phase 5, building [ADR-0028](schema/docs/adr/0028-attestation.md) (attestations: a person's verdict on a design record or one part of it, as of a commit, with staleness computed on request), accepted on 18 October 2026. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+**Next:** Phase 6 (the ecosystem and the research path: external references, export profiles, an outcomes importer), once Phase 5's attestations (a person's verdict on a design record or one part of it, as of a commit, with staleness computed on request) are merged. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
 **Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 

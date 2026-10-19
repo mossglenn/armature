@@ -13,7 +13,7 @@
 Accepted (2026-10-18), with decision 5 added at acceptance; implemented the same day on
 `phase-5/asof`. Proposed 2026-10-08.
 
-**Amended by ADR-0028** (2026-10-18, accepted, not yet built): `Attestation` carries `asOf`, with
+**Amended by ADR-0028** (2026-10-18, accepted and implemented): `Attestation` carries `asOf`, with
 `subject` checked at it by constraint 13. Decision 5's "a replace keeps the stored `asOf`" does not
 apply to an attestation. Every write of one is a fresh verdict, so a replace that omits `asOf` is
 refilled from the head (ADR-0028 decision 5). The notes below that call ADR-0028 planned and

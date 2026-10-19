@@ -82,7 +82,7 @@ Armature is **infrastructure for instructional design**. The name comes from scu
 
 Concretely, Armature is two things:
 
-1. **An open schema.** A schema is a formal definition of the kinds of records a database holds and how they connect. Armature's schema (`schema/schema.json`) defines 27 kinds of record (learning needs, objectives, assessment items, modules, design notes and so on) and 12 controlled vocabularies (such as Bloom's levels). It is the shared vocabulary every tool uses.
+1. **An open schema.** A schema is a formal definition of the kinds of records a database holds and how they connect. Armature's schema (`schema/schema.json`) defines 28 kinds of record (learning needs, objectives, assessment items, modules, design notes, attestations and so on) and 13 controlled vocabularies (such as Bloom's levels). It is the shared vocabulary every tool uses.
 2. **An API (application programming interface).** An API is a defined set of requests that other software can make, such as "give me this objective as it stood last Tuesday" or "record this new item, and here is why." Armature's API stores design records, enforces the rules that keep them coherent, keeps their full history, and answers questions about the design ("which objectives in this module have too few assessment items?").
 
 What Armature is **not**, in the paper's words: not a learning management system, not an object repository, not a learning record store, not an adaptive learning engine, not an assessment platform, not a content delivery system, and not a content-authoring app, quiz builder or curriculum-mapping tool. It is designer-facing, not student-facing, and it operates at design time, not delivery time.
@@ -398,7 +398,7 @@ This section explains the schema conceptually. It follows the design lifecycle f
 
 ### 12.1 Basic building blocks
 
-- **Classes (types).** Each kind of document is a class, such as `LearningObjective`. There are 27 classes.
+- **Classes (types).** Each kind of document is a class, such as `LearningObjective`. There are 28 classes.
 - **Fields.** Each class has fields. A field is either a plain value (text, number, date, true/false), a reference to another document, an enum value, or an embedded part (Section 12.7).
 - **Required, optional, sets and lists.** A field is required unless marked `Optional`. A `Set` holds any number of unordered values; a `List` holds ordered values. A set can declare a minimum count (`@min_cardinality`).
 - **Enums.** Twelve controlled vocabularies, such as `BloomsLevel` and `ItemStatus`. Using an enum rather than free text means "MultipleChoice," "multiple_choice" and "MC" cannot all appear, so queries are reliable (ADR-0008; ADR stands for Architecture Decision Record).
@@ -970,7 +970,7 @@ This narrative demonstrates Armature as design-time intelligence.
 
 > **[Brevity candidate]** Details of the demonstration data could move to an appendix.
 
-The repository includes a demonstration graph (`scripts/seed_data.js`), a realistic but fictional course about artificial intelligence (AI): **"Introduction to AI for Instructional Designers."** It holds 48 documents (plus their embedded parts):
+The repository includes a demonstration graph (`scripts/seed_data.js`), a realistic but fictional course about artificial intelligence (AI): **"Introduction to AI for Instructional Designers."** It holds 48 documents (plus their embedded parts), written in one commit, and one attestation written in a second commit so that it can name the first as the state it judged:
 
 - 1 course, 3 modules, 3 assessments;
 - 2 learning needs, each grounded in descriptive evidence through a need-evidence link;
@@ -980,7 +980,8 @@ The repository includes a demonstration graph (`scripts/seed_data.js`), a realis
 - 7 module-objective declarations;
 - 2 design notes (one about an item, one about a module's declaration of an objective, demonstrating that relationships can be annotated);
 - 1 design finding, open, on the draft item;
-- 1 user, the demo designer.
+- 1 user, the demo designer;
+- 1 attestation: the demo designer affirms that the bias item's first option is its only correct answer, a claim about one part of an approved item (ADR-0028).
 
 The seed currently has **no learning activities, activity groups, datasets or metrics**. The alignment read therefore reports every objective as lacking an activity, and Narrative 1 is demonstrated in tests that add a dataset and metric on a scratch branch (a temporary branch the test creates and deletes). Seeding an outcome dataset is planned for Phase 6, and the session log notes that no declaration in the seed is currently `FullyAssessed`, which a second approved item would fix.
 
@@ -1079,10 +1080,10 @@ The session log also lists a small fix (a race condition in the branch routes wh
 
 **Goal:** a minimal, tool-neutral way to record that someone judged an artifact, so the paper's "how those alignments were established and whether they have since changed" becomes answerable.
 
-- **Attestation (ADR-0028, accepted 18 October 2026, not yet built).** A `User` gives a verdict, `Affirmed` or `Declined`, about one design record or one fragment of it, as the record stood at a commit (`asOf`). The verdict may concern a written **claim** ("this option is the only correct answer"), identified by a plugin-scoped claim reference and carrying its wording, or no claim at all, in which case it is an **endorsement** of the record itself. The claim was made optional while the decision was written: requiring one would have built one tool's review method (affirming discrete claims) into the hub, and a sign-off tool or an AI assistant whose human accepts a proposal has no claims to give. The record's identity is derived from (subject, fragment, claim, attester), so each person holds one current verdict per part and claim, guaranteed by the database; earlier verdicts remain in the commit history. The attester is always the person the request identifies, never a value the tool supplies. Whether an attestation is **stale** is computed when asked, by comparing the judged fragment, matched by its `fragmentId`, as it was at `asOf` and as it is now. The database's own difference report could not serve: it compares list positions, so reordering options would look like a change (platform check AB).
+- **Attestation (ADR-0028, accepted and built 18 October 2026).** A `User` gives a verdict, `Affirmed` or `Declined`, about one design record or one fragment of it, as the record stood at a commit (`asOf`). The verdict may concern a written **claim** ("this option is the only correct answer"), identified by a plugin-scoped claim reference and carrying its wording, or no claim at all, in which case it is an **endorsement** of the record itself. The claim was made optional while the decision was written: requiring one would have built one tool's review method (affirming discrete claims) into the hub, and a sign-off tool or an AI assistant whose human accepts a proposal has no claims to give. The record's identity is derived from (subject, fragment, claim, attester), so each person holds one current verdict per part and claim, guaranteed by the database; earlier verdicts remain in the commit history. The attester is always the person the request identifies, never a value the tool supplies. Whether an attestation is **stale** is computed when asked, by comparing the judged fragment, matched by its `fragmentId`, as it was at `asOf` and as it is now. The database's own difference report could not serve: it compares list positions, so reordering options would look like a change (platform check AB). The read is `GET /api/v1/intelligence/attestations/:type/:id`, and the trace carries each attestation with its state. A tool cannot attest a record in the same request that writes it, because the commit an attestation names must already hold what it judges.
 - **Part-level notes and findings.** `DesignNote` and `DesignFinding` gain an optional `fragmentId`, so "this drop zone is ambiguous" can point at a part. ADR-0028 makes the pairing of a record with a `fragmentId` the general rule for anything that refers to a part.
-- **The non-aggregation guard (ADR-0021).** The generic list route refuses `createdBy` and `attestedBy` as filters. *Built early, on 18 October 2026:* the route refuses a filter on any field that names a person, so `attestedBy` will be refused when it exists.
-- **Exit criterion:** an attestation made on a branch at one commit is reported stale after a later commit changes the same fragment, without the plugin computing anything.
+- **The non-aggregation guard (ADR-0021).** The generic list route refuses `createdBy` and `attestedBy` as filters. *Built early, on 18 October 2026:* the route refuses a filter on any field that names a person, so `attestedBy` is refused now that it exists.
+- **Exit criterion:** an attestation made on a branch at one commit is reported stale after a later commit changes the same fragment, without the plugin computing anything. *Met on 18 October 2026:* a test makes four attestations on a review branch, merges it into another, changes one option there, and reads the changed option's verdict as stale, the untouched option's as current, and a removed option's as removed.
 
 > **[Interpretive framing]** The research survey suggests giving attestations the claim–evidence–warrant structure of evidence-centered design (Mislevy, Steinberg & Almond, 2003), and reading each attestation as a *nanopublication* (an assertion, its provenance, and its publication information). Neither is adopted yet.
 
@@ -1137,7 +1138,7 @@ CoQui is an assessment-item review tool built in a separate repository. It struc
 | Create or replace notes and findings on a branch | The generic write path | Done (Phase 3) |
 | Read users and create one | `/api/v1/users` (ADR-0032) | Done (Phase 3) |
 | Item history and changes since a commit | History, differences and branch changes for any type | Done (Phase 2) |
-| An `Attestation` type | ADR-0028, in tool-neutral form, with the claim optional | Accepted 18 October 2026; built in Phase 5 |
+| An `Attestation` type | ADR-0028, in tool-neutral form, with the claim optional | Built 18 October 2026 (Phase 5) |
 | A merge with a conflict report | The wrapped three-way merge | Done (Phase 2); merge policy still open |
 
 **What failed the two-client test and stays in CoQui:** the review *round* (a branch at the boundary), the *craft grid* and *claim version* (they travel inside an attestation's plugin-scoped claim reference), and CoQui's review *workflow states* (mapped onto the four `ItemStatus` values).
@@ -1210,7 +1211,7 @@ The survey also maps where Armature sits: upstream of delivery and outcome recor
 | **Artifact** | A primary design product: an objective, item, activity, module, note, finding. A schema category |
 | **Assessment item** | A reusable question in the item bank (`AssessmentItem`) |
 | **`asOf`** | The commit a dataset, metric or finding refers to: the design as the cohort met it, or as the finding judged it (ADR-0057) |
-| **Attestation** | A record (ADR-0028, accepted, not yet built) of one person's verdict about an artifact or one fragment of it, as of a commit: affirming or declining a claim, or endorsing the artifact when there is no claim |
+| **Attestation** | A record (ADR-0028) of one person's verdict about an artifact or one fragment of it, as of a commit: affirming or declining a claim, or endorsing the artifact when there is no claim |
 | **Branch** | A named line of commits; `main` is the shared one |
 | **CI (continuous integration)** | An automated service that checks every proposed change. Armature's runs lint (automated style checks) and the generated-types check |
 | **Client / plugin** | A separate application that uses the Armature API, such as CoQui |

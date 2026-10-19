@@ -9,15 +9,23 @@
 > current attestation per record, part and claim; earlier verdicts stay in the history. Whether an
 > attestation is out of date is never stored: Armature works it out on request by comparing the part
 > as it was with the part as it is. The same decision lets design notes and findings point at one
-> part of a question. Accepted 2026-10-18; not yet built. (ADR stands for Architecture Decision
+> part of a question. Accepted and built 2026-10-18. (ADR stands for Architecture Decision
 > Record.)
 
 ## Status
 
-Accepted (2026-10-18). Not yet implemented; Phase 5 of `docs/development-plan.md` builds it on
-`phase-5/attestation`. The number was reserved by the plan (§5). Platform checks AA and AB in
+Accepted and implemented (2026-10-18), on `phase-5/attestation` (Phase 5 of
+`docs/development-plan.md`). The number was reserved by the plan (§5). Platform checks AA and AB in
 `scripts/platform_checks.js` (added and passing 2026-10-18, TerminusDB v12.0.7) verify the two
 store behaviors it depends on.
+
+**Added while building (2026-10-18):** decision 5's last paragraph, that an attestation's subject
+may not be written in the same request. Building the exit-criterion test showed that a verdict
+written with its subject would read `Unanchored` (the subject created) or `Stale` (the subject
+changed) from the start. Also found while building: the write pipeline's lookup of the record a
+Hash-keyed write replaces queried every key field in the store, and a template on an `Optional`
+reference is a store 500 (check Y2). It now sends the required key fields to the store and matches
+the optional ones in the hub, absent only against absent, as the store hashes them (AA3).
 
 Amends ADR-0012 and ADR-0020 (an optional `fragmentId` on `DesignNote` and `DesignFinding`,
 decision 6), applies ADR-0023 decision 5, and amends ADR-0057 decision 5 for `Attestation` only (an
@@ -164,6 +172,14 @@ is therefore refilled from the head, not kept.** A client that re-sends an old v
 retried push, an importer) supplies the `asOf` it means, and the hub checks it. This amends ADR-0057
 decision 5 for `Attestation` only.
 
+**An attestation's subject is not written in the same request** (422 `subject_in_same_write`, added
+while building). A commit cannot name itself (ADR-0057 decision 5), so the filled `asOf` would name
+a state without the subject, if the write creates it, or with its earlier version, if the write
+changes it. The staleness read would report the verdict `Unanchored` or `Stale` from the moment it
+was given. ADR-0057 accepts the first case for a finding, which is about what its author saw plus
+what they added; a verdict is about one state, and that state must hold what it judges. A client
+writes the subject, then attests it.
+
 ### 6. A record about a part names the pair (record, `fragmentId`) on itself
 
 ADR-0023 decision 5 fixed the shape for part-level references: the compound
@@ -258,7 +274,8 @@ and returns no count per person. An attestation is provenance, no more aggregabl
   changed `description`) marks every whole-subject attestation `Stale`.
 - `attestedBy` and `asOf` can be absent in data written outside the pipeline; such an attestation
   hashes without an attester and reads as `Unanchored`. The seed writes both.
-- A plugin pushing for many reviewers sends one request per reviewer (decision 4).
+- A plugin pushing for many reviewers sends one request per reviewer (decision 4), and an item and
+  its verdicts take two requests (decision 5).
 - The attestations read costs two document reads per attestation; fine at demo scale, and a cache by
   `(subject, asOf)` is the first remedy when it is not.
 

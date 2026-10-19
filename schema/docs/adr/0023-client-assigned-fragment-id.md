@@ -21,7 +21,7 @@ served as part identity.
 are `Set<DesignRecord>` (ADR-0017), not `Set<ArmatureDocument>` as decision 5 and §Consequences
 say; the point they make, that a whole-record reference cannot name one option, is unchanged.
 
-**Applied by ADR-0028** (2026-10-18, accepted, not yet built): decision 5's compound target is
+**Applied by ADR-0028** (2026-10-18, accepted and implemented): decision 5's compound target is
 now the general rule for any record about a part: the record in its reference field, the part in a
 sibling `fragmentId`. ADR-0028 applies it to `Attestation`, `DesignNote` and `DesignFinding`. The
 notes below that call ADR-0028 planned and unwritten predate it.

@@ -47,7 +47,7 @@ scripts/
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
   load_schema.js           # Replaces the schema graph in one full_replace; --clear-instances empties data first for breaking changes
   platform_checks.js       # Probes store behaviors the ADRs depend on, in a scratch database it creates and deletes (run before encoding a platform assumption)
-  seed_data.js             # Inserts the demo course (48 documents plus their embedded fragments; no activities, datasets or metrics)
+  seed_data.js             # Inserts the demo course (48 documents plus their embedded fragments, then one Attestation in a second commit whose asOf names the first; no activities, datasets or metrics)
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill); also npm run sync:terminusdb-docs
 app/
@@ -62,13 +62,14 @@ app/
       app.ts               # The Armature API: Hono app, basePath /api/v1, mounts routes/, onError mapping. Never imports from next
       app.test.ts          # In-process Vitest tests via app.request(): reads, the Phase 2 walkthrough, users and identity; need the container running (users tests write to and clean up main)
       write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
-      intelligence.test.ts # The four intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion)
+      intelligence.test.ts # The five intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion); attestations made on a round branch, merged, then reported Stale after a fragment changes (Phase 5 exit criterion)
       store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
       identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
-      classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy
-      write.ts             # The one write pipeline: Zod shape → 409 on a foreign id → createdBy and asOf → invariants → one commit
-      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), asOf.ts (constraint 13), one module per constrained type
+      classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy or attestedBy
+      write.ts             # The one write pipeline: Zod shape → attestedBy → 409 on a foreign id (Hash keys: required fields in the store, Optional ones matched in the hub) → createdBy and asOf → invariants → one commit
+      fragments.ts         # A record's parts by fragmentId, from the schema's fragment category, and the canonical form two states are compared in (constraint 16, attestation staleness)
+      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), asOf.ts (constraint 13), fragmentRef.ts (constraint 16), one module per constrained type
       intelligence/
         coverage.ts        # The coverage algorithm (ADR-0029 decisions 1 to 3) and its vocabulary; computed on read, never stored (ADR-0056)
         graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
@@ -77,7 +78,7 @@ app/
         documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
-        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id: design intelligence from structure alone, at any ref (plan P4, ADR-0056)
+        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
     types.ts               # GENERATED — do not edit; run npm run generate:types. Interfaces plus the schema as data: CLASS_CATEGORY, SUBDOCUMENT_CLASSES, CLASS_ANCESTORS, CLASS_KEY, CLASS_FIELDS, and the VALID_* enum arrays
     schemas.ts             # GENERATED — do not edit; Zod request schemas, one per concrete class, from the same generator
   vitest.config.mts        # Vitest: '@' alias, reads .env.local so tests hit the same store as the app
@@ -141,7 +142,8 @@ To add a new type: (1) update `schema.json` (with ADR), giving the class `@metad
 | `AssessmentItem` | Reusable question in the item bank; a tree of fragments (stem, options, feedbacks) with its own `status`; placed into Assessments via `ItemInstance` |
 | `Fragment` / `TextFragment` / `ItemOption` | Subdocument parts of an item, returned inline; identity is the client-assigned `fragmentId`, never the nested store id (ADR-0022, ADR-0023, ADR-0033) |
 | `ItemInstance` | Assessment-context wrapper around an `AssessmentItem`; its `status` is placement clearance, distinct from the item's own (ADR-0018) |
-| `DesignFinding` | An evidence-grounded concern about any design record, with `status` and resolution rationale (ADR-0020) |
+| `DesignFinding` | An evidence-grounded concern about any design record, or one part of it (`fragmentId`), with `status` and resolution rationale (ADR-0020, ADR-0028) |
+| `Attestation` | One person's verdict (`Affirmed`, `Declined`) about a design record or one part of it, as of a commit; with a claim (`claimRef` and `claimText`) or as a plain endorsement. Relationship, Hash key over `(subject, fragmentId, claimRef, attestedBy)`: one current verdict per person, part and claim; no client `@id`. Staleness is a read (ADR-0028) |
 | `ModuleObjective` | Junction carrying a module's declaration of an objective and its design intent (`role`, `roleRationale`, `sequence`); written by clients through the generic document API, which ADR-0007 records as the decision since 2026-10-18; it stores no coverage, which is computed on read (ADR-0056) |
 | `LearningMetric` | A measurement from a `LearningDataset` (`derivedFrom`), naming the design record it measures in `subject`; an item statistic is a metric whose `subject` is the item, never a field on the item (ADR-0058) |
 | `PrerequisiteRecord` | Junction doc; carries `rationale` and `prerequisiteType` — design decision preserved as data |
@@ -167,7 +169,10 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 10. `ItemInstance.status` — may not be `Approved` while its `AssessmentItem.status` is `Draft` or `InReview` (ADR-0018)
 11. `DesignFinding.resolutionRationale` — required when `status` is `Dismissed` (ADR-0020)
 12. A write whose `@id` exists under a different `@type` — rejected with 409 `type_conflict` by the write pipeline (ADR-0024)
-13. `asOf` on `LearningDataset`, `LearningMetric` and `DesignFinding` — a bare commit id the store holds, at which the record's subjects exist (a dataset's `producedBy`; a metric's `subject`; a finding's `subject` and `regarding`); a metric with a `derivedFrom` dataset carries the dataset's value. The pipeline fills it from the branch head on create (the head the write starts from, or `If-Match`), keeps it on replace and copies it onto a metric; every value not taken from the head is checked (ADR-0057, ADR-0058; `invariants/asOf.ts`)
+13. `asOf` on `LearningDataset`, `LearningMetric` and `DesignFinding` — a bare commit id the store holds, at which the record's subjects exist (a dataset's `producedBy`; a metric's `subject`; a finding's `subject` and `regarding`); a metric with a `derivedFrom` dataset carries the dataset's value. The pipeline fills it from the branch head on create (the head the write starts from, or `If-Match`), keeps it on replace and copies it onto a metric; every value not taken from the head is checked (ADR-0057, ADR-0058; `invariants/asOf.ts`). On `Attestation` too, with `subject` checked; a replace of an attestation refills `asOf` from the head (every write of one is a new verdict), and its subject may not be written in the same request (`subject_in_same_write`; ADR-0028 decision 5)
+14. `Attestation.claimRef` and `claimText` — both present (a claim) or both absent (an endorsement), `claim_incomplete` (ADR-0028)
+15. `Attestation.attestedBy` — the resolved identity. The pipeline fills it before looking for the record to replace, since it is in the key; a body naming anyone else is `attester_not_caller` (ADR-0028, ADR-0032)
+16. `fragmentId` on `Attestation`, `DesignNote` and `DesignFinding` — the record names exactly one `subject` (`fragment_needs_one_subject`), which has a part with that `fragmentId` at `asOf` when that is checked, else as the write leaves it (`unknown_fragment`; ADR-0028 decision 6, `invariants/fragmentRef.ts`)
 
 Pending, not yet enforced: `LearningDataset.producedBy` required for Armature-administered assessments (Phase 6). The list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021's non-aggregation guard) and filters `Optional` enum or reference and `Set` fields in the hub, since the store answers those template queries with a 500 (checks Y2, Y3, Y5).
 
@@ -230,6 +235,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0055** — The API layer reaches TerminusDB over HTTP through one adapter (the JavaScript client stays in `scripts/`)
 - **ADR-0057** — Records that refer to a state of the graph name its commit (`asOf`): filled from the branch head, kept on replace, constraint 13
 - **ADR-0058** — Item statistics are `LearningMetric`s about the item (`subject`), not fields on it; summaries are reads
+- **ADR-0028** — Attestation: a person's verdict on a record or part as of a commit; the claim optional; Hash key with `attestedBy` from identity; staleness a read; `fragmentId` on notes and findings (constraints 14 to 16)
 
 The full index, with every ADR's status, is `schema/docs/adr/README.md`.
 
@@ -283,6 +289,6 @@ Say "update session" and follow the prompt in `.claude/prompts/update-session.md
 - **Don't** write a per-type route or hand-write a request schema — type behavior is a validator in `app/lib/api/invariants/`, and request shape comes from the generated `schemas.ts`
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)
 - **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6). A branch is deleted only when another branch holds its head; there is no force
-- **Don't** take the commit author or `createdBy` from a request body — both come from the identity the request resolved to; `User` documents are created on `main` only (ADR-0032)
-- **Don't** store a derived value in the graph — coverage, alignment and any future score are computed by the intelligence reads at a ref, never written into a document (ADR-0056); a judgment someone wants on record is a `DesignFinding` or an Attestation with a person's name on it; an imported measurement is a `LearningMetric` with a `subject`, never a field on what it measures (ADR-0058)
+- **Don't** take the commit author, `createdBy` or `attestedBy` from a request body — all three come from the identity the request resolved to (a body `attestedBy` naming anyone else is refused, constraint 15); `User` documents are created on `main` only (ADR-0032)
+- **Don't** store a derived value in the graph — coverage, alignment and any future score are computed by the intelligence reads at a ref, never written into a document (ADR-0056); a judgment someone wants on record is a `DesignFinding` or an `Attestation` with a person's name on it, and whether an attestation still holds is a read, never a field (ADR-0028); an imported measurement is a `LearningMetric` with a `subject`, never a field on what it measures (ADR-0058)
 - **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will

@@ -629,29 +629,35 @@ Work:
       the target's history, AB6). The compound-target rule from ADR-0023 §5 is general:
       `DesignNote` and `DesignFinding` gain an optional `fragmentId` (one subject only, 422
       `fragment_needs_one_subject`; the fragment must exist, 422 `unknown_fragment`)
-- [ ] **Schema:** `Attestation`, `AttestationVerdict`, `fragmentId` on `DesignNote` and
+- [x] **Schema:** `Attestation`, `AttestationVerdict`, `fragmentId` on `DesignNote` and
       `DesignFinding`; regenerate types, schemas and the appendix; reload (no stored document
       changes)
-- [ ] **Pipeline:** fill `attestedBy` before write step 2; `Attestation` in `AS_OF_SUBJECTS`;
-      refill `asOf` on an attestation's replace
+- [x] **Pipeline:** fill `attestedBy` before write step 2; `Attestation` in `AS_OF_SUBJECTS`;
+      refill `asOf` on an attestation's replace. Found while building: the Hash-key replace lookup
+      now matches Optional key fields in the hub (a store template on one is a 500, Y2); and an
+      attestation's subject may not be written in the same request (422 `subject_in_same_write`,
+      added to ADR-0028 decision 5)
 - [x] **Non-aggregation guard (ADR-0021).** The generic list route refuses `attestedBy` and
       `createdBy` as filter keys, and the ADR records why this one restriction lives in the
       generic layer. **Done 2026-10-18, ahead of the phase:** any field targeting `User` is
       refused (400 `person_filter_refused`), so `attestedBy` needs no change; it landed with the
       list route's hub filtering, which would otherwise have made `?createdBy=` work.
-- [ ] **Invariants:** an `Attestation` validator (`claim_incomplete`, `attester_not_caller`) and
+- [x] **Invariants:** an `Attestation` validator (`claim_incomplete`, `attester_not_caller`) and
       a fragment rule shared by attestations, notes and findings (`fragment_needs_one_subject`,
       `unknown_fragment`, the fragment looked up through the schema's `fragment` category). The
       `DesignFinding` validator, rule 11, has existed since Phase 3
-- [ ] **Read:** `GET /api/v1/intelligence/attestations/:type/:id` at a ref, each attestation with
+- [x] **Read:** `GET /api/v1/intelligence/attestations/:type/:id` at a ref, each attestation with
       a derived `state` (`Current`, `Stale`, `FragmentRemoved`, `Unanchored`); the trace adds
       them to the nodes it reports. No attester parameter, no per-person count (ADR-0021)
-- [ ] Seed one attestation so the trace route can show "affirmed by an expert at <institution>
+- [x] Seed one attestation so the trace route can show "affirmed by an expert at <institution>
       as of commit X". (*Two revisions ago* needs a revision count, left open by ADR-0028: a
       merge breaks the order between `asOf` and the target's history)
 
 Exit: an attestation written on a branch at commit A is reported stale after a write at commit B
-touches the same fragment, without the plugin computing anything.
+touches the same fragment, without the plugin computing anything. **Met 2026-10-18**
+(`intelligence.test.ts`): attestations made on a round branch, merged into a second branch,
+then reported `Stale` there after option b changes, `Current` for option a, `FragmentRemoved`
+for a dropped option, and all `Current` on the round branch and at the attested commit.
 
 CoQui receives: ask 4's attestation half, and the type its outbox is holding rows for.
 
@@ -777,7 +783,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0025 | Design process data lives in the commit graph | 2 | Accepted and implemented | Reconciles the paper's model with the store; to be amended in Phase 6 for externally versioned artifacts |
 | 0026 | API host and route versioning | 0 | Accepted; decision 1 amended by 0054 | Resolved the PROJECT_CONTEXT contradiction; the legacy routes it named were retired in Phase 3 |
 | 0027 | Schema self-description via `@metadata` | 1 | Accepted and implemented, except `GET /schema` | Replaced `JUNCTION_IDS`; `GET /api/v1/schema` not built (see §6) |
-| 0028 | Attestation | 5 | Accepted 2026-10-18; not yet built | Generic form of CoQui's proposal, with the claim optional; Hash key over subject, fragment, claim and attester; staleness a read; `fragmentId` on notes and findings; amends ADR-0057 decision 5 for attestations |
+| 0028 | Attestation | 5 | Accepted and implemented 2026-10-18 | Generic form of CoQui's proposal, with the claim optional; Hash key over subject, fragment, claim and attester; staleness a read; `fragmentId` on notes and findings; amends ADR-0057 decision 5 for attestations |
 | 0029 | Coverage algorithm | 4 | Decisions 1 to 3 accepted 2026-10-08; 4 to 6 superseded by 0056 | Counted over placements; two figures; default thresholds as parameters |
 | 0030 | External references and attachments | 6 | Reserved, not written | P6; attachment references with mandatory content hash, backend left open |
 | 0031 | Export profiles and schema slices | 6 | Reserved, not written | P7, P8; implements ADR-0021's deferred section |

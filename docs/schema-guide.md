@@ -48,7 +48,7 @@ Every class declares a category in its schema metadata (`@metadata.armature.cate
 | Category | Classes | What it means for a tool |
 |---|---|---|
 | `artifact` | `Course`, `Module`, `LearningObjective`, `AssessmentItem`, `Assessment`, `LearningActivity`, `ActivityGroup`, `LearningNeed`, `LearningEvidence` (abstract), `LearningMetric`, `DescriptiveEvidence`, `LearningDataset`, `DesignNote`, `DesignFinding` | A primary design record with a `label`, an optional `description` and a `createdBy`. Writable. A client may choose its identifier |
-| `relationship` | `NeedEvidenceLink`, `PrerequisiteRecord`, `ModuleObjective`, `ModuleActivityLink`, `ModuleActivityGroupLink`, `ActivityGroupMember`, `ItemInstance` | A junction document. Writable. Its identifier is derived from its key fields; a client never supplies one |
+| `relationship` | `NeedEvidenceLink`, `PrerequisiteRecord`, `ModuleObjective`, `ModuleActivityLink`, `ModuleActivityGroupLink`, `ActivityGroupMember`, `ItemInstance`, `Attestation` | A junction document. Writable. Its identifier is derived from its key fields; a client never supplies one |
 | `fragment` | `Fragment` (abstract), `TextFragment`, `ItemOption` | An embedded part of an item. Not a document; written as part of its item |
 | `infrastructure` | `User`, `DesignRecord` (abstract), `ArmatureDocument` (abstract) | Identity and abstract roots. `User` has its own routes; the roots cannot be created |
 
@@ -91,7 +91,8 @@ Do not create a junction for tidiness. A relationship earns one by carrying data
 
 - **Artifacts** declare a random key. A client may supply the identifier on first write, as `Type/<anything>`; a UUID (universally unique identifier) is recommended, and readable slugs are allowed. Writing again under the same identifier replaces the document. The hub never parses or regenerates an identifier.
 - **Junctions** declare a hash key over their defining references, for example `ModuleObjective` over `(module, references)` and `ItemInstance` over `(assessment, implements)`. The database computes the identifier from those fields, so a pair can exist only once. Writing the same pair again replaces the document, which keeps its other fields (sequence, role) editable.
-- **No key ever includes an editable field.** Otherwise editing the field would create a different document.
+- **`Attestation`'s hash key includes optional fields:** `(subject, fragmentId, claimRef, attestedBy)`. An absent field is part of the key, so a person's endorsement of a whole item, their verdict on one option and their verdict on a named claim are three documents (ADR-0028, platform check AA).
+- **No key ever includes an editable field.** Otherwise editing the field would create a different document. `fragmentId` and `claimRef` are identifiers, not content: changing one means judging a different part or claim.
 
 ### 4.6 Items are trees of fragments (ADR-0022, ADR-0023, ADR-0033)
 
@@ -119,7 +120,7 @@ An `AssessmentItem` embeds its parts:
 Rules for fragments:
 
 - **The authoring tool assigns `fragmentId`** once, when the part is created. Never derive it from position or display order, never regenerate it, never reuse a retired one. Armature checks only that it is unique within the item (rule 8).
-- **Address a part as the pair `{ item @id, fragmentId }`.** The database's own nested identifiers for parts are regenerated every time the item is replaced; never store them.
+- **Address a part as the pair `{ item @id, fragmentId }`.** The database's own nested identifiers for parts are regenerated every time the item is replaced; never store them. A `DesignNote`, `DesignFinding` or `Attestation` about one part carries the part's `fragmentId` beside its `subject`, which then names exactly one record, and the part must exist in it (rule 16, ADR-0028).
 - **The options list is in presentation order.** Identity is `fragmentId`, not position.
 - **Option text must be present and unique within the item, and the number of correct options must suit the item type** (rule 9): multiple choice and true/false have exactly one correct option (true/false exactly two options); multiple select has one or more.
 - `ItemOption.feedback` is plain text, not a fragment, so per-option feedback cannot yet be addressed as a part. (CoQui's handoff proposed a `{ fragmentId, text }` shape for it; that divergence is recorded and unresolved.)
@@ -138,15 +139,38 @@ A finding has a status (`Open`, `Addressed`, `Dismissed`); a `Dismissed` finding
 
 ### 4.9 Provenance is set by the hub
 
-`createdBy` on every artifact is set by the API from the identity the request resolved to, on create, and preserved on replace (ADR-0032). A value in a request body is ignored. The commit author is the same user. Do not try to set either.
+`createdBy` on every artifact is set by the API from the identity the request resolved to, on create, and preserved on replace (ADR-0032). A value in a request body is ignored. The commit author is the same user. Do not try to set either. An `Attestation`'s `attestedBy` is set the same way; a body naming anyone else is refused (rule 15).
 
-`asOf` names the state of the design a record refers to: the commit (a saved version of the whole graph) a `LearningDataset`'s assessment was taken from, a `LearningMetric` was measured against, or a `DesignFinding`'s subject was judged at (ADR-0057). Unlike `createdBy`, a client may set it, and an importer of past results should. When it is left out, the API fills it with the branch head the write starts from, keeps the stored value on a replace (so marking a finding `Addressed` does not move what it was about), and copies a dataset's value onto the metrics derived from it. A supplied value must be a real commit at which the record's subjects exist (rule 13). Because a commit cannot name itself, a finding written together with a new item about that item records the state just before the item existed.
+`asOf` names the state of the design a record refers to: the commit (a saved version of the whole graph) a `LearningDataset`'s assessment was taken from, a `LearningMetric` was measured against, or a `DesignFinding`'s subject was judged at (ADR-0057). Unlike `createdBy`, a client may set it, and an importer of past results should. When it is left out, the API fills it with the branch head the write starts from, keeps the stored value on a replace (so marking a finding `Addressed` does not move what it was about), and copies a dataset's value onto the metrics derived from it. A supplied value must be a real commit at which the record's subjects exist (rule 13). Because a commit cannot name itself, a finding written together with a new item about that item records the state just before the item existed. An attestation cannot be written in the same request as its subject for the same reason, and its `asOf` is refilled on every write, since each write of one is a new verdict (ADR-0028 decision 5).
 
 ### 4.10 Nothing derived is stored (ADR-0056)
 
-The schema holds what people decided and what was observed. Coverage, alignment and any future score are computed by the intelligence reads at a ref. If a judgment needs to be on record under someone's name, it is a `DesignFinding` (or, from Phase 5, an attestation). Before proposing any stored score, ask: *could this value appear in a commit under a person's name and be true as a record of what they did?*
+The schema holds what people decided and what was observed. Coverage, alignment and any future score are computed by the intelligence reads at a ref. If a judgment needs to be on record under someone's name, it is a `DesignFinding` or an `Attestation`. Before proposing any stored score, ask: *could this value appear in a commit under a person's name and be true as a record of what they did?*
 
 Item statistics show the line between an observation and a summary (ADR-0058). A difficulty or discrimination figure arrives from the tool that holds learners' responses, so it is an observation, but it describes one cohort meeting one version of the item. It is therefore not a field on the item: it is a `LearningMetric` whose `subject` is the item, `derivedFrom` the dataset of the administration, with that dataset's `asOf`, so each cohort's figures sit beside the others instead of overwriting them. "The metrics about this item" is `GET /api/v1/documents/LearningMetric?subject=<item>`; a summary such as an item's latest difficulty is a read, built when a client needs one.
+
+### 4.11 Attestations: a person's verdict as of a commit (ADR-0028)
+
+An `Attestation` records that one person (or agent) affirmed or declined something about one design record, or one part of it, as the record stood at `asOf`.
+
+- **With a claim** (`claimRef`, an identifier your tool chooses, and `claimText`, its wording), the verdict is about the claim: "option a is the only correct answer". Rewording a claim keeps its `claimRef`, so the new verdict replaces the old one.
+- **Without a claim**, the verdict is an endorsement of the record itself: a sign-off, or a person accepting what an AI assistant proposed. `claimRef` and `claimText` come together or not at all (rule 14).
+- **One current verdict per person, part and claim.** The key guarantees it; a later verdict replaces the record, and earlier ones stay in the commit history.
+- **Staleness is a read**, never a field: `GET /api/v1/intelligence/attestations/:type/:id` compares the judged part at `asOf` with the part now, by `fragmentId`, and reports `Current`, `Stale`, `FragmentRemoved` or `Unanchored`. A stale affirmation still records what its attester affirmed then.
+- **No tool has to attest.** Nothing else in the hub reads attestations; `ItemStatus` remains the readiness signal.
+
+```json
+{
+  "@type": "Attestation",
+  "subject": "AssessmentItem/bias-type-mc",
+  "fragmentId": "bias-type-mc-opt-a",
+  "claimRef": "seed:key-is-correct",
+  "claimText": "Training data bias is the only correct answer to this stem.",
+  "verdict": "Affirmed"
+}
+```
+
+Write it through `POST /api/v1/documents` without an `@id`; the API adds `attestedBy` and `asOf`.
 
 ## 5. What TerminusDB checks and what the API checks
 
@@ -158,6 +182,9 @@ Item statistics show the line between an observation and a summary (ADR-0058). A
 | Unique identifiers | Item and placement status consistency (rule 10) |
 | | A reason for every dismissal (rule 11) |
 | | No identifier reused across types (rule 12) |
+| | `asOf` names a real state that holds the record's subjects (rule 13) |
+| | An attestation's claim comes whole and its attester is the caller (rules 14, 15) |
+| | A named part exists in the record's one subject (rule 16) |
 
 The database does **not** check that a reference points at the right *class* of document (platform check L). Never describe a typed reference as "schema-enforced"; the API enforces it. The full rule list, with response codes, is in the [API reference](api.md#the-write-pipeline).
 
