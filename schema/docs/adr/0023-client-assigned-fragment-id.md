@@ -21,6 +21,11 @@ served as part identity.
 are `Set<DesignRecord>` (ADR-0017), not `Set<ArmatureDocument>` as decision 5 and §Consequences
 say; the point they make, that a whole-record reference cannot name one option, is unchanged.
 
+**Applied by ADR-0028** (2026-10-18, accepted, not yet built): decision 5's compound target is
+now the general rule for any record about a part: the record in its reference field, the part in a
+sibling `fragmentId`. ADR-0028 applies it to `Attestation`, `DesignNote` and `DesignFinding`. The
+notes below that call ADR-0028 planned and unwritten predate it.
+
 ## Context
 
 ADR-0022 embeds an `AssessmentItem`'s stem and options directly on the item, removing their document identity. CoQui still needs a stable, unique-within-the-item handle for each part, so that a comment or attestation can say "this is about option B" rather than "this is about the item" — and it needs that handle to exist during authoring, before the item has ever been sent to Armature for the first time.

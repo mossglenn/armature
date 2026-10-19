@@ -29,6 +29,10 @@ settled with the Phase 6 outcomes importer (see ADR-0009). **Resolved 2026-10-18
 the fields are removed; each item statistic is an imported observation stored as a `LearningMetric`
 about the item, and summaries over them are reads.
 
+**Note 2026-10-18:** ADR-0028 (Attestation) is written and accepted, not yet built. It applies
+decision 1 to its own staleness: whether an attestation still holds is computed by a read at a ref,
+never stored.
+
 ## Context
 
 ADR-0007 (2026, before the version-control model) made `coverageStatus` a field on
