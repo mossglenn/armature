@@ -112,8 +112,8 @@ const DOMAINS = [
   },
   {
     label: 'Design Rationale',
-    description: 'Rationale and review records that attach to any design record: why something was done, and what someone judged to be a problem.',
-    ids: ['DesignNote', 'DesignFinding'],
+    description: 'Rationale and review records that attach to any design record, or one part of it: why something was done, what someone judged to be a problem, and who affirmed or declined it as of a commit.',
+    ids: ['DesignNote', 'DesignFinding', 'Attestation'],
   },
 ];
 
@@ -245,7 +245,7 @@ const ENUM_GROUPS = [
   { label: 'Assessment', ids: ['ItemType', 'ItemStatus'] },
   { label: 'Evidence & Needs', ids: ['EvidenceMethod', 'ConfidenceLevel', 'NeedPriority'] },
   { label: 'Activities', ids: ['ActivityType'] },
-  { label: 'Design Rationale', ids: ['DesignNoteCategory', 'FindingStatus'] },
+  { label: 'Design Rationale', ids: ['DesignNoteCategory', 'FindingStatus', 'AttestationVerdict'] },
 ];
 const placedEnums = new Set(ENUM_GROUPS.flatMap((g) => g.ids));
 const unplacedEnums = Object.keys(enums).filter((id) => !placedEnums.has(id));

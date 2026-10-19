@@ -7,7 +7,7 @@
 // Phase 3). Shape only: cross-document rules live in the invariants engine.
 
 import { z } from 'zod';
-import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus } from './types';
+import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict } from './types';
 
 /**
  * A reference to another document: its id, or { "@ref": "<capture>" } naming a
@@ -257,6 +257,7 @@ export const DesignNoteSchema = z.strictObject({
   rationale: z.string().min(1).max(10_000),
   subject: z.array(ReferenceSchema).min(1),
   category: z.enum(VALID_DesignNoteCategory).optional(),
+  fragmentId: z.string().min(1).max(10_000).optional(),
 });
 
 export const DesignFindingSchema = z.strictObject({
@@ -274,6 +275,21 @@ export const DesignFindingSchema = z.strictObject({
   status: z.enum(VALID_FindingStatus),
   resolutionRationale: z.string().min(1).max(10_000).optional(),
   asOf: z.string().min(1).max(10_000).optional(),
+  fragmentId: z.string().min(1).max(10_000).optional(),
+});
+
+export const AttestationSchema = z.strictObject({
+  '@id': z.string().min(1).optional(),
+  '@type': z.literal('Attestation').optional(),
+  '@capture': z.string().min(1).optional(),
+  subject: ReferenceSchema,
+  fragmentId: z.string().min(1).max(10_000).optional(),
+  claimRef: z.string().min(1).max(10_000).optional(),
+  claimText: z.string().min(1).max(10_000).optional(),
+  verdict: z.enum(VALID_AttestationVerdict),
+  reason: z.string().min(1).max(10_000).optional(),
+  asOf: z.string().min(1).max(10_000).optional(),
+  attestedBy: ReferenceSchema.optional(),
 });
 
 export const CourseSchema = z.strictObject({
@@ -307,6 +323,7 @@ export const DOCUMENT_SCHEMAS = {
   ModuleActivityGroupLink: ModuleActivityGroupLinkSchema,
   DesignNote: DesignNoteSchema,
   DesignFinding: DesignFindingSchema,
+  Attestation: AttestationSchema,
   Course: CourseSchema,
 } as const;
 
