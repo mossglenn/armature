@@ -93,6 +93,25 @@ export class StoreError extends Error {
   }
 }
 
+/**
+ * Store error types that mean "the ref or id you named does not exist". A
+ * branch deleted after it was listed answers a log read with
+ * `UnresolvableAbsoluteDescriptor` and a delete with `BranchDoesNotExistError`
+ * (both HTTP 400; seen 2026-10-18).
+ */
+const UNKNOWN_REF_TYPES = new Set([
+  'api:NotValidRefError',
+  'api:BadDataVersion',
+  'api:UnresolvableAbsoluteDescriptor',
+  'api:BranchDoesNotExist',
+  'api:BranchDoesNotExistError',
+  'api:DocumentAccessImpossible',
+]);
+
+/** True when the store refused because the named branch, commit or document does not exist. */
+export const isUnknownRef = (err: unknown): boolean =>
+  err instanceof StoreError && (err.status === 404 || UNKNOWN_REF_TYPES.has(err.type));
+
 interface StoreConfig {
   url: string;
   user: string;
