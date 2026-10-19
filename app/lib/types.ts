@@ -141,6 +141,13 @@ export const VALID_FindingStatus = [
 
 export type FindingStatus = typeof VALID_FindingStatus[number];
 
+export const VALID_AttestationVerdict = [
+  "Affirmed",
+  "Declined",
+] as const;
+
+export type AttestationVerdict = typeof VALID_AttestationVerdict[number];
+
 // ────────────────────────────────────────────────────────
 // Base type
 // ────────────────────────────────────────────────────────
@@ -267,6 +274,7 @@ export interface DesignNote extends ArmatureDocument {
   rationale: string;
   subject: string[];  // DesignRecord @id[]
   category?: DesignNoteCategory;
+  fragmentId?: string;
 }
 
 export interface DesignFinding extends ArmatureDocument {
@@ -278,6 +286,7 @@ export interface DesignFinding extends ArmatureDocument {
   status: FindingStatus;
   resolutionRationale?: string;
   asOf?: string;
+  fragmentId?: string;
 }
 
 export type Course = ArmatureDocument;  // no additional fields
@@ -334,6 +343,17 @@ export interface ModuleActivityGroupLink extends DesignRecord {
   sequence?: number;
 }
 
+export interface Attestation extends DesignRecord {
+  subject: string;  // DesignRecord @id
+  fragmentId?: string;
+  claimRef?: string;
+  claimText?: string;
+  verdict: AttestationVerdict;
+  reason?: string;
+  asOf?: string;
+  attestedBy?: string;  // User @id
+}
+
 // ────────────────────────────────────────────────────────
 // Schema self-description (ADR-0027)
 // ────────────────────────────────────────────────────────
@@ -366,6 +386,7 @@ export const CLASS_CATEGORY = {
   ModuleActivityGroupLink: "relationship",
   DesignNote: "artifact",
   DesignFinding: "artifact",
+  Attestation: "relationship",
   Course: "artifact",
 } as const;
 
@@ -407,6 +428,7 @@ export const CLASS_ANCESTORS = {
   ModuleActivityGroupLink: ["DesignRecord"],
   DesignNote: ["ArmatureDocument", "DesignRecord"],
   DesignFinding: ["ArmatureDocument", "DesignRecord"],
+  Attestation: ["DesignRecord"],
   Course: ["ArmatureDocument", "DesignRecord"],
 } as const;
 
@@ -435,6 +457,7 @@ export const CLASS_KEY = {
   ModuleActivityGroupLink: {"type":"Hash","fields":["module","group"]},
   DesignNote: {"type":"Random"},
   DesignFinding: {"type":"Random"},
+  Attestation: {"type":"Hash","fields":["subject","fragmentId","claimRef","attestedBy"]},
   Course: {"type":"Random"},
 } as const;
 
@@ -622,6 +645,7 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     rationale: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     subject: {"type":"DesignRecord","kind":"reference","optional":false,"many":true,"min":1},
     category: {"type":"DesignNoteCategory","kind":"enum","optional":true,"many":false},
+    fragmentId: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
   },
   DesignFinding: {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
@@ -635,6 +659,17 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     status: {"type":"FindingStatus","kind":"enum","optional":false,"many":false},
     resolutionRationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     asOf: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    fragmentId: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+  },
+  Attestation: {
+    subject: {"type":"DesignRecord","kind":"reference","optional":false,"many":false},
+    fragmentId: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    claimRef: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    claimText: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    verdict: {"type":"AttestationVerdict","kind":"enum","optional":false,"many":false},
+    reason: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    asOf: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    attestedBy: {"type":"User","kind":"reference","optional":true,"many":false},
   },
   Course: {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},

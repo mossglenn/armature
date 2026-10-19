@@ -186,6 +186,7 @@ classDiagram
     +string rationale
     +Set<DesignRecord> subject
     +DesignNoteCategory? category
+    +string? fragmentId
   }
 
   class DesignFinding {
@@ -197,6 +198,19 @@ classDiagram
     +FindingStatus status
     +string? resolutionRationale
     +string? asOf
+    +string? fragmentId
+  }
+
+  class Attestation {
+    <<relationship>>
+    +DesignRecord subject
+    +string? fragmentId
+    +string? claimRef
+    +string? claimText
+    +AttestationVerdict verdict
+    +string? reason
+    +string? asOf
+    +User? attestedBy
   }
 
   class Course
@@ -225,6 +239,7 @@ classDiagram
   DesignRecord <|-- ModuleActivityGroupLink : inherits
   ArmatureDocument <|-- DesignNote : inherits
   ArmatureDocument <|-- DesignFinding : inherits
+  DesignRecord <|-- Attestation : inherits
   ArmatureDocument <|-- Course : inherits
 
   %% Relationships (solid: reference; dotted: optional; diamond: embedded subdocument)
@@ -259,6 +274,8 @@ classDiagram
   DesignFinding "0..*" --> DesignRecord : subject
   DesignFinding ..> DesignRecord : regarding
   DesignFinding "0..*" --> LearningEvidence : evidence
+  Attestation --> DesignRecord : subject
+  Attestation ..> User : attestedBy
 ```
 
 ---
@@ -404,7 +421,7 @@ _Reusable items in an item bank, each a tree of addressable fragments, assembled
 ### `Fragment`
 _category: fragment · **abstract** · **subdocument** · key: Random_
 
-> Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a record about a part points at it through the compound reference { document @id, fragmentId } rather than at the whole document: the planned Attestation (ADR-0028, not yet written) and, from Phase 5, DesignNote and DesignFinding through an optional fragmentId. Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (planned ADR-0030, not yet written) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.
+> Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a record about a part points at it through the compound reference { document @id, fragmentId } rather than at the whole document: Attestation, DesignNote and DesignFinding each carry an optional fragmentId beside their subject (ADR-0028 decision 6, the general rule for any record about a part). Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (planned ADR-0030, not yet written) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -557,23 +574,24 @@ _No additional fields._
 
 ## Design Rationale
 
-_Rationale and review records that attach to any design record: why something was done, and what someone judged to be a problem._
+_Rationale and review records that attach to any design record, or one part of it: why something was done, what someone judged to be a problem, and who affirmed or declined it as of a commit._
 
 ### `DesignNote`
 _category: artifact · extends `ArmatureDocument` · key: Random_
 
-> A free-form rationale record attached to any design record in the Armature graph. Inherits label, description, createdBy from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject is typed Set<DesignRecord>: any artifact or any reified relationship (a sequencing decision, an evidence weighting) can carry a note. TerminusDB checks that each subject exists; the API checks that it is a DesignRecord (constraint 0; platform check L found the store does not check class). A structured DesignDecision type is deferred (ADR-0010); when it exists, a relatesToDecision field on DesignNote will point to it. See ADR-0012, ADR-0014, ADR-0017.
+> A free-form rationale record attached to any design record in the Armature graph. Inherits label, description, createdBy from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject is typed Set<DesignRecord>: any artifact or any reified relationship (a sequencing decision, an evidence weighting) can carry a note. TerminusDB checks that each subject exists; the API checks that it is a DesignRecord (constraint 0; platform check L found the store does not check class). A structured DesignDecision type is deferred (ADR-0010); when it exists, a relatesToDecision field on DesignNote will point to it. See ADR-0012, ADR-0014, ADR-0017. A note about one part of its subject names the part in fragmentId (ADR-0028 decision 6).
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `rationale` | `string` | required |
 | `subject` | `Set<DesignRecord>` | required, min 1 |
 | `category` | `DesignNoteCategory?` | optional |
+| `fragmentId` | `string?` | optional |
 
 ### `DesignFinding`
 _category: artifact · extends `ArmatureDocument` · key: Random_
 
-> An evidence-grounded concern about a design record: "this objective is ambiguous", "these two items are redundant", "this prerequisite is unjustified". Where DesignNote records why something was done, DesignFinding records that someone judged something to be a problem, and what became of that judgment. Inherits label, description, createdBy from ArmatureDocument. Evidence is a Set rather than a junction because a finding's confidence is a property of the finding, not of each piece of evidence. Evidence is optional: a finding without it is weaker, and that weakness is visible in the graph, which is more useful than forcing ceremony. API CONSTRAINT: resolutionRationale is required when status is Dismissed. See ADR-0020.
+> An evidence-grounded concern about a design record: "this objective is ambiguous", "these two items are redundant", "this prerequisite is unjustified". Where DesignNote records why something was done, DesignFinding records that someone judged something to be a problem, and what became of that judgment. Inherits label, description, createdBy from ArmatureDocument. Evidence is a Set rather than a junction because a finding's confidence is a property of the finding, not of each piece of evidence. Evidence is optional: a finding without it is weaker, and that weakness is visible in the graph, which is more useful than forcing ceremony. API CONSTRAINT: resolutionRationale is required when status is Dismissed. See ADR-0020. A finding about one part of its subject names the part in fragmentId (ADR-0028 decision 6).
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -585,6 +603,23 @@ _category: artifact · extends `ArmatureDocument` · key: Random_
 | `status` | `FindingStatus` | required |
 | `resolutionRationale` | `string?` | optional |
 | `asOf` | `string?` | optional |
+| `fragmentId` | `string?` | optional |
+
+### `Attestation`
+_category: relationship · extends `DesignRecord` · key: Hash(subject, fragmentId, claimRef, attestedBy)_
+
+> One person's verdict about a design record, or one part of it, as the record stood at a commit. A relationship record (a judgment is a relation with properties): it relates the attester to the subject, optionally a fragment of it and optionally a claim. With a claim (claimRef and claimText) the verdict is about the claim; without one it is an endorsement of the subject, so a tool with no claims (a sign-off reviewer, a person accepting an AI proposal) uses the same type. Identity is a Hash over subject, fragmentId, claimRef and attestedBy: one person holds one current verdict per subject, part and claim, a store guarantee (platform check AA); a later verdict under the same key replaces the record, and earlier verdicts stay in the commit history. A client never supplies the @id. Whether an attestation still holds is never stored: GET /api/v1/intelligence/attestations/:type/:id compares the judged part at asOf and at the ref (ADR-0056). Being a DesignRecord, an attestation can itself carry a note or a finding. The API refuses attestedBy as a list filter (ADR-0021). API CONSTRAINTS: 0 (subject is a DesignRecord), 13 (asOf), 14 (claimRef and claimText both or neither), 15 (attestedBy is the caller), 16 (fragmentId names a part of the subject). See ADR-0028.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `subject` | `DesignRecord` | required |
+| `fragmentId` | `string?` | optional |
+| `claimRef` | `string?` | optional |
+| `claimText` | `string?` | optional |
+| `verdict` | `AttestationVerdict` | required |
+| `reason` | `string?` | optional |
+| `asOf` | `string?` | optional |
+| `attestedBy` | `User?` | optional |
 
 ---
 
@@ -721,3 +756,10 @@ _category: artifact · extends `ArmatureDocument` · key: Random_
 - `Open`
 - `Addressed`
 - `Dismissed`
+
+### `AttestationVerdict`
+
+> The verdict an Attestation records. With a claim, Affirmed means the attester holds that the claim is true of the subject (or fragment) as it stood at asOf, and Declined that it is not. Without a claim, the attestation is an endorsement: Affirmed endorses the subject (or fragment) as it stood at asOf, and Declined withholds endorsement. Deliberately two values: plugins map richer vocabularies (CoQui's Cannot) onto them at the boundary. See ADR-0028.
+
+- `Affirmed`
+- `Declined`

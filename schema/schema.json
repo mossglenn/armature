@@ -308,6 +308,21 @@
     ]
   },
   {
+    "@type": "Enum",
+    "@id": "AttestationVerdict",
+    "@value": [
+      "Affirmed",
+      "Declined"
+    ],
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "AttestationVerdict",
+        "@comment": "The verdict an Attestation records. With a claim, Affirmed means the attester holds that the claim is true of the subject (or fragment) as it stood at asOf, and Declined that it is not. Without a claim, the attestation is an endorsement: Affirmed endorses the subject (or fragment) as it stood at asOf, and Declined withholds endorsement. Deliberately two values: plugins map richer vocabularies (CoQui's Cannot) onto them at the boundary. See ADR-0028."
+      }
+    ]
+  },
+  {
     "@type": "Class",
     "@id": "User",
     "@key": {
@@ -651,7 +666,7 @@
       {
         "@language": "en",
         "@label": "Fragment",
-        "@comment": "Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a record about a part points at it through the compound reference { document @id, fragmentId } rather than at the whole document: the planned Attestation (ADR-0028, not yet written) and, from Phase 5, DesignNote and DesignFinding through an optional fragmentId. Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (planned ADR-0030, not yet written) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.",
+        "@comment": "Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a record about a part points at it through the compound reference { document @id, fragmentId } rather than at the whole document: Attestation, DesignNote and DesignFinding each carry an optional fragmentId beside their subject (ADR-0028 decision 6, the general rule for any record about a part). Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (planned ADR-0030, not yet written) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.",
         "@properties": {
           "fragmentId": "Client-assigned, immutable identifier of this part, unique within the parent document. Generated once at creation by the authoring tool (UUID, nanoid or similar), never derived from array position or display order, never regenerated. Armature validates uniqueness within one document on write and otherwise treats it as opaque authored content. Named fragmentId, never id, so it cannot be mistaken for a document identifier. See ADR-0023.",
           "text": "The inline text of this part. Required until attachment references exist (planned ADR-0030, not yet written)."
@@ -1072,10 +1087,11 @@
       {
         "@language": "en",
         "@label": "DesignNote",
-        "@comment": "A free-form rationale record attached to any design record in the Armature graph. Inherits label, description, createdBy from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject is typed Set<DesignRecord>: any artifact or any reified relationship (a sequencing decision, an evidence weighting) can carry a note. TerminusDB checks that each subject exists; the API checks that it is a DesignRecord (constraint 0; platform check L found the store does not check class). A structured DesignDecision type is deferred (ADR-0010); when it exists, a relatesToDecision field on DesignNote will point to it. See ADR-0012, ADR-0014, ADR-0017.",
+        "@comment": "A free-form rationale record attached to any design record in the Armature graph. Inherits label, description, createdBy from ArmatureDocument. Captures design decisions that fall outside the predefined rationale fields on specific document types (PrerequisiteRecord.rationale, ModuleObjective.roleRationale, etc.). subject is typed Set<DesignRecord>: any artifact or any reified relationship (a sequencing decision, an evidence weighting) can carry a note. TerminusDB checks that each subject exists; the API checks that it is a DesignRecord (constraint 0; platform check L found the store does not check class). A structured DesignDecision type is deferred (ADR-0010); when it exists, a relatesToDecision field on DesignNote will point to it. See ADR-0012, ADR-0014, ADR-0017. A note about one part of its subject names the part in fragmentId (ADR-0028 decision 6).",
         "@properties": {
           "subject": "The design record(s) this note pertains to. Typed to DesignRecord, so it accepts any artifact or junction document; User is excluded by design (ADR-0015). The store checks only that each subject exists; the API checks its class (constraint 0). Minimum 1 enforced at schema level: a note without a subject is orphaned. See ADR-0017.",
-          "category": "Optional categorization of the design decision type. Enables queries like 'show all rationale related to Bloom's level choices' or 'show all prerequisite intent notes'. Not all notes fit neatly into a category."
+          "category": "Optional categorization of the design decision type. Enables queries like 'show all rationale related to Bloom's level choices' or 'show all prerequisite intent notes'. Not all notes fit neatly into a category.",
+          "fragmentId": "The part of the subject this note is about, by its client-assigned fragmentId (ADR-0023); absent for the subject as a whole. API CONSTRAINT 16: when present, subject has exactly one member and that subject has a fragment with this fragmentId in the state the write leaves it in. See ADR-0028."
         }
       }
     ],
@@ -1093,6 +1109,10 @@
       "armature": {
         "category": "artifact"
       }
+    },
+    "fragmentId": {
+      "@type": "Optional",
+      "@class": "xsd:string"
     }
   },
   {
@@ -1134,7 +1154,7 @@
       {
         "@language": "en",
         "@label": "DesignFinding",
-        "@comment": "An evidence-grounded concern about a design record: \"this objective is ambiguous\", \"these two items are redundant\", \"this prerequisite is unjustified\". Where DesignNote records why something was done, DesignFinding records that someone judged something to be a problem, and what became of that judgment. Inherits label, description, createdBy from ArmatureDocument. Evidence is a Set rather than a junction because a finding's confidence is a property of the finding, not of each piece of evidence. Evidence is optional: a finding without it is weaker, and that weakness is visible in the graph, which is more useful than forcing ceremony. API CONSTRAINT: resolutionRationale is required when status is Dismissed. See ADR-0020.",
+        "@comment": "An evidence-grounded concern about a design record: \"this objective is ambiguous\", \"these two items are redundant\", \"this prerequisite is unjustified\". Where DesignNote records why something was done, DesignFinding records that someone judged something to be a problem, and what became of that judgment. Inherits label, description, createdBy from ArmatureDocument. Evidence is a Set rather than a junction because a finding's confidence is a property of the finding, not of each piece of evidence. Evidence is optional: a finding without it is weaker, and that weakness is visible in the graph, which is more useful than forcing ceremony. API CONSTRAINT: resolutionRationale is required when status is Dismissed. See ADR-0020. A finding about one part of its subject names the part in fragmentId (ADR-0028 decision 6).",
         "@properties": {
           "finding": "What the concern is, in the reporter's words.",
           "subject": "The design record(s) of concern. Minimum 1.",
@@ -1143,14 +1163,81 @@
           "confidence": "How sure the reporter is that the concern is real. A property of the finding, not of each evidence item.",
           "status": "Open on creation; Addressed when the design changed in response; Dismissed when judged not a problem. See FindingStatus.",
           "resolutionRationale": "Why the finding was addressed or dismissed. Required for Dismissed (API-enforced): a concern waved away without explanation launders a judgment as a fact.",
-          "asOf": "The commit (a bare commit id) at which the subject was judged, so the finding stays readable after its subject changes. The API fills it with the head of the branch being written when a create omits it (the state the write started from, so a subject created in the same write is not yet in it), keeps the stored value when a replace omits it, and checks that a supplied one names an existing commit at which every subject and the regarding record exist. API CONSTRAINT 13. See ADR-0057."
+          "asOf": "The commit (a bare commit id) at which the subject was judged, so the finding stays readable after its subject changes. The API fills it with the head of the branch being written when a create omits it (the state the write started from, so a subject created in the same write is not yet in it), keeps the stored value when a replace omits it, and checks that a supplied one names an existing commit at which every subject and the regarding record exist. API CONSTRAINT 13. See ADR-0057.",
+          "fragmentId": "The part of the subject this finding is about, by its client-assigned fragmentId (ADR-0023); absent for the subject as a whole. Always a part of subject, never of regarding. API CONSTRAINT 16: when present, subject has exactly one member and that subject has a fragment with this fragmentId at asOf when asOf is checked, otherwise in the state the write leaves it in. See ADR-0028."
         }
       }
     ],
     "asOf": {
       "@type": "Optional",
       "@class": "xsd:string"
+    },
+    "fragmentId": {
+      "@type": "Optional",
+      "@class": "xsd:string"
     }
+  },
+  {
+    "@type": "Class",
+    "@id": "Attestation",
+    "@inherits": "DesignRecord",
+    "@key": {
+      "@type": "Hash",
+      "@fields": [
+        "subject",
+        "fragmentId",
+        "claimRef",
+        "attestedBy"
+      ]
+    },
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    },
+    "subject": "DesignRecord",
+    "fragmentId": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "claimRef": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "claimText": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "verdict": "AttestationVerdict",
+    "reason": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "asOf": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "attestedBy": {
+      "@type": "Optional",
+      "@class": "User"
+    },
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "Attestation",
+        "@comment": "One person's verdict about a design record, or one part of it, as the record stood at a commit. A relationship record (a judgment is a relation with properties): it relates the attester to the subject, optionally a fragment of it and optionally a claim. With a claim (claimRef and claimText) the verdict is about the claim; without one it is an endorsement of the subject, so a tool with no claims (a sign-off reviewer, a person accepting an AI proposal) uses the same type. Identity is a Hash over subject, fragmentId, claimRef and attestedBy: one person holds one current verdict per subject, part and claim, a store guarantee (platform check AA); a later verdict under the same key replaces the record, and earlier verdicts stay in the commit history. A client never supplies the @id. Whether an attestation still holds is never stored: GET /api/v1/intelligence/attestations/:type/:id compares the judged part at asOf and at the ref (ADR-0056). Being a DesignRecord, an attestation can itself carry a note or a finding. The API refuses attestedBy as a list filter (ADR-0021). API CONSTRAINTS: 0 (subject is a DesignRecord), 13 (asOf), 14 (claimRef and claimText both or neither), 15 (attestedBy is the caller), 16 (fragmentId names a part of the subject). See ADR-0028.",
+        "@properties": {
+          "subject": "The design record judged. One record, not a set: a part belongs to one record, and a verdict about two records is two verdicts. The store checks it exists; the API checks it is a DesignRecord (constraint 0).",
+          "fragmentId": "The part of the subject judged, by its client-assigned fragmentId (ADR-0023); absent for the subject as a whole. Part of the key. API CONSTRAINT 16: the subject has a fragment with this fragmentId at asOf.",
+          "claimRef": "An opaque, client-scoped identifier for the claim and its lineage; the hub never parses it (CoQui puts its grid, claim and claim version here). Part of the key: rewording a claim keeps its claimRef, so the new verdict replaces the old one. API CONSTRAINT 14: present exactly when claimText is.",
+          "claimText": "The claim's wording as the attester saw it. Not part of the key. API CONSTRAINT 14: present exactly when claimRef is.",
+          "verdict": "Affirmed or Declined; see AttestationVerdict for what each means with and without a claim.",
+          "reason": "Why, in the attester's words. Most useful on a decline.",
+          "asOf": "The commit (a bare commit id) at which the subject was judged. The API fills it with the head the write starts from (or the If-Match commit) when omitted, on create and on replace alike, because every write of an attestation is a fresh verdict; a client re-sending an earlier verdict supplies the asOf it means. A supplied value must name an existing commit at which the subject exists. API CONSTRAINT 13. See ADR-0057, ADR-0028 decision 5.",
+          "attestedBy": "The person or agent (a User) who gave the verdict. Always the identity the request resolved to (ADR-0032), filled by the API before it looks for the record to replace; a body naming anyone else is refused (API CONSTRAINT 15). Optional in the schema only so the generated request schema does not require it; always present for attestations written through the API. Part of the key."
+        }
+      }
+    ]
   },
   {
     "@type": "Class",
