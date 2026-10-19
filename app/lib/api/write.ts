@@ -178,7 +178,8 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
  *     latest state a write can name: the commit it makes has no id until it
  *     exists, so a subject created in the same write is not in it
  *
- * Filled and copied values go in `ctx.asOfFilled`, which constraint 13 skips.
+ * Values taken from the head go in `ctx.asOfFilled`, which constraint 13
+ * skips; a copy joins it only when the parent's value came from the head.
  * Records with a parent are filled last, so a metric copies the value its
  * dataset in the same write was just given.
  */
@@ -215,7 +216,7 @@ async function fillAsOf(
     const parent = await ctx.resolve(parentOf(doc));
     if (parent?.asOf !== undefined) {
       doc.asOf = parent.asOf;
-      ctx.asOfFilled.add(doc);
+      if (ctx.asOfFilled.has(parent)) ctx.asOfFilled.add(doc);
     }
   }
 }

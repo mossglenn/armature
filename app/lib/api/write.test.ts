@@ -491,6 +491,28 @@ describe('generic write path and invariants (Phase 3)', () => {
       expect(historical.status).toBe(200);
     });
 
+    it("checks a metric's subject at its asOf, including one copied from a stored dataset (ADR-0058)", async () => {
+      const administered = await post(`/api/v1/documents${q}`, { message: 'Administration', documents: [{ ...dataset, '@capture': undefined, '@id': `LearningDataset/stats-${stamp}` }] });
+      expect(administered.status).toBe(200);
+      const datasetId = `LearningDataset/stats-${stamp}`;
+      const late = await put(`/api/v1/documents/AssessmentItem/stats-late-${stamp}${q}`, { message: 'Item added after', document: item(`stats-late-${stamp}`) });
+      expect(late.status).toBe(200);
+
+      const stat = (subject: string) => metric({ label: 'p-value', unit: 'proportion correct', value: 0.5, derivedFrom: datasetId, subject });
+      const tooLate = await post(`/api/v1/documents${q}`, { message: 'x', documents: [stat(`AssessmentItem/stats-late-${stamp}`)] });
+      expect(tooLate.status).toBe(422);
+      expect((await tooLate.json()).violations).toEqual([expect.objectContaining({ code: 'absent_at_commit', field: 'subject' })]);
+
+      const ok = await post(`/api/v1/documents${q}`, { message: 'Item statistic', documents: [stat('AssessmentItem/hallucination-mc')] });
+      expect(ok.status).toBe(200);
+      const stored = await (await get(`/api/v1/documents/${(await ok.json()).ids[0]}${q}`)).json();
+      expect(stored.subject).toBe('AssessmentItem/hallucination-mc');
+
+      // The statistics no longer live on the item.
+      const onItem = await put(`/api/v1/documents/AssessmentItem/stats-late-${stamp}${q}`, { message: 'x', document: item(`stats-late-${stamp}`, { difficultyIndex: 0.5 }) });
+      expect(onItem.status).toBe(400);
+    });
+
     it('takes If-Match as the head', async () => {
       const head = await headOf();
       const res = await app.request(`/api/v1/documents/DesignFinding/asof-ifm-${stamp}${q}`, {

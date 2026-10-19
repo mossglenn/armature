@@ -247,7 +247,7 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
       message: 'Spring cohort results for the Module 1 check',
       documents: [
         { '@type': 'LearningDataset', '@capture': 'ds', label: 'Spring cohort, Module 1 check', cohort: 'Spring', producedBy: 'Assessment/mod1-assessment' },
-        { '@type': 'LearningMetric', label: 'Item 1 p-value', collectedAt: '2026-06-01T00:00:00Z', source: 'LMS export', value: 0.42, unit: 'proportion correct', derivedFrom: { '@ref': 'ds' } },
+        { '@type': 'LearningMetric', label: 'Item 1 p-value', collectedAt: '2026-06-01T00:00:00Z', source: 'LMS export', value: 0.42, unit: 'proportion correct', derivedFrom: { '@ref': 'ds' }, subject: 'AssessmentItem/hallucination-mc' },
       ],
     });
     expect(write.status).toBe(200);
@@ -275,6 +275,15 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
     const atDelivery = await get(`/api/v1/intelligence/coverage/how-ai-works?ref=${body.root.asOf}`);
     expect(atDelivery.status).toBe(200);
     expect(atDelivery.headers.get('etag')).toBe(`"${delivered}"`);
+
+    // An item statistic names the item it measures (ADR-0058): the trace hops
+    // to it directly, the item's trace reaches the metric, and the list route
+    // finds the item's metrics.
+    expect(body.edges).toContainEqual({ from: metricId, to: 'AssessmentItem/hallucination-mc', via: 'subject' });
+    const fromItem = await json(`/api/v1/intelligence/trace/AssessmentItem/hallucination-mc${q}`);
+    expect(fromItem.edges).toContainEqual({ from: 'AssessmentItem/hallucination-mc', to: metricId, via: 'subject' });
+    const metrics = await json(`/api/v1/documents/LearningMetric${q}&subject=AssessmentItem/hallucination-mc`);
+    expect(ids(metrics.map((m: { '@id': string }) => ({ id: m['@id'] })))).toEqual([metricId]);
   });
 
   describe('a declaration walked through every verdict by writes and reads (ADR-0029 decisions 1 to 3)', () => {

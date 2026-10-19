@@ -256,7 +256,8 @@ intelligence.get('/alignment', async (c) => {
  *     ← ItemInstance → Assessment ← LearningDataset ← LearningMetric
  *
  * with Module reached from an objective's declarations and an assessment's
- * `module` as context. `upstream` follows the chain toward evidence (why does
+ * `module` as context, and a metric's `subject` (the record it measures, such
+ * as the item an item statistic is about; ADR-0058) as a direct hop. `upstream` follows the chain toward evidence (why does
  * this exist), `downstream` toward outcomes (what came of it, Narrative 1).
  * Each hop records the field it followed and the junction it went through.
  */
@@ -285,7 +286,10 @@ async function upstream(graph: Graph, doc: TerminusDocument): Promise<Array<{ ne
     if (next) hops.push({ next, edge: { from, to: id, via: field } });
   };
   switch (doc['@type']) {
-    case 'LearningMetric': await follow('derivedFrom'); break;
+    case 'LearningMetric':
+      await follow('derivedFrom');
+      await follow('subject');
+      break;
     case 'LearningDataset': await follow('producedBy'); break;
     case 'Assessment':
       for (const p of await graph.where('ItemInstance', 'assessment', from)) {
@@ -323,6 +327,8 @@ async function downstream(graph: Graph, doc: TerminusDocument): Promise<Array<{ 
   const direct = async (type: string, field: string) => {
     for (const next of await graph.where(type, field, from)) hops.push({ next, edge: { from, to: next['@id'], via: field } });
   };
+  // Whatever the record, the metrics that measure it (ADR-0058).
+  await direct('LearningMetric', 'subject');
   switch (doc['@type']) {
     case 'DescriptiveEvidence':
     case 'LearningMetric':
