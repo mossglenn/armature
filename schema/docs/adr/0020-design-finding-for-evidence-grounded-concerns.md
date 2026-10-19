@@ -18,6 +18,11 @@ Accepted and implemented (2026-10-07), with ADR-0017. `DesignFinding` and `Findi
 **Note 2026-10-18:** ADR-0057 (Accepted) added an optional `asOf` commit id to `DesignFinding`,
 filled from the branch head on create and checked as constraint 13.
 
+**Amended by ADR-0028** (2026-10-18, accepted, not yet built): `DesignFinding` gains an optional
+`fragmentId`, so a finding can point at one part of its subject (never of `regarding`). When it is
+present, `subject` has exactly one member and the fragment must exist in it at `asOf` (ADR-0028
+decision 6).
+
 ## Context
 
 Armature can record why an artifact is the way it is (`DesignNote`, ADR-0012). It cannot record that an artifact may be **wrong**.

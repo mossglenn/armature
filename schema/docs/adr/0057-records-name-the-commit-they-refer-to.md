@@ -13,6 +13,12 @@
 Accepted (2026-10-18), with decision 5 added at acceptance; implemented the same day on
 `phase-5/asof`. Proposed 2026-10-08.
 
+**Amended by ADR-0028** (2026-10-18, accepted, not yet built): `Attestation` carries `asOf`, with
+`subject` checked at it by constraint 13. Decision 5's "a replace keeps the stored `asOf`" does not
+apply to an attestation. Every write of one is a fresh verdict, so a replace that omits `asOf` is
+refilled from the head (ADR-0028 decision 5). The notes below that call ADR-0028 planned and
+unwritten predate it.
+
 **Note 2026-10-18 (later the same day):** ADR-0058 gave `LearningMetric` a `subject` (the record it
 measures), which constraint 13 checks at the metric's `asOf` like a finding's subject. A value a
 metric copies from its dataset is now checked too unless the dataset's own value came from the

@@ -46,10 +46,10 @@ always mirrored: if ADR-A says it amends ADR-B, ADR-B's status says "Amended by 
 ADRs are numbered in the order they were written, with four digits (ADR-0001, ADR-0002, ...).
 The sequence has deliberate gaps:
 
-- **0028, 0030, 0031 and 0034 are reserved and not yet written.** The development plan
+- **0030, 0031 and 0034 are reserved and not yet written.** The development plan
   (`docs/development-plan.md` §5) reserved the block 0024 to 0034 for decisions it scheduled;
-  the others in that block have been written. The four unwritten ones are:
-  - **ADR-0028: Attestation** (Phase 5): a person affirms or declines a claim about a design record.
+  the others in that block have been written (ADR-0028, Attestation, on 2026-10-18). The three
+  unwritten ones are:
   - **ADR-0030: External references and attachments** (Phase 6).
   - **ADR-0031: Export profiles and schema slices** (Phase 6).
   - **ADR-0034: Interaction types and renderers as versioned artifacts** (when the first non-text
@@ -64,7 +64,7 @@ The sequence has deliberate gaps:
 
 ## Index
 
-All 35 ADRs, grouped by when they were written. Statuses are as of 2026-10-18.
+All 36 ADRs, grouped by when they were written. Statuses are as of 2026-10-18.
 
 ### 0001–0010: Foundational schema (February 2026)
 
@@ -86,7 +86,7 @@ All 35 ADRs, grouped by when they were written. Statuses are as of 2026-10-18.
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
 | [0011](0011-placeholder-objectives-for-incomplete-authoring.md) | Placeholder Objectives for Incomplete Authoring States | Accepted | When a designer knows a prerequisite exists but has not written that objective yet, they create a draft placeholder objective rather than an incomplete prerequisite record. |
-| [0012](0012-design-note-for-free-form-rationale.md) | DesignNote for Free-Form Rationale Capture | Accepted; amended by ADR-0014 and ADR-0017 | Adds `DesignNote`, a free-text explanation of why a design decision was made, which can be attached to any design record. |
+| [0012](0012-design-note-for-free-form-rationale.md) | DesignNote for Free-Form Rationale Capture | Accepted; amended by ADR-0014, ADR-0017 and ADR-0028 | Adds `DesignNote`, a free-text explanation of why a design decision was made, which can be attached to any design record. |
 | [0013](0013-schema-level-minimum-cardinality.md) | Schema-Level Minimum Cardinality (Conditional) | Accepted (supersedes ADR-0006) | Because the database supports "at least one" rules on lists, the schema declares them itself instead of leaving them to the API. |
 | [0014](0014-armature-document-abstract-base-class.md) | ArmatureDocument Abstract Base Class | Accepted; amended by ADR-0017 and ADR-0022 | Every named design artifact inherits a common parent, `ArmatureDocument`, which supplies its label, description and author. |
 | [0015](0015-user-type-and-authorship-model.md) | User Type and Authorship Model | Accepted; amended by ADR-0032 | Adds the `User` record for the people and tools that take part in design, and a `createdBy` field on artifacts; signing in is left to an outside system. |
@@ -102,15 +102,15 @@ Armature's first client.
 | [0017](0017-design-record-abstract-root.md) | DesignRecord Abstract Root, and Category as Metadata | Accepted and implemented; amended by ADR-0027 | Adds an empty parent type, `DesignRecord`, so notes and findings can be attached to relationships as well as artifacts, and records each type's category as a label in the schema. |
 | [0018](0018-item-readiness-on-assessment-item.md) | Item Readiness Belongs on AssessmentItem, Not Only on ItemInstance | Accepted and implemented | Every test question has its own review status, separate from its clearance in each test, and a placement cannot be approved before its question is. |
 | [0019](0019-coverage-accounts-for-item-readiness.md) | Coverage Semantics Account for Item Readiness | Accepted; amended by ADR-0056 | Coverage is reported twice, counting only approved questions and counting everything not retired, so the gap between the two shows the review backlog. |
-| [0020](0020-design-finding-for-evidence-grounded-concerns.md) | DesignFinding — Evidence-Grounded Concerns About Design Artifacts | Accepted and implemented | Adds `DesignFinding`, a concern that a design record may be wrong, with optional evidence, a status, and a required reason for dismissing it. |
+| [0020](0020-design-finding-for-evidence-grounded-concerns.md) | DesignFinding — Evidence-Grounded Concerns About Design Artifacts | Accepted and implemented; amended by ADR-0028 (optional `fragmentId`) | Adds `DesignFinding`, a concern that a design record may be wrong, with optional evidence, a status, and a required reason for dismissing it. |
 | [0021](0021-non-goal-practitioner-performance-data.md) | Armature Does Not Model Practitioner Performance | Accepted (a policy; its list-filter guard built 2026-10-18) | Armature permanently declines to measure the performance of individual designers or reviewers, and offers no feature that summarizes one person's work. |
 | [0022](0022-item-parts-embedded-not-response-document.md) | AssessmentItem Stem and Options Are Embedded Structure, Not a Separate Response Document | Accepted and implemented; amends ADR-0002, supersedes ADR-0016 in part | A question's stem and answer options are stored inside the question's own record, and the separate `Response` record type was removed. |
-| [0023](0023-client-assigned-fragment-id.md) | Client-Assigned fragmentId for Addressing Item Parts | Accepted and implemented | The authoring tool gives each part of a question a permanent `fragmentId`, so a comment or review can point at one specific option. |
+| [0023](0023-client-assigned-fragment-id.md) | Client-Assigned fragmentId for Addressing Item Parts | Accepted and implemented; decision 5 applied by ADR-0028 | The authoring tool gives each part of a question a permanent `fragmentId`, so a comment or review can point at one specific option. |
 
 ### 0024–0033: Development-plan block (October 2026)
 
-Numbers reserved by `docs/development-plan.md` §5. The block's other numbers, 0028, 0030, 0031
-and 0034, are not yet written; see [Numbering](#numbering).
+Numbers reserved by `docs/development-plan.md` §5. The block's other numbers, 0030, 0031 and 0034,
+are not yet written; see [Numbering](#numbering).
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -118,6 +118,7 @@ and 0034, are not yet written; see [Numbering](#numbering).
 | [0025](0025-design-process-data-lives-in-the-commit-graph.md) | Design process data lives in the commit graph | Accepted and implemented | The database's commit history is Armature's design history: every change has an author and a reason, every read names a branch or past commit, and shared history is never rewritten. |
 | [0026](0026-api-host-and-route-versioning.md) | API host and route versioning | Accepted; amended by ADR-0054 (decision 1) | The API is served from the Next.js web application for now, every route lives under `/api/v1/`, and a separate server remains the long-term goal. |
 | [0027](0027-schema-self-description.md) | Schema Self-Description via `@metadata` | Accepted and implemented, except decision 4 (`GET /api/v1/schema` not built) | Every schema class carries a category label (infrastructure, fragment, artifact or relationship) that tools and code generators read from the schema itself. |
+| [0028](0028-attestation.md) | Attestation — A Person's Verdict on a Design Record as of a Commit | Accepted (2026-10-18); not yet implemented; amends ADR-0012, ADR-0020 and ADR-0057 (decision 5) | A person records that they endorse a record or one part of it, or affirm or decline a claim about it, as of a saved version; Armature works out on request whether that part has changed since. Notes and findings can also point at one part of a question. |
 | [0029](0029-coverage-algorithm.md) | Coverage Algorithm | Accepted for decisions 1 to 3; superseded in part by ADR-0056 (decisions 4 to 6; decision 7 moot) | For each objective a module declares, coverage counts the distinct questions placed in the module's assessments: 0 is Uncovered, 1 Partially Assessed, 2 to 4 Fully Assessed, 5 or more Over-Assessed. |
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
@@ -129,7 +130,7 @@ and 0034, are not yet written; see [Numbering](#numbering).
 | [0054](0054-api-as-a-hono-app.md) | The Armature API is a Hono application | Accepted and implemented; amended by ADR-0032 (decision 4) | The API is a Hono application in `app/lib/api/`, independent of Next.js, which serves it through a single file so it can move to its own server without a rewrite. |
 | [0055](0055-store-access-over-http.md) | The API layer reaches TerminusDB over HTTP, not through the JavaScript client | Accepted and implemented | The API talks to the TerminusDB database through one small HyperText Transfer Protocol (HTTP) module instead of the JavaScript client library, so it can record each change's real author. |
 | [0056](0056-coverage-is-computed-on-read-never-stored.md) | Coverage Is Computed on Read, Never Stored | Accepted and implemented | Coverage, and any future score, is calculated when someone asks for it, at any point in the design's history, and is never stored in the database. |
-| [0057](0057-records-name-the-commit-they-refer-to.md) | Records That Refer to a State of the Graph Name Its Commit | Accepted and implemented (2026-10-18) | Datasets, metrics and findings carry an `asOf` field naming the saved version of the design they refer to, so results can be compared with the design as it was. |
+| [0057](0057-records-name-the-commit-they-refer-to.md) | Records That Refer to a State of the Graph Name Its Commit | Accepted and implemented (2026-10-18); decision 5 amended by ADR-0028 for attestations | Datasets, metrics and findings carry an `asOf` field naming the saved version of the design they refer to, so results can be compared with the design as it was. |
 | [0058](0058-item-statistics-are-metrics-about-the-item.md) | Item Statistics Are Metrics About the Item | Accepted and implemented (2026-10-18) | A question's difficulty and discrimination are recorded as measurements that name the question, the administration and the design version, not as fields on the question; summaries are calculated when asked for. |
 
 ## How to add an ADR
@@ -137,7 +138,7 @@ and 0034, are not yet written; see [Numbering](#numbering).
 1. **Write the ADR before the change.** Any change to `schema/schema.json` that alters an existing
    type or adds a new one needs an ADR first; so does any other decision a later reader would
    otherwise have to reverse-engineer from the code.
-2. **Pick the number.** If you are writing one of the reserved decisions (0028, 0030, 0031, 0034),
+2. **Pick the number.** If you are writing one of the reserved decisions (0030, 0031, 0034),
    use its reserved number. Otherwise take the next number after the highest existing ADR
    (ADR-0058 at the time of writing). If the decision adopts a research candidate from
    `docs/research/adr-candidates.md`, name the candidate in the Status section, as ADR-0025 does

@@ -14,6 +14,10 @@ Accepted
 `Set<ArmatureDocument>`. **Amended by ADR-0017** (2026-10-07): `subject` is `Set<DesignRecord>`; the
 store checks that each subject exists, and the API checks its class (noted 2026-10-08).
 
+**Amended by ADR-0028** (2026-10-18, accepted, not yet built): `DesignNote` gains an optional
+`fragmentId`, so a note can point at one part of its subject. When it is present, `subject` has
+exactly one member and the fragment must exist in it (ADR-0028 decision 6).
+
 ## Context
 Several document types in the schema carry dedicated rationale fields: `PrerequisiteRecord.rationale`, `LearningNeed.rationale`, `ModuleObjective.roleRationale`. These fields are appropriate for decisions made within a well-defined slot — the reason a specific prerequisite was identified, the reason a need was prioritized, the reason an objective was assigned a role.
 
