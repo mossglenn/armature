@@ -21,7 +21,7 @@ import { branches } from './routes/branches';
 import { documents } from './routes/documents';
 import { intelligence } from './routes/intelligence';
 import { users } from './routes/users';
-import { StoreError } from './store';
+import { isUnknownRef, StoreError } from './store';
 
 export const app = new Hono().basePath('/api/v1');
 
@@ -29,15 +29,6 @@ app.route('/documents', documents);
 app.route('/branches', branches);
 app.route('/users', users);
 app.route('/intelligence', intelligence);
-
-/** Store error types that mean "the ref or id you named does not exist". */
-const UNKNOWN_REF_TYPES = new Set([
-  'api:NotValidRefError',
-  'api:BadDataVersion',
-  'api:UnresolvableAbsoluteDescriptor',
-  'api:BranchDoesNotExist',
-  'api:DocumentAccessImpossible',
-]);
 
 /**
  * Maps errors to responses. Hub errors render themselves; store errors are
@@ -66,7 +57,7 @@ app.onError((err, c) => {
       // a client-supplied id on one can only disagree with it.
       return c.json({ error: 'bad_id', message: 'This type derives its id from its key fields; omit @id and let the hub mint it' }, 400);
     }
-    if (err.status === 404 || UNKNOWN_REF_TYPES.has(err.type)) {
+    if (isUnknownRef(err)) {
       return c.json({ error: 'unknown_ref', message: 'No such branch, commit or document' }, 404);
     }
     if (err.status === 401) {
