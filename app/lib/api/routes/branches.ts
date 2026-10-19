@@ -6,6 +6,7 @@ import {
   createStore,
   idFromIri,
   isRecord,
+  isUnknownRef,
   StoreError,
   type Commit,
   type Ref,
@@ -118,15 +119,31 @@ async function mergeBase(target: Store, source: Store): Promise<string | undefin
  * The first of `candidates` whose history holds `head`: the commit is in its
  * log, or one of its commits merged it (decision 6, branch delete). Every
  * commit on the branch being deleted is an ancestor of its head, so a held
- * head means the whole branch stays reachable.
+ * head means the whole branch stays reachable. A candidate deleted since the
+ * branch list was read holds nothing and is skipped.
  */
 async function branchHolding(head: string, candidates: string[], store: Store): Promise<string | undefined> {
   for (const name of candidates) {
-    for (const commit of await fullLog(store.at({ branch: name }))) {
+    const log = await gone(fullLog(store.at({ branch: name })));
+    for (const commit of log ?? []) {
       if (commit.id === head || mergeSourceOf(commit) === head) return name;
     }
   }
   return undefined;
+}
+
+/**
+ * A read of one branch, or undefined when the branch no longer exists. The
+ * branch list and each branch's log are separate store calls, so a branch
+ * another request deletes in between must not fail a read about the others.
+ */
+async function gone<T>(read: Promise<T>): Promise<T | undefined> {
+  try {
+    return await read;
+  } catch (err) {
+    if (isUnknownRef(err)) return undefined;
+    throw err;
+  }
 }
 
 type ChangeOp = 'insert' | 'delete' | 'update';
@@ -146,10 +163,14 @@ function changeOf(entry: unknown): { id: string; op: ChangeOp } {
 branches.get('/', async (c) => {
   const store = createStore({ branch: 'main' });
   const names = await store.listBranches();
+  // A branch deleted after the list was read is left out (see `gone`).
   const list = await Promise.all(
-    names.map(async (name) => ({ name, head: toHead(await store.at({ branch: name }).head()) }))
+    names.map(async (name) => {
+      const read = await gone(store.at({ branch: name }).head().then((head) => ({ head })));
+      return read && { name, head: toHead(read.head) };
+    })
   );
-  return c.json(list);
+  return c.json(list.filter((b) => b !== undefined));
 });
 
 branches.post('/', async (c) => {

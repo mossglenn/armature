@@ -15,9 +15,9 @@
  * so registering one writes there; the suite deletes what it registered
  * through the adapter.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { app } from './app';
-import { createStore } from './store';
+import { createStore, isUnknownRef, Store } from './store';
 
 /** The seed's User and the header value that resolves to it (ADR-0032 decision 1). */
 const AUTHOR = 'User/demo-designer';
@@ -364,6 +364,68 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     const atCommit = await app.request(`/api/v1/documents/${doc}?ref=${commit}`);
     expect(atCommit.status).toBe(200);
     expect((await atCommit.json()).label).toBe('Merged need');
+  });
+
+  describe('a branch deleted between the list read and the head reads', () => {
+    // The race itself cannot be timed in a test; the state it leaves can. The
+    // list names a branch whose log the store no longer has, exactly as when
+    // another request deletes it between the two calls.
+    const GHOST = `test-ghost-${stamp}`;
+    const listWithGhost = () => {
+      const real = Store.prototype.listBranches;
+      return vi.spyOn(Store.prototype, 'listBranches').mockImplementation(async function (this: Store) {
+        return [GHOST, ...(await real.call(this))];
+      });
+    };
+
+    it('lists the branches that remain', async () => {
+      const spy = listWithGhost();
+      try {
+        const res = await app.request('/api/v1/branches');
+        expect(res.status).toBe(200);
+        const names = (await res.json()).map((b: { name: string }) => b.name);
+        expect(names).toContain('main');
+        expect(names).not.toContain(GHOST);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('finds the holder past a candidate that vanished', async () => {
+      // FORK's head is a commit only HOLDER also has, so main does not hold
+      // it and the search reaches the ghost, listed first, before HOLDER.
+      const HOLDER = `test-holder-${stamp}`;
+      const FORK = `test-fork-${stamp}`;
+      expect((await post('/api/v1/branches', { name: HOLDER, from: { branch: 'main' } })).status).toBe(201);
+      const written = await write(`/api/v1/documents/LearningNeed/held-${stamp}?branch=${HOLDER}`, {
+        message: 'A commit main does not have',
+        document: { label: 'Held need', rationale: 'Only on the holder' },
+      });
+      expect(written.status).toBe(200);
+      expect((await post('/api/v1/branches', { name: FORK, from: { branch: HOLDER } })).status).toBe(201);
+      const spy = listWithGhost();
+      try {
+        const res = await app.request(`/api/v1/branches/${FORK}`, { method: 'DELETE', headers: { 'Armature-User': AUTHOR_EXTERNAL_ID } });
+        expect(res.status).toBe(200);
+        expect((await res.json()).heldBy).toBe(HOLDER);
+      } finally {
+        spy.mockRestore();
+        const main = createStore({ branch: 'main' });
+        for (const name of [FORK, HOLDER]) await main.deleteBranch(name).catch(() => undefined);
+      }
+    });
+
+    it('answers a delete of a branch already deleted with 404, not 500', async () => {
+      const spy = listWithGhost();
+      try {
+        const res = await app.request(`/api/v1/branches/${GHOST}`, { method: 'DELETE', headers: { 'Armature-User': AUTHOR_EXTERNAL_ID } });
+        expect(res.status).toBe(404);
+        expect((await res.json()).error).toBe('unknown_ref');
+      } finally {
+        spy.mockRestore();
+      }
+      await expect(createStore({ branch: 'main' }).deleteBranch(GHOST)).rejects.toSatisfy(isUnknownRef);
+    });
   });
 
   it('refuses to write User documents through the provisional route', async () => {
