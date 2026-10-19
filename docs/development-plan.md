@@ -131,7 +131,7 @@ shape is versioned-tree-capable from the start. See the note below the CoQui tab
 | Replace item by client-supplied id | Outcomes importer (idempotent loads), needs intake | Client-supplied `@id` on any artifact, replace semantics, 409 on type mismatch (ADR-0024) | CoQui's id formats |
 | Embedded options with `fragmentId` | AI assistant (item generation), any item tool | ADR-0022 and ADR-0023 as written; `fragmentId` as a *pattern* for any artifact with embedded parts | Nothing withheld |
 | `DesignFinding` and `DesignNote` on a branch | Curriculum mapper (objective flagged by three items) | ADR-0020 as written | A fourth status; CoQui's withdrawal vocabulary |
-| `Attestation` with grid, claim lineage, claim version | Curriculum mapper (SME affirms alignment), AI assistant (human accepts proposal) | Verdict by a `User` about a claim regarding a target plus optional fragment, as of a commit (ADR-0028) | `grid`, `claimVersion` as named fields; they travel in `claimRef` |
+| `Attestation` with grid, claim lineage, claim version | Curriculum mapper (SME affirms alignment), AI assistant (human accepts proposal) | Verdict by a `User` about a target plus optional fragment, as of a commit, with an optional claim; without one it is an endorsement, which the AI assistant and any sign-off tool need (ADR-0028) | `grid`, `claimVersion` as named fields; they travel in `claimRef` |
 | Users: read and create | Every client | `GET /users`, `POST /users`, identity resolution hook (ADR-0032) | Reviewer roles |
 | Item history and changed-since | Outcomes importer (what changed since last pull), research exporter | Per-document history and branch diff for any type | Nothing withheld |
 | `assesses` optional while Draft | None yet; CoQui withdrew it | Not adopted | Keep `@min_cardinality: 1` |
@@ -611,26 +611,44 @@ asked for, which is the point. This phase exists for every client.
 alike), P8 (non-aggregation enforced).
 
 Work:
-- [ ] **ADR-0028: Attestation.** A `User` affirms or declines a claim about a target. Fields:
-      `subject: DesignRecord`; `fragmentId?`; `claimText`; `claimRef?` (an opaque, plugin-scoped
-      identifier for the claim's lineage; CoQui puts its grid and claim version here);
-      `verdict: AttestationVerdict` (`Affirmed`, `Declined`); `reason?`; `asOf` (the commit of
-      the subject attested); `attestedBy: User`. Key: Hash over `subject`, `fragmentId`,
-      `claimRef`, `attestedBy`, so "the latest live attestation per claim per reviewer" is a
-      store guarantee, not an API lookup. Staleness is derived from commits since `asOf`, not
-      stored. The ADR states the compound-target pattern from ADR-0023 §5 as the general rule
-      for any part-level reference, and applies it immediately: `DesignNote` and `DesignFinding`
-      gain an optional `fragmentId` beside their existing `subject`, so "why did we replace this
-      image" and "this drop zone is ambiguous" point at a part rather than a whole item.
+- [x] **ADR-0028: Attestation.** Written and accepted 2026-10-18 after platform checks AA (a Hash
+      key over Optional fields) and AB (fragment-level change between commits). A `User`
+      gives a verdict about a design record, or one part of it, as of a commit. A relationship
+      record inheriting `DesignRecord`: `subject: DesignRecord`; `fragmentId?`; `claimRef?` and
+      `claimText?`, both or neither (422 `claim_incomplete`); `verdict: AttestationVerdict`
+      (`Affirmed`, `Declined`); `reason?`; `asOf?` and `attestedBy?: User`, always filled by
+      the hub. **The claim is optional** (decided at writing; the plan had `claimText`
+      required): with one, the verdict is about the claim (CoQui, curriculum mapper); without
+      one, it is an endorsement of the subject (a sign-off tool, the AI assistant's accepted
+      proposal). Key: Hash over `subject`, `fragmentId`, `claimRef`, `attestedBy`, so one
+      current verdict per person, part and claim is a store guarantee; no client `@id`.
+      `attestedBy` is the resolved identity, filled before the replace lookup (422
+      `attester_not_caller` for anyone else). A replace refills `asOf` from the head (amends
+      ADR-0057 decision 5 for attestations). Staleness compares the judged part at `asOf` and
+      at the ref by `fragmentId`, never walks history (a merge leaves the attested commit out of
+      the target's history, AB6). The compound-target rule from ADR-0023 §5 is general:
+      `DesignNote` and `DesignFinding` gain an optional `fragmentId` (one subject only, 422
+      `fragment_needs_one_subject`; the fragment must exist, 422 `unknown_fragment`)
+- [ ] **Schema:** `Attestation`, `AttestationVerdict`, `fragmentId` on `DesignNote` and
+      `DesignFinding`; regenerate types, schemas and the appendix; reload (no stored document
+      changes)
+- [ ] **Pipeline:** fill `attestedBy` before write step 2; `Attestation` in `AS_OF_SUBJECTS`;
+      refill `asOf` on an attestation's replace
 - [x] **Non-aggregation guard (ADR-0021).** The generic list route refuses `attestedBy` and
       `createdBy` as filter keys, and the ADR records why this one restriction lives in the
       generic layer. **Done 2026-10-18, ahead of the phase:** any field targeting `User` is
       refused (400 `person_filter_refused`), so `attestedBy` needs no change; it landed with the
       list route's hub filtering, which would otherwise have made `?createdBy=` work.
-- [ ] An `Attestation` validator in the invariants registry (the `DesignFinding` validator, rule
-      11, has existed since Phase 3).
+- [ ] **Invariants:** an `Attestation` validator (`claim_incomplete`, `attester_not_caller`) and
+      a fragment rule shared by attestations, notes and findings (`fragment_needs_one_subject`,
+      `unknown_fragment`, the fragment looked up through the schema's `fragment` category). The
+      `DesignFinding` validator, rule 11, has existed since Phase 3
+- [ ] **Read:** `GET /api/v1/intelligence/attestations/:type/:id` at a ref, each attestation with
+      a derived `state` (`Current`, `Stale`, `FragmentRemoved`, `Unanchored`); the trace adds
+      them to the nodes it reports. No attester parameter, no per-person count (ADR-0021)
 - [ ] Seed one attestation so the trace route can show "affirmed by an expert at <institution>
-      as of commit X, two revisions ago."
+      as of commit X". (*Two revisions ago* needs a revision count, left open by ADR-0028: a
+      merge breaks the order between `asOf` and the target's history)
 
 Exit: an attestation written on a branch at commit A is reported stale after a write at commit B
 touches the same fragment, without the plugin computing anything.
@@ -759,7 +777,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0025 | Design process data lives in the commit graph | 2 | Accepted and implemented | Reconciles the paper's model with the store; to be amended in Phase 6 for externally versioned artifacts |
 | 0026 | API host and route versioning | 0 | Accepted; decision 1 amended by 0054 | Resolved the PROJECT_CONTEXT contradiction; the legacy routes it named were retired in Phase 3 |
 | 0027 | Schema self-description via `@metadata` | 1 | Accepted and implemented, except `GET /schema` | Replaced `JUNCTION_IDS`; `GET /api/v1/schema` not built (see §6) |
-| 0028 | Attestation | 5 | Reserved, not written | Generic form of CoQui's proposal |
+| 0028 | Attestation | 5 | Accepted 2026-10-18; not yet built | Generic form of CoQui's proposal, with the claim optional; Hash key over subject, fragment, claim and attester; staleness a read; `fragmentId` on notes and findings; amends ADR-0057 decision 5 for attestations |
 | 0029 | Coverage algorithm | 4 | Decisions 1 to 3 accepted 2026-10-08; 4 to 6 superseded by 0056 | Counted over placements; two figures; default thresholds as parameters |
 | 0030 | External references and attachments | 6 | Reserved, not written | P6; attachment references with mandatory content hash, backend left open |
 | 0031 | Export profiles and schema slices | 6 | Reserved, not written | P7, P8; implements ADR-0021's deferred section |
@@ -826,7 +844,9 @@ what evidence would be enough.
   courses. Evidence: a second course in any deployment, or the first research slice.
 - **AI provenance beyond `createdBy`.** Whether an AI-proposed, human-accepted artifact needs
   `proposedBy` and `acceptedBy`, or whether an `Attestation` with an agent `attestedBy` already
-  covers it. Evidence: the AI design assistant reference client becoming real, or a research
+  covers it. Since ADR-0028 (2026-10-18), a person's acceptance is expressible as a claimless
+  attestation (an endorsement) of the proposed record, and the agent's own proposal as its
+  `createdBy`. Evidence: the AI design assistant reference client becoming real, or a research
   question that needs the distinction.
 - **Fragment ids beyond items.** Activities with steps, objectives with components, rubrics with
   criteria. ADR-0023's pattern generalizes; the plan does not apply it anywhere else until a
@@ -1009,6 +1029,13 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   on the target in a new commit: `apply` with the same `before_commit` and `after_commit` then
   succeeds, the source's value lands, and the target's other changes are kept. Verified for the
   merge recompute ADR-0029 decision 6 called for; nothing uses it since ADR-0056.
+- *Verified (2026-10-18, check AB):* a one-option edit diffs as `options: [{}, {text: SwapValue}]`,
+  by position (AB1). A replace with identical content makes a commit, appears in the item's
+  history and regenerates subdocument ids (AB4). Comparing fragments by `fragmentId`, nested `@id`s
+  removed, at two commits reports exactly the changed fragment (AB2) and nothing for a reorder
+  (AB5). After `apply`, the branch commit is absent from the target's history of the document
+  (AB6), yet still readable, and the comparison from it to the target's head holds (AB7).
+  Attestation staleness (ADR-0028 decision 7) is that comparison, never a history walk.
 - Change requests are an unmaintained dashboard feature, not an API.
 - Reset and squash exist; reset moves the head and keeps commits.
 
@@ -1097,5 +1124,10 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   a template filters on a required enum field (Y4) and is a 500 on an `Optional` enum field (Y5).
   A template on an `Optional` string field filters (Y6). The list route filters `Optional` enum
   and reference fields and every `Set` in the hub.
+- *Verified (2026-10-18, check AA):* a Hash key may include `Optional` fields (AA1). Absent fields
+  are not confused with each other (`fragmentId: "b"` alone and `claimRef: "b"` alone hash apart,
+  AA2, AA3); a second insert of the same key fields is `DocumentIdAlreadyExists` (AA4); `PUT
+  create=true` with no `@id` replaces in place, with every optional key field absent too (AA5).
+  ADR-0028's key relies on it.
 - Turtle and RDF/XML content negotiation appear under enterprise-labeled pages; treat JSON and
   JSON-LD as the guaranteed export formats until verified.

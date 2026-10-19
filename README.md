@@ -39,16 +39,16 @@ Through the design-intelligence reads under `/api/v1/intelligence/`, tools built
 
 ## Status
 
-As of 8 October 2026, Phases 0 to 4 of the [development plan](docs/development-plan.md) are complete:
+As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-plan.md) are complete, and so are the decisions queued after them (commit ids on records that describe a state of the design, item statistics as measurements):
 
 - the schema (27 classes, 12 controlled vocabularies) with every accepted decision applied
 - a version-controlled API: reads at any branch or commit, history and differences per document, branches, three-way merges with conflict reports
 - one write path for every document type, enforcing every rule the database cannot (the invariants engine), with the author and reason recorded on every change
 - identity resolution for people and AI agents
 - the four design-intelligence reads and a read-only Coverage View page
-- 95 integration tests
+- 109 integration tests
 
-**Next:** a decision on [ADR-0057](schema/docs/adr/0057-records-name-the-commit-they-refer-to.md) (records that name the commit they refer to), then Phase 5 (attestations and the review vocabulary). The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+**Next:** Phase 5, building [ADR-0028](schema/docs/adr/0028-attestation.md) (attestations: a person's verdict on a design record or one part of it, as of a commit, with staleness computed on request), accepted on 18 October 2026. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
 **Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
