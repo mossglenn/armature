@@ -101,7 +101,7 @@ This demonstrates Armature as pre-delivery design-time intelligence.
 ### Demo environment
 - Local: TerminusDB in Docker Compose and the API on the host (`npm run dev`) for screen-capture video; Phase 7 containerizes the API so Compose runs both
 - Web: Deployed to Railway or Render for stakeholder access
-- Seed data: A realistic but fictional course ("Introduction to AI for Instructional Designers", 48 documents). It has no activities, datasets or metrics yet, so Narrative 1 is demonstrated in tests that write a dataset and metric on a scratch branch; seeding one dataset is planned for Phase 6
+- Seed data: A realistic but fictional course ("Introduction to AI for Instructional Designers", 48 documents, then one attestation in a second commit). It has no activities, datasets or metrics yet, so Narrative 1 is demonstrated in tests that write a dataset and metric on a scratch branch; seeding one dataset is planned for Phase 6
 
 ---
 

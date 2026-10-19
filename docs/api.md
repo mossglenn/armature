@@ -40,7 +40,7 @@ Every write body is a JSON object with a required, non-empty `message`: the reas
 A document's identifier is `Type/local-part`, such as `LearningObjective/distinguish-ai-approaches`. In route paths the type and local part are separate segments: `/documents/LearningObjective/distinguish-ai-approaches`.
 
 - **Artifacts** may be given an identifier by the client on first write; later writes under it replace the document (ADR-0024). Without one, the store mints one.
-- **Relationship (junction) documents** derive their identifier from their key fields, so a client never supplies one; writing the same key fields again replaces the document. Supplying an `@id` on one is a 400 (`bad_id`).
+- **Relationship (junction) documents** derive their identifier from their key fields, so a client never supplies one; writing the same key fields again replaces the document. Supplying an `@id` on one is a 400 (`bad_id`). An `Attestation` is one of these: its key is its `subject`, `fragmentId`, `claimRef` and `attestedBy`, and an absent optional field is part of the key (ADR-0028). Write one through `POST /documents`.
 - An identifier that already belongs to a document of another type is a **409** (`type_conflict`).
 
 ### Errors
@@ -111,8 +111,8 @@ The structural difference in one document between two commits. Both are required
 `PUT /documents/:type/:id` and `POST /documents` run the same steps (`app/lib/api/write.ts`):
 
 1. **Shape.** Each document is checked against a validation schema generated from `schema/schema.json`: required fields, field kinds, allowed enum values, minimum set sizes, no unknown fields, every string non-empty and at most 10,000 characters. Failure: **400** `invalid_document` with an `issues` list (`{ index, path, message }` per problem).
-2. **Identity of the document.** An identifier held by another type: **409** `type_conflict`. An existing document (found by `@id`, or for a junction by its key fields) makes this write a replace.
-3. **Provenance.** `createdBy` is set to the resolved user on create and preserved on replace (a value in the body is ignored). On a branch that lacks the user's `User` document, a copy from `main` is written in the same commit. `asOf`, the commit a `LearningDataset`, `LearningMetric` or `DesignFinding` refers to (ADR-0057), is filled when the body omits it: on create, with the branch head the write starts from (the `If-Match` commit when one is sent); on replace, with the stored value; on a metric with a `derivedFrom` dataset, with the dataset's value. A body may supply `asOf`, for example when importing historical results, and rule 13 checks it.
+2. **Identity of the document.** An identifier held by another type: **409** `type_conflict`. An existing document (found by `@id`, or for a junction by its key fields) makes this write a replace. Before the lookup, an `Attestation` without `attestedBy` gets the resolved user, since the attester is part of its key: a re-attestation finds the caller's own record, never another person's.
+3. **Provenance.** `createdBy` is set to the resolved user on create and preserved on replace (a value in the body is ignored). On a branch that lacks the user's `User` document, a copy from `main` is written in the same commit. `asOf`, the commit a `LearningDataset`, `LearningMetric` or `DesignFinding` refers to (ADR-0057), is filled when the body omits it: on create, with the branch head the write starts from (the `If-Match` commit when one is sent); on replace, with the stored value, except for an `Attestation`, whose every write is a new verdict and takes the head again (ADR-0028 decision 5); on a metric with a `derivedFrom` dataset, with the dataset's value. A body may supply `asOf`, for example when importing historical results, and rule 13 checks it.
 4. **Rules.** Every invariant is checked against the branch as it will be after the write. Failure: **422** `invariant_violation` with every violation at once, as `violations: [ { code, id?, index, field?, message } ]`.
 5. **One commit**, authored by the resolved user with the request's message, honoring `If-Match` (**412** when the branch has moved).
 
@@ -132,7 +132,10 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 10 | A placement is not `Approved` while its item is `Draft` or `InReview`, in either direction | `instance_ahead_of_item` |
 | 11 | A `Dismissed` finding has a `resolutionRationale` | `rationale_required` |
 | 12 | An identifier is not reused across types | 409 `type_conflict` |
-| 13 | An `asOf` not taken from the branch head is a commit the database holds, at which the record's subjects exist (a dataset's `producedBy`, a metric's `subject`, a finding's `subject` and `regarding`); a metric's `asOf` equals its dataset's | `unknown_commit`, `absent_at_commit`, `as_of_disagrees` |
+| 13 | An `asOf` not taken from the branch head is a commit the database holds, at which the record's subjects exist (a dataset's `producedBy`, a metric's `subject`, a finding's `subject` and `regarding`, an attestation's `subject`); a metric's `asOf` equals its dataset's. An attestation's subject is not written in the same request, since `asOf` could not then hold it | `unknown_commit`, `absent_at_commit`, `as_of_disagrees`, `subject_in_same_write` |
+| 14 | An attestation's claim comes whole: `claimRef` and `claimText` both present, or both absent for an endorsement | `claim_incomplete` |
+| 15 | An attestation's `attestedBy` is the caller | `attester_not_caller` |
+| 16 | A `fragmentId` on an `Attestation`, `DesignNote` or `DesignFinding` names a part of its one subject: at `asOf` when that is checked, otherwise as the write leaves the subject | `fragment_needs_one_subject`, `unknown_fragment` |
 
 There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5).
 
@@ -199,7 +202,7 @@ AI agents are ordinary users whose `externalId` begins with `agent:` (for exampl
 
 ## Design intelligence
 
-All four reads compute their answers from the graph at the requested ref; nothing they report is stored (ADR-0056). Each accepts `?branch=` or `?ref=` and returns the commit in `ETag`.
+All five reads compute their answers from the graph at the requested ref; nothing they report is stored (ADR-0056). Each accepts `?branch=` or `?ref=` and returns the commit in `ETag`.
 
 ### `GET /intelligence/coverage/:moduleId`
 
@@ -252,7 +255,25 @@ evidence ← need-evidence link → need ← objective ← item ← placement �
 
 with modules attached as context to every objective (through its declarations) and assessment reached, and a metric's `subject`, the record it measures, followed in both directions (an item statistic leads to its item, and an item to the metrics about it; ADR-0058). Accepted types: `LearningMetric`, `LearningDataset`, `Assessment`, `AssessmentItem`, `LearningObjective`, `LearningNeed`, `DescriptiveEvidence`, `Module`, `LearningActivity`. Any other type is a 400 `untraceable_type`.
 
-Response: `{ root, nodes: [ summary ], edges: [ { from, to, via, through?, confidence?, status?, role? } ], annotations: [ design notes and findings about any node reached ] }`. `via` is the field followed; `through` is the junction document passed through, with its data. A dataset, metric or finding summary carries its `asOf`: read the rest of the design as that cohort met it, or as that finding judged it, at `?ref=<asOf>`.
+Response: `{ root, nodes: [ summary ], edges: [ { from, to, via, through?, confidence?, status?, role? } ], annotations: [ design notes, findings and attestations about any node reached ] }`. A note or finding about one part carries its `fragmentId`; an attestation is reported as by the attestations read below, with its `state`. `via` is the field followed; `through` is the junction document passed through, with its data. A dataset, metric or finding summary carries its `asOf`: read the rest of the design as that cohort met it, or as that finding judged it, at `?ref=<asOf>`.
+
+### `GET /intelligence/attestations/:type/:id`
+
+The attestations whose `subject` is this record, each with whether the part it judged has changed since its `asOf` (ADR-0028 decision 7). Whether an attestation still holds is computed here, never stored.
+
+Response:
+
+```
+{
+  subject:  { id, type, label, ... },
+  summary:  { attestations, byState: { Current, Stale, FragmentRemoved, Unanchored } },
+  attestations: [
+    { id, type, subject, fragmentId?, claimRef?, claimText?, verdict, reason?, asOf?, attestedBy,
+      state: "Current" | "Stale" | "FragmentRemoved" | "Unanchored" } ]
+}
+```
+
+The judged part is the fragment named by `fragmentId`, or the whole record when there is none. It is read at `asOf` and at the requested ref and compared with every nested `@id` removed and fragments matched by `fragmentId`, so reordering an item's options changes no fragment (it does change the whole item). `Stale`: the part differs. `FragmentRemoved`: the record no longer has the part. `Unanchored`: no `asOf`, or the subject is not at it. A stale verdict is still a true record of what its attester affirmed then. The comparison works after a merge, when the commit attested is on another branch. The read takes no attester parameter and reports no count per person (ADR-0021).
 
 ### `GET /intelligence/impact/:type/:id`
 

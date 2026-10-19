@@ -23,7 +23,7 @@ history. The interim `Armature-User` header (decision 2) and the provisional doc
 (§Consequences) were replaced in Phase 3 by ADR-0032 and the generic write path. ADR-0028
 (Attestation), cited below, is planned in `docs/development-plan.md` Phase 5 and not yet written.
 
-**Note 2026-10-18:** ADR-0028 (Attestation) is written and accepted, not yet built. The notes
+**Note 2026-10-18:** ADR-0028 (Attestation) is written, accepted and implemented. The notes
 below that call it planned predate it. It adopts no content hash beside the commit id (candidate
 0036's pin), relying on decision 6: a commit id stays valid because history is never rewritten.
 
