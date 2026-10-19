@@ -409,3 +409,120 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
     });
   });
 });
+
+/**
+ * Phase 5's exit criterion (ADR-0028 decision 7): an attestation written on a
+ * branch at commit A is reported stale after a write at commit B touches the
+ * same fragment, without the plugin computing anything. The attestations are
+ * made on a review branch (CoQui's round) and merged into a second branch, so
+ * the commit they name is not in the target's history (platform check AB6);
+ * the change is then made on the target.
+ */
+describe('GET /api/v1/intelligence/attestations/:type/:id (Phase 5 exit criterion)', () => {
+  const ROUND = `test-attest-round-${stamp}`;
+  const TARGET = `test-attest-target-${stamp}`;
+  const ITEM = `AssessmentItem/attested-${stamp}`;
+  const put = (path: string, body: unknown) =>
+    app.request(path, { method: 'PUT', headers: HEADERS, body: JSON.stringify(body) });
+  const itemDoc = (options: Array<[string, string, boolean]>) => ({
+    label: 'Attested item',
+    stem: { '@type': 'TextFragment', fragmentId: 'stem', text: 'Which statement about language models is true?' },
+    options: options.map(([fragmentId, text, isCorrect]) => ({ '@type': 'ItemOption', fragmentId, text, isCorrect })),
+    itemType: 'MultipleChoice',
+    status: 'InReview',
+    assesses: ['LearningObjective/identify-ai-limitations'],
+  });
+  const original: Array<[string, string, boolean]> = [
+    ['a', 'They can state falsehoods fluently.', true],
+    ['b', 'They check facts before answering.', false],
+    ['c', 'They never repeat training text.', false],
+  ];
+  const stateOf = (body: { attestations: Array<{ fragmentId?: string; claimRef?: string; state: string }> }) =>
+    Object.fromEntries(body.attestations.map((a) => [a.claimRef ?? a.fragmentId ?? 'item', a.state]));
+  let attestedAt: string;
+
+  beforeAll(async () => {
+    for (const name of [ROUND, TARGET]) {
+      expect((await post('/api/v1/branches', { name, from: { branch: 'main' } })).status).toBe(201);
+    }
+    expect((await put(`/api/v1/documents/${ITEM}?branch=${ROUND}`, { message: 'Item for review', document: itemDoc(original) })).status).toBe(200);
+    const res = await post(`/api/v1/documents?branch=${ROUND}`, {
+      message: 'Round 1 verdicts',
+      documents: [
+        { '@type': 'Attestation', subject: ITEM, fragmentId: 'b', claimRef: 'grid:distractor-b', claimText: 'Option b is plausible but wrong.', verdict: 'Affirmed' },
+        { '@type': 'Attestation', subject: ITEM, fragmentId: 'a', claimRef: 'grid:key-a', claimText: 'Option a is the correct answer.', verdict: 'Affirmed' },
+        { '@type': 'Attestation', subject: ITEM, fragmentId: 'c', verdict: 'Affirmed' },
+        { '@type': 'Attestation', subject: ITEM, verdict: 'Affirmed', reason: 'Ready for placement.' },
+      ],
+    });
+    expect(res.status).toBe(200);
+    attestedAt = (await res.json()).commit;
+    expect((await post(`/api/v1/branches/${TARGET}/merge`, { from: ROUND, message: 'Merge round 1' })).status).toBe(200);
+  });
+
+  afterAll(async () => {
+    const store = createStore({ branch: 'main' });
+    for (const name of [ROUND, TARGET]) await store.deleteBranch(name).catch(() => undefined);
+  });
+
+  it('reports every verdict Current after the merge, comparing against the round commit', async () => {
+    const body = await json(`/api/v1/intelligence/attestations/AssessmentItem/attested-${stamp}?branch=${TARGET}`);
+    expect(body.subject).toMatchObject({ id: ITEM, type: 'AssessmentItem' });
+    expect(body.summary).toEqual({ attestations: 4, byState: { Current: 4, Stale: 0, FragmentRemoved: 0, Unanchored: 0 } });
+    expect(stateOf(body)).toEqual({ 'grid:distractor-b': 'Current', 'grid:key-a': 'Current', c: 'Current', item: 'Current' });
+    const b = body.attestations.find((a: { claimRef?: string }) => a.claimRef === 'grid:distractor-b');
+    expect(b).toMatchObject({ fragmentId: 'b', claimText: 'Option b is plausible but wrong.', verdict: 'Affirmed', attestedBy: 'User/demo-designer' });
+    expect(b.asOf).not.toBe(attestedAt); // the head the write started from: the item's commit
+  });
+
+  it('reports the changed fragment Stale, the untouched one Current, a removed one FragmentRemoved, and the whole item Stale', async () => {
+    const revised: Array<[string, string, boolean]> = [
+      ['a', 'They can state falsehoods fluently.', true],
+      ['b', 'They verify every claim against a database.', false],
+    ];
+    expect((await put(`/api/v1/documents/${ITEM}?branch=${TARGET}`, { message: 'Revise b, drop c', document: itemDoc(revised) })).status).toBe(200);
+    const body = await json(`/api/v1/intelligence/attestations/AssessmentItem/attested-${stamp}?branch=${TARGET}`);
+    expect(stateOf(body)).toEqual({ 'grid:distractor-b': 'Stale', 'grid:key-a': 'Current', c: 'FragmentRemoved', item: 'Stale' });
+    expect(body.summary.byState).toEqual({ Current: 1, Stale: 2, FragmentRemoved: 1, Unanchored: 0 });
+  });
+
+  it('is unaffected by a reorder, by fragmentId, and leaves the round branch Current', async () => {
+    const reordered: Array<[string, string, boolean]> = [
+      ['b', 'They verify every claim against a database.', false],
+      ['a', 'They can state falsehoods fluently.', true],
+    ];
+    expect((await put(`/api/v1/documents/${ITEM}?branch=${TARGET}`, { message: 'Reorder', document: itemDoc(reordered) })).status).toBe(200);
+    const target = await json(`/api/v1/intelligence/attestations/AssessmentItem/attested-${stamp}?branch=${TARGET}`);
+    expect(stateOf(target)['grid:key-a']).toBe('Current');
+    const round = await json(`/api/v1/intelligence/attestations/AssessmentItem/attested-${stamp}?branch=${ROUND}`);
+    expect(round.summary.byState.Current).toBe(4);
+    const atA = await json(`/api/v1/intelligence/attestations/AssessmentItem/attested-${stamp}?ref=${attestedAt}`);
+    expect(atA.summary.byState.Current).toBe(4);
+  });
+
+  it('carries the verdicts and their state in the trace from the item', async () => {
+    const body = await json(`/api/v1/intelligence/trace/AssessmentItem/attested-${stamp}?branch=${TARGET}`);
+    const attestations = body.annotations.filter((a: { type: string }) => a.type === 'Attestation');
+    expect(attestations).toHaveLength(4);
+    expect(attestations.find((a: { claimRef?: string }) => a.claimRef === 'grid:distractor-b')).toMatchObject({ subject: ITEM, state: 'Stale' });
+  });
+
+  it("reads the seed's attestation Current on main, and shows it in the item's trace", async () => {
+    const body = await json('/api/v1/intelligence/attestations/AssessmentItem/bias-type-mc');
+    expect(body.summary.byState).toEqual({ Current: 1, Stale: 0, FragmentRemoved: 0, Unanchored: 0 });
+    expect(body.attestations[0]).toMatchObject({
+      fragmentId: 'bias-type-mc-opt-a',
+      claimRef: 'seed:key-is-correct',
+      verdict: 'Affirmed',
+      attestedBy: 'User/demo-designer',
+      state: 'Current',
+    });
+    const trace = await json('/api/v1/intelligence/trace/AssessmentItem/bias-type-mc');
+    expect(trace.annotations.filter((x: { type: string }) => x.type === 'Attestation')).toHaveLength(1);
+  });
+
+  it('takes no attester parameter and is 404 for an unknown subject', async () => {
+    const unknown = await get(`/api/v1/intelligence/attestations/AssessmentItem/nope-${stamp}?branch=${TARGET}`);
+    expect(unknown.status).toBe(404);
+  });
+});

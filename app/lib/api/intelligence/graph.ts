@@ -25,6 +25,7 @@ import { StoreError, type Store, type TerminusDocument } from '../store';
 export class Graph {
   private readonly docs = new Map<string, Promise<TerminusDocument | undefined>>();
   private readonly lists = new Map<string, Promise<TerminusDocument[]>>();
+  private readonly past = new Map<string, Promise<TerminusDocument | undefined>>();
   commit: string | undefined;
 
   constructor(readonly store: Store) {}
@@ -48,6 +49,30 @@ export class Graph {
           throw err;
         });
       this.docs.set(id, p);
+    }
+    return p;
+  }
+
+  /**
+   * One document as it stood at another commit (an attestation's `asOf`), or
+   * undefined when that commit or that document is not there. Outside the
+   * request's ref, so it leaves `commit`, the ETag, alone. The commit is
+   * checked first: a read at a commit the store lacks is a 500 (check U3).
+   */
+  getAt(commitId: string, id: string): Promise<TerminusDocument | undefined> {
+    const key = `${commitId} ${id}`;
+    let p = this.past.get(key);
+    if (!p) {
+      p = (async () => {
+        if (!/^[a-z0-9]+$/.test(commitId) || !(await this.store.getCommit(commitId))) return undefined;
+        try {
+          return (await this.store.at({ commit: commitId }).getDocument(id)).document;
+        } catch (err) {
+          if (err instanceof StoreError && err.type === 'api:DocumentNotFound') return undefined;
+          throw err;
+        }
+      })();
+      this.past.set(key, p);
     }
     return p;
   }

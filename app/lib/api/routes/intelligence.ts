@@ -13,6 +13,7 @@ import {
   type PlacementLike,
   type Thresholds,
 } from '../intelligence/coverage';
+import { canonical, fragmentsOf } from '../fragments';
 import { Graph, bloomsRank, idsIn, otherReferences, summarize, type Summary } from '../intelligence/graph';
 import { createStore, type TerminusDocument } from '../store';
 
@@ -29,11 +30,15 @@ import { createStore, type TerminusDocument } from '../store';
  *                                              objectives no activity targets
  *   GET /trace/:type/:id?branch=|ref=          the provenance chain through the design
  *                                              lifecycle, both ways from any document on it,
- *                                              with the notes and findings about what it reaches
+ *                                              with the notes, findings and attestations about
+ *                                              what it reaches
  *   GET /impact/:type/:id?branch=|ref=         every document that references this one, with
  *                                              the artifact each junction sits in
+ *   GET /attestations/:type/:id?branch=|ref=   the attestations about this record, each with
+ *                                              whether the part it judged has changed since
+ *                                              its asOf (ADR-0028 decision 7)
  *
- * All four are reads at a ref with the commit in ETag, the entity tag
+ * All five are reads at a ref with the commit in ETag, the entity tag
  * (architecture decision record ADR-0025, decision 7). They derive
  * everything from structure (plan principle P4): no text similarity, no model.
  * Redundancy detection ("a new item duplicates one in the bank") needs text
@@ -414,14 +419,26 @@ intelligence.get('/trace/:type/:id', async (c) => {
     for (const { next, edge } of await moduleContext(graph, doc)) record(next, edge);
   }
 
-  // Notes and findings about anything the trace reached: the recorded "why".
+  // Notes, findings and attestations about anything the trace reached: the
+  // recorded "why", and who has vouched for what since (ADR-0028).
   const reached = new Set(nodes.keys());
-  const annotations = [];
+  const annotations: Array<Record<string, unknown>> = [];
   for (const type of ['DesignNote', 'DesignFinding']) {
     for (const d of await graph.list(type)) {
       const about = idsIn(d.subject).filter((s) => reached.has(s));
-      if (about.length) annotations.push({ ...summarize(d), subject: about, ...(d.regarding ? { regarding: d.regarding } : {}) });
+      if (about.length) {
+        annotations.push({
+          ...summarize(d),
+          subject: about,
+          ...(typeof d.fragmentId === 'string' ? { fragmentId: d.fragmentId } : {}),
+          ...(d.regarding ? { regarding: d.regarding } : {}),
+        });
+      }
     }
+  }
+  for (const d of await graph.list('Attestation')) {
+    const subject = nodes.get(String(d.subject));
+    if (subject) annotations.push(await reportAttestation(graph, d, subject));
   }
 
   setEtag(c, graph.commit);
@@ -431,6 +448,79 @@ intelligence.get('/trace/:type/:id', async (c) => {
     edges,
     annotations,
   });
+});
+
+// ── Attestations ──────────────────────────────────────────────────────────────
+
+/**
+ * Whether an attestation still holds is derived here, never stored
+ * (ADR-0028 decision 7, ADR-0056):
+ *
+ *   Current          the judged part reads the same at asOf and at the ref
+ *   Stale            it reads differently
+ *   FragmentRemoved  the subject no longer has the part at the ref
+ *   Unanchored       no asOf (written outside the pipeline), or asOf names a
+ *                    state without the subject: nothing to compare against
+ *
+ * The judged part is the fragment named by fragmentId, or the whole subject.
+ * Both states are compared in canonical form, every `@id` dropped, fragments
+ * matched by fragmentId (fragments.ts). Two reads, never a history walk:
+ * after a merge the commit attested is not in the target's history (check
+ * AB6), and a no-op replace is a commit (AB4). `Stale` is not a verdict: the
+ * attester still affirmed the earlier state.
+ */
+type AttestationState = 'Current' | 'Stale' | 'FragmentRemoved' | 'Unanchored';
+const ATTESTATION_STATES: readonly AttestationState[] = ['Current', 'Stale', 'FragmentRemoved', 'Unanchored'];
+
+const judgedPart = (subject: TerminusDocument, fragmentId: unknown): unknown =>
+  typeof fragmentId === 'string' ? fragmentsOf(subject).get(fragmentId) : subject;
+
+async function attestationState(graph: Graph, attestation: TerminusDocument, subject: TerminusDocument): Promise<AttestationState> {
+  const now = judgedPart(subject, attestation.fragmentId);
+  if (now === undefined) return 'FragmentRemoved';
+  if (typeof attestation.asOf !== 'string') return 'Unanchored';
+  const then = await graph.getAt(attestation.asOf, subject['@id']);
+  if (!then) return 'Unanchored';
+  const before = judgedPart(then, attestation.fragmentId);
+  return before !== undefined && canonical(before) === canonical(now) ? 'Current' : 'Stale';
+}
+
+/** An attestation as the reads report it: the verdict, what it is about, who gave it, and its state. */
+async function reportAttestation(graph: Graph, d: TerminusDocument, subject: TerminusDocument) {
+  return {
+    id: d['@id'],
+    type: d['@type'],
+    subject: subject['@id'],
+    ...(typeof d.fragmentId === 'string' ? { fragmentId: d.fragmentId } : {}),
+    ...(typeof d.claimRef === 'string' ? { claimRef: d.claimRef, claimText: d.claimText } : {}),
+    verdict: d.verdict,
+    ...(typeof d.reason === 'string' ? { reason: d.reason } : {}),
+    ...(typeof d.asOf === 'string' ? { asOf: d.asOf } : {}),
+    attestedBy: d.attestedBy,
+    state: await attestationState(graph, d, subject),
+  };
+}
+
+/**
+ * By subject only. No attester parameter and no count per person: an
+ * attestation is provenance, not a measure of its attester (ADR-0021,
+ * ADR-0028 decision 8). The counts are per state, for this subject.
+ */
+intelligence.get('/attestations/:type/:id', async (c) => {
+  const { type, id } = c.req.param();
+  const graph = await graphAt(c);
+  const root = await requireDocument(graph, type, id);
+
+  const attestations = await Promise.all(
+    (await graph.where('Attestation', 'subject', root['@id'])).map((d) => reportAttestation(graph, d, root))
+  );
+  attestations.sort((x, y) =>
+    (x.fragmentId ?? '').localeCompare(y.fragmentId ?? '') || (x.claimRef ?? '').localeCompare(y.claimRef ?? '') || x.id.localeCompare(y.id)
+  );
+  const byState = Object.fromEntries(ATTESTATION_STATES.map((st) => [st, attestations.filter((a) => a.state === st).length]));
+
+  setEtag(c, graph.commit);
+  return c.json({ subject: summarize(root), summary: { attestations: attestations.length, byState }, attestations });
 });
 
 // ── Impact ────────────────────────────────────────────────────────────────────
