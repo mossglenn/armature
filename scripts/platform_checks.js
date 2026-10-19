@@ -69,6 +69,17 @@
 //      apply. Verified for the merge-time coverage recompute that ADR-0056 removed; nothing
 //      uses it now
 //
+// Phase 5 checks (ADR-0028), added 2026-10-18:
+//   AA. A Hash key over Optional fields: an Attestation's identity is (subject, fragmentId?,
+//      claimRef?, attestedBy). Does the schema load, are absent fields distinguished from each
+//      other (fragmentId "b" with no claimRef against claimRef "b" with no fragmentId), and does
+//      a PUT of the same key fields replace in place
+//   AB. Fragment-level change between two commits (staleness is a read): what the store's diff
+//      reports for a one-option edit, which commits the per-document history lists, whether a
+//      no-op replace is a change at the store, and whether comparing fragments by fragmentId at
+//      two commits survives a reorder and a merge (apply writes a new commit, so a branch commit
+//      is not in the target's history)
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -606,6 +617,104 @@ async function main() {
   const zOther = (await api("GET", at("branch/main", "id=Artifact/z-other"))).json;
   record("Z3", r.json?.label === "source" && zOther?.label === "kept" ? "PASS" : "INFO", `after the merge: Artifact/z.label=${r.json?.label} (source wins), Artifact/z-other.label=${zOther?.label} (target's other work kept)`);
   await api("DELETE", `/api/branch/admin/${DB}/local/branch/z-src`, {});
+
+  // AA: a Hash key over Optional fields (ADR-0028). If an absent field hashed as an empty string,
+  // "fragmentId b, no claimRef" and "no fragmentId, claimRef b" would be one document.
+  const idOf = (j) => (Array.isArray(j) ? String(j[0]).replace("terminusdb:///pc/data/", "") : short(j));
+  r = await api("POST", docs(`graph_type=schema&${commit("aa: Hash key over Optional fields")}`), {
+    "@type": "Class", "@id": "Attest", "@key": { "@type": "Hash", "@fields": ["subject", "fragmentId", "claimRef", "attestedBy"] },
+    subject: "Artifact", attestedBy: "Other", verdict: "xsd:string",
+    fragmentId: { "@type": "Optional", "@class": "xsd:string" }, claimRef: { "@type": "Optional", "@class": "xsd:string" },
+  });
+  record("AA1", r.status === 200 ? "PASS" : "FAIL", `a class whose Hash key includes two Optional fields: ${r.status} ${r.status === 200 ? "" : errType(r)}`);
+  if (r.status === 200) {
+    await api("POST", at("branch/main", commit("aa fixtures")), [
+      { "@type": "Artifact", "@id": "Artifact/aa", label: "aa" },
+      { "@type": "Other", "@id": "Other/aa", label: "reviewer" },
+    ]);
+    const aaBase = { "@type": "Attest", subject: "Artifact/aa", attestedBy: "Other/aa", verdict: "Affirmed" };
+    const variants = {
+      neither: {}, fragment: { fragmentId: "b" }, claim: { claimRef: "b" }, both: { fragmentId: "b", claimRef: "b" },
+      xy: { fragmentId: "x", claimRef: "y" }, yx: { fragmentId: "y", claimRef: "x" },
+    };
+    const aaIds = {};
+    for (const [name, extra] of Object.entries(variants)) {
+      r = await api("POST", at("branch/main", commit(`aa insert ${name}`)), { ...aaBase, ...extra });
+      aaIds[name] = r.status === 200 ? idOf(r.json) : `${r.status} ${errType(r)}`;
+    }
+    const all = Object.values(aaIds);
+    record("AA2", all.every((i) => i.startsWith("Attest/")) && new Set(all).size === all.length ? "PASS" : "FAIL",
+      `six combinations of present and absent optional key fields get six ids: ${short(aaIds)}`);
+    record("AA3", aaIds.fragment !== aaIds.claim && aaIds.xy !== aaIds.yx ? "PASS" : "FAIL",
+      `an absent field is not confused with another field's value (fragment ${aaIds.fragment} vs claim ${aaIds.claim})`);
+    r = await api("POST", at("branch/main", commit("aa insert neither again")), { ...aaBase, verdict: "Declined" });
+    record("AA4", r.status !== 200 ? "PASS" : "FAIL", `POST of the same key fields again is refused: ${r.status} ${errType(r)}`);
+    r = await api("PUT", at("branch/main", `${commit("aa re-attest neither")}&create=true`), [{ ...aaBase, verdict: "Declined" }]);
+    const aaAfter = (await api("POST", at("branch/main", ""), { type: "Attest", as_list: true, query: {} }, override)).json;
+    const neither = Array.isArray(aaAfter) ? aaAfter.find((d) => d["@id"] === aaIds.neither) : undefined;
+    record("AA5", r.status === 200 && aaAfter?.length === 6 && neither?.verdict === "Declined" && neither?.fragmentId === undefined ? "PASS" : "FAIL",
+      `PUT create=true with no @id and both optional fields absent replaces that document in place: ${r.status}; ${aaAfter?.length} Attest documents; ${short(neither)}`);
+  }
+
+  // AB: fragment-level change between two commits (ADR-0028 staleness). Subdocument @ids regenerate
+  // on replace (J4), so fragments are compared by fragmentId with @id removed.
+  const canon = (v) => (Array.isArray(v) ? `[${v.map(canon).join(",")}]`
+    : v && typeof v === "object" ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canon(v[k])}`).join(",")}}`
+    : JSON.stringify(v));
+  const fragmentsOf = (doc) => Object.fromEntries([doc?.stem, ...(doc?.options ?? []), ...(doc?.parts ?? [])]
+    .filter(Boolean).map(({ "@id": _id, ...f }) => [f.fragmentId, canon(f)]));
+  const changedFragments = (before, after) => {
+    const a = fragmentsOf(before), b = fragmentsOf(after);
+    return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => a[k] !== b[k]).sort();
+  };
+  const readAt = async (commitId, id) => (await api("GET", at(`commit/${commitId}`, `id=${id}`))).json;
+  const head = async (branch) => (await log(branch, 1))?.[0]?.identifier;
+  const abOption = (fragmentId, text, isCorrect) => ({ "@type": "ItemOption", fragmentId, kind: "option", text, isCorrect });
+  const abItem = (options) => ({ "@type": "Item", name: "ab", options, parts: [] });
+  const abA_ = abOption("a", "Alpha", true), abB_ = abOption("b", "Beta", false), abB2 = abOption("b", "Beta (revised)", false);
+
+  r = await api("POST", at("branch/main", commit("ab item")), abItem([abA_, abB_]));
+  const abBase = await head("main");
+  r = await api("POST", `/api/branch/admin/${DB}/local/branch/ab-br`, { origin: `admin/${DB}/local/branch/main` });
+  r = await api("POST", at("branch/ab-br", commit("ab A: a write that does not touch the item")), { "@type": "Artifact", "@id": "Artifact/ab-other", label: "o" });
+  const abA = await head("ab-br");
+  r = await api("PUT", at("branch/ab-br", commit("ab B: revise option b")), abItem([abA_, abB2]));
+  const abB = await head("ab-br");
+
+  r = await api("POST", `/api/diff/admin/${DB}`, { before_data_version: abA, after_data_version: abB, document_id: "Item/ab" });
+  const abDiff = JSON.stringify(r.json);
+  record("AB1", "INFO", `the store's diff for a one-option edit ${abDiff.includes("Alpha") ? "also carries the unchanged option a" : "carries only option b"}: ${r.status} ${abDiff.slice(0, 400)}`);
+  const atA = await readAt(abA, "Item/ab"), atB = await readAt(abB, "Item/ab");
+  const ab2 = changedFragments(atA, atB);
+  record("AB2", ab2.join(",") === "b" ? "PASS" : "FAIL", `fragments changed between A and B, compared by fragmentId without @id: [${ab2}]`);
+
+  r = await api("GET", `/api/history/admin/${DB}/local/branch/ab-br?id=Item/ab`);
+  const abHist = Array.isArray(r.json) ? r.json.map((h) => h.identifier) : [];
+  record("AB3", abHist.includes(abB) && !abHist.includes(abA) ? "PASS" : "INFO",
+    `per-document history lists only the commits that touched the item: ${abHist.length} entries, B ${abHist.includes(abB) ? "in" : "absent"}, A ${abHist.includes(abA) ? "in" : "absent"}`);
+
+  r = await api("PUT", at("branch/ab-br", commit("ab C: replace with identical content")), abItem([abA_, abB2]));
+  const abC = await head("ab-br");
+  const abHistC = ((await api("GET", `/api/history/admin/${DB}/local/branch/ab-br?id=Item/ab`)).json ?? []).map((h) => h.identifier);
+  const atC = await readAt(abC, "Item/ab");
+  record("AB4", "INFO", `a replace with identical content: head ${abC === abB ? "unchanged (no commit)" : "moved"}; item history ${abHistC.includes(abC) ? "lists it" : "does not list it"}; option b @id ${atB?.options?.[1]?.["@id"] === atC?.options?.[1]?.["@id"] ? "kept" : "regenerated"}; fragments changed [${changedFragments(atB, atC)}]`);
+
+  r = await api("PUT", at("branch/ab-br", commit("ab D: reorder the options")), abItem([abB2, abA_]));
+  const abD = await head("ab-br");
+  const atD = await readAt(abD, "Item/ab");
+  record("AB5", changedFragments(atC, atD).length === 0 ? "PASS" : "INFO",
+    `a reorder changes no fragment's content when compared by fragmentId: [${changedFragments(atC, atD)}] (order is the item's, not the fragment's)`);
+
+  r = await api("POST", `/api/apply/admin/${DB}/local/branch/main`, { before_commit: abBase, after_commit: abD, commit_info: { author: "merger@example", message: "ab merge" } });
+  const abMerge = await head("main");
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/ab-br`, {});
+  const mainHist = ((await api("GET", `/api/history/admin/${DB}/local/branch/main?id=Item/ab`)).json ?? []).map((h) => h.identifier);
+  record("AB6", r.status === 200 && !mainHist.includes(abB) ? "PASS" : "INFO",
+    `after apply, main's history of the item lacks the branch commit B: apply ${r.status}; main history ${short(mainHist)}; B ${abB}`);
+  const atAAfter = await readAt(abA, "Item/ab"), atMain = await readAt(abMerge, "Item/ab");
+  const ab7 = changedFragments(atAAfter, atMain);
+  record("AB7", atAAfter?.name === "ab" && ab7.join(",") === "b" ? "PASS" : "FAIL",
+    `after the merge and the branch's deletion, A is still readable and the comparison A to main's head reports [${ab7}]`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
