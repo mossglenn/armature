@@ -123,7 +123,7 @@ are not yet written; see [Numbering](#numbering).
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
-### 0054–0058: Later decisions (October 2026)
+### 0054–0059: Later decisions (October 2026)
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -132,6 +132,7 @@ are not yet written; see [Numbering](#numbering).
 | [0056](0056-coverage-is-computed-on-read-never-stored.md) | Coverage Is Computed on Read, Never Stored | Accepted and implemented | Coverage, and any future score, is calculated when someone asks for it, at any point in the design's history, and is never stored in the database. |
 | [0057](0057-records-name-the-commit-they-refer-to.md) | Records That Refer to a State of the Graph Name Its Commit | Accepted and implemented (2026-10-18); decision 5 amended by ADR-0028 for attestations | Datasets, metrics and findings carry an `asOf` field naming the saved version of the design they refer to, so results can be compared with the design as it was. |
 | [0058](0058-item-statistics-are-metrics-about-the-item.md) | Item Statistics Are Metrics About the Item | Accepted and implemented (2026-10-18) | A question's difficulty and discrimination are recorded as measurements that name the question, the administration and the design version, not as fields on the question; summaries are calculated when asked for. |
+| [0059](0059-capability-negotiation-per-request.md) | Capability Negotiation Per Request | Proposed (2026-10-20); adopts the capabilities half of candidate ADR-0039; resolves ADR-0026's deferral | A tool states on each request which revision of the API it was written against and which features it relies on; the hub answers each request on its own, naming what it does support when it must refuse. One discovery route lets a tool ask first. Modeled on the Model Context Protocol's 2026 revision. |
 
 ## How to add an ADR
 
@@ -140,9 +141,9 @@ are not yet written; see [Numbering](#numbering).
    otherwise have to reverse-engineer from the code.
 2. **Pick the number.** If you are writing one of the reserved decisions (0030, 0031, 0034),
    use its reserved number. Otherwise take the next number after the highest existing ADR
-   (ADR-0058 at the time of writing). If the decision adopts a research candidate from
+   (ADR-0059 at the time of writing). If the decision adopts a research candidate from
    `docs/research/adr-candidates.md`, name the candidate in the Status section, as ADR-0025 does
-   for candidate 0036.
+   for candidate 0036 and ADR-0059 for candidate 0039.
 3. **Name the file** `NNNN-short-decision-title.md` in this directory.
 4. **Follow the format below**: the Nygard sections (Status, Context, Decision, Consequences),
    plus Alternatives considered when real alternatives were weighed, and an In brief block for

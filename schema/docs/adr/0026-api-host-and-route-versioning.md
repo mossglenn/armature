@@ -74,6 +74,11 @@ not follow is that the boundary must be a separate process today. The boundary i
 - The versioned prefix gives the project a place to make a breaking shape change without breaking
   existing clients. Whether and how versions are negotiated beyond the prefix is deferred to the
   API-evolution candidate (ADR-0039 in `docs/research/adr-candidates.md`).
+
+  > **Later change (2026-10-20):** ADR-0059 (Proposed) takes up the deferral: dated contract
+  > revisions and named capabilities declared per request in `Armature-Version` and
+  > `Armature-Capabilities` headers, a discovery route, and no handshake. The prefix keeps the
+  > meaning decision 2 gives it: the boundary for a breaking shape change.
 - Route handlers must not depend on Next.js-only features in ways that would make extraction
   costly. Handlers take a request and return a response; TerminusDB access goes through `app/lib/`.
   A future extraction lifts `app/lib/` and the handlers together.
