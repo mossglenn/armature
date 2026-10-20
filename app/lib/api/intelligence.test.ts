@@ -120,6 +120,7 @@ describe('GET /api/v1/intelligence/alignment', () => {
     expect(body.itemsBelowObjective).toEqual([]);
     expect(body.objectivesWithoutItemAtLevel.map((o: { id: string }) => o.id)).toEqual(['LearningObjective/describe-model-training']);
     expect(body.objectivesWithoutActivity).toHaveLength(7);
+    expect(body.itemsWithoutObjective).toEqual([]);
     expect(body.unleveled).toEqual({ objectives: [], items: [] });
   });
 
@@ -239,6 +240,39 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
         levelsBelow: 4,
       }),
     ]);
+  });
+
+  it('lists an item that assesses nothing, bank-wide and within the module it is placed in (ADR-0060)', async () => {
+    const itemId = `AssessmentItem/unaligned-${stamp}`;
+    const before = await json(`/api/v1/intelligence/alignment${q}`);
+    const write = await post(`/api/v1/documents${q}`, {
+      message: 'An imported item nobody has aligned yet, placed in the Module 2 check',
+      documents: [
+        {
+          '@id': itemId,
+          '@type': 'AssessmentItem',
+          label: 'Unaligned item',
+          stem: { '@type': 'TextFragment', fragmentId: 'stem', text: 'Which is true?' },
+          options: [
+            { '@type': 'ItemOption', fragmentId: 'a', text: 'Alpha', isCorrect: true },
+            { '@type': 'ItemOption', fragmentId: 'b', text: 'Beta', isCorrect: false },
+          ],
+          itemType: 'MultipleChoice',
+          status: 'Draft',
+        },
+        { '@type': 'ItemInstance', sequence: 99, pointValue: 1, randomize: false, status: 'Draft', assessment: 'Assessment/mod2-assessment', implements: itemId },
+      ],
+    });
+    expect(write.status).toBe(200);
+
+    const bankWide = await json(`/api/v1/intelligence/alignment${q}`);
+    expect(ids(bankWide.itemsWithoutObjective)).toEqual([itemId]);
+    expect(bankWide.scope.items).toBe(before.scope.items); // it assesses nothing, so it is in no objective's scope
+
+    const placedIn = await json(`/api/v1/intelligence/alignment${q}&module=Module/ai-in-learning-design`);
+    expect(ids(placedIn.itemsWithoutObjective)).toEqual([itemId]);
+    const elsewhere = await json(`/api/v1/intelligence/alignment${q}&module=Module/how-ai-works`);
+    expect(elsewhere.itemsWithoutObjective).toEqual([]);
   });
 
   it('traces a metric back through its dataset and assessment to the objectives and the module (Narrative 1)', async () => {

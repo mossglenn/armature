@@ -80,13 +80,21 @@ describe('generic write path and invariants (Phase 3)', () => {
       expect(found).toContain('label');
     });
 
-    it('enforces @min_cardinality from the schema (constraints 1 and 2)', async () => {
+    it('accepts an item that assesses nothing (ADR-0060) and enforces @min_cardinality on an activity (constraint 2)', async () => {
+      // Rule 1 was retired by ADR-0060: an item may exist before it is aligned,
+      // whether `assesses` is empty or absent. The store returns no field for an
+      // empty Set, so a reader treats a missing `assesses` as none.
       const noObjective = await put(`/api/v1/documents/AssessmentItem/shape-${stamp}${q}`, {
-        message: 'x',
+        message: 'An item from a bank nobody has aligned yet',
         document: item(`shape-${stamp}`, { assesses: [] }),
       });
-      expect(noObjective.status).toBe(400);
-      expect(await paths(noObjective)).toContain('assesses');
+      expect(noObjective.status).toBe(200);
+      const stored = await (await get(`/api/v1/documents/AssessmentItem/shape-${stamp}${q}`)).json();
+      expect(stored.assesses ?? []).toEqual([]);
+      const { assesses: _omitted, ...withoutField } = item(`shape-${stamp}`);
+      void _omitted;
+      const absent = await put(`/api/v1/documents/AssessmentItem/shape-${stamp}${q}`, { message: 'x', document: withoutField });
+      expect(absent.status).toBe(200);
 
       const noTarget = await put(`/api/v1/documents/LearningActivity/shape-${stamp}${q}`, {
         message: 'x',
@@ -708,8 +716,8 @@ describe('generic write path and invariants (Phase 3)', () => {
     const idsOf = async (res: Response) => ((await res.json()) as Array<{ '@id': string }>).map((d) => d['@id']);
 
     it('filters on a Set reference by membership', async () => {
-      const all = (await (await get(`/api/v1/documents/AssessmentItem${q}`)).json()) as Array<{ '@id': string; assesses: string[] }>;
-      const expected = all.filter((d) => d.assesses.includes(OBJECTIVE)).map((d) => d['@id']);
+      const all = (await (await get(`/api/v1/documents/AssessmentItem${q}`)).json()) as Array<{ '@id': string; assesses?: string[] }>;
+      const expected = all.filter((d) => (d.assesses ?? []).includes(OBJECTIVE)).map((d) => d['@id']);
       expect(expected.length).toBeGreaterThan(1);
       const res = await get(`/api/v1/documents/AssessmentItem${q}&assesses=${OBJECTIVE}`);
       expect(res.status).toBe(200);

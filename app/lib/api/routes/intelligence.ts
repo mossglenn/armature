@@ -27,7 +27,8 @@ import { createStore, type TerminusDocument } from '../store';
  *   GET /coverage?course=&branch=|ref=         the same for every module of a course (or all)
  *   GET /alignment?module=&branch=|ref=        Bloom's mismatches: items below an objective
  *                                              they assess; objectives no item reaches at level;
- *                                              objectives no activity targets
+ *                                              objectives no activity targets; items that
+ *                                              assess nothing (ADR-0060)
  *   GET /trace/:type/:id?branch=|ref=          the provenance chain through the design
  *                                              lifecycle, both ways from any document on it,
  *                                              with the notes, findings and attestations about
@@ -216,7 +217,15 @@ intelligence.get('/alignment', async (c) => {
     objectives = await graph.list('LearningObjective');
   }
   const scope = new Set(objectives.map((o) => o['@id']));
-  const items = (await graph.list('AssessmentItem')).filter((i) => idsIn(i.assesses).some((o) => scope.has(o)));
+  const bank = await graph.list('AssessmentItem');
+  const items = bank.filter((i) => idsIn(i.assesses).some((o) => scope.has(o)));
+  // An item may exist before anyone aligns it (ADR-0060). It covers nothing and
+  // is in no objective's scope, so it is listed on its own: every such item in
+  // the bank, or, within a module, those placed in the module's assessments.
+  const unaligned = (i: TerminusDocument) => idsIn(i.assesses).length === 0;
+  const itemsWithoutObjective = scopeModule
+    ? [...(await assessmentOf(graph, scopeModule['@id'])).items.values()].filter(unaligned)
+    : bank.filter(unaligned);
   const activities = (await graph.list('LearningActivity')).filter((x) => idsIn(x.targets).some((o) => scope.has(o)));
 
   const itemsBelowObjective = [];
@@ -245,6 +254,7 @@ intelligence.get('/alignment', async (c) => {
       .filter((o) => bloomsRank(o.bloomsLevel) >= 0 && !reachedAtLevel.has(o['@id']))
       .map(summarize),
     objectivesWithoutActivity: objectives.filter((o) => !targeted.has(o['@id'])).map(summarize),
+    itemsWithoutObjective: itemsWithoutObjective.map(summarize),
     unleveled: {
       objectives: objectives.filter((o) => bloomsRank(o.bloomsLevel) < 0).map(summarize),
       items: items.filter((i) => bloomsRank(i.bloomsLevel) < 0).map(summarize),
