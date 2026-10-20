@@ -814,6 +814,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0057 | Records that refer to a state of the graph name its commit (`asOf`) | Before or with Phase 5 (needed by Phase 6) | Accepted and implemented 2026-10-18 | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head on create, keeps it on replace, copies a dataset's onto its metrics, and validates a supplied or kept id (rule 13); closes Narrative 1's "adequate when" |
 | 0058 | Item statistics are metrics about the item | With Phase 6's importer (decided early) | Accepted and implemented 2026-10-18 | `LearningMetric.subject: Optional<DesignRecord>`; `difficultyIndex` and `discriminationIndex` removed; constraint 13 checks a metric's subject at its `asOf`; the trace follows `subject` both ways |
 | 0059 | Capability negotiation per request | 7 (with the typed client), or on the first trigger it names | Proposed 2026-10-20 | Adopts candidate 0039's capabilities half, from MCP's per-request model: dated contract revisions in `Armature-Version`, namespaced capabilities in `Armature-Capabilities`, `GET /api/v1/discover`, 400 `unsupported_version` and `unsupported_capability` listing what the hub serves; no handshake; shape changes stay a new prefix (ADR-0026). Resolves ADR-0026's deferral; gives `GET /api/v1/schema` an owner by implication |
+| 0060 | Items may exist unaligned | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | Amends 0013: no minimum on `AssessmentItem.assesses`; rule 1 retired; the alignment read lists `itemsWithoutObjective`; rule 2 stands until a client shows the activity case; encouraging alignment is a §6 question |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -893,7 +894,10 @@ what evidence would be enough.
   to twice, which would change the key anyway; or the outcomes importer meeting a source that
   references one item twice in one test, which QTI permits. Decided 2026-10-08 as a timing
   decision, not a scope decision.
-- **Must every item assess an objective? (Rule 1, reassessed.)** *Raised 2026-10-18*
+- **Must every item assess an objective? (Rule 1, reassessed.)** *Raised 2026-10-18; resolved
+  2026-10-20 by ADR-0060: no.* `assesses` is zero or more; an unaligned item counts toward no
+  objective and the alignment read lists it under `itemsWithoutObjective`; rule 2 stands until a
+  client shows the activity case. The record as raised:
   (`docs/research/dq-questionbank-mapping.md` §4.1). `AssessmentItem.assesses` has
   `@min_cardinality: 1` (ADR-0013), so an item cannot exist in the hub before it is aligned.
   CoQui asked for it to be optional while `Draft`, then withdrew the ask because its items always
@@ -909,6 +913,16 @@ what evidence would be enough.
   Evidence for change: DQ, with the outcomes importer (items arriving from an LMS unaligned) and
   the AI design assistant (drafts) as reference clients. Evidence to settle it: the first real
   import of an unaligned bank.
+- **Encouraging alignment without requiring it.** *Opened 2026-10-20 by ADR-0060.* An item may
+  now exist with no objective, so nothing at write time asks for alignment; the alignment read
+  lists items that assess nothing. The question is how the hub encourages alignment without
+  requiring it at all times. Candidates, each a decision and none built: a readiness rule in the
+  invariants engine (an item, or a placement of it, may not be `Approved` while the item assesses
+  nothing, the same shape as rule 10); the coverage read naming the unaligned items placed in a
+  module beside its verdicts; a `DesignFinding` a client raises from the alignment read; the AI
+  design assistant proposing alignments for a person to attest (ADR-0028). Evidence to act on: the
+  first imported bank, and what its users do with the unaligned list (ignore it, work through it,
+  or want it to block approval).
 - **Items used formatively, inside activities.** *Raised 2026-10-18*
   (`docs/research/quiqui-mapping.md` §4). Items reach a module only as placements in an
   `Assessment`, which requires a module and carries summative fields; a `LearningActivity` names

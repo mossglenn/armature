@@ -121,7 +121,8 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | # | Rule | Violation code |
 |---|---|---|
 | 0 | Every reference names an existing document of the declared class or a subclass | `unknown_reference`, `unknown_capture`, `reference_class` |
-| 1, 2 | `AssessmentItem.assesses` and `LearningActivity.targets` have at least one objective | 400 `invalid_document` (shape) |
+| 1 | *Retired 2026-10-20 (ADR-0060).* An item may assess no objective; the alignment read lists such items | none |
+| 2 | `LearningActivity.targets` has at least one objective | 400 `invalid_document` (shape) |
 | 3 | Module content positions are unique across activity links and group links in a module | `duplicate_sequence` |
 | 4 | Group member positions are unique within a group | `duplicate_sequence` |
 | 5 | Item positions are unique within an assessment | `duplicate_sequence` |
@@ -243,7 +244,7 @@ The same block for every module of a course (`{ course, thresholds, modules: [ .
 
 Bloom's-level alignment for a module's declared objectives, or for every objective when `module` is omitted.
 
-Response: `{ scope, itemsBelowObjective: [ { item, objective, levelsBelow } ], objectivesWithoutItemAtLevel, objectivesWithoutActivity, unleveled: { objectives, items } }`. An item counts as reaching its objective when its level is the same or higher. Activities have no Bloom's level, so "without activity" means no activity targets the objective at all.
+Response: `{ scope, itemsBelowObjective: [ { item, objective, levelsBelow } ], objectivesWithoutItemAtLevel, objectivesWithoutActivity, itemsWithoutObjective, unleveled: { objectives, items } }`. An item counts as reaching its objective when its level is the same or higher. Activities have no Bloom's level, so "without activity" means no activity targets the objective at all. `itemsWithoutObjective` lists items that assess nothing (ADR-0060): every such item in the bank, or, with `module`, those placed in the module's assessments; they are in no objective's scope, so `scope.items` does not count them.
 
 ### `GET /intelligence/trace/:type/:id`
 

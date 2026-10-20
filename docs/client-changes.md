@@ -15,6 +15,31 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-20 · Items may exist unaligned (ADR-0060)
+
+**What changed.** `AssessmentItem.assesses` no longer needs at least one objective. A write with
+`assesses: []`, or with no `assesses` field, is accepted. The alignment read,
+`GET /api/v1/intelligence/alignment`, gains `itemsWithoutObjective`: every item that assesses
+nothing, or, with `module`, those placed in the module's assessments. `LearningActivity.targets`
+still needs at least one objective.
+
+**What a client does.**
+
+- **Import or draft items before aligning them.** An adapter for a bank whose questions are not yet
+  aligned writes them as they are; it never mints a placeholder objective.
+- **Guard reads of `assesses`.** The database returns no field for an empty set, so an item read
+  back may lack `assesses` altogether. Treat an absent field as an empty list.
+- **Show the gap.** `itemsWithoutObjective` is the bank's list of unaligned items at any ref; a
+  review or mapping tool can surface it as work to do. Nothing in the hub blocks an unaligned item
+  from being `Approved` or placed; whether anything should is open (`docs/development-plan.md` §6).
+
+**CoQui:** no change. Its items arrive from Armature already aligned. If it ever reads an item
+written by another tool, it treats a missing `assesses` as none.
+
+Detail: ADR-0060; the API reference's rules table (rule 1 retired) and alignment section.
+
+---
+
 ## 2026-10-18 · Attestations (ADR-0028; PR #16)
 
 **What changed.** A new record type, `Attestation`: one person's verdict, `Affirmed` or
