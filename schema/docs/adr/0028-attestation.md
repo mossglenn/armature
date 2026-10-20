@@ -314,3 +314,10 @@ and returns no count per person. An attestation is provenance, no more aggregabl
 - ADR-0057 — `asOf`; decision 5 amended here for `Attestation`
 - Platform checks AA (Hash key over Optional fields), AB (fragment-level change between commits),
   J4, T2, V
+- W3C Web Annotation Data Model (Recommendation, 2017): an annotation targets a resource through a
+  `source`, a `FragmentSelector` and a `State`, which independently arrives at this ADR's
+  (`subject`, `fragmentId`, `asOf`); its `motivation` vocabulary (assessing, commenting,
+  questioning, moderating) is a comparison point for `DesignNoteCategory`, and its JSON-LD is a
+  candidate export shape for notes, findings and attestations under ADR-0031. Identified after this
+  ADR was accepted, in the precedents survey of 2026-10-20
+  (`docs/research/schema-precedents-and-plugin-candidates.md`, Part 1 §A)
