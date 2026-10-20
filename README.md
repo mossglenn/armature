@@ -156,7 +156,7 @@ docs/
   armature-asks-from-Coqui.md What the first plugin asked for and learned (a dated handoff)
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
-  research/                   Standards-precedents survey, candidate ADRs, reading list
+  research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings
   vendor/terminusdb/          Generated: vendored, version-stamped TerminusDB documentation
 app/                          The Next.js app: hosts the API and the Coverage View (see app/README.md)
   app/                        Pages and the one catch-all API route
