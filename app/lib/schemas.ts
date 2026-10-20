@@ -150,7 +150,7 @@ export const AssessmentItemSchema = z.strictObject({
   itemType: z.enum(VALID_ItemType),
   status: z.enum(VALID_ItemStatus),
   bloomsLevel: z.enum(VALID_BloomsLevel).optional(),
-  assesses: z.array(ReferenceSchema).min(1),
+  assesses: z.array(ReferenceSchema).optional(),
 });
 
 export const ItemInstanceSchema = z.strictObject({

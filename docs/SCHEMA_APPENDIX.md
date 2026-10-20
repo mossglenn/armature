@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-10-19_
+_Schema snapshot · Generated 2026-10-20_
 
 ---
 
@@ -449,7 +449,7 @@ _category: fragment · **subdocument** · extends `Fragment` · key: Random_
 ### `AssessmentItem`
 _category: artifact · extends `ArmatureDocument` · key: Random_
 
-> A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). Item statistics (difficulty, discrimination) are not stored on the item: each is a LearningMetric whose subject is the item, derived from the dataset of one administration and carrying that dataset's asOf (ADR-0058). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.
+> A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses may be empty: an item can exist before it is aligned, and the alignment read reports items that assess nothing (ADR-0060, which removed the minimum ADR-0013 set). Item statistics (difficulty, discrimination) are not stored on the item: each is a LearningMetric whose subject is the item, derived from the dataset of one administration and carrying that dataset's asOf (ADR-0058). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -460,7 +460,7 @@ _category: artifact · extends `ArmatureDocument` · key: Random_
 | `itemType` | `ItemType` | required |
 | `status` | `ItemStatus` | required |
 | `bloomsLevel` | `BloomsLevel?` | optional |
-| `assesses` | `Set<LearningObjective>` | required, min 1 |
+| `assesses` | `Set<LearningObjective>` | required |
 
 ### `ItemInstance`
 _category: relationship · extends `DesignRecord` · key: Hash(assessment, implements)_

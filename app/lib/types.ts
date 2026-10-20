@@ -578,7 +578,7 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     itemType: {"type":"ItemType","kind":"enum","optional":false,"many":false},
     status: {"type":"ItemStatus","kind":"enum","optional":false,"many":false},
     bloomsLevel: {"type":"BloomsLevel","kind":"enum","optional":true,"many":false},
-    assesses: {"type":"LearningObjective","kind":"reference","optional":false,"many":true,"min":1},
+    assesses: {"type":"LearningObjective","kind":"reference","optional":true,"many":true},
   },
   ItemInstance: {
     sequence: {"type":"xsd:integer","kind":"primitive","optional":false,"many":false},

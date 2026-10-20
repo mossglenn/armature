@@ -763,14 +763,13 @@
     },
     "assesses": {
       "@type": "Set",
-      "@class": "LearningObjective",
-      "@min_cardinality": 1
+      "@class": "LearningObjective"
     },
     "@documentation": [
       {
         "@language": "en",
         "@label": "AssessmentItem",
-        "@comment": "A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses must contain at least one LearningObjective, enforced at schema level via @min_cardinality (ADR-0013). Item statistics (difficulty, discrimination) are not stored on the item: each is a LearningMetric whose subject is the item, derived from the dataset of one administration and carrying that dataset's asOf (ADR-0058). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.",
+        "@comment": "A single reusable question or task in the item bank. Inherits label, description, createdBy from ArmatureDocument. Exists independently of any specific Assessment; placed into Assessments via ItemInstance. The item is a tree of fragments: stem, options and general feedbacks are embedded subdocuments, each with a client-assigned fragmentId so that notes, findings and attestations can address a part (ADR-0022, ADR-0023, ADR-0033). status is the item's own review lifecycle, distinct from ItemInstance.status, which is placement clearance (ADR-0018). assesses may be empty: an item can exist before it is aligned, and the alignment read reports items that assess nothing (ADR-0060, which removed the minimum ADR-0013 set). Item statistics (difficulty, discrimination) are not stored on the item: each is a LearningMetric whose subject is the item, derived from the dataset of one administration and carrying that dataset's asOf (ADR-0058). API CONSTRAINTS: fragmentId unique across all fragments of the item; option text unique within the item; the number of correct options consistent with itemType. See ADR-0009, ADR-0013, ADR-0018, ADR-0022.",
         "@properties": {
           "stem": "The question or prompt, as a TextFragment with its own fragmentId so a reviewer can address the stem rather than the whole item.",
           "options": "The ordered answer options, embedded as ItemOption subdocuments. Order is presentation order; identity is fragmentId, never position. Empty for item types with no options (Essay, ShortAnswer). See ADR-0022.",
@@ -778,7 +777,7 @@
           "incorrectFeedback": "General feedback shown on an incorrect response, as a TextFragment. Optional.",
           "status": "The item's own review lifecycle: Draft on creation, InReview, Approved, Retired. Required so that absence is never ambiguous. Shares the ItemStatus enum with ItemInstance.status so the consistency check \"placements Approved whose item is not\" is a graph query. Readiness bears on coverage, which is computed on read and never stored: the delivered figure counts Approved items in Approved placements, the projected figure counts every item and placement not Retired (ADR-0019, ADR-0029, ADR-0056). See ADR-0018.",
           "bloomsLevel": "The cognitive level this item assesses. Optional at authoring time. When set, enables Bloom's alignment queries against the objectives in the assesses set.",
-          "assesses": "The LearningObjectives this item provides evidence of. Minimum 1 enforced at the schema level. An item that assesses no objective has no place in the artifact graph. See ADR-0013."
+          "assesses": "The LearningObjectives this item provides evidence of. Zero or more: an item may exist before anyone aligns it (an imported bank, a draft), and an unaligned item covers nothing. The alignment read lists items that assess nothing. The minimum of one that ADR-0013 set was removed by ADR-0060."
         }
       }
     ]
