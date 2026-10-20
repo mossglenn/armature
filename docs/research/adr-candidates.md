@@ -38,7 +38,7 @@ Priority: **High** = decide before the phase named, because getting it wrong cos
 | 0036 | Immutable shared history and durable pins | 2 | High | 0025 |
 | 0037 | Release pointers for delivered design states | 2 | Medium | 0036 |
 | 0038 | Schema change operators and compatibility rules | 0–1 | High | 0027 |
-| 0039 | API evolution: capabilities, projections and cadence | 0 / 7 | Medium | 0026, 0038 |
+| 0039 | API evolution: capabilities, projections and cadence | 0 / 7 | Medium | 0026, 0038 (*capabilities half drafted as ADR-0059, Proposed 2026-10-20; projections and cadence remain candidates*) |
 | 0040 | Extension model and promotion path | 1 | Medium | 0033 |
 | 0041 | Profiles as enforceable constraint documents | 3 | Medium | 0040 |
 | 0042 | Local structure and external alignment as separate classes | 6 | Medium | 0027, 0030 |
@@ -83,6 +83,7 @@ Priority: **High** = decide before the phase named, because getting it wrong cos
 
 - **Context.** The project prefers semantic capability negotiation to a monolithic API version. The research says capabilities alone do not handle shape changes.
 - **Candidate decision.** Capabilities for features (`coverage.read`, `attestation.write`, `fragments.generic`), negotiated LSP-style. Versioned projections for the rare breaking shape change, Stripe-style. Breaking changes batched into announced releases with long overlap. Stable names stay stable; projections are the exception.
+  > **2026-10-20:** the capabilities half is drafted as ADR-0059 (Proposed). It drops "LSP-style": Armature's API is stateless HTTP with no session to hold a handshake's result, so ADR-0059 follows the Model Context Protocol's 2026-07-28 revision instead (version and capabilities declared on every request, a refusal that lists what is supported, one optional discovery route, namespaced identifiers). Projections and cadence are untouched.
 - **Precedents.** LSP `initialize`; Stripe version-change modules; Kubernetes conversion; Ed-Fi break-rest cadence; OpenTelemetry's moratorium on schema transforms.
 
 ### ADR-0040: Extension model and promotion path

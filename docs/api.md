@@ -6,7 +6,7 @@ This document describes every route of the Armature API (application programming
 
 ### Base path and versioning
 
-Every route is under `/api/v1`. The version segment is part of the contract; a change that would break existing clients goes under a new version (ADR-0026). When the app runs locally the full address is `http://localhost:3000/api/v1/...`.
+Every route is under `/api/v1`. The version segment is part of the contract; a change that would break existing clients goes under a new version (ADR-0026). When the app runs locally the full address is `http://localhost:3000/api/v1/...`. Finer than the prefix, nothing is negotiated yet: ADR-0059 (Proposed, 2026-10-20) describes per-request `Armature-Version` and `Armature-Capabilities` headers and a `GET /discover` route, none of which is built; the dated entries in [`client-changes.md`](client-changes.md) are the revisions it would name.
 
 ### Reading at a ref
 
