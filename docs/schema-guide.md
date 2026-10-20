@@ -81,6 +81,8 @@ GET /api/v1/documents/Assessment?module=Module/how-ai-works
 
 Do not create a junction for tidiness. A relationship earns one by carrying data (ADR-0017).
 
+`NeedEvidenceLink.confidence` is the designer's assessment of the evidence's *reliability*, not the direction it points. A link means the evidence informed the need; there is no way yet to record evidence that was weighed and argues against a need, and a low confidence does not mean that. If usage shows the need, the path is an optional `relation` enum beside `confidence`, not a negative value (development plan §6, "Evidence that argues against a need").
+
 ### 4.4 Required, optional and controlled values
 
 - A field is required unless the schema marks it `Optional`. Sets may be empty unless they declare `@min_cardinality`.

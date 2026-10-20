@@ -506,7 +506,7 @@ A central pattern in Armature is that some relationships are not just references
 |---|---|---|
 | Item assesses objective | `AssessmentItem.assesses`, a set of references | The link carries no data of its own |
 | Activity targets objective | `LearningActivity.targets`, a set of references | Same |
-| Need is informed by evidence | `NeedEvidenceLink` junction, with `confidence` (`High`, `Medium`, `Low`, `Preliminary`) | The designer's weighting of each piece of evidence is a decision worth recording |
+| Need is informed by evidence | `NeedEvidenceLink` junction, with `confidence` (`High`, `Medium`, `Low`, `Preliminary`) | The designer's weighting of each piece of evidence is a decision worth recording. The weighting is reliability, not direction: evidence that argues *against* a need has no relation yet, an open question in the development plan (§6) |
 | Objective requires objective | `PrerequisiteRecord` junction, with `prerequisiteType` and `rationale` | The kind and reason for a prerequisite are the decision |
 | Module declares objective | `ModuleObjective` junction, with `role` (`Primary`, `Supporting`, `Prerequisite`), optional `roleRationale`, and `sequence` | The role an objective plays in a module is a decision |
 | Activity placed in module | `ModuleActivityLink` junction, with `sequence` | Order matters |
