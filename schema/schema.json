@@ -944,6 +944,41 @@
   },
   {
     "@type": "Class",
+    "@id": "ActivityItemLink",
+    "@key": {
+      "@type": "Hash",
+      "@fields": [
+        "activity",
+        "item"
+      ]
+    },
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "ActivityItemLink",
+        "@comment": "Formative use of an AssessmentItem inside a LearningActivity: a poll in a lecture, a question on a content page, a practice set (ADR-0061). Distinct from ItemInstance, which places an item in an Assessment with points and clearance. A formative use carries no points, no clearance and no verdict, and it counts toward nothing: coverage (ADR-0029) counts assessment placements only, and an objective practiced here but assessed nowhere is still Uncovered. Within one activity an item is used at most once: the @key is Hash over (activity, item), so the store derives the id, a client never supplies one, and writing the same pair again replaces the use. sequence orders the items within the activity when the order matters. Fields that a later client needs (a purpose, a grading note) are added as optional fields beside sequence (ADR-0010), never by reusing ItemInstance.",
+        "@properties": {
+          "activity": "The LearningActivity that uses the item.",
+          "item": "The reusable AssessmentItem used.",
+          "sequence": "Position of this item within the activity, when the activity presents its items in order. Independent of every module-level and group-level sequence. API CONSTRAINT: values must be unique within an activity (constraint 17). Gaps are permitted."
+        }
+      }
+    ],
+    "activity": "LearningActivity",
+    "item": "AssessmentItem",
+    "sequence": {
+      "@type": "Optional",
+      "@class": "xsd:integer"
+    },
+    "@metadata": {
+      "armature": {
+        "category": "relationship"
+      }
+    },
+    "@inherits": "DesignRecord"
+  },
+  {
+    "@type": "Class",
     "@id": "ModuleObjective",
     "@key": {
       "@type": "Hash",

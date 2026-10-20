@@ -323,6 +323,12 @@ export interface ActivityGroupMember extends DesignRecord {
   sequence?: number;
 }
 
+export interface ActivityItemLink extends DesignRecord {
+  activity: string;  // LearningActivity @id
+  item: string;  // AssessmentItem @id
+  sequence?: number;
+}
+
 export interface ModuleObjective extends DesignRecord {
   sequence?: number;
   role: ObjectiveRole;
@@ -380,6 +386,7 @@ export const CLASS_CATEGORY = {
   LearningActivity: "artifact",
   ActivityGroup: "artifact",
   ActivityGroupMember: "relationship",
+  ActivityItemLink: "relationship",
   ModuleObjective: "relationship",
   Module: "artifact",
   ModuleActivityLink: "relationship",
@@ -422,6 +429,7 @@ export const CLASS_ANCESTORS = {
   LearningActivity: ["ArmatureDocument", "DesignRecord"],
   ActivityGroup: ["ArmatureDocument", "DesignRecord"],
   ActivityGroupMember: ["DesignRecord"],
+  ActivityItemLink: ["DesignRecord"],
   ModuleObjective: ["DesignRecord"],
   Module: ["ArmatureDocument", "DesignRecord"],
   ModuleActivityLink: ["DesignRecord"],
@@ -451,6 +459,7 @@ export const CLASS_KEY = {
   LearningActivity: {"type":"Random"},
   ActivityGroup: {"type":"Random"},
   ActivityGroupMember: {"type":"Hash","fields":["group","activity"]},
+  ActivityItemLink: {"type":"Hash","fields":["activity","item"]},
   ModuleObjective: {"type":"Hash","fields":["module","references"]},
   Module: {"type":"Random"},
   ModuleActivityLink: {"type":"Hash","fields":["module","activity"]},
@@ -612,6 +621,11 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
   ActivityGroupMember: {
     group: {"type":"ActivityGroup","kind":"reference","optional":false,"many":false},
     activity: {"type":"LearningActivity","kind":"reference","optional":false,"many":false},
+    sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
+  },
+  ActivityItemLink: {
+    activity: {"type":"LearningActivity","kind":"reference","optional":false,"many":false},
+    item: {"type":"AssessmentItem","kind":"reference","optional":false,"many":false},
     sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
   },
   ModuleObjective: {

@@ -154,6 +154,13 @@ classDiagram
     +integer? sequence
   }
 
+  class ActivityItemLink {
+    <<relationship>>
+    +LearningActivity activity
+    +AssessmentItem item
+    +integer? sequence
+  }
+
   class ModuleObjective {
     <<relationship>>
     +integer? sequence
@@ -233,6 +240,7 @@ classDiagram
   ArmatureDocument <|-- LearningActivity : inherits
   ArmatureDocument <|-- ActivityGroup : inherits
   DesignRecord <|-- ActivityGroupMember : inherits
+  DesignRecord <|-- ActivityItemLink : inherits
   DesignRecord <|-- ModuleObjective : inherits
   ArmatureDocument <|-- Module : inherits
   DesignRecord <|-- ModuleActivityLink : inherits
@@ -263,6 +271,8 @@ classDiagram
   LearningActivity "0..*" --> LearningObjective : targets
   ActivityGroupMember --> ActivityGroup : group
   ActivityGroupMember --> LearningActivity : activity
+  ActivityItemLink --> LearningActivity : activity
+  ActivityItemLink --> AssessmentItem : item
   ModuleObjective --> Module : module
   ModuleObjective --> LearningObjective : references
   Module --> Course : course
@@ -620,6 +630,21 @@ _category: relationship · extends `DesignRecord` · key: Hash(subject, fragment
 | `reason` | `string?` | optional |
 | `asOf` | `string?` | optional |
 | `attestedBy` | `User?` | optional |
+
+## Other classes
+
+_Classes not yet placed in a domain section above; add them to DOMAINS in the generator._
+
+### `ActivityItemLink`
+_category: relationship · extends `DesignRecord` · key: Hash(activity, item)_
+
+> Formative use of an AssessmentItem inside a LearningActivity: a poll in a lecture, a question on a content page, a practice set (ADR-0061). Distinct from ItemInstance, which places an item in an Assessment with points and clearance. A formative use carries no points, no clearance and no verdict, and it counts toward nothing: coverage (ADR-0029) counts assessment placements only, and an objective practiced here but assessed nowhere is still Uncovered. Within one activity an item is used at most once: the @key is Hash over (activity, item), so the store derives the id, a client never supplies one, and writing the same pair again replaces the use. sequence orders the items within the activity when the order matters. Fields that a later client needs (a purpose, a grading note) are added as optional fields beside sequence (ADR-0010), never by reusing ItemInstance.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `activity` | `LearningActivity` | required |
+| `item` | `AssessmentItem` | required |
+| `sequence` | `integer?` | optional |
 
 ---
 
