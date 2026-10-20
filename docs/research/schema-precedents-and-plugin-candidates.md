@@ -2,6 +2,8 @@
 
 Oct 19, 2026 · @Amos Glenn
 
+> **Status (2026-10-20).** A dated research snapshot, committed on 2026-10-20 and kept as written, except for the open-questions list at the end, which records what was decided. Renamed the same day from *Armature Schema Precedents and Plugin Candidates.md* to match the directory's naming. Cited by ADR-0028 (related work), ADR-0059 (context and related) and `docs/development-plan.md` (§6 and Phase 6). Companion to `learning-data-standards-precedents.md` (2026-10-06), which it does not repeat.
+
 ## Scope
 
 This doc lists outside projects worth studying for Armature's schema, and tools that could become Armature plugins or show how a plugin system should work. Only kept findings appear; rejected candidates are left out.

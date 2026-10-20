@@ -72,7 +72,7 @@ handshake and added a stateless HTTP transport that could not keep one. Its revi
 
 Versions are dates, not numbers, and the version string is a revision of the whole contract.
 This was found during the precedents survey of 2026-10-20
-(`docs/research/Armature Schema Precedents and Plugin Candidates.md`, Part 2 §6).
+(`docs/research/schema-precedents-and-plugin-candidates.md`, Part 2 §6).
 
 ## Decision
 
@@ -215,7 +215,7 @@ This was found during the precedents survey of 2026-10-20
 - Model Context Protocol specification, revision 2026-07-28: "Versioning and Compatibility"
   (`basic/versioning`), "Lifecycle" (`basic/lifecycle`), the `MCP-Protocol-Version` header
   (`basic/transports/streamable-http`) and `server/discover`. Read 2026-10-20.
-- `docs/research/Armature Schema Precedents and Plugin Candidates.md` (2026-10-20), Part 2 §6,
+- `docs/research/schema-precedents-and-plugin-candidates.md` (2026-10-20), Part 2 §6,
   where the precedent was identified; the same section lists the VS Code extension manifest and
   Obsidian's `minAppVersion` as the minimal contract a client package can carry before any of
   this is built.
