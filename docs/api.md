@@ -137,6 +137,7 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 14 | An attestation's claim comes whole: `claimRef` and `claimText` both present, or both absent for an endorsement | `claim_incomplete` |
 | 15 | An attestation's `attestedBy` is the caller | `attester_not_caller` |
 | 16 | A `fragmentId` on an `Attestation`, `DesignNote` or `DesignFinding` names a part of its one subject: at `asOf` when that is checked, otherwise as the write leaves the subject | `fragment_needs_one_subject`, `unknown_fragment` |
+| 17 | Within an activity, formative uses of items never share a `sequence` (`ActivityItemLink`, ADR-0061) | `duplicate_sequence` |
 
 There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5).
 
@@ -252,9 +253,10 @@ Walks the design lifecycle in both directions from one document:
 
 ```
 evidence ← need-evidence link → need ← objective ← item ← placement → assessment ← dataset ← metric
+                                                 item ← formative use → activity
 ```
 
-with modules attached as context to every objective (through its declarations) and assessment reached, and a metric's `subject`, the record it measures, followed in both directions (an item statistic leads to its item, and an item to the metrics about it; ADR-0058). Accepted types: `LearningMetric`, `LearningDataset`, `Assessment`, `AssessmentItem`, `LearningObjective`, `LearningNeed`, `DescriptiveEvidence`, `Module`, `LearningActivity`. Any other type is a 400 `untraceable_type`.
+with an item's formative uses (`ActivityItemLink`, ADR-0061) followed downstream to the activities that use it, and modules attached as context to every objective (through its declarations), assessment and activity (through its module links) reached, and a metric's `subject`, the record it measures, followed in both directions (an item statistic leads to its item, and an item to the metrics about it; ADR-0058). Accepted types: `LearningMetric`, `LearningDataset`, `Assessment`, `AssessmentItem`, `LearningObjective`, `LearningNeed`, `DescriptiveEvidence`, `Module`, `LearningActivity`. Any other type is a 400 `untraceable_type`.
 
 Response: `{ root, nodes: [ summary ], edges: [ { from, to, via, through?, confidence?, status?, role? } ], annotations: [ design notes, findings and attestations about any node reached ] }`. A note or finding about one part carries its `fragmentId`; an attestation is reported as by the attestations read below, with its `state`. `via` is the field followed; `through` is the junction document passed through, with its data. A dataset, metric or finding summary carries its `asOf`: read the rest of the design as that cohort met it, or as that finding judged it, at `?ref=<asOf>`.
 

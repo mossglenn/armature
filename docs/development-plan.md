@@ -815,6 +815,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0058 | Item statistics are metrics about the item | With Phase 6's importer (decided early) | Accepted and implemented 2026-10-18 | `LearningMetric.subject: Optional<DesignRecord>`; `difficultyIndex` and `discriminationIndex` removed; constraint 13 checks a metric's subject at its `asOf`; the trace follows `subject` both ways |
 | 0059 | Capability negotiation per request | 7 (with the typed client), or on the first trigger it names | Proposed 2026-10-20 | Adopts candidate 0039's capabilities half, from MCP's per-request model: dated contract revisions in `Armature-Version`, namespaced capabilities in `Armature-Capabilities`, `GET /api/v1/discover`, 400 `unsupported_version` and `unsupported_capability` listing what the hub serves; no handshake; shape changes stay a new prefix (ADR-0026). Resolves ADR-0026's deferral; gives `GET /api/v1/schema` an owner by implication |
 | 0060 | Items may exist unaligned | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | Amends 0013: no minimum on `AssessmentItem.assesses`; rule 1 retired; the alignment read lists `itemsWithoutObjective`; rule 2 stands until a client shows the activity case; encouraging alignment is a §6 question |
+| 0061 | Formative use of items inside activities | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | `ActivityItemLink` junction with optional `sequence` (constraint 17); counts toward no coverage; trace follows it; the module-content view nests it when built; annotates 0003, 0005, 0029 |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -856,7 +857,8 @@ what evidence would be enough.
   themselves. Evidence: the activity and strategy designer reference client, or a Coverage View
   that shows a module's activities. *Since 2026-10-18 the course builder reference client needs
   it too, so it passes the two-client test* (`docs/research/tessera-mapping.md` §5); it is built
-  when the next phase touches module content.
+  when the next phase touches module content. *Since 2026-10-20 the view also nests an activity's
+  formative items (`ActivityItemLink`, ADR-0061) by their own `sequence`.*
 - **Filtering the list route on optional and multi-valued references.** *Resolved 2026-10-18.*
   The store answers a template query on an `Optional` enum or reference, or on a `Set`, with a
   500 (checks Y2, Y3, Y5). The list route now lists the type and filters those in the hub, then
@@ -923,7 +925,10 @@ what evidence would be enough.
   design assistant proposing alignments for a person to attest (ADR-0028). Evidence to act on: the
   first imported bank, and what its users do with the unaligned list (ignore it, work through it,
   or want it to block approval).
-- **Items used formatively, inside activities.** *Raised 2026-10-18*
+- **Items used formatively, inside activities.** *Raised 2026-10-18; resolved 2026-10-20 by
+  ADR-0061:* an `ActivityItemLink` junction (activity, item, optional `sequence`; constraint 17),
+  counting toward no coverage, reached by the trace and impact reads; the module-content view
+  nests an activity's items when it is built. The record as raised:
   (`docs/research/quiqui-mapping.md` §4). Items reach a module only as placements in an
   `Assessment`, which requires a module and carries summative fields; a `LearningActivity` names
   the objectives it targets but cannot reference an item. So "lecture 3 polls the room with item

@@ -15,6 +15,35 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-20 · Formative use of items inside activities (ADR-0061)
+
+**What changed.** A new relationship record, `ActivityItemLink`, records that a `LearningActivity`
+uses an `AssessmentItem` formatively: a poll in a lecture, a question on a content page, a
+practice set. Fields: `activity`, `item`, optional `sequence`. The identifier is derived from
+`(activity, item)`. It carries no points, no clearance and no verdict, and counts toward no
+coverage. The trace read follows an item downstream to the activities that use it, and shows an
+activity with the modules it is placed in; the impact read reaches a use through its `item`.
+
+**What a client does.**
+
+- **Write a use through `POST /api/v1/documents` without an `@id`**, as for any Hash-keyed record.
+  Writing the same activity and item again replaces the use (for example to reorder it).
+- **Give `sequence` only when the activity orders its items.** Within one activity two uses may not
+  share a `sequence` (422 `duplicate_sequence`, rule 17). It is independent of every module and
+  group sequence.
+- **Do not use it for a graded test.** An assessment with points and clearance is an `Assessment`
+  with `ItemInstance` placements, as before. Those are what coverage counts.
+- **Look in two places for where an item is used:** `ItemInstance` for placements and
+  `ActivityItemLink` for formative uses, or read `GET /api/v1/intelligence/impact/AssessmentItem/:id`,
+  which lists both.
+
+**CoQui:** no change; CoQui reviews items, not their uses. **QuiQui and Tessera** (mapped in
+`docs/research/`): a live poll and a question on a content page map onto this record.
+
+Detail: ADR-0061; the API reference's rules table (rule 17) and trace section.
+
+---
+
 ## 2026-10-20 · Items may exist unaligned (ADR-0060)
 
 **What changed.** `AssessmentItem.assesses` no longer needs at least one objective. A write with
