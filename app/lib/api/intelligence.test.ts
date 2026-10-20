@@ -275,6 +275,39 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
     expect(elsewhere.itemsWithoutObjective).toEqual([]);
   });
 
+  it('shows an item\'s formative use in the trace and impact, and keeps it out of coverage (ADR-0061)', async () => {
+    const ACT = `LearningActivity/lecture-${stamp}`;
+    const objective = 'LearningObjective/identify-ai-limitations';
+    const before = await json(`/api/v1/intelligence/coverage/how-ai-works${q}`);
+    const write = await post(`/api/v1/documents${q}`, {
+      message: 'Lecture 1 polls the room with the hallucination item',
+      documents: [
+        { '@type': 'LearningActivity', '@id': ACT, label: 'Lecture 1', targets: [objective] },
+        { '@type': 'ModuleActivityLink', module: 'Module/how-ai-works', activity: ACT, sequence: 1 },
+        { '@type': 'ActivityItemLink', activity: ACT, item: 'AssessmentItem/hallucination-mc', sequence: 1 },
+      ],
+    });
+    expect(write.status).toBe(200);
+    const [, , linkId] = (await write.json()).ids as string[];
+
+    const trace = await json(`/api/v1/intelligence/trace/AssessmentItem/hallucination-mc${q}`);
+    expect(ids(trace.nodes)).toContain(ACT);
+    expect(trace.edges).toContainEqual({ from: 'AssessmentItem/hallucination-mc', to: ACT, via: 'activity', through: linkId });
+    const context = trace.edges.find((e: { from: string; via: string }) => e.from === ACT && e.via === 'module');
+    expect(context).toMatchObject({ to: 'Module/how-ai-works' });
+    expect(context.through).toMatch(/^ModuleActivityLink\//);
+
+    const impact = await json(`/api/v1/intelligence/impact/AssessmentItem/hallucination-mc${q}`);
+    const use = impact.references.find((r: { id: string }) => r.id === linkId);
+    expect(use).toMatchObject({ type: 'ActivityItemLink', field: 'item' });
+    expect(use.within).toEqual([expect.objectContaining({ field: 'activity', id: ACT })]);
+
+    const after = await json(`/api/v1/intelligence/coverage/how-ai-works${q}`);
+    const count = (body: { objectives: Array<{ objective: { id: string }; projected: { items: number } }> }) =>
+      body.objectives.find((o) => o.objective.id === objective)!.projected.items;
+    expect(count(after)).toBe(count(before));
+  });
+
   it('traces a metric back through its dataset and assessment to the objectives and the module (Narrative 1)', async () => {
     const delivered = (await get(`/api/v1/branches/${BRANCH}`)).headers.get('etag')!.replace(/"/g, '');
     const write = await post(`/api/v1/documents${q}`, {

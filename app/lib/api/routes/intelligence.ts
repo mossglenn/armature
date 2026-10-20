@@ -270,8 +270,9 @@ intelligence.get('/alignment', async (c) => {
  *   LearningEvidence ← NeedEvidenceLink → LearningNeed ← LearningObjective ← AssessmentItem
  *     ← ItemInstance → Assessment ← LearningDataset ← LearningMetric
  *
- * with Module reached from an objective's declarations and an assessment's
- * `module` as context, and a metric's `subject` (the record it measures, such
+ * with an item's formative uses (ActivityItemLink → LearningActivity, ADR-0061)
+ * as a downstream hop beside its placements, Module reached from an objective's
+ * declarations, an assessment's `module` and an activity's links as context, and a metric's `subject` (the record it measures, such
  * as the item an item statistic is about; ADR-0058) as a direct hop. `upstream` follows the chain toward evidence (why does
  * this exist), `downstream` toward outcomes (what came of it, Narrative 1).
  * Each hop records the field it followed and the junction it went through.
@@ -362,6 +363,11 @@ async function downstream(graph: Graph, doc: TerminusDocument): Promise<Array<{ 
         const next = await graph.get(String(p.assessment));
         if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'assessment', through: p['@id'], status: String(p.status) } });
       }
+      // Formative use: the activities that ask the item in passing (ADR-0061).
+      for (const use of await graph.where('ActivityItemLink', 'item', from)) {
+        const next = await graph.get(String(use.activity));
+        if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'activity', through: use['@id'] } });
+      }
       break;
     case 'Assessment': await direct('LearningDataset', 'producedBy'); break;
     case 'LearningDataset': await direct('LearningMetric', 'derivedFrom'); break;
@@ -372,7 +378,8 @@ async function downstream(graph: Graph, doc: TerminusDocument): Promise<Array<{ 
 /**
  * Module is context, not a stage: whichever way the walk went, every
  * objective it reached is shown with the modules that declare it (and the
- * declaration's role and verdict), and every assessment with its module.
+ * declaration's role and verdict), every assessment with its module, and
+ * every activity with the modules it is placed in.
  */
 async function moduleContext(graph: Graph, doc: TerminusDocument): Promise<Array<{ next: TerminusDocument; edge: Edge }>> {
   const from = doc['@id'];
@@ -385,6 +392,11 @@ async function moduleContext(graph: Graph, doc: TerminusDocument): Promise<Array
   } else if (doc['@type'] === 'Assessment' && typeof doc.module === 'string') {
     const next = await graph.get(doc.module);
     if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'module' } });
+  } else if (doc['@type'] === 'LearningActivity') {
+    for (const link of await graph.where('ModuleActivityLink', 'activity', from)) {
+      const next = await graph.get(String(link.module));
+      if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'module', through: link['@id'] } });
+    }
   }
   return hops;
 }

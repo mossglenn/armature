@@ -363,6 +363,57 @@ describe('generic write path and invariants (Phase 3)', () => {
     });
   });
 
+  describe('formative use of items in activities (constraint 17, ADR-0061)', () => {
+    const ACT = `LearningActivity/poll-${stamp}`;
+    const activity = { '@type': 'LearningActivity', '@id': ACT, label: 'Lecture 3 polls', targets: [OBJECTIVE] };
+    const ITEM_A = 'AssessmentItem/hallucination-mc';
+    const ITEM_B = 'AssessmentItem/bias-type-mc';
+
+    it('rejects two uses at one position in an activity, and a use of something that is not an item', async () => {
+      const dup = await post(`/api/v1/documents${q}`, {
+        message: 'x',
+        documents: [
+          activity,
+          { '@type': 'ActivityItemLink', activity: ACT, item: ITEM_A, sequence: 1 },
+          { '@type': 'ActivityItemLink', activity: ACT, item: ITEM_B, sequence: 1 },
+        ],
+      });
+      expect(dup.status).toBe(422);
+      expect(await codes(dup)).toEqual(['duplicate_sequence', 'duplicate_sequence']);
+
+      const notAnItem = await post(`/api/v1/documents${q}`, {
+        message: 'x',
+        documents: [activity, { '@type': 'ActivityItemLink', activity: ACT, item: OBJECTIVE, sequence: 1 }],
+      });
+      expect(notAnItem.status).toBe(422);
+      expect(await codes(notAnItem)).toEqual(['reference_class']);
+    });
+
+    it('accepts ordered and unordered uses, and writing the same pair again replaces the use', async () => {
+      const res = await post(`/api/v1/documents${q}`, {
+        message: 'Poll the room twice in lecture 3',
+        documents: [
+          activity,
+          { '@type': 'ActivityItemLink', activity: ACT, item: ITEM_A, sequence: 1 },
+          { '@type': 'ActivityItemLink', activity: ACT, item: ITEM_B },
+        ],
+      });
+      expect(res.status).toBe(200);
+      const [, first] = (await res.json()).ids as string[];
+      expect(first).toMatch(/^ActivityItemLink\//);
+
+      const again = await post(`/api/v1/documents${q}`, {
+        message: 'Move the first poll',
+        documents: [{ '@type': 'ActivityItemLink', activity: ACT, item: ITEM_A, sequence: 5 }],
+      });
+      expect(again.status).toBe(200);
+      expect((await again.json()).ids).toEqual([first]);
+      const uses = await (await get(`/api/v1/documents/ActivityItemLink${q}&activity=${ACT}`)).json();
+      expect(uses).toHaveLength(2);
+      expect(uses.find((u: { '@id': string }) => u['@id'] === first).sequence).toBe(5);
+    });
+  });
+
   describe('DesignFinding: dismissal needs a rationale (constraint 11)', () => {
     const finding = (overrides: Record<string, unknown>) => ({
       label: 'Stem cues the answer',

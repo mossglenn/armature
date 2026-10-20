@@ -8,6 +8,8 @@ import { refId, type Violation, type WriteContext } from './index';
  *      one integer namespace per Module, so a value may appear once across
  *      both types
  *   4  ActivityGroupMember.sequence is unique within its ActivityGroup
+ *  17  ActivityItemLink.sequence is unique within its LearningActivity
+ *      (formative use of items, ADR-0061)
  *   6  flatness is constraint 0's doing: a member's activity is typed
  *      LearningActivity, which an ActivityGroup is not
  */
@@ -52,6 +54,27 @@ export async function validateActivityGroupMember(
       index,
       field: 'sequence',
       message: `sequence ${doc.sequence} is already used in ${group} by ${clash['@id'] ?? 'another member in this write'}`,
+    },
+  ];
+}
+
+export async function validateActivityItemLink(
+  doc: TerminusDocument,
+  index: number,
+  ctx: WriteContext
+): Promise<Violation[]> {
+  const activity = refId(doc.activity);
+  if (!activity || typeof doc.sequence !== 'number') return [];
+  const uses = await ctx.siblings('ActivityItemLink', { activity });
+  const clash = uses.find((d) => d !== doc && d.sequence === doc.sequence);
+  if (!clash) return [];
+  return [
+    {
+      code: 'duplicate_sequence',
+      id: typeof doc['@id'] === 'string' ? doc['@id'] : undefined,
+      index,
+      field: 'sequence',
+      message: `sequence ${doc.sequence} is already used in ${activity} by ${clash['@id'] ?? 'another use in this write'}`,
     },
   ];
 }
