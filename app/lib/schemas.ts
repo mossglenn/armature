@@ -207,6 +207,15 @@ export const ActivityGroupMemberSchema = z.strictObject({
   sequence: z.number().int().optional(),
 });
 
+export const ActivityItemLinkSchema = z.strictObject({
+  '@id': z.string().min(1).optional(),
+  '@type': z.literal('ActivityItemLink').optional(),
+  '@capture': z.string().min(1).optional(),
+  activity: ReferenceSchema,
+  item: ReferenceSchema,
+  sequence: z.number().int().optional(),
+});
+
 export const ModuleObjectiveSchema = z.strictObject({
   '@id': z.string().min(1).optional(),
   '@type': z.literal('ModuleObjective').optional(),
@@ -317,6 +326,7 @@ export const DOCUMENT_SCHEMAS = {
   LearningActivity: LearningActivitySchema,
   ActivityGroup: ActivityGroupSchema,
   ActivityGroupMember: ActivityGroupMemberSchema,
+  ActivityItemLink: ActivityItemLinkSchema,
   ModuleObjective: ModuleObjectiveSchema,
   Module: ModuleSchema,
   ModuleActivityLink: ModuleActivityLinkSchema,
