@@ -513,8 +513,9 @@ A central pattern in Armature is that some relationships are not just references
 | Group placed in module | `ModuleActivityGroupLink` junction, with `sequence` | Order matters |
 | Activity placed in group | `ActivityGroupMember` junction, with `sequence` | Order matters |
 | Item placed in assessment | `ItemInstance` junction, with `sequence`, `pointValue`, `randomize`, `status` | Placement has its own settings and its own clearance |
+| Item used formatively in an activity | `ActivityItemLink` junction, with an optional `sequence` (since 20 October 2026, ADR-0061) | A poll or practice question happens in an order, carries no score, and must not be mistaken for a graded placement |
 
-These seven junction types are tagged with the category `relationship` in the schema (Section 12.11).
+These eight junction types are tagged with the category `relationship` in the schema (Section 12.11).
 
 **How declarations are written.** ADR-0007 (February 2026) said a `ModuleObjective` would be "created programmatically by the API" (the application programming interface) when a designer assigned an objective to a module, and not edited directly through a user interface. That is not what was built: clients write `ModuleObjective` documents through the same generic write route as everything else, and the seed writes seven. On 18 October 2026 the project recorded the built behavior as the decision. The rule had existed to protect the stored coverage field, which ADR-0056 removed (Section 17.6), so what remains is a designer's decision of the kind the graph exists to hold. And the hub had no other event to react to: inferring declarations from where items are placed would erase exactly the "declared but never assessed" case that coverage reports. Because they are documents, they can themselves be annotated: a design note can explain why an activity is third in a module, or why a piece of evidence carries only preliminary confidence (ADR-0017).
 
@@ -541,6 +542,7 @@ Module
     ActivityGroupMember    sequence 1  → first activity in the group
     ActivityGroupMember    sequence 2  → second activity in the group
   ModuleActivityLink       sequence 3  → another standalone activity
+    ActivityItemLink       sequence 1  → a question the activity asks in passing (ADR-0061)
 ```
 
 The two kinds of module link share one numbering space (no activity and group may both be at position 2), and group membership has its own numbering. Gaps are allowed (1, 2, 10) so a designer can insert without renumbering. The API enforces the uniqueness rules (Section 13, rules 3 and 4). ADR-0005 also assigned the API the job of merging the two kinds of link into one ordered view of a module's content; that view has not been built, so a client currently sorts the link documents itself.
@@ -686,8 +688,12 @@ The project numbers the rules 0 to 13 (the numbering is used across the document
 | 11 | A dismissed finding must give a reason | Dismissals must be inspectable |
 | 12 | A write cannot reuse an identifier that belongs to a document of another type | Identifiers belong to one type for the life of the database (answered with 409, conflict) |
 | 13 | A dataset, metric or finding's `asOf` names a real commit at which what the record is about existed, and a metric agrees with the dataset it came from | A record that says "the design as it was then" must name a "then" that holds what it describes (Section 24.1) |
+| 14 | An attestation's claim comes whole: its reference and its text both present, or both absent for a plain endorsement | Half a claim cannot be read (ADR-0028) |
+| 15 | An attestation's attester is the person making the request | A verdict carries the name of the person who gave it, never one supplied in the body (ADR-0028, ADR-0032) |
+| 16 | A part named on an attestation, note or finding exists in its one subject | A verdict or concern about a part must point at a real part (ADR-0028) |
+| 17 | Within an activity, items used formatively never share a position number | Order must be unambiguous (ADR-0061) |
 
-Rules 1 and 2 are enforced both by the database (as minimum counts) and by the shape check. Rule 6 is a consequence of rule 0. The rest are code in the invariants engine.
+Rule 2 is enforced both by the database (as a minimum count) and by the shape check; rule 1 was retired. Rule 6 is a consequence of rule 0. The rest are code in the invariants engine.
 
 ### 13.3 How rules see the world
 
@@ -897,7 +903,8 @@ evidence ← need-evidence link → need ← objective ← item ← placement �
 
 - **Upstream** answers *why does this exist?* From an item: the objectives it assesses, the needs that generated them, and the evidence behind those needs (with the confidence the designer gave each piece).
 - **Downstream** answers *what came of it?* From an objective: the items that assess it and the activities that target it, the assessments the items are placed in, the datasets those assessments produced, and the metrics derived from them. (Narrative 1 reads the same chain from the other end: from a metric, the upstream walk reaches the dataset, the assessment, the items and the objectives.)
-- **Modules are context**, not a stage: every objective reached is shown with the modules that declare it (and the declaration's role), every assessment with its module.
+- **Formative use** (since 20 October 2026, ADR-0061): from an item, downstream, the activities that ask it in passing, through the link that records the use.
+- **Modules are context**, not a stage: every objective reached is shown with the modules that declare it (and the declaration's role), every assessment with its module, and every activity with the modules it is placed in.
 - **Annotations**: every design note and design finding about anything the walk reached.
 
 Each hop names the field it followed and, when it passed through a junction document, the junction and its data (a link's confidence, a placement's status, a declaration's role).
@@ -1158,7 +1165,7 @@ The development plan (§6) lists questions to be decided deliberately, each with
 - **A fourth finding status** for a reviewer withdrawing their own concern. *Evidence:* a second tool needing the distinction.
 - **One placement per item per assessment.** *Evidence:* sections inside assessments, or an import source that repeats an item.
 - **Must every assessment item name an objective?** *Decided 20 October 2026 (ADR-0060): no.* A question may be stored before it is aligned; it counts toward no objective, and the alignment read lists every such question. The question that replaces it: **how does Armature encourage alignment without requiring it at all times?** Candidates are a readiness rule (a question, or its placement, may not be approved while unaligned), the coverage read naming unaligned questions placed in a module, a finding raised from the alignment read, or an assistant proposing alignments for a person to attest. *Evidence to settle it:* the first imported bank, and what its users do with the list of unaligned questions.
-- **Items used formatively, inside activities.** A live classroom poll or an ungraded question on a content page uses items inside a learning activity, which the schema cannot record: items reach a module only through assessments. Whether such formative use belongs in the graph, and in what form, is open. *Evidence already in hand:* two real tools reviewed in October 2026 (a live audience response system and a course framework), with the activity designer reference client.
+- **Items used formatively, inside activities.** *Decided 20 October 2026 (ADR-0061).* A live classroom poll or an ungraded question on a content page is recorded as an `ActivityItemLink`: the activity, the question and, when it matters, the order. It carries no score and counts toward no coverage. Still open on it: a purpose for the use, and whether a "practiced" figure should sit beside the two coverage figures.
 - **A separate API (application programming interface) service.** *Evidence:* a plugin that should not depend on a Next.js deployment, or independent scaling needs.
 - **Which file store the hub operates, and when.** *Evidence:* the first tool that develops multi-file assets on Armature.
 
@@ -1291,6 +1298,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | `LearningActivity` | artifact | targets (≥1), activityType? | random |
 | `ActivityGroup` | artifact | (label, description) | random |
 | `ActivityGroupMember` | relationship | group, activity, sequence? | hash (group, activity) |
+| `ActivityItemLink` | relationship | activity, item, sequence? | hash (activity, item) |
 | `ModuleObjective` | relationship | module, references, role, roleRationale?, sequence? | hash (module, references) |
 | `Module` | artifact | course, sequence? | random |
 | `ModuleActivityLink` | relationship | module, activity, sequence? | hash (module, activity) |
@@ -1342,7 +1350,7 @@ See `schema/docs/adr/README.md` for the full index with one-line summaries. In b
 | 0016–0023 | The CoQui fit analysis (August–September 2026): keys, the `DesignRecord` abstract root, readiness, coverage and readiness, findings, the non-goal on practitioner performance, embedded item parts, fragment identifiers |
 | 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0030, 0031 and 0034 are reserved and unwritten; 0028 (attestations) was written 18 October 2026 |
 | 0035–0053 | Research candidates, not decisions (`docs/research/adr-candidates.md`) |
-| 0054–0060 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item, and a proposal (0059, not yet built) for how a tool states per request which revision of the API and which features it relies on |
+| 0054–0061 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item, and a proposal (0059, not yet built) for how a tool states per request which revision of the API and which features it relies on |
 
 ## Appendix E. References
 

@@ -78,6 +78,7 @@ GET /api/v1/documents/Assessment?module=Module/how-ai-works
 | Activity or group placed in module | `ModuleActivityLink` / `ModuleActivityGroupLink` with `sequence` |
 | Activity placed in group | `ActivityGroupMember` with `sequence` |
 | Item placed in assessment | `ItemInstance` with `sequence`, `pointValue`, `randomize`, `status` |
+| Item used formatively in an activity | `ActivityItemLink` with optional `sequence`; no points or clearance, counts toward no coverage (ADR-0061) |
 
 Do not create a junction for tidiness. A relationship earns one by carrying data (ADR-0017).
 
@@ -179,7 +180,7 @@ Write it through `POST /api/v1/documents` without an `@id`; the API adds `attest
 | The database checks | The API checks (the invariants engine) |
 |---|---|
 | Field types, required fields, enum values | That every reference names a document of the declared class (rule 0) |
-| Minimum set sizes (`@min_cardinality`) | Unique positions in modules, groups and assessments (rules 3 to 5) |
+| Minimum set sizes (`@min_cardinality`) | Unique positions in modules, groups, assessments and activities (rules 3 to 5, 17) |
 | That a referenced document exists | Fragment and option rules (rules 8, 9) |
 | Unique identifiers | Item and placement status consistency (rule 10) |
 | | A reason for every dismissal (rule 11) |

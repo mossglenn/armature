@@ -152,6 +152,7 @@ To add a new type: (1) update `schema.json` (with ADR), giving the class `@metad
 | `ModuleActivityLink` | Junction doc; places LearningActivity in Module with `sequence` |
 | `ModuleActivityGroupLink` | Junction doc; places ActivityGroup in Module with `sequence` |
 | `ActivityGroupMember` | Junction doc; places LearningActivity in ActivityGroup with sub-`sequence` |
+| `ActivityItemLink` | Junction doc; an item used formatively inside a LearningActivity (a poll, a practice question) with its own optional `sequence`; Hash key over `(activity, item)`; no points, no clearance, counts toward no coverage (ADR-0061) |
 
 ### Critical API constraints (not enforced by TerminusDB schema)
 
@@ -174,6 +175,7 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 14. `Attestation.claimRef` and `claimText` — both present (a claim) or both absent (an endorsement), `claim_incomplete` (ADR-0028)
 15. `Attestation.attestedBy` — the resolved identity. The pipeline fills it before looking for the record to replace, since it is in the key; a body naming anyone else is `attester_not_caller` (ADR-0028, ADR-0032)
 16. `fragmentId` on `Attestation`, `DesignNote` and `DesignFinding` — the record names exactly one `subject` (`fragment_needs_one_subject`), which has a part with that `fragmentId` at `asOf` when that is checked, else as the write leaves it (`unknown_fragment`; ADR-0028 decision 6, `invariants/fragmentRef.ts`)
+17. `ActivityItemLink.sequence` — must be unique within a `LearningActivity`; independent of every module and group sequence (`duplicate_sequence`; ADR-0061)
 
 Pending, not yet enforced: `LearningDataset.producedBy` required for Armature-administered assessments (Phase 6). The list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021's non-aggregation guard) and filters `Optional` enum or reference and `Set` fields in the hub, since the store answers those template queries with a 500 (checks Y2, Y3, Y5).
 
@@ -182,7 +184,7 @@ Pending, not yet enforced: `LearningDataset.producedBy` required for Armature-ad
 Armature uses junction documents extensively for M:M relationships and semantically rich associations. This is intentional — relationships are first-class artifacts, not just edges. See ADR-0003.
 
 Every junction document follows the same pattern:
-- Named after both sides: `NeedEvidenceLink`, `ModuleActivityLink`, `ActivityGroupMember`
+- Named after both sides: `NeedEvidenceLink`, `ModuleActivityLink`, `ActivityGroupMember`, `ActivityItemLink`
 - Carries the relationship-level data that makes it worth reifying
 - Back-reference pattern: children carry the parent reference, not the other way around (ADR-0004)
 
@@ -225,6 +227,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0005** — Module content sequencing (affects activity ordering logic)
 - **ADR-0013** — Minimum cardinality at schema level (supersedes ADR-0006, whose "the API enforces what the store cannot" principle the invariants engine now carries); amended by ADR-0060, which removed the minimum on `AssessmentItem.assesses`
 - **ADR-0060** — Items may exist unaligned: `assesses` is zero or more, rule 1 retired, the alignment read lists `itemsWithoutObjective`; `LearningActivity.targets` keeps its minimum until a client shows the case; how to encourage alignment without requiring it is open (plan §6)
+- **ADR-0061** — Formative use of items inside activities: `ActivityItemLink` (activity, item, optional `sequence`; constraint 17); counts toward no coverage; the trace follows it downstream and shows an activity with its modules
 - **ADR-0007** — ModuleObjective as the junction for a module's declaration (its computed field superseded by ADR-0056)
 - **ADR-0024** — Client-supplied identifiers and replace semantics; 409 on an id held by another type (constraint 12)
 - **ADR-0025** — Design process data lives in the commit graph (author and reason on every commit, reads at a ref, ETag/If-Match, merge, no history rewriting)
