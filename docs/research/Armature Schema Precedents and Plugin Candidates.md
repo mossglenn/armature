@@ -111,6 +111,6 @@ Categories 1–5 are plugins Armature could have; category 6 is systems whose pl
 
 ### Open questions
 
-- [ ] Draft ADR-0039 from the MCP model?
-- [ ] Pick a first exporter: Storyline (demo value) or text2qti (Canvas reach)?
-- [ ] Add a *challenges* relation alongside `NeedEvidenceLink`, or wait for usage evidence per progressive formalization?
+- [x] Draft ADR-0039 from the MCP model? *Done 2026-10-20 as ADR-0059 (Proposed), numbered past the candidate block per the ADR index's rule; it adopts candidate 0039's capabilities half and leaves projections and cadence open.*
+- [x] Pick a first exporter: Storyline (demo value) or text2qti (Canvas reach)? *text2qti, decided 2026-10-20; recorded in the development plan §8 with the reasons (an LMS the outcomes importer can read back from; a reversible syntax; no QTI authoring). Plugin work, outside this repository.*
+- [x] Add a *challenges* relation alongside `NeedEvidenceLink`, or wait for usage evidence per progressive formalization? *Wait, decided 2026-10-20. `confidence` is reliability, not direction, so a negative value is not the answer; the path when evidence arrives is an optional `relation` enum on the link. Recorded as a plan §6 question with the evidence that would act on it, and noted in the schema guide and explainer.*
