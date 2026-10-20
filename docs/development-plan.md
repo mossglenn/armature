@@ -999,7 +999,18 @@ Recorded so the decisions are inherited rather than rediscovered.
   optimistic concurrency are wrapped, not rebuilt.
 - No structured replacement for any free-text rationale field without usage evidence (ADR-0010).
 - No import or export *format* work beyond JSON-LD. QTI, CASE and xAPI are referenced, not
-  implemented; translating to them is plugin work.
+  implemented; translating to them is plugin work. *Decided 2026-10-20: the first exporter
+  plugin targets text2qti's plain-text syntax (v0.8.0, August 2026; Markdown-based text to a QTI
+  1.2 package that Canvas imports; multiple-choice, true/false, multiple-answers, numerical,
+  short-answer, essay and file-upload items; per-choice feedback, points, groups and titles).
+  It was chosen over a Storyline spreadsheet exporter because it reaches an LMS that the outcomes
+  importer can read results back from (the Canvas Outcome Results API), so one LMS closes
+  Narrative 1 end to end; because its syntax, read in reverse, models a plain-text importer that
+  assigns `fragmentId` on parse; and because emitting its text reaches Canvas without writing
+  QTI. It lives outside this repository; the hub's part is ADR-0031's export route and
+  profiles, and the exporter is the first consumer of the Phase 7 client package. What it loses
+  on the way out (`fragmentId`, `assesses`, `purpose`, item identity across re-exports) is the
+  evidence ADR-0031 needs about what an export profile must carry beside the format.*
 - No binary content in the graph. Files and asset trees are referenced by content hash and
   revision coordinate and live in a content-addressed store behind the API or in a store the
   tool manages; the store is a backend, never a schema fact.
