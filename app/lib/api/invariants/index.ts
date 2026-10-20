@@ -7,7 +7,7 @@ import { validateAttestation } from './attestation';
 import { validateDesignFinding } from './designFinding';
 import { checkFragmentRef } from './fragmentRef';
 import { validateItemInstance } from './itemInstance';
-import { validateActivityGroupMember, validateModuleContentLink } from './moduleContent';
+import { validateActivityGroupMember, validateActivityItemLink, validateModuleContentLink } from './moduleContent';
 import { checkReferences } from './references';
 
 /**
@@ -20,7 +20,7 @@ import { checkReferences } from './references';
  * every write regardless of route:
  *
  *   0  reference class            references.ts (generic, every type)
- *   1  AssessmentItem.assesses    Zod .min(1) from @min_cardinality (schemas.ts, the generated Zod validation schemas)
+ *   1  (retired by ADR-0060)      an item may assess nothing; the alignment read lists it
  *   2  LearningActivity.targets   Zod .min(1)
  *   3  module content sequence    moduleContent.ts (one namespace for both link types)
  *   4  group member sequence      moduleContent.ts
@@ -42,6 +42,7 @@ import { checkReferences } from './references';
  *                                the subject is not written in the same request
  *  16  a named part exists        fragmentRef.ts (generic, every class with a top-level fragmentId:
  *                                one subject, and it has that part at asOf or after the write)
+ *  17  formative use sequence     moduleContent.ts (ActivityItemLink.sequence unique within an activity; ADR-0061)
  *
  * A validator sees the whole batch and the branch being written, never main
  * by default. Every violation is collected and reported at once as a 422.
@@ -104,6 +105,7 @@ const VALIDATORS: Record<string, Validator> = {
   ModuleActivityLink: validateModuleContentLink,
   ModuleActivityGroupLink: validateModuleContentLink,
   ActivityGroupMember: validateActivityGroupMember,
+  ActivityItemLink: validateActivityItemLink,
   DesignFinding: validateDesignFinding,
   Attestation: validateAttestation,
 };
