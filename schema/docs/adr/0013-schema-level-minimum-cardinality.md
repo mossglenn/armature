@@ -23,6 +23,10 @@ which `app/lib/api/write.test.ts` exercises ("enforces @min_cardinality from the
 reassessment in `docs/development-plan.md` §6, on evidence from a second tool that holds unaligned
 questions (`docs/research/dq-questionbank-mapping.md` §4.1). Still binding; nothing is decided.
 
+**Amended 2026-10-20 by ADR-0060:** the minimum on `AssessmentItem.assesses` is removed; an item may
+exist before it is aligned, and the alignment read lists items that assess nothing. The minimum on
+`LearningActivity.targets` stands until a client shows the activity case (ADR-0060 decision 4).
+
 ## Context
 ADR-0006 established that minimum cardinality constraints on `Set` fields — specifically `AssessmentItem.assesses` and `LearningActivity.targets` must each contain at least one element — are enforced by the API because TerminusDB's `Set` type does not support minimum cardinality at the schema level.
 
