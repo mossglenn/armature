@@ -53,6 +53,11 @@ The `PrerequisiteType` enum distinguishes three meaningfully different prerequis
 ### 5. NeedEvidenceLink: confidence
 The `ConfidenceLevel` enum (High, Medium, Low, Preliminary) records the designer's assessment of each piece of evidence's reliability at the point of linking it to a need. This makes the needs analysis process inspectable — the graph records not just what evidence was used but how much weight it carried.
 
+> **Note (2026-10-20):** `confidence` is reliability, not direction. The link records evidence
+> that informed a need; evidence weighed and found to argue against one has no relation, and a
+> negative confidence would not be the fix. Left open deliberately under ADR-0010; the path, when
+> usage calls for it, is an optional `relation` enum beside this field (development plan §6).
+
 ### 6. LearningNeed: priority
 The `NeedPriority` enum (Critical, High, Medium, Low) captures triage decisions when needs analysis produces more needs than a course can address. Optional — not all projects require explicit prioritization — but when it matters, the decision is preserved in the graph.
 

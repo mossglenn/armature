@@ -910,6 +910,25 @@ what evidence would be enough.
   Evidence already in hand: QuiQui (live polls) and Tessera (standalone questions on content
   pages), with the activity and strategy designer reference client. Decide before the ordered
   module-content view is built, since that view is where an activity's items would appear.
+- **Evidence that argues against a need.** *Raised 2026-10-20* (precedents survey, Part 1 §A:
+  Micropublications keeps *supports* and *challenges* as distinct claim-evidence relations).
+  `NeedEvidenceLink.confidence` records the designer's assessment of a piece of evidence's
+  *reliability* (`High`, `Medium`, `Low`, `Preliminary`; ADR-0009 decision 5), not the
+  *direction* it points: a rigorous study that contradicts a need and a thin survey that supports
+  it differ on both axes, and one field cannot carry both. The link's existence is read as
+  support ("informed by", "grounded in"), so evidence that was weighed and found to argue against
+  a need has no relation in the graph today. A designer's two workarounds are text in
+  `LearningNeed.rationale` and a `DesignFinding` about the need with the evidence in `regarding`,
+  which is a concern with a lifecycle, not a standing weight in the analysis. A negative
+  confidence value would be the wrong fix: it conflates the two axes and loses the reliability of
+  the challenging evidence. The progressive-formalization path (ADR-0010) is a second optional
+  enum on the same link, `relation: Supports | Challenges`, read as `Supports` when absent, so
+  no existing link changes meaning and no migration runs; a separate junction type is warranted
+  only if a challenge turns out to need its own data, such as a rebuttal. Evidence to act: a
+  designer recording a contradicting source in `rationale` text, or a finding used as a standing
+  weight, because the graph gave them nowhere else to put it. Clients that would need it: the
+  needs-analysis intake and the AI design assistant (proposing a need and the evidence against
+  it). Until then the schema guide and the explainer say what `confidence` is and is not.
 - **Separate API service.** When Phase 7's container and client package exist, the move is
   mechanical. Evidence: a plugin that cannot or should not depend on a Next.js deployment, or
   the hosted demo needing independent scaling.
