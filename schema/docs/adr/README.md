@@ -87,7 +87,7 @@ All 36 ADRs, grouped by when they were written. Statuses are as of 2026-10-18.
 |---|---|---|---|
 | [0011](0011-placeholder-objectives-for-incomplete-authoring.md) | Placeholder Objectives for Incomplete Authoring States | Accepted | When a designer knows a prerequisite exists but has not written that objective yet, they create a draft placeholder objective rather than an incomplete prerequisite record. |
 | [0012](0012-design-note-for-free-form-rationale.md) | DesignNote for Free-Form Rationale Capture | Accepted; amended by ADR-0014, ADR-0017 and ADR-0028 | Adds `DesignNote`, a free-text explanation of why a design decision was made, which can be attached to any design record. |
-| [0013](0013-schema-level-minimum-cardinality.md) | Schema-Level Minimum Cardinality (Conditional) | Accepted (supersedes ADR-0006) | Because the database supports "at least one" rules on lists, the schema declares them itself instead of leaving them to the API. |
+| [0013](0013-schema-level-minimum-cardinality.md) | Schema-Level Minimum Cardinality (Conditional) | Accepted (supersedes ADR-0006); amended by ADR-0060 (the minimum on `AssessmentItem.assesses` removed) | Because the database supports "at least one" rules on lists, the schema declares them itself instead of leaving them to the API. |
 | [0014](0014-armature-document-abstract-base-class.md) | ArmatureDocument Abstract Base Class | Accepted; amended by ADR-0017 and ADR-0022 | Every named design artifact inherits a common parent, `ArmatureDocument`, which supplies its label, description and author. |
 | [0015](0015-user-type-and-authorship-model.md) | User Type and Authorship Model | Accepted; amended by ADR-0032 | Adds the `User` record for the people and tools that take part in design, and a `createdBy` field on artifacts; signing in is left to an outside system. |
 
@@ -123,7 +123,7 @@ are not yet written; see [Numbering](#numbering).
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
-### 0054–0059: Later decisions (October 2026)
+### 0054–0060: Later decisions (October 2026)
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -133,6 +133,7 @@ are not yet written; see [Numbering](#numbering).
 | [0057](0057-records-name-the-commit-they-refer-to.md) | Records That Refer to a State of the Graph Name Its Commit | Accepted and implemented (2026-10-18); decision 5 amended by ADR-0028 for attestations | Datasets, metrics and findings carry an `asOf` field naming the saved version of the design they refer to, so results can be compared with the design as it was. |
 | [0058](0058-item-statistics-are-metrics-about-the-item.md) | Item Statistics Are Metrics About the Item | Accepted and implemented (2026-10-18) | A question's difficulty and discrimination are recorded as measurements that name the question, the administration and the design version, not as fields on the question; summaries are calculated when asked for. |
 | [0059](0059-capability-negotiation-per-request.md) | Capability Negotiation Per Request | Proposed (2026-10-20); adopts the capabilities half of candidate ADR-0039; resolves ADR-0026's deferral | A tool states on each request which revision of the API it was written against and which features it relies on; the hub answers each request on its own, naming what it does support when it must refuse. One discovery route lets a tool ask first. Modeled on the Model Context Protocol's 2026 revision. |
+| [0060](0060-items-may-exist-unaligned.md) | Items May Exist Unaligned | Accepted and implemented (2026-10-20); amends ADR-0013 | A question may be stored before anyone has said which objective it assesses. It then counts toward no objective, and the alignment read lists every such question so the gap is visible. How Armature encourages alignment without requiring it is an open question. |
 
 ## How to add an ADR
 
@@ -141,7 +142,7 @@ are not yet written; see [Numbering](#numbering).
    otherwise have to reverse-engineer from the code.
 2. **Pick the number.** If you are writing one of the reserved decisions (0030, 0031, 0034),
    use its reserved number. Otherwise take the next number after the highest existing ADR
-   (ADR-0059 at the time of writing). If the decision adopts a research candidate from
+   (ADR-0060 at the time of writing). If the decision adopts a research candidate from
    `docs/research/adr-candidates.md`, name the candidate in the Status section, as ADR-0025 does
    for candidate 0036 and ADR-0059 for candidate 0039.
 3. **Name the file** `NNNN-short-decision-title.md` in this directory.
