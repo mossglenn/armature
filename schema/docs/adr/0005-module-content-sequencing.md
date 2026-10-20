@@ -12,6 +12,11 @@ Accepted
 **Note (2026-10-08):** the uniqueness rules this ADR assigns to the API are enforced since Phase 3
 as constraints 3 and 4; see the note under Consequences.
 
+**Note (2026-10-20):** ADR-0061 adds a third independent sequence, `ActivityItemLink.sequence`,
+ordering the items an activity uses formatively (constraint 17). The composed module-content view
+this ADR assigns to the API, still unbuilt, nests an activity's items under the activity when it
+is built.
+
 ## Context
 A module's content is heterogeneous — it can contain standalone LearningActivities and ActivityGroups, interleaved in a pedagogically meaningful order. These are stored in two separate junction document types: `ModuleActivityLink` and `ModuleActivityGroupLink`.
 

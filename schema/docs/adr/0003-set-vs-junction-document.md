@@ -14,6 +14,10 @@ Accepted
 **Note (2026-10-08):** the decision stands. One example in the Decision is out of date since
 ADR-0056; see the note there.
 
+**Note (2026-10-20):** ADR-0061 adds a third kind of multi-valued relationship, an item used
+formatively inside an activity, as the junction `ActivityItemLink` with `sequence`, by this ADR's
+own test: the use carries order.
+
 ## Context
 The schema has two categories of multi-valued relationships:
 1. **Objective mappings** — an AssessmentItem assesses multiple objectives; a LearningActivity targets multiple objectives. The connection is the entire relationship — no additional data is needed.

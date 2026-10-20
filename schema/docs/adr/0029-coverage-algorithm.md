@@ -21,6 +21,9 @@ question PROJECT_CONTEXT recorded under "Coverage computation algorithm". The co
 rejected alternatives below are kept as written; ADR-0056 records what building decisions 4 to 6
 revealed.
 
+**Note (2026-10-20):** decision 1's population is unchanged by ADR-0061: an item used formatively
+inside an activity (`ActivityItemLink`) is not a placement and counts toward nothing.
+
 **Superseded in part by ADR-0056** (decisions 4 to 6; decision 7 moot). Amends ADR-0007 (decisions 1 to 3 define what
 its coverage counts; decisions 4 to 6 amended its computed field and triggers, both now superseded
 by ADR-0056) and ADR-0019 decision 4, and adopts ADR-0019's eligibility rule as decision 2. **Clarified 2026-10-08:** the

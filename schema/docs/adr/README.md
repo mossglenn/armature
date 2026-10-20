@@ -72,9 +72,9 @@ All 36 ADRs, grouped by when they were written. Statuses are as of 2026-10-18.
 |---|---|---|---|
 | [0001](0001-abstract-base-type-for-evidence.md) | Abstract Base Type for Learning Evidence | Accepted; amended by ADR-0014 | Measured results and written findings share one parent type, `LearningEvidence`, so anything that cites evidence can accept either kind. |
 | [0002](0002-references-not-ownership.md) | All Relationships Use References, Not Ownership | Accepted; amended by ADR-0022 and ADR-0033 | Records point at each other instead of nesting inside one another, so each can be reused and has its own history; a question's embedded parts are the one exception. |
-| [0003](0003-set-vs-junction-document.md) | Set References vs. Junction Documents for Multi-Valued Relationships | Accepted (one example out of date since ADR-0056) | A plain list of links is used when a connection carries no information of its own; a separate "junction" record is used when the connection carries data such as an order, a role or a reason. |
+| [0003](0003-set-vs-junction-document.md) | Set References vs. Junction Documents for Multi-Valued Relationships | Accepted (one example out of date since ADR-0056; a third kind added by ADR-0061) | A plain list of links is used when a connection carries no information of its own; a separate "junction" record is used when the connection carries data such as an order, a role or a reason. |
 | [0004](0004-back-references-on-children.md) | Back-References on Children, Not Arrays on Parents | Accepted; amended by ADR-0022 | In a parent-child relationship the child names its parent (an assessment names its module), rather than the parent keeping a list of children. |
-| [0005](0005-module-content-sequencing.md) | Module Content Sequencing via Shared Integer Space | Accepted | Standalone activities and activity groups in a module share one numbered order, and activities inside a group have their own separate order. |
+| [0005](0005-module-content-sequencing.md) | Module Content Sequencing via Shared Integer Space | Accepted; annotated by ADR-0061 (a third sequence, an activity's formative items) | Standalone activities and activity groups in a module share one numbered order, and activities inside a group have their own separate order. |
 | [0006](0006-minimum-cardinality-enforced-by-api.md) | Minimum Cardinality Constraints Enforced by API, Not Schema | Superseded by ADR-0013 | Rules such as "a question must assess at least one objective" were to be checked by the API, until the database proved able to check them itself. |
 | [0007](0007-module-objective-as-programmatic-junction.md) | ModuleObjective as Programmatic Junction with Computed Fields | Superseded in part by ADR-0056; amended by ADR-0019 and ADR-0029; generic write path confirmed 2026-10-18 | A module's declaration that it teaches an objective is its own record, carrying the objective's role and the reason for it; the stored coverage field it also carried was removed. |
 | [0008](0008-top-level-enums.md) | Enums Defined as Top-Level Types | Accepted (its list of values is out of date; see the note in it) | Every controlled list of values, such as review status or Bloom's level, is defined once in the schema and shared wherever it is used. |
@@ -123,7 +123,7 @@ are not yet written; see [Numbering](#numbering).
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
-### 0054–0060: Later decisions (October 2026)
+### 0054–0061: Later decisions (October 2026)
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -134,6 +134,7 @@ are not yet written; see [Numbering](#numbering).
 | [0058](0058-item-statistics-are-metrics-about-the-item.md) | Item Statistics Are Metrics About the Item | Accepted and implemented (2026-10-18) | A question's difficulty and discrimination are recorded as measurements that name the question, the administration and the design version, not as fields on the question; summaries are calculated when asked for. |
 | [0059](0059-capability-negotiation-per-request.md) | Capability Negotiation Per Request | Proposed (2026-10-20); adopts the capabilities half of candidate ADR-0039; resolves ADR-0026's deferral | A tool states on each request which revision of the API it was written against and which features it relies on; the hub answers each request on its own, naming what it does support when it must refuse. One discovery route lets a tool ask first. Modeled on the Model Context Protocol's 2026 revision. |
 | [0060](0060-items-may-exist-unaligned.md) | Items May Exist Unaligned | Accepted and implemented (2026-10-20); amends ADR-0013 | A question may be stored before anyone has said which objective it assesses. It then counts toward no objective, and the alignment read lists every such question so the gap is visible. How Armature encourages alignment without requiring it is an open question. |
+| [0061](0061-formative-use-of-items-in-activities.md) | Formative Use of Items Inside Activities | Accepted and implemented (2026-10-20); annotates ADR-0003, ADR-0005 and ADR-0029 | A question asked during an activity (a poll, a practice question) is recorded by a small link record naming the activity, the question and the order. It carries no score and counts toward no coverage; the trace and impact reads reach it. |
 
 ## How to add an ADR
 
@@ -142,7 +143,7 @@ are not yet written; see [Numbering](#numbering).
    otherwise have to reverse-engineer from the code.
 2. **Pick the number.** If you are writing one of the reserved decisions (0030, 0031, 0034),
    use its reserved number. Otherwise take the next number after the highest existing ADR
-   (ADR-0060 at the time of writing). If the decision adopts a research candidate from
+   (ADR-0061 at the time of writing). If the decision adopts a research candidate from
    `docs/research/adr-candidates.md`, name the candidate in the Status section, as ADR-0025 does
    for candidate 0036 and ADR-0059 for candidate 0039.
 3. **Name the file** `NNNN-short-decision-title.md` in this directory.
