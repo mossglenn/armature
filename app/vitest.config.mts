@@ -28,5 +28,9 @@ export default defineConfig({
   test: {
     include: ['lib/**/*.test.ts'],
     env: envLocal(),
+    // Integration tests against a live store: a branch merge, delete or a
+    // coverage walk of several writes can pass the 5-second default when the
+    // store is busy (seen 2026-10-18 and twice on 2026-10-20, never twice in a row).
+    testTimeout: 15_000,
   },
 });
