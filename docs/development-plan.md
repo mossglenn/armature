@@ -675,6 +675,16 @@ CoQui receives: ask 4's attestation half, and the type its outbox is holding row
 and data-first adoption by learning scientists.
 **Serves:** P6, P7, P8.
 
+**Research notes.** The precedents survey of 2026-10-20
+(`docs/research/schema-precedents-and-plugin-candidates.md`, Part 1 §A and §B) names outside
+vocabularies to borrow rather than invent. For ADR-0030: CTDL-ASN's graded alignment terms (exact,
+broad, narrow, major, minor, prerequisite) if an `ExternalRef` is given a relation to what it
+references, and CaSS's competency relations as the set designers will ask for next. For ADR-0031's
+JSON-LD: the W3C Web Annotation Data Model as the shape of notes, findings and attestations (a
+target, a fragment selector and a state), PROV-O for provenance, and LRMI `AlignmentObject`
+(`assesses`, `teaches`, `requires`) for `assesses` and `targets`, so an export reads in vocabularies
+other tools already consume.
+
 Work:
 - [ ] **ADR-0030: External references and attachments.** Two optional subdocument sets on
       `ArmatureDocument`, both pointing outward so nothing is duplicated in the graph.
@@ -910,8 +920,9 @@ what evidence would be enough.
   Evidence already in hand: QuiQui (live polls) and Tessera (standalone questions on content
   pages), with the activity and strategy designer reference client. Decide before the ordered
   module-content view is built, since that view is where an activity's items would appear.
-- **Evidence that argues against a need.** *Raised 2026-10-20* (precedents survey, Part 1 §A:
-  Micropublications keeps *supports* and *challenges* as distinct claim-evidence relations).
+- **Evidence that argues against a need.** *Raised 2026-10-20* (the precedents survey,
+  `docs/research/schema-precedents-and-plugin-candidates.md`, Part 1 §A: Micropublications keeps
+  *supports* and *challenges* as distinct claim-evidence relations).
   `NeedEvidenceLink.confidence` records the designer's assessment of a piece of evidence's
   *reliability* (`High`, `Medium`, `Low`, `Preliminary`; ADR-0009 decision 5), not the
   *direction* it points: a rigorous study that contradicts a need and a thin survey that supports

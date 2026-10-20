@@ -92,7 +92,7 @@ docs/
   client-changes.md        # What client tools (CoQui first) must act on, newest first: what changed, what a client does, CoQui's mappings. Add an entry for every change to /api/v1 or the schema a client would act on
   demo-api.md              # RETIRED demo-era API spec, kept for history
   positionpaper/           # The position paper (March 2026); not edited
-  research/                # Standards-precedents survey, candidate ADRs 0035–0053, reading list (2026-10-06 snapshot)
+  research/                # Standards-precedents survey, candidate ADRs 0035–0053, reading list (2026-10-06 snapshot); schema-precedents-and-plugin-candidates.md (2026-10-20); three client mappings (DQ QuestionBank Core, Tessera, QuiQui)
   vendor/terminusdb/       # GENERATED — vendored TerminusDB docs; INDEX.md, VERSION.json, 50 curated pages
 .claude/
   CLAUDE.md                # This file

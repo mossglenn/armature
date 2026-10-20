@@ -1182,6 +1182,8 @@ In October 2026 a survey of about forty precedents was conducted (`docs/research
 
 The survey also maps where Armature sits: upstream of delivery and outcome records, joined to them by identifiers rather than by a shared data model, and referencing competency frameworks rather than containing them. Its literature table addresses the claims a reviewer is most likely to test; several of its sources are listed in Appendix E.
 
+A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-candidates.md`) looked outward at rationale and attestation models, competency graphs, the learning-design lineage and candidate plugins. Its strongest finding is that the W3C Web Annotation Data Model, a 2017 web standard for comments and reviews attached to documents, independently arrived at the shape of an attestation in ADR-0028: a target resource, a selector for one part of it, and the state of that resource at a point in time, which correspond to Armature's subject, `fragmentId` and `asOf` (Section 24.2). It also supplied the per-request versioning of the Model Context Protocol (MCP, a published protocol for connecting tools to AI assistants) as the design for ADR-0059, and three questions it raised were decided the same day: text2qti as the first exporter target, `confidence` on a need-evidence link as reliability rather than direction, and ADR-0059 itself.
+
 ## 29. Limitations and risks
 
 > **[Brevity candidate]** Some of these repeat earlier sections; they are gathered here for a reviewer's convenience.
