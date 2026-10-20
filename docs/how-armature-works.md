@@ -460,7 +460,7 @@ Read left to right, this is the instructional design process: **evidence** groun
 
 **Assessment.**
 
-- **`AssessmentItem`**: a single reusable question in the **item bank**. It exists independently of any test. It has a stem (the question), an ordered list of options, optional general feedback for correct and incorrect responses, an item type (eight formats: `MultipleChoice`, `MultipleSelect`, `TrueFalse`, `ShortAnswer`, `Essay`, `Matching`, `Ordering`, `FillInTheBlank`), a review status, an optional Bloom's level, and the set of objectives it **assesses** (at least one; an item that assesses nothing "has no place in the artifact graph"). Its statistics are not stored on it but recorded as measurements about it (Section 12.14).
+- **`AssessmentItem`**: a single reusable question in the **item bank**. It exists independently of any test. It has a stem (the question), an ordered list of options, optional general feedback for correct and incorrect responses, an item type (eight formats: `MultipleChoice`, `MultipleSelect`, `TrueFalse`, `ShortAnswer`, `Essay`, `Matching`, `Ordering`, `FillInTheBlank`), a review status, an optional Bloom's level, and the set of objectives it **assesses** (possibly none: since 20 October 2026 an item may exist before anyone aligns it, counting toward no objective until it is, with the alignment read listing every such item; ADR-0060). Its statistics are not stored on it but recorded as measurements about it (Section 12.14).
 - **`Assessment`**: a named collection of placed items for a purpose within one module, with settings such as whether to randomize order, a passing score and the number of retakes allowed.
 - **`ItemInstance`**: the placement of a bank item into one assessment, with its position (`sequence`), point value, whether its options are randomized, and its placement status (Section 12.8).
 
@@ -673,8 +673,8 @@ The project numbers the rules 0 to 13 (the numbering is used across the document
 | # | Rule | Why |
 |---|---|---|
 | 0 | Every reference must point to a document of the declared type (or a subtype) | The database checks only that the target exists. Without this rule, a module's `course` could name an assessment item, or a design note's subject could be a person |
-| 1 | An assessment item assesses at least one objective | An item that assesses nothing has no place in the design graph |
-| 2 | An activity targets at least one objective | Same, for activities |
+| 1 | *Retired 20 October 2026 (ADR-0060).* An item may assess no objective | An imported question bank holds questions before anyone aligns them; refusing them would keep a true state of the design out of the graph. An unaligned item counts toward nothing, and the alignment read lists it |
+| 2 | An activity targets at least one objective | Kept when rule 1 was retired: no tool has yet shown an activity that exists before it targets anything (ADR-0060, decision 4) |
 | 3 | Within a module, activity links and group links never share a position number | They share one sequence (Section 12.6) |
 | 4 | Within an activity group, members never share a position number | Order must be unambiguous |
 | 5 | Within an assessment, placed items never share a position number | Same |
@@ -814,7 +814,7 @@ If-Match: "<the commit the plugin last read>"
 
 The hub then:
 
-1. **Checks shape** against the generated rules for `AssessmentItem`: every required field present, the stem and options well-formed, `status` one of the four allowed values, at least one objective in `assesses`, no unknown fields. Failure is a 400 listing each problem and where it is.
+1. **Checks shape** against the generated rules for `AssessmentItem`: every required field present, the stem and options well-formed, `status` one of the four allowed values, no unknown fields. Failure is a 400 listing each problem and where it is.
 2. **Resolves identity.** It finds the `User` on `main` whose external identifier is `reviewer@example.edu`, or refuses with 401 (unknown user).
 3. **Checks identity of the document.** If the identifier already belongs to a document of another type, it refuses with 409. If a document with this identifier exists, this write is a *replace*.
 4. **Sets provenance.** On a new document it sets `createdBy` to the resolved user; on a replace it preserves whatever `createdBy` was stored, ignoring any value in the request. If the user does not yet exist on this branch, it prepares a copy from `main`. (Had the plugin been writing a dataset, a metric or a finding, this step would also fill `asOf`, the commit the record refers to; Section 24.1.)
@@ -882,6 +882,7 @@ The alignment read (`/intelligence/alignment`, optionally for one module) uses B
 - **Items below their objective's level**: an item assessing an *Analyze* objective at the *Remember* level, with the gap in levels.
 - **Objectives no item reaches at or above their level.**
 - **Objectives no activity targets.** (Activities have no Bloom's level in the schema, so "an activity at the objective's level" is read as "any activity targets it" until the schema says otherwise.)
+- **Items that assess nothing** (since 20 October 2026, ADR-0060): every unaligned item in the bank, or, for one module, those placed in its assessments. They are in no objective's scope, so they appear here and nowhere else.
 - **The unleveled**: objectives and items with no Bloom's level, which cannot be judged.
 
 This is the paper's fourth quiz-tool example ("identify when the Bloom's level of a proposed item is inconsistent with the level specified for the objective it measures"). The schema's documentation states the rule the read applies, that "items should assess at the same or higher cognitive level as the objective they target"; the project treats it as a heuristic, not a law.
@@ -1156,7 +1157,7 @@ The development plan (§6) lists questions to be decided deliberately, each with
 - **A structured `DesignDecision` type.** *Evidence:* recurring structure in how `DesignNote.category` is used.
 - **A fourth finding status** for a reviewer withdrawing their own concern. *Evidence:* a second tool needing the distinction.
 - **One placement per item per assessment.** *Evidence:* sections inside assessments, or an import source that repeats an item.
-- **Must every assessment item name an objective?** The schema requires it (ADR-0013), so a question cannot be stored before it is aligned. CoQui asked to relax this for drafts and withdrew the ask; a question-bank tool reviewed in October 2026 holds questions that exist before anyone aligns them, which reopens it. The options are to keep the rule, relax it for drafts, or drop it and have the alignment read report items that assess nothing. *Evidence to settle it:* the first real import of an unaligned bank.
+- **Must every assessment item name an objective?** *Decided 20 October 2026 (ADR-0060): no.* A question may be stored before it is aligned; it counts toward no objective, and the alignment read lists every such question. The question that replaces it: **how does Armature encourage alignment without requiring it at all times?** Candidates are a readiness rule (a question, or its placement, may not be approved while unaligned), the coverage read naming unaligned questions placed in a module, a finding raised from the alignment read, or an assistant proposing alignments for a person to attest. *Evidence to settle it:* the first imported bank, and what its users do with the list of unaligned questions.
 - **Items used formatively, inside activities.** A live classroom poll or an ungraded question on a content page uses items inside a learning activity, which the schema cannot record: items reach a module only through assessments. Whether such formative use belongs in the graph, and in what form, is open. *Evidence already in hand:* two real tools reviewed in October 2026 (a live audience response system and a course framework), with the activity designer reference client.
 - **A separate API (application programming interface) service.** *Evidence:* a plugin that should not depend on a Next.js deployment, or independent scaling needs.
 - **Which file store the hub operates, and when.** *Evidence:* the first tool that develops multi-file assets on Armature.
@@ -1281,7 +1282,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | `NeedEvidenceLink` | relationship | need, evidence, confidence? | hash (need, evidence) |
 | `LearningObjective` | artifact | state, bloomsLevel?, generatedBy? | random |
 | `PrerequisiteRecord` | relationship (also named, so inherits `ArmatureDocument`) | objective, prerequisite, prerequisiteType, rationale | hash (objective, prerequisite) |
-| `AssessmentItem` | artifact | stem, options, correctFeedback?, incorrectFeedback?, itemType, status, bloomsLevel?, assesses (≥1) | random |
+| `AssessmentItem` | artifact | stem, options, correctFeedback?, incorrectFeedback?, itemType, status, bloomsLevel?, assesses (a set, may be empty) | random |
 | `Fragment` | fragment (abstract) | fragmentId, text | embedded |
 | `TextFragment` | fragment | (as Fragment) | embedded |
 | `ItemOption` | fragment | isCorrect, feedback?, purpose? | embedded |
@@ -1326,7 +1327,7 @@ All API (application programming interface) routes are under `/api/v1`. Reads ac
 | `POST /users` | Register a user on `main` (`{ message, user }`) |
 | `GET /intelligence/coverage/:moduleId` | A module's coverage (both figures, counts, items, undeclared objectives) |
 | `GET /intelligence/coverage?course=` | Coverage for every module of a course |
-| `GET /intelligence/alignment?module=` | Bloom's-level mismatches and objectives without activities |
+| `GET /intelligence/alignment?module=` | Bloom's-level mismatches, objectives without activities, and items that assess nothing |
 | `GET /intelligence/trace/:type/:id` | The design lifecycle walked both ways from a document |
 | `GET /intelligence/impact/:type/:id` | Every document that references a document |
 
@@ -1341,7 +1342,7 @@ See `schema/docs/adr/README.md` for the full index with one-line summaries. In b
 | 0016–0023 | The CoQui fit analysis (August–September 2026): keys, the `DesignRecord` abstract root, readiness, coverage and readiness, findings, the non-goal on practitioner performance, embedded item parts, fragment identifiers |
 | 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0030, 0031 and 0034 are reserved and unwritten; 0028 (attestations) was written 18 October 2026 |
 | 0035–0053 | Research candidates, not decisions (`docs/research/adr-candidates.md`) |
-| 0054–0059 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item, and a proposal (0059, not yet built) for how a tool states per request which revision of the API and which features it relies on |
+| 0054–0060 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item, and a proposal (0059, not yet built) for how a tool states per request which revision of the API and which features it relies on |
 
 ## Appendix E. References
 

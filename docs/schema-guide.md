@@ -70,7 +70,7 @@ GET /api/v1/documents/Assessment?module=Module/how-ai-works
 
 | Relationship | Stored as |
 |---|---|
-| Item assesses objectives | `AssessmentItem.assesses`: a set (at least one) |
+| Item assesses objectives | `AssessmentItem.assesses`: a set, possibly empty (an item may exist before it is aligned, ADR-0060; it then counts toward no objective) |
 | Activity targets objectives | `LearningActivity.targets`: a set (at least one) |
 | Need informed by evidence | `NeedEvidenceLink` with `confidence` |
 | Objective requires objective | `PrerequisiteRecord` with `prerequisiteType` and `rationale` |

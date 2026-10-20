@@ -151,7 +151,7 @@ These are settled. Don't re-open them without a strong reason.
 - **Junction documents for semantically rich M:M relationships** (ADR-0003)
 - **Back-references on children** (ADR-0004)
 - **Shared integer sequence space for module content** (ADR-0005)
-- **Minimum cardinality is enforced at schema level** (ADR-0013, superseding ADR-0006); the rules the store cannot express are enforced by the API's invariants engine
+- **Minimum cardinality is enforced at schema level** (ADR-0013, superseding ADR-0006); the rules the store cannot express are enforced by the API's invariants engine. Since 2026-10-20 an item may assess no objective (ADR-0060): alignment is encouraged and made visible by the alignment read, not required at the door
 - **ModuleObjective is the junction for a module's declaration of an objective** (ADR-0007), written by clients through the generic document API (confirmed as ADR-0007's decision 2026-10-18), and carries no computed value: coverage is derived on read, never stored (ADR-0056). (ADR-0007 originally said it would be created programmatically by the API and not edited through a UI; that is not what was built)
 - **The API is a boundary CoQui never crosses** — plugins talk to Armature routes, never to TerminusDB. The API is a host-neutral Hono application under `/api/v1` (ADR-0054), served by the Next.js app in this repo for the current phase (ADR-0026); a separate process serving the same application remains the destination and the triggers for the move are recorded in ADR-0026
 

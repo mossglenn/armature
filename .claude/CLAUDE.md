@@ -140,7 +140,7 @@ To add a new type: (1) update `schema.json` (with ADR), giving the class `@metad
 |---|---|
 | `DesignRecord` | Abstract root of every artifact and relationship; the type `DesignNote.subject` and `DesignFinding.subject` point at. `User` is outside it (ADR-0017) |
 | `LearningObjective` | Central node — everything connects to it |
-| `AssessmentItem` | Reusable question in the item bank; a tree of fragments (stem, options, feedbacks) with its own `status`; placed into Assessments via `ItemInstance` |
+| `AssessmentItem` | Reusable question in the item bank; a tree of fragments (stem, options, feedbacks) with its own `status`; placed into Assessments via `ItemInstance`; may assess no objective yet (ADR-0060) |
 | `Fragment` / `TextFragment` / `ItemOption` | Subdocument parts of an item, returned inline; identity is the client-assigned `fragmentId`, never the nested store id (ADR-0022, ADR-0023, ADR-0033) |
 | `ItemInstance` | Assessment-context wrapper around an `AssessmentItem`; its `status` is placement clearance, distinct from the item's own (ADR-0018) |
 | `DesignFinding` | An evidence-grounded concern about any design record, or one part of it (`fragmentId`), with `status` and resolution rationale (ADR-0020, ADR-0028) |
@@ -155,11 +155,11 @@ To add a new type: (1) update `schema.json` (with ADR), giving the class `@metad
 
 ### Critical API constraints (not enforced by TerminusDB schema)
 
-These are enforced by the invariants engine in `app/lib/api/invariants/` on every write, whatever the route; its `index.ts` maps each number below to the module that checks it. TerminusDB enforces field types, required fields, `@min_cardinality`, enum values and that a referenced document *exists*. It does **not** check the class of a referenced document (verified 2026-10-07, `scripts/platform_checks.js` check L), and it cannot express cross-document or conditional rules. Shape (types, required fields, enums, minimum cardinality) is checked first by the generated Zod schemas and answered with 400; the rules below are answered with 422 `invariant_violation`, every violation at once, except where a rule says otherwise (1 and 2 are shape, 400; 12 is 409). `docs/api.md` lists every violation code.
+These are enforced by the invariants engine in `app/lib/api/invariants/` on every write, whatever the route; its `index.ts` maps each number below to the module that checks it. TerminusDB enforces field types, required fields, `@min_cardinality`, enum values and that a referenced document *exists*. It does **not** check the class of a referenced document (verified 2026-10-07, `scripts/platform_checks.js` check L), and it cannot express cross-document or conditional rules. Shape (types, required fields, enums, minimum cardinality) is checked first by the generated Zod schemas and answered with 400; the rules below are answered with 422 `invariant_violation`, every violation at once, except where a rule says otherwise (2 is shape, 400; 12 is 409; 1 is retired). `docs/api.md` lists every violation code.
 
 0. **Every reference field's target must be an instance of the declared class or a subclass.** Generic, applies to every type. This is what keeps a `User` out of `DesignNote.subject` and an `AssessmentItem` out of `Module.course` (ADR-0014, ADR-0017 amended)
-1. `AssessmentItem.assesses` — must contain at least one `LearningObjective` (schema `@min_cardinality`, ADR-0013; checked as shape by Zod, 400)
-2. `LearningActivity.targets` — must contain at least one `LearningObjective` (same: shape, 400)
+1. *Retired 2026-10-20 (ADR-0060).* `AssessmentItem.assesses` may be empty or absent: an item may exist before it is aligned; it counts toward no objective's coverage, and `GET /api/v1/intelligence/alignment` lists it under `itemsWithoutObjective`. Readers treat an absent `assesses` as none (the store returns no field for an empty set)
+2. `LearningActivity.targets` — must contain at least one `LearningObjective` (schema `@min_cardinality`, ADR-0013; checked as shape by Zod, 400; kept after rule 1's retirement until a client shows an activity that exists before it targets anything, ADR-0060 decision 4)
 3. `ModuleActivityLink.sequence` and `ModuleActivityGroupLink.sequence` — must be unique across both types for a given Module (they share one integer namespace)
 4. `ActivityGroupMember.sequence` — must be unique within a group
 5. `ItemInstance.sequence` — must be unique within an Assessment
@@ -223,7 +223,8 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0003** — Set vs. junction document (affects all write operations)
 - **ADR-0004** — Back-references on children (affects all list queries)
 - **ADR-0005** — Module content sequencing (affects activity ordering logic)
-- **ADR-0013** — Minimum cardinality at schema level (supersedes ADR-0006, whose "the API enforces what the store cannot" principle the invariants engine now carries)
+- **ADR-0013** — Minimum cardinality at schema level (supersedes ADR-0006, whose "the API enforces what the store cannot" principle the invariants engine now carries); amended by ADR-0060, which removed the minimum on `AssessmentItem.assesses`
+- **ADR-0060** — Items may exist unaligned: `assesses` is zero or more, rule 1 retired, the alignment read lists `itemsWithoutObjective`; `LearningActivity.targets` keeps its minimum until a client shows the case; how to encourage alignment without requiring it is open (plan §6)
 - **ADR-0007** — ModuleObjective as the junction for a module's declaration (its computed field superseded by ADR-0056)
 - **ADR-0024** — Client-supplied identifiers and replace semantics; 409 on an id held by another type (constraint 12)
 - **ADR-0025** — Design process data lives in the commit graph (author and reason on every commit, reads at a ref, ETag/If-Match, merge, no history rewriting)
