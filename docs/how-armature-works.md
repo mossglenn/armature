@@ -1339,7 +1339,7 @@ See `schema/docs/adr/README.md` for the full index with one-line summaries. In b
 | 0016–0023 | The CoQui fit analysis (August–September 2026): keys, the `DesignRecord` abstract root, readiness, coverage and readiness, findings, the non-goal on practitioner performance, embedded item parts, fragment identifiers |
 | 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0030, 0031 and 0034 are reserved and unwritten; 0028 (attestations) was written 18 October 2026 |
 | 0035–0053 | Research candidates, not decisions (`docs/research/adr-candidates.md`) |
-| 0054–0058 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item |
+| 0054–0059 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item, and a proposal (0059, not yet built) for how a tool states per request which revision of the API and which features it relies on |
 
 ## Appendix E. References
 
