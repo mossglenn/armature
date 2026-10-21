@@ -242,7 +242,9 @@ TerminusDB
   versioned prefix (ADR-0054, accepted 2026-10-07 after a six-check spike). Moving hosts later is
   a deployment change plus a build configuration that resolves the `@/` alias, never a handler
   change. Every route Phases 2 to 6 add is a Hono route; the legacy Next.js handlers die in
-  Phase 3.
+  Phase 3. (The move was made on 2026-10-21, Phase 7: `app/server.ts` serves the same app
+  standalone, bundled by esbuild into the container `docker/hub.Dockerfile` builds. No handler
+  changed. Next.js remains the development host and serves the pages.)
 - **The schema describes itself.** `@metadata.armature.category` on every class (done, ADR-0027);
   a `GET /schema` route (built 2026-10-21 with ADR-0059, beside `GET /discover`); generated types
   (done) and a typed client (done 2026-10-21, `@armature/client`) derived from the same file.
@@ -782,13 +784,25 @@ Work:
       suite against a v12.0.7 service container after `scripts/wait_for_store.js`,
       `load_schema.js` and `seed_data.js`; `app/vitest.global-setup.mts` waits for the seeded
       database and warms it with a branch, a write and a read before the first test file. `tsc --noEmit` joined the lint job the same day.)
-- [ ] Containerize the hub: an entry file that serves the Hono app with `@hono/node-server`,
+- [x] Containerize the hub: an entry file that serves the Hono app with `@hono/node-server`,
       behind a build or transpile step that resolves the `@/` path alias (Node cannot; the
       ADR-0054 spike needed `tsx` for the standalone check). A compose file that runs store and hub
-      together; deploy one hosted instance for the public demo so CoQui's recorded hub is a
-      fallback rather than the source. The Next.js app becomes the demo UI only, deployed
+      together. The Next.js app becomes the demo UI only, deployed
       separately or not at all. (The contract test above runs through `app.request()` against the
       service container, so `npm test` joined CI with it, before the hub was containerized.)
+      (Done 2026-10-21: `app/server.ts` and `app/lib/hub.ts`; `npm run build:hub`, esbuild
+      bundling the entry, the API, the workspace packages, hono and zod into one `dist/server.mjs`;
+      `docker/hub.Dockerfile`, two stages, the runtime image holding Node and that file;
+      a `hub` service in `docker/docker-compose.yml` behind the `hub` profile, so the
+      store-only `docker compose up` local workflow is unchanged; `lib/hub.test.ts` serving the
+      app over a socket and comparing with `app.request()`; CI bundles it and builds and starts
+      the image. The alias had already gone: nothing under `app/lib/api/` imports with `@/`,
+      and the bundle step exists because the workspace packages are TypeScript source with
+      extensionless imports.)
+- [ ] Deploy one hosted instance for the public demo so CoQui's recorded hub is a fallback
+      rather than the source. Where to host (PROJECT_CONTEXT names Railway or Render) and the
+      `oidc` resolver it needs before anyone but the demo team can reach a writing route
+      (ADR-0032) are decided with it.
 - [ ] `docs/schema-guide.md` revised from the reference-client perspective: what a tool author
       needs to know to write and read the graph. (A first conceptual version was written on
       2026-10-08, with `docs/api.md` and `docs/how-armature-works.md`.)

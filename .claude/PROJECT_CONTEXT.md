@@ -99,7 +99,7 @@ Flow: Designer creates/edits an AssessmentItem → CoQui queries the Armature co
 This demonstrates Armature as pre-delivery design-time intelligence.
 
 ### Demo environment
-- Local: TerminusDB in Docker Compose and the API on the host (`npm run dev`) for screen-capture video; Phase 7 containerizes the API so Compose runs both
+- Local: TerminusDB in Docker Compose and the API on the host (`npm run dev`) for screen-capture video; since 2026-10-21 Compose runs both with `--profile hub` (the API as its own container, `docker/hub.Dockerfile`)
 - Web: Deployed to Railway or Render for stakeholder access
 - Seed data: A realistic but fictional course ("Introduction to AI for Instructional Designers", 48 documents, then one attestation in a second commit, then one dataset and three metrics in a third, since 2026-10-20). Narrative 1 walks on `main` from `LearningMetric/mod3-bias-type-difficulty`; the seed has no activities, so formative use is shown only in tests
 

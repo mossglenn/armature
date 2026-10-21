@@ -47,13 +47,15 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 - identity resolution for people and AI agents
 - the five design-intelligence reads (coverage, alignment, trace, impact, and attestation staleness) and a read-only Coverage View page
 - external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
-- 145 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
+- 175 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
 
 - `@armature/types` and `@armature/client`, installable packages a plugin builds on: the schema as TypeScript and every route as a typed function (Phase 7, 2026-10-21)
 
 - the per-request version contract (ADR-0059): `Armature-Version` and `Armature-Capabilities` headers, `GET /discover` and `GET /schema`
 
-**Next:** the rest of Phase 7 (a containerized hub, the schema guide for tool authors). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+- the hub as its own container: `docker/hub.Dockerfile` bundles the API into one file and serves it with Node; `docker compose --profile hub up` runs store and hub together (Phase 7, 2026-10-21)
+
+**Next:** the rest of Phase 7 (one hosted instance, the schema guide for tool authors). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
 **Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
@@ -106,7 +108,21 @@ node scripts/seed_data.js
 cd app && npm run dev
 ```
 
-Then open <http://localhost:3000> for the module list and Coverage View, or call the API directly:
+Then open <http://localhost:3000> for the module list and Coverage View, or call the API directly.
+
+To run the API as its own process instead, without Next.js, bundle it and start it (it reads `app/.env.local` too, and listens on port 3100):
+
+```bash
+cd app && npm run build:hub && npm run start:hub
+```
+
+Or run store and hub both as containers, which is what a hosted instance does; the schema and seed are still loaded from the host as in step 4:
+
+```bash
+cd docker && docker compose --profile hub up -d --build && cd ..
+```
+
+Either way the API answers at `/api/v1` (on port 3100 for the standalone hub, 3000 for the Next.js host); the examples below use the Next.js address.
 
 ```bash
 # Every learning objective on main
@@ -131,7 +147,7 @@ curl -X PUT "http://localhost:3000/api/v1/documents/DesignNote/my-note?branch=my
 
 Writes need the `Armature-User` header carrying a registered user's external identifier; the seed registers `demo-designer@example.edu`. The [API reference](docs/api.md) documents every route.
 
-**Tests.** `npm test` in `app/` runs the 145 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
+**Tests.** `npm test` in `app/` runs the 175 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
 
 **After a schema change.** Run `npm run generate:types` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
 
@@ -143,7 +159,7 @@ Plugins (CoQui, future tools)  →  Armature API (/api/v1)  →  TerminusDB
 ```
 
 - **TerminusDB** stores the design graph as typed documents and keeps every change as a commit, with branches and merges built in.
-- **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). For now a Next.js app hosts it through a single catch-all route; a standalone process is the planned destination (ADR-0026).
+- **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). Two hosts serve the same application: a Next.js app through a single catch-all route (the local development server, which also serves the pages), and `app/server.ts`, a standalone Node process bundled into the container image `docker/hub.Dockerfile` builds (ADR-0026; Phase 7).
 - **Plugins never talk to the database directly.** The API is where the rules, identity and history are enforced.
 - **The schema is the single source of truth.** Type definitions, request validation and the schema appendix are generated from `schema/schema.json`.
 

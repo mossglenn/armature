@@ -6,7 +6,7 @@ This document describes every route of the Armature API (application programming
 
 ### Base path and versioning
 
-Every route is under `/api/v1`. The version segment is part of the contract; a change that would break existing clients goes under a new version (ADR-0026). When the app runs locally the full address is `http://localhost:3000/api/v1/...`.
+Every route is under `/api/v1`. The version segment is part of the contract; a change that would break existing clients goes under a new version (ADR-0026). When the app runs locally the full address is `http://localhost:3000/api/v1/...` under the Next.js development server, or `http://localhost:3100/api/v1/...` from the standalone hub (`npm run start:hub` in `app/`, or the `hub` container in `docker/docker-compose.yml`); both serve the same application.
 
 Within the prefix the contract has dated **revisions** (ADR-0059): each dated entry in [`client-changes.md`](client-changes.md) is one, named by its date, `YYYY-MM-DD`. Revisions are additive, so a hub serves every revision up to its newest. Nothing is negotiated up front and the hub keeps nothing between requests; each request is answered on its own:
 
