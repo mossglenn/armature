@@ -48,7 +48,7 @@ lib/
     classes.ts                What the generated schema data says about a class
     write.ts                  The one write pipeline for every type
     errors.ts                 ApiError: status, stable code, message
-    invariants/               The invariants engine: rules 0 to 12, one module per constrained type
+    invariants/               The invariants engine: rules 0 to 19, one module per constrained type
     intelligence/             The coverage algorithm and the per-request graph reader
     routes/                   documents, branches, users, intelligence
     *.test.ts                 Integration tests (app, write, intelligence)
@@ -59,7 +59,7 @@ vitest.config.mts             Test configuration: the @ alias, and .env.local so
 
 ## Tests
 
-`npm test` runs 95 integration tests that call the Hono app in-process and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. The tests are not yet in CI; Phase 7 of the development plan adds a database service container so they can run there.
+`npm test` runs 135 integration tests that call the Hono app in-process and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. The tests are not yet in CI; Phase 7 of the development plan adds a database service container so they can run there.
 
 ## Rules for code in this directory
 

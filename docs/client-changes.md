@@ -15,6 +15,44 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-20 · External references and attachments (ADR-0030)
+
+**What changed.** Every artifact (every type inheriting `ArmatureDocument`) may carry two new
+optional sets of embedded records: `externalRefs`, identifiers in other systems
+(`{ "@type": "ExternalRef", "system": "CASE" | "QTI" | "xAPI" | "LTI" | "Other", "identifier", "label"? }`),
+and `attachments`, verifiable references to bytes or to a revision of a tree of bytes in a store the
+hub may or may not operate (`{ "@type": "Attachment", "store": "S3" | "Lore" | "Git" | "Other",
+"storeUri", "contentHash", "hashAlgorithm", "revision"?, "path"?, "container"?, "mediaType"?,
+"byteSize"?, "role"?, "label"? }`). Every fragment (a stem, an option, a feedback) may carry
+`attachments` too, and `Fragment.text` is now optional. Two rules: an attachment in a `Git` or
+`Lore` store names a `revision`, and `contentHash` has the length its `hashAlgorithm` implies
+(422 `revision_required`, `hash_malformed`, rule 18); a fragment carries text or at least one
+attachment (422 `empty_fragment`, rule 19). Rule 9 now checks option text for uniqueness only where
+present. The graph never holds bytes, and the hub does not fetch or verify them.
+
+**What a client does.**
+
+- **Guard `fragment.text`.** It may be absent on a part that is a picture or a clip; render the
+  attachment instead. Treat an absent `externalRefs` or `attachments` as empty, as for `assesses`.
+- **Send attachments and references inline**, inside the record, with their `@type`. Never store
+  their nested `@id`; it regenerates on every replace.
+- **Name the hash algorithm as the IANA registry does** (`sha-256`, `sha-1`, `md5`); give a
+  `revision` for a versioned store. A store or algorithm the hub does not know is accepted as
+  written.
+- **Expect staleness.** Writing a new `contentHash` or `revision` on a fragment's attachment is a
+  change to that part: attestations on it report `Stale`, as after a text edit.
+- **A text-less option that used to be 400 is now 422** `empty_fragment` with the fragment named,
+  unless it carries an attachment.
+
+**CoQui:** no change until it shows media options; a CoQui item that imports with a picture choice
+maps the picture onto an `Attachment` on the option and leaves `text` out. **Curriculum mappers and
+importers:** a CASE competency, a QTI source or an xAPI activity goes in `externalRefs`.
+
+Detail: ADR-0030; the API reference's rules table (rules 9, 18, 19) and its documents section;
+`docs/schema-guide.md` §4.12.
+
+---
+
 ## 2026-10-20 · Formative use of items inside activities (ADR-0061)
 
 **What changed.** A new relationship record, `ActivityItemLink`, records that a `LearningActivity`

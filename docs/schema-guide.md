@@ -49,8 +49,8 @@ Every class declares a category in its schema metadata (`@metadata.armature.cate
 |---|---|---|
 | `artifact` | `Course`, `Module`, `LearningObjective`, `AssessmentItem`, `Assessment`, `LearningActivity`, `ActivityGroup`, `LearningNeed`, `LearningEvidence` (abstract), `LearningMetric`, `DescriptiveEvidence`, `LearningDataset`, `DesignNote`, `DesignFinding` | A primary design record with a `label`, an optional `description` and a `createdBy`. Writable. A client may choose its identifier |
 | `relationship` | `NeedEvidenceLink`, `PrerequisiteRecord`, `ModuleObjective`, `ModuleActivityLink`, `ModuleActivityGroupLink`, `ActivityGroupMember`, `ItemInstance`, `Attestation` | A junction document. Writable. Its identifier is derived from its key fields; a client never supplies one |
-| `fragment` | `Fragment` (abstract), `TextFragment`, `ItemOption` | An embedded part of an item. Not a document; written as part of its item |
-| `infrastructure` | `User`, `DesignRecord` (abstract), `ArmatureDocument` (abstract) | Identity and abstract roots. `User` has its own routes; the roots cannot be created |
+| `fragment` | `Fragment` (abstract), `TextFragment`, `ItemOption` | An embedded part of an item. Not a document; written as part of its item. Carries text, attachments or both |
+| `infrastructure` | `User`, `DesignRecord` (abstract), `ArmatureDocument` (abstract), `ExternalRef`, `Attachment` | Identity, abstract roots, and the two embedded coordinates that point out of the graph (§4.12). `User` has its own routes; the roots cannot be created; the coordinates are written as part of the record that carries them |
 
 ## 4. Patterns you will meet everywhere
 
@@ -125,7 +125,8 @@ Rules for fragments:
 - **The authoring tool assigns `fragmentId`** once, when the part is created. Never derive it from position or display order, never regenerate it, never reuse a retired one. Armature checks only that it is unique within the item (rule 8).
 - **Address a part as the pair `{ item @id, fragmentId }`.** The database's own nested identifiers for parts are regenerated every time the item is replaced; never store them. A `DesignNote`, `DesignFinding` or `Attestation` about one part carries the part's `fragmentId` beside its `subject`, which then names exactly one record, and the part must exist in it (rule 16, ADR-0028).
 - **The options list is in presentation order.** Identity is `fragmentId`, not position.
-- **Option text must be present and unique within the item, and the number of correct options must suit the item type** (rule 9): multiple choice and true/false have exactly one correct option (true/false exactly two options); multiple select has one or more.
+- **Every fragment carries text or at least one attachment** (rule 19). A picture option has `attachments` and no `text` (§4.12).
+- **Option text, where present, must be unique within the item, and the number of correct options must suit the item type** (rule 9): multiple choice and true/false have exactly one correct option (true/false exactly two options); multiple select has one or more.
 - `ItemOption.feedback` is plain text, not a fragment, so per-option feedback cannot yet be addressed as a part. (CoQui's handoff proposed a `{ fragmentId, text }` shape for it; that divergence is recorded and unresolved.)
 
 ### 4.7 Two statuses for items (ADR-0018)
@@ -175,19 +176,53 @@ An `Attestation` records that one person (or agent) affirmed or declined somethi
 
 Write it through `POST /api/v1/documents` without an `@id`; the API adds `attestedBy` and `asOf`.
 
+### 4.12 Pointing outside the graph: external references and attachments (ADR-0030)
+
+Two embedded shapes let a record point at things the graph does not hold. Every artifact (every type that inherits `ArmatureDocument`) may carry both; every fragment may carry attachments.
+
+```json
+{
+  "@id": "LearningObjective/explain-training-data",
+  "@type": "LearningObjective",
+  "label": "Explain how training data shapes model behavior",
+  "state": "Active",
+  "externalRefs": [
+    { "@type": "ExternalRef", "system": "CASE", "identifier": "https://case.example.edu/ims/case/v1p0/CFItems/4f2c", "label": "AI.2.1" }
+  ]
+}
+```
+
+```json
+{ "@type": "ItemOption", "fragmentId": "f-chart", "isCorrect": true,
+  "attachments": [
+    { "@type": "Attachment", "store": "Git", "storeUri": "https://example.edu/course-assets.git",
+      "revision": "c0ffee1", "path": "img/bias-types.png",
+      "contentHash": "ab…64 hex digits…", "hashAlgorithm": "sha-256", "mediaType": "image/png" }
+  ] }
+```
+
+Rules:
+
+- **An `ExternalRef` is the other system's identifier, as that system writes it**, with the system named (`CASE`, `QTI`, `xAPI`, `LTI`, `Other`). It copies nothing else in; the optional `label` is a convenience. It carries no relation to its target (exact, broad, narrow); that enum is added beside `identifier` when a client needs it.
+- **An `Attachment` never holds bytes.** It names where they are (`store`, `storeUri`, optional `container` and `path`), which state (`revision`, required when the store is `Git` or `Lore`, rule 18) and what they are (`contentHash` and `hashAlgorithm`, both mandatory). `hashAlgorithm` is an IANA registry name (`sha-256`, `sha-1`, `md5`, and so on); for the names the hub knows it checks the hash's length (rule 18). The hub does not fetch or verify bytes; a reference is a claim the writing tool makes.
+- **Neither has identity.** Like fragments, they are subdocuments whose nested `@id` the database regenerates on every replace; never store one. Unlike fragments they have no `fragmentId` and are not parts: a note or attestation is about the artifact or the fragment that carries the reference.
+- **A changed attachment is a changed fragment.** Re-export an image and write the new hash, and every attestation on that option goes `Stale` (§4.11), exactly as after a text edit.
+- **Absent means none.** The database returns no field for an empty set, so read `externalRefs ?? []`.
+
 ## 5. What TerminusDB checks and what the API checks
 
 | The database checks | The API checks (the invariants engine) |
 |---|---|
 | Field types, required fields, enum values | That every reference names a document of the declared class (rule 0) |
 | Minimum set sizes (`@min_cardinality`) | Unique positions in modules, groups, assessments and activities (rules 3 to 5, 17) |
-| That a referenced document exists | Fragment and option rules (rules 8, 9) |
+| That a referenced document exists | Fragment and option rules (rules 8, 9, 19) |
 | Unique identifiers | Item and placement status consistency (rule 10) |
 | | A reason for every dismissal (rule 11) |
 | | No identifier reused across types (rule 12) |
 | | `asOf` names a real state that holds the record's subjects (rule 13) |
 | | An attestation's claim comes whole and its attester is the caller (rules 14, 15) |
 | | A named part exists in the record's one subject (rule 16) |
+| | An attachment names a revision when its store is versioned, and its hash has the length its algorithm implies (rule 18) |
 
 The database does **not** check that a reference points at the right *class* of document (platform check L). Never describe a typed reference as "schema-enforced"; the API enforces it. The full rule list, with response codes, is in the [API reference](api.md#the-write-pipeline).
 

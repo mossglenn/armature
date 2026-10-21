@@ -669,7 +669,7 @@ for a dropped option, and all `Current` on the round branch and at the attested 
 
 CoQui receives: ask 4's attestation half, and the type its outbox is holding rows for.
 
-### Phase 6: Ecosystem and the research path (2 sessions)
+### Phase 6: Ecosystem and the research path (2 sessions) — in progress since 2026-10-20
 
 **Goal.** Make the paper's §5 and §6 structurally possible: external standards by reference,
 and data-first adoption by learning scientists.
@@ -686,7 +686,7 @@ target, a fragment selector and a state), PROV-O for provenance, and LRMI `Align
 other tools already consume.
 
 Work:
-- [ ] **ADR-0030: External references and attachments.** Two optional subdocument sets on
+- [x] **ADR-0030: External references and attachments** (written and built 2026-10-20; `ExternalRef` carries `system`, `identifier` and an optional `label`; `Attachment` is as drafted below with `hashAlgorithm` an IANA registry name rather than an enum; attachments also sit on every `Fragment`, whose `text` became optional; constraints 18 and 19; platform check AD). Two optional subdocument sets on
       `ArmatureDocument`, both pointing outward so nothing is duplicated in the graph.
       `externalRefs: Set<ExternalRef>` with `system` (an enum seeded with `CASE`, `QTI`, `xAPI`,
       `LTI`, `Other`) and `identifier` (URI or string). `attachments: Set<Attachment>`, a
@@ -716,13 +716,13 @@ Work:
       "this module was built against revision X of this asset tree" without a schema change),
       and that the hub-managed backend is chosen in a separate ADR when a reference client needs
       one (§6). This is the minimum P9 permits that does not foreclose versioned assets.
-- [ ] **ADR-0025 amendment: externally versioned artifacts.** Design process data for an
+- [x] **ADR-0025 amendment: externally versioned artifacts** (ADR-0030 decision 6, 2026-10-20). Design process data for an
       artifact whose bytes live in an asset store is carried by the graph commits that move its
       `Attachment.revision`, each with author and reason, plus the asset store's own log reached
       through the reference. The graph is a projection of the asset history, not a replay of it
       (§2). The amendment also states the cross-reference convention: a tool that controls the
       asset store writes the graph commit id into the asset revision message when it can.
-- [ ] **Attachment endpoints, in two modes.** For a **hub-managed** store:
+- [ ] **Attachment endpoints, in two modes** (the tool-managed validator landed with ADR-0030 on 2026-10-20; the hub does not yet verify hashes; the hub-managed endpoints are not built). For a **hub-managed** store:
       `POST /api/v1/attachments` streams bytes, computes the hash, and returns an `Attachment`
       for the caller to place on its artifact; `GET /api/v1/attachments/url` takes a reference
       and returns a short-lived URL the plugin's browser can fetch, or proxies when the store
@@ -798,12 +798,12 @@ The decision records this plan reserved or produced, in number order, with their
 | 0020 | DesignFinding | 1 | Accepted and implemented | |
 | 0022, 0023 | Embedded parts, fragmentId | 1 | Accepted and implemented | |
 | 0024 | Client-supplied identifiers | 1 | Accepted and implemented | Resolves 0016 decision 5 and 0023's open question. Its lossless-write requirement (candidate 0035) is still open; see §6 |
-| 0025 | Design process data lives in the commit graph | 2 | Accepted and implemented | Reconciles the paper's model with the store; to be amended in Phase 6 for externally versioned artifacts |
+| 0025 | Design process data lives in the commit graph | 2 | Accepted and implemented; amended by 0030 | Reconciles the paper's model with the store; amended 2026-10-20 for externally versioned artifacts (0030 decision 6) |
 | 0026 | API host and route versioning | 0 | Accepted; decision 1 amended by 0054 | Resolved the PROJECT_CONTEXT contradiction; the legacy routes it named were retired in Phase 3 |
 | 0027 | Schema self-description via `@metadata` | 1 | Accepted and implemented, except `GET /schema` | Replaced `JUNCTION_IDS`; `GET /api/v1/schema` not built (see §6) |
 | 0028 | Attestation | 5 | Accepted and implemented 2026-10-18 | Generic form of CoQui's proposal, with the claim optional; Hash key over subject, fragment, claim and attester; staleness a read; `fragmentId` on notes and findings; amends ADR-0057 decision 5 for attestations |
 | 0029 | Coverage algorithm | 4 | Decisions 1 to 3 accepted 2026-10-08; 4 to 6 superseded by 0056 | Counted over placements; two figures; default thresholds as parameters |
-| 0030 | External references and attachments | 6 | Reserved, not written | P6; attachment references with mandatory content hash, backend left open |
+| 0030 | External references and attachments | 6 | Accepted and implemented 2026-10-20 | P6; `externalRefs` and `attachments` on every artifact, `attachments` on every fragment, `text` optional; mandatory content hash with IANA algorithm names, `revision` for versioned stores (constraint 18), a fragment has content (constraint 19); backend and hub-managed endpoints left open; amends 0025, 0033, 0002 |
 | 0031 | Export profiles and schema slices | 6 | Reserved, not written | P7, P8; implements ADR-0021's deferred section |
 | 0032 | Identity resolution | 3 | Accepted and implemented | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |
 | 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Accepted; shape implemented | Abstract `Fragment` subdocument; `ItemOption` as a specialization; generic kinds with `sys:JSON` payload and per-kind validation land with the first non-text item type |
@@ -1152,6 +1152,11 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - Reset and squash exist; reset moves the head and keeps commits.
 
 **Writes, identity and concurrency** (Phases 2 and 3)
+- *Verified (2026-10-20, check AC, for ADR-0062):* the document API's `DELETE` is refused with
+  400 `api:SchemaCheckFailure` while another document references the target; otherwise it answers
+  204 and is a commit carrying the given author and message, after which the document is gone
+  from the branch and still readable at the commit before. A `GET` of a missing document answers
+  HTTP 200 with a 404 envelope in the body (`api:DocumentNotFound`); the adapter reads the body.
 - *Corrected:* the JavaScript client sets `author` from its connection user and provides no
   override on any write method. The HTTP document API accepts `author` and `message` query
   parameters on `POST`, `PUT` and `DELETE`. All store calls from the API layer go over HTTP
@@ -1201,6 +1206,14 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   inline by default (no `unfold` needed); a `List` typed to an abstract subdocument accepts
   subclasses polymorphically; `sys:JSON` on a subdocument round-trips; a replace of the parent
   regenerates every subdocument id (checks D to J, `scripts/platform_checks.js`).
+- *Verified (2026-10-20, check AD, for ADR-0030):* a `Set` of subdocuments declared on an abstract
+  class, added to the schema while instances exist, loads without clearing and is inherited by a
+  leaf; an enum inside a subdocument round-trips; a document written before the field existed
+  reads back with no field (an empty `Set` is absent); a required field weakened to `Optional`
+  loads with instances present; a `Set` of subdocuments inside a `List` subdocument round-trips
+  (an option with an attachment and no text); a no-op replace regenerates nested subdocument ids
+  at every depth, so two states compare equal only once `@id` is removed throughout, which
+  `fragments.ts` does; changing an attachment's hash changes exactly the fragment that carries it.
 - A client-supplied `@id` is honored under an explicit `@key: Random`; `POST` under an existing
   id fails with `api:DocumentIdAlreadyExists`; `PUT` replaces; `@capture` and `@ref` resolve
   intra-batch references including to Hash-keyed junctions (check K; the seed uses it).

@@ -72,7 +72,7 @@ Infrastructure — the layer underneath tools that makes design decisions visibl
 ### Relationship to existing systems
 - **LearnSphere / DataShop (CMU):** Post-delivery analytics. Studies what learners did. Armature is pre-delivery design infrastructure. They are complementary — Armature could feed data downstream to LearnSphere, closing the full loop from design decision through learner outcome back to design revision.
 - **OLI / Torus (CMU):** Integrated authoring and delivery platform with relational (Postgres) backend. Not a graph. No design rationale capture. Armature differs by modeling relationships explicitly and treating the design process as primary data.
-- **xAPI / LTI / QTI / CASE:** Standards for interoperability: xAPI (Experience API) for learning activity records, LTI (Learning Tools Interoperability) for launching tools from an LMS (learning management system), QTI (Question and Test Interoperability) for assessment items, CASE (Competencies and Academic Standards Exchange) for competency frameworks. Armature references these by identifier (plan principle P6; external references planned for Phase 6) rather than competing with or translating between them.
+- **xAPI / LTI / QTI / CASE:** Standards for interoperability: xAPI (Experience API) for learning activity records, LTI (Learning Tools Interoperability) for launching tools from an LMS (learning management system), QTI (Question and Test Interoperability) for assessment items, CASE (Competencies and Academic Standards Exchange) for competency frameworks. Armature references these by identifier (plan principle P6; `externalRefs` on every artifact since ADR-0030, 2026-10-20) rather than competing with or translating between them.
 
 ---
 
