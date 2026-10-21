@@ -778,6 +778,12 @@ Two people may edit the same branch at once. Armature uses **optimistic concurre
 
 The token (the commit identifier the client sends) is the branch's latest commit, not a fingerprint of one document, so "the branch moved" may mean someone changed a different document. This is a deliberate simplification. The database's own token format never appears in Armature's API (application programming interface); the hub translates (ADR-0025 decision 7).
 
+### 14.9 Which contract a tool was written against (ADR-0059)
+
+The API grows by dated revisions under one address prefix (`/api/v1`): a new route, a new field, a new rule, each recorded with its date in `docs/client-changes.md`. A tool written against one revision may meet a hub at another. Nothing is negotiated up front, because a request to Armature is complete in itself and the hub remembers nothing between requests (Section 12). Instead, a request may say which revision it was written against (`Armature-Version: 2026-10-21`), and every answer says which revision served it. A hub that does not serve the named revision refuses and lists the ones it does, so an unattended tool (an outcomes importer on a schedule, say) fails on its first request with an error that names the gap, rather than after writing half a dataset.
+
+One case was decided deliberately (21 October 2026): a tool *newer* than the hub. Since revisions only add, an older hub's answer to a read is something the newer tool already understands, so reads are served. A write from a newer tool may rely on a rule the older hub does not enforce, which the hub cannot detect, so writes are refused. The line is the one the API already draws between reads, which need no identity, and writes, which do. A tool may also name the features it relies on (`Armature-Capabilities`), and a hub that lacks one refuses by name; and `GET /api/v1/discover` answers all of this in one call, pointing at `GET /api/v1/schema`, which returns the schema itself so a tool can learn the types from the hub rather than from a copy of the schema file.
+
 ## 15. Identity: who did what
 
 ### 15.1 The three-system boundary (ADR-0015)

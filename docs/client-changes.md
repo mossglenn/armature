@@ -15,6 +15,31 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-21 · The version contract: `Armature-Version`, `Armature-Capabilities`, `GET /discover`, `GET /schema` (ADR-0059)
+
+**What changed.** The contract has dated revisions: every dated entry of this file is one, and
+this hub serves all of them (they are additive). A request may name the revision it was written
+against in `Armature-Version`; a revision the hub does not serve is refused with 400
+`unsupported_version` listing `supported`, except that a *newer* revision is served on a read and
+refused on a write (so a client ahead of a hub can still look, and stops before its first commit).
+Every response carries `Armature-Version` saying which revision served it. A request may declare
+the capabilities it relies on in `Armature-Capabilities` (`armature/documents`,
+`armature/intelligence.coverage`, …); one the hub lacks is 400 `unsupported_capability` naming it.
+`GET /discover` lists the revisions, the capabilities with their settings (the coverage
+thresholds, the batch limit) and where the schema is; `GET /schema?branch=|ref=` returns the
+schema graph at a ref in the form the store reloads, the route ADR-0027 scheduled in Phase 1.
+Both headers are optional: a client that sends neither is served as before.
+
+**What a client does.** Nothing, to keep working. To fail early and by name, send
+`Armature-Version` with the date of the entry it last read here, and `Armature-Capabilities` with
+what it relies on; or call `GET /discover` first. Read `Armature-Version` from responses to know
+which revision a hub is at. Discover types from `GET /schema` instead of a copy of `schema.json`.
+
+**CoQui.** `@armature/client` sends `Armature-Version` on every call (`CLIENT_REVISION`) and
+returns the response header as `version`; CoQui's own version check can read that, or go.
+
+---
+
 ## 2026-10-21 · A typed client over every route (`@armature/client`)
 
 **What changed.** `packages/client` is a workspace package, `@armature/client`, with one function

@@ -51,7 +51,9 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 
 - `@armature/types` and `@armature/client`, installable packages a plugin builds on: the schema as TypeScript and every route as a typed function (Phase 7, 2026-10-21)
 
-**Next:** the rest of Phase 7 (ADR-0059's per-request version contract, a containerized hub, the schema guide for tool authors). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+- the per-request version contract (ADR-0059): `Armature-Version` and `Armature-Capabilities` headers, `GET /discover` and `GET /schema`
+
+**Next:** the rest of Phase 7 (a containerized hub, the schema guide for tool authors). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
 **Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
