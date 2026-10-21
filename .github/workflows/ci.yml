@@ -22,10 +22,11 @@
 #             (lib/hub.test.ts). The Vitest global setup waits again for the seeded
 #             database before the first test file starts.
 #
-#   hub       Builds the hub's container image (docker/hub.Dockerfile) and checks
+#   images    Builds the hub's container image (docker/hub.Dockerfile) and checks
 #             that it starts and answers GET /api/v1/discover, the one read that
-#             needs no store. What the hub answers over a socket is the contract
-#             job's hub test; this job guards the image itself.
+#             needs no store; then builds the viewer's image (docker/viewer.Dockerfile)
+#             and checks that it starts. What the hub answers over a socket is the
+#             contract job's hub test; this job guards the images themselves.
 name: CI
 
 on:
@@ -91,12 +92,12 @@ jobs:
       - name: Run the contract suite
         run: npm test
 
-  hub:
-    name: Hub container image
+  images:
+    name: Hub and viewer container images
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build the image
+      - name: Build the hub image
         run: docker build -f docker/hub.Dockerfile -t armature-hub .
       - name: Start it and wait for GET /discover
         run: |
@@ -111,3 +112,19 @@ jobs:
       - name: Show the log and stop
         if: always()
         run: docker logs hub; docker rm -f hub
+      - name: Build the viewer image
+        run: docker build -f docker/viewer.Dockerfile -t armature-viewer .
+      - name: Start it and wait for a page
+        # With no hub to read, a page answers 500; the check is that the server
+        # is up and routing, which any status below 500 or a 500 both show.
+        run: |
+          docker run -d --name viewer -p 3000:3000 armature-viewer
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/ || true)
+            if [ "$code" != "000" ]; then echo "answered $code after ${i}s"; exit 0; fi
+            sleep 1
+          done
+          echo "the viewer did not answer within 30s"; docker logs viewer; exit 1
+      - name: Show the viewer log and stop
+        if: always()
+        run: docker logs viewer; docker rm -f viewer
