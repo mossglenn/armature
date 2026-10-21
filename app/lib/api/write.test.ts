@@ -900,4 +900,41 @@ describe('generic write path and invariants (Phase 3)', () => {
       expect(await read()).toBe('Stale');
     });
   });
+  describe('outcome records name their source (constraint 20; ADR-0063)', () => {
+    const xapi = { '@type': 'ExternalRef', system: 'xAPI', identifier: 'https://lms.example.edu/xapi/activities/pilot-quiz' };
+
+    it('refuses a dataset with neither producedBy nor an external reference, and accepts either', async () => {
+      const bare = await put(`/api/v1/documents/LearningDataset/src-bare-${stamp}${q}`, {
+        message: 'x',
+        document: { label: 'Scores from somewhere', cohort: 'Pilot' },
+      });
+      expect(bare.status).toBe(422);
+      expect(await codes(bare)).toEqual(['dataset_without_source']);
+
+      const imported = await put(`/api/v1/documents/LearningDataset/src-ext-${stamp}${q}`, {
+        message: 'Imported from the LMS',
+        document: { label: 'Pilot quiz results', cohort: 'Pilot', externalRefs: [xapi] },
+      });
+      expect(imported.status).toBe(200);
+
+      const produced = await put(`/api/v1/documents/LearningDataset/src-prod-${stamp}${q}`, {
+        message: 'Produced by an assessment here',
+        document: { label: 'Module 1 check results', producedBy: 'Assessment/mod1-assessment' },
+      });
+      expect(produced.status).toBe(200);
+    });
+
+    it('refuses a metric with neither derivedFrom nor an external reference, and accepts a benchmark that names its study', async () => {
+      const base = { label: 'Pass rate', collectedAt: '2026-06-01T00:00:00Z', source: 'Benchmark report', value: 0.7, unit: 'proportion' };
+      const bare = await put(`/api/v1/documents/LearningMetric/src-bare-${stamp}${q}`, { message: 'x', document: base });
+      expect(bare.status).toBe(422);
+      expect(await codes(bare)).toEqual(['metric_without_source']);
+
+      const benchmark = await put(`/api/v1/documents/LearningMetric/src-ext-${stamp}${q}`, {
+        message: 'A published benchmark',
+        document: { ...base, externalRefs: [{ '@type': 'ExternalRef', system: 'Other', identifier: 'doi:10.1000/example.2026.17', label: 'Sector benchmark 2026' }] },
+      });
+      expect(benchmark.status).toBe(200);
+    });
+  });
 });

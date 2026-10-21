@@ -9,6 +9,7 @@ import { validateDesignFinding } from './designFinding';
 import { checkFragmentRef } from './fragmentRef';
 import { validateItemInstance } from './itemInstance';
 import { validateActivityGroupMember, validateActivityItemLink, validateModuleContentLink } from './moduleContent';
+import { validateLearningDataset, validateLearningMetric } from './observations';
 import { checkReferences } from './references';
 
 /**
@@ -47,6 +48,8 @@ import { checkReferences } from './references';
  *  18  attachment is a coordinate  attachments.ts (generic, every document: revision present for a
  *                                versioned store; contentHash the length its algorithm implies; ADR-0030)
  *  19  a fragment has content     attachments.ts (text or at least one attachment; ADR-0030)
+ *  20  an outcome names its source observations.ts (a dataset has producedBy or an externalRef; a metric
+ *                                has derivedFrom or an externalRef; ADR-0063)
  *
  * A validator sees the whole batch and the branch being written, never main
  * by default. Every violation is collected and reported at once as a 422.
@@ -112,6 +115,8 @@ const VALIDATORS: Record<string, Validator> = {
   ActivityItemLink: validateActivityItemLink,
   DesignFinding: validateDesignFinding,
   Attestation: validateAttestation,
+  LearningDataset: validateLearningDataset,
+  LearningMetric: validateLearningMetric,
 };
 
 /** Runs every check over the batch; throws a 422 carrying all violations. */
