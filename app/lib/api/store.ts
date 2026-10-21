@@ -341,6 +341,54 @@ export class Store {
   }
 
   /**
+   * Every instance document at this store's ref in one read, no type given
+   * (platform check AE2). The export route's source (ADR-0031); fine at demo
+   * scale, paged when a deployment outgrows it.
+   */
+  async allDocuments(): Promise<{ documents: TerminusDocument[]; commit: string }> {
+    const r = await this.request('GET', `/api/document/${this.refPath()}`, { query: { as_list: 'true' } });
+    return { documents: Array.isArray(r.body) ? (r.body as TerminusDocument[]) : [], commit: r.commit ?? '' };
+  }
+
+  /**
+   * The schema graph at this store's ref, as the store returns it (AE1): the
+   * `@context` entry and every class and enum. The store decorates each `Set`
+   * with `@max_cardinality: "inf"` and refuses to load it back (AE5), so an
+   * export passes this through `normalizeSchema` first.
+   */
+  async getSchema(): Promise<{ entries: Record<string, unknown>[]; commit: string }> {
+    const r = await this.request('GET', `/api/document/${this.refPath()}`, { query: { graph_type: 'schema', as_list: 'true' } });
+    return { entries: Array.isArray(r.body) ? (r.body as Record<string, unknown>[]) : [], commit: r.commit ?? '' };
+  }
+
+  /**
+   * Operator-side (ADR-0062): replace this branch's schema graph in one
+   * commit, as `scripts/load_schema.js` does (AE5). No route calls this; the
+   * export reproduction test does, standing in for the operator who stands
+   * up a database from an export.
+   */
+  async replaceSchema(entries: Record<string, unknown>[], opts: { author: string; message: string }): Promise<{ commit: string }> {
+    const r = await this.request('POST', `/api/document/${this.refPath({ branch: this.branch })}`, {
+      query: { graph_type: 'schema', full_replace: 'true', author: opts.author, message: opts.message },
+      body: entries,
+    });
+    return { commit: r.commit ?? '' };
+  }
+
+  /**
+   * Operator-side (ADR-0062): insert a list of documents with their ids in one
+   * commit, bypassing the hub's pipeline (AE6). Re-import of an export; no
+   * route calls this.
+   */
+  async insertDocuments(documents: TerminusDocument[], opts: { author: string; message: string }): Promise<{ commit: string }> {
+    const r = await this.request('POST', `/api/document/${this.refPath({ branch: this.branch })}`, {
+      query: { author: opts.author, message: opts.message },
+      body: documents,
+    });
+    return { commit: r.commit ?? '' };
+  }
+
+  /**
    * Administrative: delete one document as a commit. No route calls this;
    * deletion is outside the plugin API (ADR-0024 decision 5). Tests use it to
    * remove the `User` documents they register on `main` (ADR-0032).
@@ -432,6 +480,14 @@ export class Store {
     await this.request('POST', `/api/branch/${this.dbPath}/local/branch/${encodeURIComponent(name)}`, {
       body: { origin: this.refPath(origin) },
     });
+  }
+
+  /**
+   * Operator-side (ADR-0062): a branch with no origin, empty of data and with
+   * an empty schema graph (AE3, AE4). The target an export is reproduced into.
+   */
+  async createEmptyBranch(name: string): Promise<void> {
+    await this.request('POST', `/api/branch/${this.dbPath}/local/branch/${encodeURIComponent(name)}`, { body: {} });
   }
 
   /** The DELETE needs a JSON body; without one the server returns 500 (check T1). */

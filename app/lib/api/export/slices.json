@@ -1,0 +1,28 @@
+{
+  "full": {
+    "description": "Every document at the ref: every design record (everything inheriting DesignRecord) and every User. The only slice that reproduces the graph when re-imported.",
+    "classes": ["DesignRecord", "User"]
+  },
+  "outcomes-loop": {
+    "description": "The position paper's needs-to-objectives-to-outcomes path (Narrative 1): evidence, needs and their links; objectives and prerequisites; items, their placements and assessments; the modules and course they sit in and the objectives modules declare; datasets and metrics. Leaves out activities, notes, findings and attestations. A metric whose subject is an activity is reported as unresolved.",
+    "classes": [
+      "LearningEvidence",
+      "LearningDataset",
+      "LearningNeed",
+      "NeedEvidenceLink",
+      "LearningObjective",
+      "PrerequisiteRecord",
+      "AssessmentItem",
+      "Assessment",
+      "ItemInstance",
+      "Module",
+      "ModuleObjective",
+      "Course",
+      "User"
+    ]
+  },
+  "review": {
+    "description": "The review record: items and the findings, notes and attestations about them, with their authors. For studying how review happens, not what was taught. Subjects that are not items are reported as unresolved.",
+    "classes": ["AssessmentItem", "DesignFinding", "DesignNote", "Attestation", "User"]
+  }
+}
