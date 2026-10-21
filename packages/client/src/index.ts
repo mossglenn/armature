@@ -32,7 +32,7 @@ export const CLIENT_REVISION = '2026-10-21';
 // ── Options and results ──────────────────────────────────────────────────────
 
 export interface ClientOptions {
-  /** The hub's origin, with or without a trailing slash: `http://localhost:3000`. */
+  /** The hub's origin, with or without a trailing slash: `http://localhost:3100`. */
   baseUrl: string;
   /** The external identifier sent as `Armature-User` on every request; needed for writes. */
   user?: string;
@@ -163,6 +163,26 @@ export interface RegisterUser {
   institution?: string;
 }
 
+/**
+ * How the intelligence reads name a document: its id and type plus the few
+ * fields worth showing (label, status, Bloom's level, a metric's value, asOf).
+ */
+export interface Summary {
+  id: string;
+  type: string;
+  label?: string;
+  bloomsLevel?: string;
+  status?: string;
+  state?: string;
+  role?: string;
+  confidence?: string;
+  method?: string;
+  value?: number;
+  unit?: string;
+  /** On a dataset, metric or finding: the commit it refers to (ADR-0057). */
+  asOf?: string;
+}
+
 export type CoverageVerdict = 'Uncovered' | 'PartiallyAssessed' | 'FullyAssessed' | 'OverAssessed';
 
 export interface CoverageFigure {
@@ -170,8 +190,30 @@ export interface CoverageFigure {
   items: number;
 }
 
+/** An item that assesses a declared objective, with how it counts and where it is placed. */
+export interface CoverageItem {
+  id: string;
+  label?: string;
+  bloomsLevel?: string;
+  status?: string;
+  eligibility: 'delivered' | 'projected' | 'none';
+  placements: Array<{ id: string; assessment: string; status?: string }>;
+}
+
+/** One of the module's declarations (a `ModuleObjective`) with its two verdicts. */
+export interface CoverageDeclaration {
+  id: string;
+  role?: string;
+  sequence?: number;
+  roleRationale?: string;
+  objective: Summary;
+  coverage: CoverageFigure;
+  projected: CoverageFigure;
+  assessedBy: CoverageItem[];
+}
+
 export interface CoverageReport {
-  module: TerminusDocument & { label?: string };
+  module: Summary;
   thresholds: { fullyAssessedAt: number; overAssessedAbove: number };
   summary: {
     declared: number;
@@ -179,23 +221,9 @@ export interface CoverageReport {
     projected: Record<CoverageVerdict, number>;
     undeclared: number;
   };
-  objectives: Array<{
-    id: string;
-    role?: string;
-    sequence?: number;
-    roleRationale?: string;
-    objective: TerminusDocument & { label?: string; bloomsLevel?: string };
-    coverage: CoverageFigure;
-    projected: CoverageFigure;
-    assessedBy: Array<{
-      id: string;
-      label?: string;
-      status?: string;
-      eligibility: 'delivered' | 'projected' | 'none';
-      placements: Array<{ id: string; assessment: string; status?: string }>;
-    }>;
-  }>;
-  undeclared: Array<{ objective: unknown; assessedBy: unknown[] }>;
+  objectives: CoverageDeclaration[];
+  /** Objectives the module's items assess but the module never declared. */
+  undeclared: Array<{ objective: Summary; assessedBy: CoverageItem[] }>;
 }
 
 export interface CourseCoverageReport {
@@ -219,8 +247,8 @@ export interface AlignmentReport {
 }
 
 export interface TraceReport {
-  root: unknown;
-  nodes: unknown[];
+  root: Summary;
+  nodes: Summary[];
   edges: Array<{ from: string; to: string; via: string; [key: string]: unknown }>;
   annotations: unknown[];
 }
@@ -228,13 +256,13 @@ export interface TraceReport {
 export type AttestationState = 'Current' | 'Stale' | 'FragmentRemoved' | 'Unanchored';
 
 export interface AttestationsReport {
-  subject: TerminusDocument & { label?: string };
+  subject: Summary;
   summary: { attestations: number; byState: Record<AttestationState, number> };
   attestations: Array<Record<string, unknown> & { id: string; state: AttestationState }>;
 }
 
 export interface ImpactReport {
-  document: TerminusDocument & { label?: string };
+  document: Summary;
   summary: { references: number; byType: Record<string, number> };
   references: Array<{ id: string; type: string; label?: string; field: string; within?: unknown }>;
 }

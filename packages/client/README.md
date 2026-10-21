@@ -14,7 +14,7 @@ Types come from [`@armature/types`](../types/README.md): `documents.get('Learnin
 ```ts
 import { createClient, HubError } from '@armature/client';
 
-const hub = createClient({ baseUrl: 'http://localhost:3000', user: 'demo-designer@example.edu' });
+const hub = createClient({ baseUrl: 'http://localhost:3100', user: 'demo-designer@example.edu' });
 
 const { data: objectives, commit } = await hub.documents.list('LearningObjective', { branch: 'main' });
 const coverage = await hub.intelligence.coverage('how-ai-works', { ref: commit });
