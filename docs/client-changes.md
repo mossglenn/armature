@@ -17,14 +17,15 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ## 2026-10-21 · The hub runs as its own process and container
 
-**What changed.** Nothing in the contract. The API that Next.js served on port 3000 is also
-served by a standalone Node process (`npm run build:hub && npm run start:hub` in `app/`, port
-3100) and by a container (`docker compose --profile hub up` in `docker/`, port 3100), both the
-same application under the same `/api/v1`. A hosted instance will be the container.
+**What changed.** Nothing in the contract. The API is served by a standalone Node process
+(`npm run build:hub && npm run start:hub` in `app/`, port 3100) and by a container
+(`docker compose --profile hub up` in `docker/`, port 3100); a running API in front of a store is
+a hub. The Next.js app on port 3000 no longer serves the API: it is the viewer, a client of a hub
+through `@armature/client` like any plugin, and has its own container. A hosted instance is the
+compose file's three containers with only the viewer public (`deployment.md`).
 
-**What a client does.** Make the hub's base address configuration, if it was not already: the
-development address `http://localhost:3000/api/v1` and the container's
-`http://localhost:3100/api/v1` are the same hub. `@armature/client` takes it as `baseUrl`.
+**What a client does.** Point at the hub, port 3100 locally, not at the Next.js address; make the
+base address configuration if it was not already. `@armature/client` takes it as `baseUrl`.
 
 **CoQui.** When an instance is hosted, its address replaces the recorded hub, which becomes the
 fallback; until then nothing changes.

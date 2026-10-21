@@ -53,11 +53,11 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 
 - the per-request version contract (ADR-0059): `Armature-Version` and `Armature-Capabilities` headers, `GET /discover` and `GET /schema`
 
-- the hub as its own container: `docker/hub.Dockerfile` bundles the API into one file and serves it with Node; `docker compose --profile hub up` runs store and hub together (Phase 7, 2026-10-21)
+- an instance as three containers: the store, the hub (`docker/hub.Dockerfile`, the API bundled into one file and served by Node) and the viewer (`docker/viewer.Dockerfile`, the pages as a client of the hub); `docker compose --profile hub up` runs them on one private network with only the viewer public ([Running an instance](docs/deployment.md); Phase 7, 2026-10-21)
 
 **Next:** the rest of Phase 7 (one hosted instance, the schema guide for tool authors). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
-**Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
+**Not yet suitable for public writes:** the current identity resolver trusts the caller, so the hub's port stays on the server's loopback and only the read-only viewer is published; writes happen on the server until an authenticating resolver exists. See [Running an instance](docs/deployment.md) and [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
 ## Documentation map
 
@@ -73,6 +73,7 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 | See what the first plugin asked for | [CoQui handoff](docs/armature-asks-from-Coqui.md) |
 | Catch a client tool up with what changed | [Changes for client tools](docs/client-changes.md) |
 | Use Armature as a research instrument for one study | [The research path](docs/research-path.md) |
+| Stand up an instance on a server, or understand what runs where | [Running an instance](docs/deployment.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
 | Work on the code (including with an AI assistant) | [.claude/CLAUDE.md](.claude/CLAUDE.md), [.claude/SESSION.md](.claude/SESSION.md) |
 
@@ -104,40 +105,35 @@ ENV
 node scripts/load_schema.js
 node scripts/seed_data.js
 
-# 5. Run the app, which serves the API and the Coverage View
+# 5. Run the hub: the API on port 3100 (it reads app/.env.local)
+cd app && npm run build:hub && npm run start:hub
+
+# 6. In another terminal, run the viewer: the module list and Coverage View on port 3000
 cd app && npm run dev
 ```
 
-Then open <http://localhost:3000> for the module list and Coverage View, or call the API directly.
+Then open <http://localhost:3000> for the viewer, or call the API directly at <http://localhost:3100/api/v1>.
 
-To run the API as its own process instead, without Next.js, bundle it and start it (it reads `app/.env.local` too, and listens on port 3100):
-
-```bash
-cd app && npm run build:hub && npm run start:hub
-```
-
-Or run store and hub both as containers, which is what a hosted instance does; the schema and seed are still loaded from the host as in step 4:
+An instance runs store, hub and viewer as three containers on one private network, with only the viewer's port public; the schema and seed are still loaded from the machine as in step 4. [Running an instance](docs/deployment.md) is the administrator's guide:
 
 ```bash
 cd docker && docker compose --profile hub up -d --build && cd ..
 ```
 
-Either way the API answers at `/api/v1` (on port 3100 for the standalone hub, 3000 for the Next.js host); the examples below use the Next.js address.
-
 ```bash
 # Every learning objective on main
-curl http://localhost:3000/api/v1/documents/LearningObjective
+curl http://localhost:3100/api/v1/documents/LearningObjective
 
 # Coverage of one module (both figures, the counts, and the items behind them)
-curl http://localhost:3000/api/v1/intelligence/coverage/how-ai-works
+curl http://localhost:3100/api/v1/intelligence/coverage/how-ai-works
 
 # The same read as the design stood at an earlier commit
-curl "http://localhost:3000/api/v1/intelligence/coverage/how-ai-works?ref=<commit-id>"
+curl "http://localhost:3100/api/v1/intelligence/coverage/how-ai-works?ref=<commit-id>"
 
 # A write: every change names who made it and says why
-curl -X POST http://localhost:3000/api/v1/branches \
+curl -X POST http://localhost:3100/api/v1/branches \
   -H 'Content-Type: application/json' -d '{"name":"my-experiment"}'
-curl -X PUT "http://localhost:3000/api/v1/documents/DesignNote/my-note?branch=my-experiment" \
+curl -X PUT "http://localhost:3100/api/v1/documents/DesignNote/my-note?branch=my-experiment" \
   -H 'Content-Type: application/json' \
   -H 'Armature-User: demo-designer@example.edu' \
   -d '{"message":"Record why the module order changed",
@@ -159,7 +155,8 @@ Plugins (CoQui, future tools)  →  Armature API (/api/v1)  →  TerminusDB
 ```
 
 - **TerminusDB** stores the design graph as typed documents and keeps every change as a commit, with branches and merges built in.
-- **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). Two hosts serve the same application: a Next.js app through a single catch-all route (the local development server, which also serves the pages), and `app/server.ts`, a standalone Node process bundled into the container image `docker/hub.Dockerfile` builds (ADR-0026; Phase 7).
+- **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). `app/server.ts` serves it as a standalone Node process, bundled into the container image `docker/hub.Dockerfile` builds (ADR-0026; Phase 7). A running API in front of a store is a **hub**: one address, `/api/v1`, that every client talks to.
+- **The Armature viewer** is the Next.js app's two read-only pages (`app/app/`), a client of a hub like any plugin: it reads over HTTP through `@armature/client` and knows only the hub's address.
 - **Plugins never talk to the database directly.** The API is where the rules, identity and history are enforced.
 - **The schema is the single source of truth.** Type definitions, request validation and the schema appendix are generated from `schema/schema.json`.
 
@@ -177,19 +174,20 @@ docs/
   development-plan.md         The phased roadmap, principles, open questions and platform facts
   armature-asks-from-Coqui.md What the first plugin asked for and learned (a dated handoff)
   research-path.md            How a learning scientist stands up a constrained Armature for one study
+  deployment.md               Running an instance: the terms, the three containers, who can do what, the steps
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
   research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings
   vendor/terminusdb/          Generated: vendored, version-stamped TerminusDB documentation
-app/                          The Next.js app: hosts the API and the Coverage View (see app/README.md)
-  app/                        Pages and the one catch-all API route
+app/                          The API with its host (server.ts) and the viewer (the Next.js pages); see app/README.md
+  app/                        The viewer's pages (no API route: the Next.js app is a client of the hub)
   lib/api/                    The Armature API (Hono): routes, write path, invariants, intelligence
 packages/types/               @armature/types: the schema as TypeScript, generated from schema.json; never edit by hand
 packages/client/              @armature/client: every /api/v1 route as a typed function (see packages/client/README.md)
 package.json                  The npm workspace root (app and packages/*)
 scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync (its own package)
-docker/                       Docker Compose for TerminusDB
-.github/workflows/ci.yml      CI: lint, type-check, the generated-types drift check, and the contract suite against a TerminusDB service container
+docker/                       Docker Compose for the store, and with --profile hub the hub and viewer containers; their two Dockerfiles
+.github/workflows/ci.yml      CI: lint, type-check, the generated-types drift check, the hub bundle, the contract suite against a TerminusDB service container, and both container images
 .claude/                      Context for AI-assisted development sessions: CLAUDE.md, PROJECT_CONTEXT.md, SESSION.md
 ```
 

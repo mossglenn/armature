@@ -20,9 +20,10 @@ The core insight: current instructional design tools capture *what was built* bu
 
 ### Stack
 - **TerminusDB** — graph database storing the artifact graph
-- **Armature API** — a Hono application in `app/lib/api/` (ADR-0054), host-neutral: nothing under that directory imports from `next`. Two hosts serve it: Next.js, through the one catch-all route `app/app/api/[[...route]]/route.ts` (the only route file; the development server, which also serves the pages), and `app/server.ts`, a standalone Node process through `app/lib/hub.ts` and `@hono/node-server`, bundled by `npm run build:hub` (esbuild, one file) and packaged by `docker/hub.Dockerfile` (ADR-0026 decision 4, done 2026-10-21). The demo-era unversioned routes were retired in Phase 3 (2026-10-08)
+- **Armature API** — a Hono application in `app/lib/api/` (ADR-0054), host-neutral: nothing under that directory imports from `next`. Its host is `app/server.ts`, a standalone Node process through `app/lib/hub.ts` and `@hono/node-server`, bundled by `npm run build:hub` (esbuild, one file) and packaged by `docker/hub.Dockerfile` (ADR-0026 decision 4, done 2026-10-21). Next.js no longer mounts it: the catch-all route and `@hono/vercel` were removed the same day, and the Next.js app is the viewer, a client of the hub. The demo-era unversioned routes were retired in Phase 3 (2026-10-08)
+- **Armature Viewer** — the Next.js app's two pages (the module index and the Coverage View), a client of a hub over HTTP through `@armature/client` (`app/lib/viewer.ts`), configured by `ARMATURE_HUB_URL` alone (default `http://localhost:3100`); it holds no store credentials and only reads
 - **CoQui** — first plugin; an assessment-item review tool built on top of the Armature API (separate repo, not here)
-- **Docker Compose** — `docker/docker-compose.yml` runs TerminusDB; with `--profile hub` it also builds and runs the hub container on port 3100, published on loopback only unless `ARMATURE_HUB_BIND` says otherwise, since the `header` resolver trusts the caller (what a hosted instance runs). Locally the API runs on the host, with `npm run dev` (Next.js, port 3000) or `npm run build:hub && npm run start:hub` (standalone, port 3100, reads `.env.local` too)
+- **Docker Compose** — `docker/docker-compose.yml` runs TerminusDB (port 6363 on loopback); with `--profile hub` it runs an instance: three containers on one private network, the store, the hub (`hub.Dockerfile`, port 3100 on loopback only, since the `header` resolver trusts the caller) and the viewer (`viewer.Dockerfile`, port 3000 public, reading the hub by service name). `docs/deployment.md` is the administrator's guide. Locally the hub can run on the machine instead (`npm run build:hub && npm run start:hub`, reads `.env.local`) with the viewer as `npm run dev` pointed at it
 
 - **Export** — `GET /api/v1/export?branch=|ref=&profile=full|pseudonymous|institutional&slice=<name>` returns the graph at a ref as one JSON-LD document (ADR-0031). `ARMATURE_EXPORT_KEY` in `app/.env.local` makes pseudonyms stable across exports; without it they are per export. There is no import route: re-import is an operator step (load `schema`, post `documents`; ADR-0062)
 - **Identity locally** — writes need `Armature-User: <externalId>` (the seed registers `demo-designer@example.edu`); `ARMATURE_IDENTITY` in `app/.env.local` selects the resolver (`header`, the default, trusts the caller, so mutating routes stay local). The app's `.env.local` holds `TERMINUS_URL`, `TERMINUS_USER`, `TERMINUS_PASS`, `TERMINUS_DB`; the scripts read the same variables from the shell, defaulting to admin/admin
@@ -30,20 +31,33 @@ The core insight: current instructional design tools capture *what was built* bu
 
 ### Topology
 ```
-CoQui (plugin)  →  Armature API  →  TerminusDB
-                    (this repo)
+CoQui (plugin)  ─┐
+                 ├─▶  Armature Hub  =  Armature API (Hono)  →  TerminusDB
+Viewer (Next.js) ┘     one address, /api/v1       (this repo)
 ```
 
 The API is the boundary. Plugins never talk to TerminusDB directly. This is architecturally important — the separation demonstrates the hub-plugin model and makes the demo narrative coherent.
+
+### Terms
+Used the same way in every document here (settled 2026-10-21; `docs/deployment.md` has the same table):
+- **A server** — a machine. It runs processes; with Docker, containers, each one process with its packaging. A container adds nothing to the vocabulary
+- **The schema** — the vocabulary: `schema/schema.json`, its types, fields and rules. What a design record is
+- **The API** — the contract at `/api/v1` (routes, envelopes, headers, error codes, rules; `docs/api.md`), and its implementation, the Hono app in `app/lib/api/`. A client is written against this and nothing else
+- **A store** — one TerminusDB database: a graph with its own commit history, branches and `User` registry. The TerminusDB process (the store server) holds any number of stores; only the API talks to them
+- **A host** — one Node process running the API's code: `app/server.ts`, or the container built from it. A server runs as many hosts as it has ports for; a host is invisible to clients
+- **A hub** — one host bound to one store (`TERMINUS_DB`): the address a client talks to, and the thing that "serves revisions", "fills `asOf`", "refuses a write". The relation of API to hub is that of a protocol to a server: every hub serves the same API; there can be many hubs. Several projects are either courses in one store (one hub) or separate stores (a hub each)
+- **An instance** — a hub with its particular data: the demo's seed, or a study's own graph. Usually interchangeable with hub
+- **A client, or plugin** — any program that consumes the API: CoQui, the viewer, a future importer. Never touches a store
+- **The viewer** — the Next.js pages, a client that only reads; `viewer.Dockerfile` is its container
 
 ### Repository Structure
 ```
 schema/
   schema.json              # TerminusDB schema — single source of truth for all types
   docs/adr/                # Architecture Decision Records; README.md is the index with every ADR's status
-docker/                    # docker-compose.yml (TerminusDB pinned to v12.0.7; the hub service behind the `hub` profile) and hub.Dockerfile (two stages: bundle, then Node plus the one file)
+docker/                    # docker-compose.yml (TerminusDB pinned to v12.0.7 on loopback; behind the `hub` profile the hub on loopback and the viewer public, one private network), hub.Dockerfile (bundle, then Node plus the one file), viewer.Dockerfile (next build standalone, then Node plus the output)
 .dockerignore              # What the hub image's build context (the repository root) leaves out
-.github/workflows/ci.yml   # CI: lint, typecheck, check:types and the hub bundle at the root; the contract suite against a TerminusDB service container; the hub image built and started
+.github/workflows/ci.yml   # CI: lint, typecheck, check:types and the hub bundle at the root; the contract suite against a TerminusDB service container; the hub and viewer images built and started
 package.json               # The npm workspace root: app and packages/*; scripts/ stays outside so the TerminusDB client is resolvable only there (ADR-0055)
 packages/
   types/                   # @armature/types (GENERATED src/, do not edit): types.ts (interfaces, ClassMap, schema as data) and schemas.ts (Zod); TypeScript source, no build; the app depends on it as a workspace, another repository by git reference
@@ -57,14 +71,14 @@ scripts/
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill); also npm run sync:terminusdb-docs
 app/
-  app/api/
-    [[...route]]/route.ts  # The ONLY file that knows Next.js hosts the API: exports handle(app) per method (ADR-0054); the only route file
-  app/page.tsx             # Index: a branch's modules, each linking to its Coverage View; calls the Hono app in-process, never the store
-  app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4)
+  app/page.tsx             # The viewer's index: a branch's modules, each linking to its Coverage View; reads the hub through lib/viewer.ts, never the store
+  app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4), read from the hub
+                           # (No route file: since 2026-10-21 Next.js hosts no API; the catch-all route and @hono/vercel are gone)
   app/layout.tsx           # Page shell (titled Armature)
   server.ts                # The standalone hub's entry: .env.local, PORT (3100) and HOST (loopback by default; the header resolver trusts the caller), startHub, SIGTERM; what build:hub bundles and the container runs
   README.md                # What the app hosts, its env vars, scripts and layout
   lib/
+    viewer.ts              # The viewer's hub: hubUrl() from ARMATURE_HUB_URL (default http://localhost:3100), hubPublicUrl() for footer links (ARMATURE_HUB_PUBLIC_URL, else only a localhost hub; omitted when private), viewerHub(), a read-only @armature/client
     hub.ts                 # startHub({ port, hostname }): the API served by Node (@hono/node-server); port 0 for a free one; returns url, revision, close()
     hub.test.ts            # The standalone host over a real socket on an ephemeral port: the same answers as app.request(), a write with If-Match, a clean stop
     api/
@@ -105,6 +119,7 @@ docs/
   armature-asks-from-Coqui.md  # CoQui's dated handoff (2026-10-05): its asks and lessons; a status banner says what landed
   client-changes.md        # What client tools (CoQui first) must act on, newest first: what changed, what a client does, CoQui's mappings. Add an entry for every change to /api/v1 or the schema a client would act on
   research-path.md         # How a learning scientist stands up a constrained Armature for one study: instance, what the tools write, slice, profile, export at a pinned commit, reproduction, process questions only (Phase 6)
+  deployment.md            # The administrator's guide to an instance: the terms, the three containers and what each publishes, who can do what and why, the steps, several projects, what is not built (authentication, an admin page, a hosted instance, backups)
   demo-api.md              # RETIRED demo-era API spec, kept for history
   positionpaper/           # The position paper (March 2026); not edited
   research/                # Standards-precedents survey, candidate ADRs 0035–0053, reading list (2026-10-06 snapshot); schema-precedents-and-plugin-candidates.md (2026-10-20); three client mappings (DQ QuestionBank Core, Tessera, QuiQui)
@@ -215,7 +230,7 @@ Every junction document follows the same pattern:
 ### 1. The API is the boundary
 Plugins never touch TerminusDB directly. All reads and writes go through Armature API endpoints. This is both an architectural principle and a demo narrative requirement.
 
-The API is also host-neutral (ADR-0054). Every `/api/v1` route is a Hono route in `app/lib/api/`, written against Web-standard `Request` and `Response`. Nothing under `app/lib/api/` imports from `next`; the one catch-all route file is the only place Next.js appears, and `app/server.ts` with `app/lib/hub.ts` is the other host. This is what made the separate process a deployment change rather than a rewrite (done 2026-10-21).
+The API is also host-neutral (ADR-0054). Every `/api/v1` route is a Hono route in `app/lib/api/`, written against Web-standard `Request` and `Response`. Nothing under `app/lib/api/` imports from `next`; `app/server.ts` with `app/lib/hub.ts` is its host, and Next.js appears nowhere near it since 2026-10-21, when the catch-all route went and the pages became a client. This is what made the separate process a deployment change rather than a rewrite.
 
 ### 2. Constraints belong in the API
 TerminusDB enforces field types, required fields, enum values, minimum cardinality and reference existence. Everything else (reference class, sequence uniqueness, conditional and cross-document rules) belongs in the API layer, in the invariants engine. See ADR-0006 (the original principle; superseded for minimum cardinality by ADR-0013) and the constraints above. Derived values are not constraints to maintain: they are computed on read (ADR-0056).
@@ -312,8 +327,8 @@ Say "update session" and follow the prompt in `.claude/prompts/update-session.md
 - **Don't** put UI logic, import/export formats, or plugin-specific code in this repo
 - **Don't** change `schema.json` without an ADR
 - **Don't** edit `packages/types/src/` manually — it's generated; change `schema.json` and run `generate:types`
-- **Don't** write API routes as Next.js route handlers — every route is a Hono route in `app/lib/api/` under `/api/v1` (ADR-0054); the catch-all is the only file under `app/app/api/`
-- **Don't** import from `next` anywhere under `app/lib/api/` — the host appears only in `app/app/api/[[...route]]/route.ts`
+- **Don't** write API routes as Next.js route handlers, or add any file under `app/app/api/` — every route is a Hono route in `app/lib/api/` under `/api/v1` (ADR-0054), served by `app/server.ts`; the Next.js app is the viewer and hosts no API since 2026-10-21
+- **Don't** import from `next` anywhere under `app/lib/api/`, and don't import `app/lib/api/` from a page — a page reaches the hub over HTTP through `app/lib/viewer.ts`, like any plugin
 - **Don't** add the `terminusdb` client to `app/` — the API layer reaches the store through its HTTP adapter (ADR-0055); the client is a dependency of `scripts/` only. The one exception would be `lib/woql.js` to build query JSON the adapter posts, and the first such use amends the ADR
 - **Don't** write a per-type route or hand-write a request schema — type behavior is a validator in `app/lib/api/invariants/`, and request shape comes from the generated `schemas.ts`
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)

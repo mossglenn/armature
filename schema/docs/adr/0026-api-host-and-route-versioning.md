@@ -16,6 +16,10 @@ application; Next.js is its host). Decisions 2 to 4 are unchanged.
 **Decision 3 completed 2026-10-08 (Phase 3):** the eleven legacy unversioned routes were removed;
 `app/app/api/[[...route]]/route.ts` is the only route file, and every route is under `/api/v1`.
 
+**Decision 1 superseded in fact on 2026-10-21 (Phase 7):** the Next.js app hosts no API any more.
+`app/server.ts` is the host; the Next.js app is the viewer, a client of a hub (ADR-0054, later
+change of 2026-10-21). Every route is still under `/api/v1`, served from one address.
+
 ## Context
 
 `PROJECT_CONTEXT.md` lists "Separate API service (not Next.js API routes in CoQui)" among the
@@ -43,6 +47,9 @@ not follow is that the boundary must be a separate process today. The boundary i
 
    > **Later change (2026-10-08):** Phase 3 retired them; no Next.js route handler other than the
    > catch-all remains.
+   >
+   > **Later change (2026-10-21):** the catch-all is gone too. Next.js serves the pages only; the
+   > API's host is the standalone process (decision 4, done).
 
 2. **All new routes are mounted under a versioned prefix, `/api/v1/`.** The generic document API,
    branch, history, diff, user and intelligence routes the plan describes all land there. The

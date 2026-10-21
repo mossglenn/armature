@@ -16,13 +16,14 @@ The guide has three parts. **Part I** gets a hub running and a client talking to
 
 ### 1. Run a hub
 
-A hub is the Armature API in front of one TerminusDB database. Three ways to have one, all answering at `/api/v1`:
+A hub is the Armature API in front of one TerminusDB database. Two ways to have one, both answering at `/api/v1`:
 
 | Way | Command | Address |
 |---|---|---|
-| Store and hub as containers (what a hosted instance runs) | `cd docker && docker compose --profile hub up -d --build` | `http://localhost:3100` |
-| Store in Docker, the API standalone on your machine | `cd docker && docker compose up -d`, then in `app/`: `npm run build:hub && npm run start:hub` | `http://localhost:3100` |
-| Store in Docker, the Next.js development server (also serves Armature's own pages) | `cd docker && docker compose up -d`, then in `app/`: `npm run dev` | `http://localhost:3000` |
+| An instance: store, hub and viewer as containers (what a hosted deployment runs; [`deployment.md`](deployment.md)) | `cd docker && docker compose --profile hub up -d --build` | `http://localhost:3100`, from the machine only |
+| Store in Docker, the API as a process on your machine | `cd docker && docker compose up -d`, then in `app/`: `npm run build:hub && npm run start:hub` | `http://localhost:3100` |
+
+Armature's own pages (the viewer, `npm run dev` in `app/`, port 3000) are a client of whichever hub `ARMATURE_HUB_URL` names, exactly as your tool will be; they serve no API of their own.
 
 The repository README's "Getting started" covers the install and the `.env.local` file. Whichever way, load the schema and the demonstration course once from the repository root: `node scripts/load_schema.js`, then `node scripts/seed_data.js`. The seed is a small fictional course, "Introduction to AI for Instructional Designers", with 48 documents, one attestation and one administration's results; every example below reads it.
 
@@ -34,7 +35,7 @@ curl http://localhost:3100/api/v1/discover
 
 It returns the contract revisions the hub serves, its capabilities with their settings, and where the schema is (Section 15).
 
-The hub published by the compose file listens on the loopback interface only, and so does the standalone process by default, because the only identity resolver built so far trusts whatever identity a request claims (Section 10). A hub other machines can reach is a decision, not a default.
+The hub published by the compose file listens on the machine's loopback interface only, and so does the standalone process by default, because the only identity resolver built so far trusts whatever identity a request claims (Section 10). A hub other machines can reach is a decision, not a default; a tool that writes runs on the hub's machine, or behind a proxy that authenticates, until an authenticating resolver exists.
 
 ### 2. The client in five lines
 
