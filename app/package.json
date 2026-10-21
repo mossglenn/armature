@@ -7,12 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "generate:types": "node ../scripts/generate-types.js",
-    "check:types": "node ../scripts/generate-types.js --check",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "sync:terminusdb-docs": "node ../scripts/sync-terminusdb-docs.js",
     "test": "vitest run"
   },
   "dependencies": {
+    "@armature/types": "0.1.0",
     "@hono/vercel": "1.0.0",
     "hono": "4.13.13",
     "next": "16.1.6",
