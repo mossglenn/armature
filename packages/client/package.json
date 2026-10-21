@@ -1,0 +1,22 @@
+{
+  "name": "@armature/client",
+  "version": "0.1.0",
+  "description": "A thin typed client for the Armature API: every /api/v1 route as a function, with refs, commits (ETag / If-Match), identity and the hub's error codes behind the boundary",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@armature/types": "0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
