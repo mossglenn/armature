@@ -139,7 +139,7 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 16 | A `fragmentId` on an `Attestation`, `DesignNote` or `DesignFinding` names a part of its one subject: at `asOf` when that is checked, otherwise as the write leaves the subject | `fragment_needs_one_subject`, `unknown_fragment` |
 | 17 | Within an activity, formative uses of items never share a `sequence` (`ActivityItemLink`, ADR-0061) | `duplicate_sequence` |
 
-There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5).
+There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5; ADR-0062, proposed, describes that operator surface: a delete as a commit, a whole-branch rule check, and a replace that can skip the hub's rules, none of it on `/api/v1`).
 
 ---
 

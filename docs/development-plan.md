@@ -816,6 +816,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0059 | Capability negotiation per request | 7 (with the typed client), or on the first trigger it names | Proposed 2026-10-20 | Adopts candidate 0039's capabilities half, from MCP's per-request model: dated contract revisions in `Armature-Version`, namespaced capabilities in `Armature-Capabilities`, `GET /api/v1/discover`, 400 `unsupported_version` and `unsupported_capability` listing what the hub serves; no handshake; shape changes stay a new prefix (ADR-0026). Resolves ADR-0026's deferral; gives `GET /api/v1/schema` an owner by implication |
 | 0060 | Items may exist unaligned | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | Amends 0013: no minimum on `AssessmentItem.assesses`; rule 1 retired; the alignment read lists `itemsWithoutObjective`; rule 2 stands until a client shows the activity case; encouraging alignment is a §6 question |
 | 0061 | Formative use of items inside activities | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | `ActivityItemLink` junction with optional `sequence` (constraint 17); counts toward no coverage; trace follows it; the module-content view nests it when built; annotates 0003, 0005, 0029 |
+| 0062 | Operator repair is a commit outside the plugin API | 7 (the toolkit), or on the first repair that needs it | Proposed 2026-10-20 | Gives 0024 decision 5 its meaning; 0025 decision 6 holds for operators; three tools (`check`, `delete`, `put --unchecked`) reusing the adapter and the invariants engine in-process; no superuser mode and no raw query route on `/api/v1` (§8) |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -1060,6 +1061,12 @@ Recorded so the decisions are inherited rather than rediscovered.
   profiles, and the exporter is the first consumer of the Phase 7 client package. What it loses
   on the way out (`fragmentId`, `assesses`, `purpose`, item identity across re-exports) is the
   evidence ADR-0031 needs about what an export profile must carry beside the format.*
+- No raw query route and no superuser mode on `/api/v1` (ADR-0062, proposed 2026-10-20). A
+  `POST /api/v1/query` taking the store's query language would couple every client to TerminusDB
+  (ADR-0055) and make ADR-0021's non-aggregation guard unenforceable; a bypass header would make
+  every constraint conditional. Ad-hoc questions are the intelligence reads, the list filters and
+  ADR-0031's declared slices; operators query the store with its own credentials and tools. Repairs
+  the API's rules prevent are made from outside it, as new commits, never by rewriting history.
 - No binary content in the graph. Files and asset trees are referenced by content hash and
   revision coordinate and live in a content-addressed store behind the API or in a store the
   tool manages; the store is a backend, never a schema fact.

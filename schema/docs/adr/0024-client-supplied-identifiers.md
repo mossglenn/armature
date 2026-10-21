@@ -16,6 +16,10 @@ decision 4 is constraint 12 (409 `type_conflict`). **Open:** the lossless-write 
 §Consequences (research candidate ADR-0035) was not implemented in Phase 3 and no phase of
 `docs/development-plan.md` currently owns it.
 
+**Note 2026-10-20:** ADR-0062 (Proposed) says what decision 5's "administrative operation outside
+the plugin API" is: an operator surface outside `/api/v1`, with store credentials, that deletes a
+document as a commit and never rewrites history.
+
 ## Context
 
 Two identifier conventions have coexisted since the first seed: the seed script supplies readable
