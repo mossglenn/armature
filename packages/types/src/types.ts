@@ -446,6 +446,41 @@ export const CLASS_CATEGORY = {
 export type ClassName = keyof typeof CLASS_CATEGORY;
 export type ClassCategory = typeof CLASS_CATEGORY[ClassName];
 
+/** Every class name mapped to its interface, so a client can type a read by the class it names (Phase 7, @armature/client). */
+export interface ClassMap {
+  User: User;
+  DesignRecord: DesignRecord;
+  ArmatureDocument: ArmatureDocument;
+  LearningEvidence: LearningEvidence;
+  LearningMetric: LearningMetric;
+  DescriptiveEvidence: DescriptiveEvidence;
+  LearningDataset: LearningDataset;
+  LearningNeed: LearningNeed;
+  NeedEvidenceLink: NeedEvidenceLink;
+  LearningObjective: LearningObjective;
+  PrerequisiteRecord: PrerequisiteRecord;
+  ExternalRef: ExternalRef;
+  Attachment: Attachment;
+  Fragment: Fragment;
+  TextFragment: TextFragment;
+  ItemOption: ItemOption;
+  AssessmentItem: AssessmentItem;
+  ItemInstance: ItemInstance;
+  Assessment: Assessment;
+  LearningActivity: LearningActivity;
+  ActivityGroup: ActivityGroup;
+  ActivityGroupMember: ActivityGroupMember;
+  ActivityItemLink: ActivityItemLink;
+  ModuleObjective: ModuleObjective;
+  Module: Module;
+  ModuleActivityLink: ModuleActivityLink;
+  ModuleActivityGroupLink: ModuleActivityGroupLink;
+  DesignNote: DesignNote;
+  DesignFinding: DesignFinding;
+  Attestation: Attestation;
+  Course: Course;
+}
+
 /** Subdocument classes: returned inline, never addressable on their own (ADR-0022, ADR-0033). */
 export const SUBDOCUMENT_CLASSES = [
   "ExternalRef",
