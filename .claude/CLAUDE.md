@@ -62,7 +62,7 @@ app/
   app/page.tsx             # Index: a branch's modules, each linking to its Coverage View; calls the Hono app in-process, never the store
   app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4)
   app/layout.tsx           # Page shell (titled Armature)
-  server.ts                # The standalone hub's entry: .env.local, PORT (3100) and HOST, startHub, SIGTERM; what build:hub bundles and the container runs
+  server.ts                # The standalone hub's entry: .env.local, PORT (3100) and HOST (loopback by default; the header resolver trusts the caller), startHub, SIGTERM; what build:hub bundles and the container runs
   README.md                # What the app hosts, its env vars, scripts and layout
   lib/
     hub.ts                 # startHub({ port, hostname }): the API served by Node (@hono/node-server); port 0 for a free one; returns url, revision, close()

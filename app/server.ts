@@ -10,7 +10,10 @@
  *   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS, TERMINUS_DB  the store (see README.md)
  *   ARMATURE_IDENTITY, ARMATURE_EXPORT_KEY                  optional, as for the Next.js host
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
- *   HOST                                                     default 0.0.0.0
+ *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
+ *                                                            the caller, so the hub stays on this machine
+ *                                                            unless told otherwise; the container sets 0.0.0.0
+ *                                                            and the compose file confines what is published
  *
  * On the host, `.env.local` in the working directory is read first, as Next.js
  * reads it, so the standalone hub and `next dev` reach the same store with the
@@ -40,7 +43,7 @@ async function main(): Promise<void> {
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new Error(`PORT must be a port number, not ${JSON.stringify(process.env.PORT)}`);
   }
-  const hub = await startHub({ port, hostname: process.env.HOST ?? '0.0.0.0' });
+  const hub = await startHub({ port, hostname: process.env.HOST?.trim() || '127.0.0.1' });
   console.log(`Armature hub (revision ${hub.revision}) listening at ${hub.url}/api/v1`);
   console.log(`  store: ${process.env.TERMINUS_URL ?? '(TERMINUS_URL is not set)'} database ${process.env.TERMINUS_DB ?? '(TERMINUS_DB is not set)'}`);
 

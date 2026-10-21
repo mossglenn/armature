@@ -21,7 +21,12 @@ import { CURRENT_REVISION } from './api/version';
 export interface HubOptions {
   /** The port to listen on; 0 asks the operating system for a free one. */
   port: number;
-  /** The interface to bind; `0.0.0.0` in a container, `127.0.0.1` to stay local. */
+  /**
+   * The interface to bind. Loopback by default: the `header` identity resolver
+   * trusts the caller (ADR-0032), so a hub other machines can reach lets anyone
+   * write as anyone. A container binds `0.0.0.0` inside its own network and the
+   * compose file decides what the host publishes.
+   */
   hostname?: string;
 }
 
@@ -37,7 +42,7 @@ export interface RunningHub {
 }
 
 /** Starts the hub and resolves once it is listening. */
-export function startHub({ port, hostname = '0.0.0.0' }: HubOptions): Promise<RunningHub> {
+export function startHub({ port, hostname = '127.0.0.1' }: HubOptions): Promise<RunningHub> {
   return new Promise((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port, hostname }, (info: AddressInfo) => {
       const host = info.address === '0.0.0.0' || info.address === '::' ? 'localhost' : info.address;
