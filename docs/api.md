@@ -6,7 +6,7 @@ This document describes every route of the Armature API (application programming
 
 ### Base path and versioning
 
-Every route is under `/api/v1`. The version segment is part of the contract; a change that would break existing clients goes under a new version (ADR-0026). When the app runs locally the full address is `http://localhost:3000/api/v1/...` under the Next.js development server, or `http://localhost:3100/api/v1/...` from the standalone hub (`npm run start:hub` in `app/`, or the `hub` container in `docker/docker-compose.yml`); both serve the same application.
+Every route is under `/api/v1`. The version segment is part of the contract; a change that would break existing clients goes under a new version (ADR-0026). When the hub runs locally the full address is `http://localhost:3100/api/v1/...` (`npm run start:hub` in `app/`, or the `hub` container in `docker/docker-compose.yml`). The Next.js app on port 3000 is the viewer, a client of the hub; it serves no API.
 
 Within the prefix the contract has dated **revisions** (ADR-0059): each dated entry in [`client-changes.md`](client-changes.md) is one, named by its date, `YYYY-MM-DD`. Revisions are additive, so a hub serves every revision up to its newest. Nothing is negotiated up front and the hub keeps nothing between requests; each request is answered on its own:
 
@@ -36,7 +36,7 @@ A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the bran
 
 Every route that changes data needs an identity (ADR-0032). Under the default `header` resolver, the request carries `Armature-User: <externalId>`, the external identifier of a registered `User` (the seed registers `demo-designer@example.edu`). The hub resolves it to a `User` document on `main`, records that user as the commit author, and sets `createdBy` on documents it creates. Missing header: **401** `identity_required`. Unregistered identifier: **401** `unknown_user`.
 
-The `header` resolver trusts the caller. Do not expose routes that change data beyond the local machine while it is configured. An `oidc` (OpenID Connect) resolver is named but not built.
+The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself. An `oidc` (OpenID Connect) resolver is named but not built.
 
 ### Write envelopes
 

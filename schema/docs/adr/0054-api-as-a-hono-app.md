@@ -88,6 +88,15 @@ through an official adapter. Facts checked on 2026-10-07 against hono.dev and np
 
    > **Later change (2026-10-08):** Phase 3 retired the legacy routes; the catch-all is the only
    > route file.
+   >
+   > **Later change (2026-10-21):** the host move happened as decision 2 describes, and went one
+   > step further: `app/server.ts` serves the app through `@hono/node-server`, the catch-all route
+   > was deleted and `@hono/vercel` dropped. The Next.js app no longer hosts the API at all; its
+   > pages read a hub over HTTP through `@armature/client`, like any plugin, configured by
+   > `ARMATURE_HUB_URL`. The reason to go further than "add an entry file": with both hosts alive,
+   > the pages were a second hub with their own store credentials, which blurred what "the hub"
+   > meant in every deployment conversation. Decision 1 is unaffected; decision 3's amendment of
+   > ADR-0026 decision 1 now reads "the standalone process is the host, the Hono app is the API".
 
 4. **Framework features are adopted where the plan already needs them, and nowhere else.**
    - Middleware for identity resolution (ADR-0032, Phase 3) and for reading and echoing the
@@ -232,7 +241,8 @@ Everything else as anticipated:
   Phase 2 onward is portable on the day it is written.
 - Two routing layers exist while the app is mounted in Next.js: Next's file-system router hands
   `/api/*` to the catch-all, Hono routes within it. The cost is one indirection per request and a
-  small adapter dependency; the benefit is that only one file knows about Next.js.
+  small adapter dependency; the benefit is that only one file knows about Next.js. (No longer the
+  case since 2026-10-21: the app is not mounted in Next.js.)
 - The Node.js runtime is required; the Next.js edge runtime is not supported by the adapter and is
   not wanted, since the TerminusDB client is Node code.
 - `handleTerminusError` and `createGetHandler` in `app/lib/routeHelpers.ts` become legacy with the

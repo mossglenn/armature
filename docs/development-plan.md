@@ -244,7 +244,9 @@ TerminusDB
   change. Every route Phases 2 to 6 add is a Hono route; the legacy Next.js handlers die in
   Phase 3. (The move was made on 2026-10-21, Phase 7: `app/server.ts` serves the same app
   standalone, bundled by esbuild into the container `docker/hub.Dockerfile` builds. No handler
-  changed. Next.js remains the development host and serves the pages.)
+  changed. Later the same day the catch-all route and `@hono/vercel` were removed: Next.js is
+  the viewer only, its pages a client of the hub through `@armature/client`, so "the host" means
+  one thing and a hub is always store plus API process.)
 - **The schema describes itself.** `@metadata.armature.category` on every class (done, ADR-0027);
   a `GET /schema` route (built 2026-10-21 with ADR-0059, beside `GET /discover`); generated types
   (done) and a typed client (done 2026-10-21, `@armature/client`) derived from the same file.
@@ -800,9 +802,13 @@ Work:
       and the bundle step exists because the workspace packages are TypeScript source with
       extensionless imports.)
 - [ ] Deploy one hosted instance for the public demo so CoQui's recorded hub is a fallback
-      rather than the source. Where to host (PROJECT_CONTEXT names Railway or Render) and the
-      `oidc` resolver it needs before anyone but the demo team can reach a writing route
-      (ADR-0032) are decided with it.
+      rather than the source. What runs is settled and documented (`docs/deployment.md`,
+      2026-10-21): the compose file's three containers on one server, the viewer public, the hub
+      and the store on loopback, with the viewer container (`docker/viewer.Dockerfile`) added so
+      the hub need not be published at all. Left to decide: the server (a small VPS fits the
+      compose file as is; PROJECT_CONTEXT named Railway or Render), and, before any writing
+      client reaches it from elsewhere, the `oidc` resolver (ADR-0032) or an authenticating
+      proxy.
 - [x] `docs/schema-guide.md` revised from the reference-client perspective: what a tool author
       needs to know to write and read the graph. (A first conceptual version was written on
       2026-10-08, with `docs/api.md` and `docs/how-armature-works.md`. Rewritten 2026-10-21 in

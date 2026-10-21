@@ -6,10 +6,10 @@ What Armature records is the **design process as data**: the artifacts (needs, o
 
 ## 1. Stand up an instance
 
-1. Clone the repository, start the database and load the schema (the root `README.md`, "Getting started"). The database runs in Docker; the API (application programming interface) runs on your machine with `npm run dev` in `app/`.
+1. Clone the repository and start an instance (the root `README.md`, "Getting started"; `deployment.md` for a server): the database in Docker and the hub, the API (application programming interface) in front of it, either on your machine with `npm run start:hub` in `app/` or as the compose file's container. Load the schema.
 2. Decide whether to start from the demonstration course or empty. The seed (`node scripts/seed_data.js`) is a fictional course with one administration's results, useful for learning the shape. A study starts empty: load the schema and register its participants.
 3. Register every participant as a `User` on `main` through `POST /api/v1/users` (ADR-0032). Participants are the people whose decisions the study records: designers, reviewers, and any AI agent acting on their behalf (an `externalId` beginning with `agent:`). Record `institution` if the institutional export profile will be used (§4).
-4. Keep the instance local or behind authentication. The default identity resolver trusts a header naming the user; it is for a single machine or a trusted network (ADR-0032 decision 1).
+4. Keep the hub on its server or behind authentication. The default identity resolver trusts a header naming the user; the compose file keeps the hub's port on the server's loopback and publishes only the read-only viewer, so the study's tools write from the server or through a proxy that authenticates (ADR-0032 decision 1; `deployment.md`).
 
 One database holds one course or program today; comparability across courses is an open question (`docs/development-plan.md` §6, "Project boundaries"), and for now a multi-course study is one database per course exported separately.
 

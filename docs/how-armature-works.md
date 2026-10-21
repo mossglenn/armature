@@ -335,9 +335,11 @@ The rule matters for three reasons.
 
 ### 10.1 Where the code runs
 
-The API is written with **Hono**, a small web framework built on the standard web request and response types that every modern JavaScript environment supports (ADR-0054, an Architecture Decision Record). It has two hosts. During development it runs inside a **Next.js** web application (Next.js is a framework for building websites), which serves it under the address prefix `/api/v1/`; only one file in the repository (`app/app/api/[[...route]]/route.ts`) knows that Next.js is the host, and nothing in the API code imports anything from Next.js. Since Phase 7 (2026-10-21) it also runs as its own program: `app/server.ts` serves the same application with Node's HTTP server, a build step (esbuild) folds the API and its packages into one file, and `docker/hub.Dockerfile` packages that file with Node as a container holding nothing else. Moving the API to a separate server was therefore a deployment change, not a rewrite, as ADR-0026 said it would be (ADR-0026 decision 4). A tool sees the same `/api/v1` from either host; a test starts the standalone one on a spare port and checks that its answers match the in-process ones.
+The API is written with **Hono**, a small web framework built on the standard web request and response types that every modern JavaScript environment supports (ADR-0054, an Architecture Decision Record). It runs as its own program: `app/server.ts` serves it with Node's HTTP server, a build step (esbuild) folds the API and its packages into one file, and `docker/hub.Dockerfile` packages that file with Node as a container holding nothing else. A running API in front of one database is a **hub**: the one address, ending in `/api/v1/`, that every tool talks to. Until 21 October 2026 the API also ran inside the **Next.js** web application that serves Armature's own pages (Next.js is a framework for building websites); that made the pages a second hub with their own database credentials, so the mounting was removed and the pages became what every other tool is, a client of a hub reached over the network. Nothing in the API code ever imported anything from Next.js, which is why moving it to its own server was a deployment change and not a rewrite, as ADR-0026 said it would be (decision 4). A test starts the hub on a spare port and checks that its answers over the network match the application's in-process ones.
 
-The same Next.js application also serves Armature's own pages (Section 18). Those pages call the API in exactly the way a plugin would, so they cannot do anything a plugin could not.
+The vocabulary, used the same way everywhere in this document: a **server** is a machine; the **schema** is the vocabulary of records; the **API** is the contract at `/api/v1/` and the code that implements it; a **store** is one TerminusDB database, and the TerminusDB process holds any number; a **host** is one process running the API's code; a **hub** is one host bound to one store, the address a client talks to; an **instance** is a hub with its particular data; a **client** or **plugin** is any program that consumes the API; the **viewer** is Armature's own pages, a client that only reads. An instance as deployed is three containers on one server, the store, the hub and the viewer, on a private network where only the viewer's port is public; `docs/deployment.md` is the administrator's guide.
+
+The Next.js application is the viewer: Armature's own pages (Section 18). They call a hub exactly as a plugin does, through the same client library, so they cannot do anything a plugin could not, and they need nothing but the hub's address.
 
 The database, TerminusDB, runs in a Docker container (Docker is software that runs programs in isolated, reproducible environments called containers) defined in `docker/docker-compose.yml`, pinned to version 12.0.7. The same file can run the hub beside it (`docker compose --profile hub up`), which is how a hosted instance runs; locally the store alone runs in Docker and the API on the machine.
 
@@ -800,7 +802,7 @@ A `User` has a display name, an external identifier (the stable identifier from 
 
 Every request that changes anything must say who is making it. A pluggable **resolver** turns the request into a set of claims, statements about who is asking (at minimum the external identifier); the hub then finds the matching `User`.
 
-- The current resolver, `header`, reads the external identifier from a request header (`Armature-User: <externalId>`) and **trusts the caller**. It is for local use and demonstration only: anyone who can reach the API (application programming interface) can claim to be anyone. While it is configured, the routes that change data must not be exposed beyond the local machine.
+- The current resolver, `header`, reads the external identifier from a request header (`Armature-User: <externalId>`) and **trusts the caller**. It is for a single machine and demonstration only: anyone who can reach the API (application programming interface) can claim to be anyone. While it is configured, the hub stays on its server's loopback interface, where only the server's own processes and operators reach it; an instance publishes the read-only viewer and nothing else (`docs/deployment.md`).
 - A future resolver, `oidc` (OpenID Connect, the common single-sign-on protocol), will read a signed token (a tamper-proof credential issued by the login system). It is named but not built; the claims shape is fixed now so adding it changes no route.
 
 ### 15.3 Where `User` documents live
@@ -959,12 +961,12 @@ This is one of the most instructive decisions in the project's history, and it p
 
 ## 18. Armature's own pages: the Coverage View
 
-The Next.js application (the web framework that currently hosts the API, or application programming interface) includes two read-only pages, Armature's first visual interface:
+The viewer, a Next.js application (Next.js is a web framework), is two read-only pages, Armature's first visual interface and a client of a hub like any plugin:
 
 - **The index** (`/`) lists the modules on a branch, each linking to its Coverage View.
 - **The Coverage View** (`/coverage/<module>`) shows the coverage read for one module: each declared objective with its role, both verdicts with their counts, the items behind each and how they count, the objectives the module assesses without declaring, the thresholds in force, and the commit the data came from. Query parameters switch the branch (`?branch=`) or change the thresholds.
 
-Both pages call the API in-process, that is, inside the same running program rather than over the network, using the same application object the API routes are served from. They never read the database directly, so they are a client of the API like any plugin. This is the "Coverage View" the March 2026 demo plan called "the demo payoff."
+Both pages read a hub over the network through the same client library a plugin would use, and they are configured by nothing but the hub's address. (Until 21 October 2026 they called the API in-process, inside the same running program, which also hosted it; see Section 10.1.) They never read the database directly, so they are a client of the API like any plugin. This is the "Coverage View" the March 2026 demo plan called "the demo payoff."
 
 ## 19. The two demonstration narratives
 
@@ -1129,7 +1131,7 @@ The session log also lists a small fix (a race condition in the branch routes wh
 - Generated types moved into a package other tools can install.
 - A small client library: ready-made code other tools can use to call the API (application programming interface).
 - An Armature-owned **contract test**: CI (continuous integration, the automated checks run on every pull request) starts a database, loads the schema and seed, and exercises every route and every rule. The database-backed tests join CI here.
-- The API served as its own program in a container (an isolated, packaged environment), with the Next.js pages as a separate demo interface (done 2026-10-21: `app/server.ts`, `docker/hub.Dockerfile`, and a `hub` service in the compose file); one hosted instance for public demonstration (not yet).
+- The API served as its own program in a container (an isolated, packaged environment), with the Next.js pages as a separate demo interface (done 2026-10-21: `app/server.ts` and `docker/hub.Dockerfile` for the hub, `docker/viewer.Dockerfile` for the pages as a client of it, and the compose file running store, hub and viewer as one instance; `docs/deployment.md`); one hosted instance for public demonstration (not yet).
 - A schema guide written from a tool author's perspective (done 2026-10-21: `docs/schema-guide.md`, in three parts, a hub and the client, the graph, the work of a tool).
 - **Exit criterion:** a developer with the repository, Docker (the container software) and the client package can write a new plugin without reading TerminusDB documentation.
 
@@ -1210,7 +1212,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 
 > **[Brevity candidate]** Some of these repeat earlier sections; they are gathered here for a reviewer's convenience.
 
-- **Identity is trusted, not authenticated.** The current resolver believes whatever identity a request claims. Routes that change data must stay on the local machine until an authenticating resolver exists.
+- **Identity is trusted, not authenticated.** The current resolver believes whatever identity a request claims. The hub therefore stays on its server's loopback interface, with only the read-only viewer published, until an authenticating resolver exists; a tool that writes runs on the server or behind a proxy that authenticates.
 - **Not yet tested at scale.** The intelligence reads and the merge-base search (finding the common starting point of two branches) make many small requests. This is negligible for the seed course but will need database queries written in WOQL (Web Object Query Language, TerminusDB's query language) for large courses. History walks are capped at 5,000 commits per branch.
 - **The database-backed tests run in CI (continuous integration) against a store that starts fresh every time.** Since Phase 7 (2026-10-21) CI starts TerminusDB as a service container, loads the schema and the seed, and runs the suite. A store that has just started on a cold machine has stalled on one request mid-suite, so the suite waits for the seeded database and then exercises it once (a branch, a write, a read) before it begins; whether that is enough is being watched.
 - **The coverage thresholds are unevidenced**, and coverage inherits the reliability of the alignments it counts (Section 17.1).
@@ -1253,7 +1255,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **Design relation** | A meaningfully named connection between artifacts that expresses a design decision |
 | **`DesignRecord`** | The abstract supertype of every artifact and relationship; what notes and findings can be about |
 | **Diff** | A structured description of what changed between two states |
-| **Docker** | Software that runs programs in isolated containers; Armature runs its database in one, and since Phase 7 can run the hub in another |
+| **Docker** | Software that runs programs in isolated containers, each one process with its packaging; an Armature instance is three of them, the store, the hub and the viewer |
 | **Document** | One record in the database, with a type, an identifier and fields |
 | **Enum (enumeration)** | A field restricted to a fixed list of values |
 | **ETag (entity tag) / If-Match** | Standard web headers. Armature puts the commit a response came from in `ETag`; a client sends a commit in `If-Match` to say "only write if nothing changed since" |
@@ -1262,13 +1264,17 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **Hash key / random key** | Two ways the database assigns identifiers: computed from defining references (junctions), or opaque (artifacts, which may also accept a client-supplied identifier) |
 | **Hono** | The web framework the API is written in |
 | **HTTP (Hypertext Transfer Protocol) status codes** | 200 success; 201 created; 400 malformed; 401 identity missing or unknown; 404 not found; 409 conflict; 412 precondition failed; 422 rule violated; 500 server error |
-| **Hub** | Armature itself, shared by plugins |
+| **Host** | One process running the API's code and giving it a network socket: the Node process in `app/server.ts`, or the container built from it. A server runs as many as it has ports for. Invisible to clients |
+| **Hub** | One host bound to one store: the address a client talks to. The relation of API to hub is that of a protocol to a server; every hub serves the same API, and there can be many hubs |
+| **Instance** | A hub with its particular data: the demonstration's seed course, or a study's own graph. Usually interchangeable with hub |
+| **Server** | A machine. It runs the processes, or the containers, that make up an instance |
+| **Store** | One TerminusDB database, with its own history, branches and people. The TerminusDB process holds any number |
 | **ICICLE** | The IEEE (Institute of Electrical and Electronics Engineers) Industry Connections Industry Consortium on Learning Engineering |
 | **Junction document** | A relationship stored as its own document so it can carry data (sequence, rationale, confidence, role) |
 | **JSON / JSON-LD** | JavaScript Object Notation, a text format for structured data; JSON for Linked Data, a variant that carries the meaning of fields |
 | **LMS (learning management system)** | Delivery software such as Canvas or Moodle |
 | **Merge (three-way)** | Combining one branch's changes into another by comparing both with their common ancestor; conflicts are reported, never guessed |
-| **Next.js** | The web application framework that currently hosts the API and Armature's pages |
+| **Next.js** | The web application framework Armature's viewer is written in. It hosted the API as well until 21 October 2026 |
 | **OIDC (OpenID Connect)** | A common single-sign-on protocol; a planned identity resolver |
 | **Optimistic concurrency** | Letting writes proceed and refusing one only if the data changed since the writer read it |
 | **Placement** | An `ItemInstance`: a bank item placed into one assessment |
@@ -1283,7 +1289,8 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **Schema** | The definition of document types, fields and allowed values (`schema/schema.json`) |
 | **Seed** | The demonstration course loaded by `scripts/seed_data.js` |
 | **SME (subject-matter expert)** | A content expert who reviews items |
-| **TerminusDB** | The open-source graph and document database with built-in version control that Armature uses |
+| **TerminusDB** | The open-source graph and document database with built-in version control that Armature uses; one TerminusDB process holds the stores |
+| **Viewer** | Armature's own pages, the module index and the Coverage View: a client of a hub that only reads |
 | **Two-client test** | A capability enters the hub only if at least two reference clients would need it, in the generic form they share |
 | **TypeScript** | The programming language the API is written in |
 | **WOQL (Web Object Query Language)** | TerminusDB's query language, not yet used by the API |

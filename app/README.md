@@ -1,15 +1,15 @@
 # The Armature app
 
-This directory is a [Next.js](https://nextjs.org) application with two jobs:
+This directory holds two programs that share a package:
 
-1. **It hosts the Armature API.** The API itself is a host-neutral [Hono](https://hono.dev) application in `lib/api/` (ADR-0054, an Architecture Decision Record in `schema/docs/adr/`). Next.js serves it under `/api/v1/` through one catch-all route file, `app/api/[[...route]]/route.ts`, the only file that knows Next.js is the host. The same application has a second host since Phase 7: `server.ts` serves it as a standalone Node process through `lib/hub.ts` and `@hono/node-server`, bundled by `npm run build:hub` into `dist/server.mjs`, which the container image in `../docker/hub.Dockerfile` runs (ADR-0026 decision 4). A plugin sees the same `/api/v1` from either host.
-2. **It serves Armature's own pages**: a read-only module index (`/`) and the Coverage View (`/coverage/<moduleId>`). The pages call the Hono app in-process with `app.request()`, exactly as a plugin would call the API over HTTP, and never read the database directly.
+1. **The Armature API and its host.** The API is a host-neutral [Hono](https://hono.dev) application in `lib/api/` (ADR-0054, an Architecture Decision Record in `schema/docs/adr/`). `server.ts` serves it as a standalone Node process through `lib/hub.ts` and `@hono/node-server`; `npm run build:hub` bundles it into `dist/server.mjs`, which `npm run start:hub` runs on this machine and the container image in `../docker/hub.Dockerfile` runs anywhere (ADR-0026 decision 4). A running API in front of a store is a **hub**.
+2. **The Armature viewer**, a [Next.js](https://nextjs.org) application with two read-only pages, the module index (`/`) and the Coverage View (`/coverage/<moduleId>`). The pages are a client of a hub like any plugin: they read it over HTTP through `@armature/client` (`lib/viewer.ts`) and know only the hub's address. `../docker/viewer.Dockerfile` packages them (Next's standalone output) as the public face of an instance, beside the hub and the store (`../docs/deployment.md`). Until 2026-10-21 Next.js also mounted the API through a catch-all route and the pages called it in-process; that made the viewer a second hub with its own store credentials, and it was removed.
 
 The project's README at the repository root explains how to start the database and load the demonstration data. [How Armature Works](../docs/how-armature-works.md) explains everything the code does, and the [API reference](../docs/api.md) documents each route.
 
 ## Running it
 
-The app needs the TerminusDB container running with the schema and seed loaded (see the root README), and a `.env.local` file in this directory (not committed):
+The hub needs the TerminusDB container running with the schema and seed loaded (see the root README), and a `.env.local` file in this directory (not committed). The viewer needs only a hub to point at.
 
 | Variable | Meaning | Local default |
 |---|---|---|
@@ -19,18 +19,20 @@ The app needs the TerminusDB container running with the schema and seed loaded (
 | `TERMINUS_DB` | Database name | `armature` |
 | `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local | `header` |
 | `ARMATURE_EXPORT_KEY` | Optional. The key under which `GET /api/v1/export?profile=pseudonymous` derives user tokens (ADR-0031); set it so the same person has the same token in every export, leave it unset and each export mints its own | unset |
-| `PORT`, `HOST` | The standalone hub only (`npm run start:hub` and the container): where it listens. Loopback by default because the `header` resolver trusts the caller; the container sets `HOST=0.0.0.0` inside its own network and `docker-compose.yml` confines what is published. The Next.js host ignores them | `3100`, `127.0.0.1` |
+| `PORT`, `HOST` | The hub (`npm run start:hub` and the container): where it listens. Loopback by default because the `header` resolver trusts the caller; the container sets `HOST=0.0.0.0` inside its own network and `docker-compose.yml` confines what is published | `3100`, `127.0.0.1` |
+| `ARMATURE_HUB_URL` | The viewer only: the hub its pages read. The one variable the viewer needs; it reads no `TERMINUS_*` | `http://localhost:3100` |
+| `ARMATURE_HUB_PUBLIC_URL` | The viewer only, optional: the hub's address as a reader's browser could reach it, for the raw-data links in page footers. Unset, a `localhost` hub is linked as itself and any other is not linked at all, so a hub kept private behind the viewer stays private | unset |
 
-The standalone hub reads `.env.local` from its working directory as Next.js does (a variable already set in the environment wins); the container has no such file and takes everything from `docker-compose.yml`, which publishes its port on loopback only by default (`ARMATURE_HUB_BIND`), because the `header` resolver trusts the caller.
+The hub reads `.env.local` from its working directory as Next.js does (a variable already set in the environment wins); the container has no such file and takes everything from `docker-compose.yml`, which publishes its port on loopback only by default (`ARMATURE_HUB_BIND`), because the `header` resolver trusts the caller.
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start the development server on <http://localhost:3000> |
-| `npm run build`, `npm start` | Production build and server (the Next.js host) |
-| `npm run build:hub` | Bundle the standalone hub: esbuild over `server.ts` into `dist/server.mjs`, the API and its packages in one file (runs in CI) |
-| `npm run start:hub` | Run that bundle: the API alone on port 3100, no Next.js |
+| `npm run build:hub` | Bundle the hub: esbuild over `server.ts` into `dist/server.mjs`, the API and its packages in one file (runs in CI) |
+| `npm run start:hub` | Run that bundle: the API on port 3100 |
+| `npm run dev` | Start the viewer's development server on <http://localhost:3000>, reading the hub at `ARMATURE_HUB_URL` |
+| `npm run build`, `npm start` | The viewer's production build and server |
 | `npm run lint` | ESLint (runs in CI, continuous integration) |
 | `npm test` | The integration tests (Vitest) against the running database; see below |
 | `npm run typecheck` | `tsc --noEmit` (runs in CI) |
@@ -39,14 +41,14 @@ The standalone hub reads `.env.local` from its working directory as Next.js does
 ## Layout
 
 ```
-server.ts                     The standalone hub's entry: reads the environment, starts lib/hub.ts, stops on SIGTERM
+server.ts                     The hub's entry: reads the environment, starts lib/hub.ts, stops on SIGTERM
 dist/                         Its bundle (npm run build:hub); generated, not committed
-app/
+app/                          The viewer (Next.js); no route files, it hosts no API
   page.tsx                    The module index
   coverage/[moduleId]/page.tsx  The Coverage View over GET /api/v1/intelligence/coverage/:moduleId
-  api/[[...route]]/route.ts   Mounts the Hono app for every HTTP method (the only route file)
   layout.tsx, globals.css     Page shell and styles (Tailwind CSS)
 lib/
+  viewer.ts                   The viewer's hub: hubUrl() from ARMATURE_HUB_URL and viewerHub(), a read-only @armature/client
   hub.ts                      The API served by Node's HTTP server (@hono/node-server): startHub({ port }) for server.ts and the test
   hub.test.ts                 The standalone host over a real socket: the same answers as app.request(), headers included
   api/                        The Armature API (Hono; never imports from next)
@@ -74,4 +76,4 @@ vitest.config.mts             Test configuration: the @ alias, and .env.local so
 - Nothing under `lib/api/` imports from `next` (ADR-0054).
 - Only `lib/api/store.ts` talks to TerminusDB, over HTTP (ADR-0055). The `terminusdb` JavaScript client is a dependency of `../scripts/` only.
 - The types and the Zod request schemas come from `@armature/types` (`../packages/types`, a workspace package generated from `../schema/schema.json`); never edit them, change the schema and run `npm run generate:types` at the root.
-- Pages are clients of the API like any plugin: they call `app.request()` and never the store.
+- Pages are clients of a hub like any plugin: they read it over HTTP through `lib/viewer.ts` and never import `lib/api/` or touch the store.
