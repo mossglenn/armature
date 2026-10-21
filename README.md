@@ -49,7 +49,9 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 - external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
 - 145 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
 
-**Next:** the rest of Phase 7 (the toolkit and deployment: a typed client package, a containerized hub). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+- `@armature/types` and `@armature/client`, installable packages a plugin builds on: the schema as TypeScript and every route as a typed function (Phase 7, 2026-10-21)
+
+**Next:** the rest of Phase 7 (ADR-0059's per-request version contract, a containerized hub, the schema guide for tool authors). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
 **Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
@@ -165,6 +167,7 @@ app/                          The Next.js app: hosts the API and the Coverage Vi
   app/                        Pages and the one catch-all API route
   lib/api/                    The Armature API (Hono): routes, write path, invariants, intelligence
 packages/types/               @armature/types: the schema as TypeScript, generated from schema.json; never edit by hand
+packages/client/              @armature/client: every /api/v1 route as a typed function (see packages/client/README.md)
 package.json                  The npm workspace root (app and packages/*)
 scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync (its own package)
 docker/                       Docker Compose for TerminusDB

@@ -15,6 +15,29 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-21 · A typed client over every route (`@armature/client`)
+
+**What changed.** `packages/client` is a workspace package, `@armature/client`, with one function
+per `/api/v1` route in the reference's five groups (`documents`, `branches`, `users`,
+`intelligence`, `export`). Every call returns `{ data, commit }`, the commit read from the
+`ETag`; a read takes `{ branch }` or `{ ref }`; a write takes `message`, `branch` and an optional
+`ifMatch` that becomes `If-Match`; the `user` given to `createClient` is sent as `Armature-User`;
+a non-2xx answer throws `HubError` with the hub's `status`, stable `code`, `message` and the
+body's other fields as `details`. Reads are typed by class name through `ClassMap`, new in
+`@armature/types`. The client takes a `fetch`, so a plugin's tests can run it over a Hono app
+in-process; the hub's own contract test does (`app/lib/api/client.test.ts`). No route changed.
+
+**What a client does.** Install by git reference (pnpm:
+`github:mossglenn/armature#path:packages/client`) and call the functions instead of building
+URLs, headers and envelopes by hand. The client sends no `Armature-Version` header yet; ADR-0059
+(Proposed) is the next unit, and the hub serves its current revision to a request without one.
+
+**CoQui.** `httpHub` becomes a consumer of this package rather than a reimplementation of the
+routes (plan Phase 7); its own version check can read `Armature-Version` from responses once
+ADR-0059 lands, or be replaced by the client's.
+
+---
+
 ## 2026-10-21 · The schema's types are an installable package (`@armature/types`)
 
 **What changed.** The generated TypeScript interfaces, the schema as data (`CLASS_FIELDS`,
