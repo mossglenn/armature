@@ -80,6 +80,19 @@
 //      two commits survives a reorder and a merge (apply writes a new commit, so a branch commit
 //      is not in the target's history)
 //
+// Phase 6 checks (ADR-0030) and operator repair (ADR-0062), added 2026-10-20:
+//   AC. Deleting a document through the document API: refused while another document references
+//      it; otherwise a commit with the given author and message, after which the document is
+//      still readable at the commit before (an operator repair is a commit, never a rewrite);
+//      the store's GET of a missing document is a 200 carrying a 404 envelope in its body
+//   AD. Attachment references: a Set of subdocuments declared on an abstract class, added to the
+//      schema while instances exist, is inherited by a leaf and round-trips; an enum inside a
+//      subdocument; a document written before the field existed reads back without it; a
+//      required field weakened to Optional with instances present; a Set of subdocuments inside a
+//      List subdocument (an option that is an image with no text); a change to an attachment's
+//      hash is a change to the fragment that carries it, and nested subdocument ids regenerate
+//      at every depth on replace
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -715,6 +728,84 @@ async function main() {
   const ab7 = changedFragments(atAAfter, atMain);
   record("AB7", atAAfter?.name === "ab" && ab7.join(",") === "b" ? "PASS" : "FAIL",
     `after the merge and the branch's deletion, A is still readable and the comparison A to main's head reports [${ab7}]`);
+
+
+  // ---------------------------------------------------------------------------
+  // Phase 6 (ADR-0030) and operator repair (ADR-0062), added 2026-10-20
+  // ---------------------------------------------------------------------------
+  // AC: a document delete is a commit. Other/x is referenced by a Holder (check L1).
+  r = await api("DELETE", docs(`${commit("ac delete a referenced document")}&id=Other/x`));
+  record("AC1", r.status !== 200 ? "PASS" : "INFO",
+    `DELETE of Other/x while a Holder references it: ${r.status === 200 ? "ACCEPTED, the reference now dangles" : "refused " + r.status + " " + short(r.json?.["api:error"]?.["@type"] ?? r.json)}`);
+  r = await api("POST", docs(commit("ac insert a loose document")), { "@type": "Other", "@id": "Other/ac-loose", label: "loose" });
+  const acBefore = await head("main");
+  r = await api("DELETE", docs(`author=operator-probe&message=${encodeURIComponent("ac repair: remove a document written by mistake")}&id=Other/ac-loose`));
+  const acHead = (await log("main", 1))?.[0];
+  record("AC2", r.status === 204 && acHead?.author === "operator-probe" && acHead?.identifier !== acBefore ? "PASS" : "FAIL",
+    `DELETE of an unreferenced document is a commit: ${r.status}; head author ${acHead?.author}, message ${short(acHead?.message)}`);
+  r = await api("GET", docs(`id=Other/ac-loose`));
+  // The store answers a GET of a missing document with HTTP 200 whose body is a 404 envelope
+  // (a "Status: 404" line, then api:DocumentNotFound JSON); the adapter reads the body, not the status.
+  const acGone = r.status !== 200 || (typeof r.json === "string" && r.json.includes("api:DocumentNotFound"));
+  const acAt = await readAt(acBefore, "Other/ac-loose");
+  record("AC3", acGone && acAt?.label === "loose" ? "PASS" : "FAIL",
+    `after the delete the document is ${acGone ? "gone from the branch" : "still on the branch"} and ${acAt?.label === "loose" ? "readable" : "not readable"} at the commit before`);
+  record("AC4", "INFO", `a GET of the deleted document answers HTTP ${r.status} with ${typeof r.json === "string" ? "a 404 envelope in the body: " + r.json.slice(0, 60).replace(/\n/g, " ") : short(r.json)}`);
+
+  // AD: attachment references (ADR-0030). The schema gains an enum, a subdocument class and a
+  // Set of it on the abstract L2 and on Fragment, and L4.extra is weakened, with instances present.
+  const adSchema = schema.map((e) => {
+    if (e["@id"] === "L2") return { ...e, attachments: { "@type": "Set", "@class": "Att" } };
+    if (e["@id"] === "L4") return { ...e, extra: { "@type": "Optional", "@class": "xsd:string" } };
+    if (e["@id"] === "Fragment") return { ...e, attachments: { "@type": "Set", "@class": "Att" } };
+    return e;
+  }).concat([
+    { "@type": "Enum", "@id": "StoreKind", "@value": ["S3", "Git", "Other"] },
+    { "@type": "Class", "@id": "Att", "@subdocument": [], "@key": { "@type": "Random" },
+      "store": "StoreKind", "hash": "xsd:string", "revision": { "@type": "Optional", "@class": "xsd:string" } },
+  ]);
+  r = await api("POST", docs(`graph_type=schema&full_replace=true&${commit("ad schema")}`), adSchema);
+  record("AD0", r.status === 200 ? "PASS" : "FAIL",
+    `schema reloaded with instances present (Set<Att> on abstract L2 and on Fragment, L4.extra weakened to Optional, a new enum and subdocument): ${r.status} ${r.status === 200 ? "" : short(r.json?.["api:error"]?.["@type"] ?? r.json)}`);
+  const att = (hash, extra = {}) => ({ "@type": "Att", store: "Git", hash, ...extra });
+  r = await api("POST", docs(commit("ad L4 with attachments")), { "@type": "L4", label: "ad-leaf", extra: "y", attachments: [att("h1", { revision: "r1" }), att("h2")] });
+  record("AD1", r.status === 200 ? "PASS" : "FAIL", `insert L4 with two Att subdocuments through the Set inherited from L2: ${r.status} ${r.status === 200 ? "" : short(r.json)}`);
+  r = await api("GET", docs(`id=L4/ad-leaf`));
+  const adAtts = Array.isArray(r.json?.attachments) ? r.json.attachments : [];
+  const adStores = adAtts.map((a) => a.store).sort().join(",");
+  record("AD2", adAtts.length === 2 && adStores === "Git,Git" && adAtts.every((a) => a["@type"] === "Att") ? "PASS" : "FAIL",
+    `read back: ${adAtts.length} attachments inline, enum values [${adStores}], first @id ${short(adAtts[0]?.["@id"])}`);
+  r = await api("GET", docs(`id=L4/leaf`));
+  const adHasField = r.json && Object.prototype.hasOwnProperty.call(r.json, "attachments");
+  record("AD3", r.status === 200 && !adHasField ? "PASS" : "INFO",
+    `an L4 written before the field existed reads back ${adHasField ? "with attachments = " + short(r.json.attachments) : "with no attachments field"}`);
+  r = await api("POST", docs(commit("ad L4 without extra")), { "@type": "L4", label: "ad-noextra" });
+  record("AD4", r.status === 200 ? "PASS" : "FAIL", `insert L4 without the weakened field: ${r.status} ${r.status === 200 ? "" : short(r.json)}`);
+  const adItem = { "@type": "Item", name: "ad", options: [
+    { "@type": "ItemOption", fragmentId: "pic", kind: "option", isCorrect: true, attachments: [att("h3", { revision: "r3" })] },
+    { "@type": "ItemOption", fragmentId: "b", kind: "option", text: "Beta", isCorrect: false } ], parts: [] };
+  r = await api("POST", docs(commit("ad item with an image option")), adItem);
+  const adInsert = r.status;
+  r = await api("GET", docs(`id=Item/ad`));
+  const pic = r.json?.options?.[0];
+  record("AD5", adInsert === 200 && pic?.attachments?.[0]?.hash === "h3" && pic?.text === undefined ? "PASS" : "FAIL",
+    `an option with an attachment and no text, a Set of subdocuments inside a List subdocument: insert ${adInsert}; read back ${short(pic)}`);
+  const deepCanon = (v) => Array.isArray(v) ? `[${v.map(deepCanon).join(",")}]`
+    : v && typeof v === "object" ? `{${Object.keys(v).filter((k) => k !== "@id").sort().map((k) => `${JSON.stringify(k)}:${deepCanon(v[k])}`).join(",")}}`
+    : JSON.stringify(v);
+  const adHead1 = await head("main");
+  r = await api("PUT", docs(commit("ad no-op replace")), adItem);
+  const adHead2 = await head("main");
+  const adAt1 = await readAt(adHead1, "Item/ad"), adAt2 = await readAt(adHead2, "Item/ad");
+  const adNestedId = (d) => d?.options?.[0]?.attachments?.[0]?.["@id"];
+  record("AD6", deepCanon(adAt1) === deepCanon(adAt2) ? "PASS" : "FAIL",
+    `a no-op replace: nested attachment @id ${adNestedId(adAt1) === adNestedId(adAt2) ? "kept" : "regenerated"} (${short(adNestedId(adAt2))}); equal once @id is removed at every depth: ${deepCanon(adAt1) === deepCanon(adAt2)}`);
+  const adItem2 = structuredClone(adItem); adItem2.options[0].attachments[0].hash = "h3-new";
+  r = await api("PUT", docs(commit("ad a new revision of the image")), adItem2);
+  const adHead3 = await head("main");
+  const adAt3 = await readAt(adHead3, "Item/ad");
+  const adChanged = (adAt2?.options ?? []).filter((o, i) => deepCanon(o) !== deepCanon(adAt3?.options?.[i])).map((o) => o.fragmentId);
+  record("AD7", adChanged.join(",") === "pic" ? "PASS" : "FAIL", `changing an attachment's hash changes exactly the fragment that carries it: [${adChanged}]`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
