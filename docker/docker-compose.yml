@@ -1,3 +1,15 @@
+# Armature's containers.
+#
+#   docker compose up -d                       the store only: what local development
+#                                              uses, with the API served by `npm run dev`
+#   docker compose --profile hub up -d --build the store and the hub (Phase 7): the API as
+#                                              its own container on port 3100, built from
+#                                              hub.Dockerfile; what a hosted instance runs
+#
+# The schema and the seed are loaded from the host either way (node scripts/load_schema.js,
+# node scripts/seed_data.js), which is why the store's port stays published. The hub needs
+# no running store to start: every request opens its own connection, and a store that is
+# not up yet answers as a 500 until it is.
 services:
   terminusdb:
     image: terminusdb/terminusdb-server:v12.0.7
@@ -8,6 +20,33 @@ services:
     environment:
       - TERMINUSDB_ADMIN_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
       - TERMINUSDB_SERVER_NAME=${TERMINUSDB_SERVER_NAME:-localhost}
+
+  hub:
+    build:
+      context: ..
+      dockerfile: docker/hub.Dockerfile
+    profiles: [hub]
+    ports:
+      # Published on loopback only by default: the one identity resolver built
+      # so far (`header`) trusts the caller, so a hub reachable from elsewhere
+      # would let anyone write as anyone (ADR-0032). Set ARMATURE_HUB_BIND=0.0.0.0
+      # only behind a proxy that authenticates and sets Armature-User itself, or
+      # once an authenticating resolver exists.
+      - "${ARMATURE_HUB_BIND:-127.0.0.1}:${ARMATURE_HUB_PORT:-3100}:3100"
+    environment:
+      # The store by its service name on the compose network; the same
+      # variables app/.env.local holds for the host-run API.
+      - TERMINUS_URL=http://terminusdb:6363
+      - TERMINUS_USER=admin
+      - TERMINUS_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
+      - TERMINUS_DB=${TERMINUS_DB:-armature}
+      # The identity resolver (ADR-0032): `header` trusts the caller, so a hub
+      # with it must not be reachable by strangers (see the ports note above).
+      - ARMATURE_IDENTITY=${ARMATURE_IDENTITY:-header}
+      # Set it so pseudonymous exports name the same person the same way every time (ADR-0031).
+      - ARMATURE_EXPORT_KEY=${ARMATURE_EXPORT_KEY:-}
+    depends_on:
+      - terminusdb
 
 volumes:
   terminusdb-data:

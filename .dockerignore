@@ -1,0 +1,14 @@
+# What docker/hub.Dockerfile never needs from the build context (the repository root).
+**/node_modules
+**/.env*
+**/dist
+.git
+.github
+.next
+.worktrees
+.claude
+.files
+.vscode
+docs
+schema/docs
+scripts
