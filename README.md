@@ -78,9 +78,9 @@ You need [Docker](https://www.docker.com/) (to run the database) and [Node.js](h
 # 1. Start TerminusDB, the graph database (pinned to v12.0.7 in docker/docker-compose.yml)
 cd docker && docker compose up -d && cd ..
 
-# 2. Install dependencies for the scripts and the app
+# 2. Install dependencies: the workspace (the app and packages/*) at the root, and the scripts
+npm install
 (cd scripts && npm install)
-(cd app && npm install)
 
 # 3. Configure the app's connection to the database (app/.env.local is not committed)
 cat > app/.env.local <<'ENV'
@@ -129,7 +129,7 @@ Writes need the `Armature-User` header carrying a registered user's external ide
 
 **Tests.** `npm test` in `app/` runs the 145 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
 
-**After a schema change.** Run `npm run generate:types` in `app/` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
+**After a schema change.** Run `npm run generate:types` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
 
 ## How it is built
 
@@ -164,10 +164,11 @@ docs/
 app/                          The Next.js app: hosts the API and the Coverage View (see app/README.md)
   app/                        Pages and the one catch-all API route
   lib/api/                    The Armature API (Hono): routes, write path, invariants, intelligence
-  lib/types.ts, lib/schemas.ts  Generated from schema.json; never edit by hand
-scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync
+packages/types/               @armature/types: the schema as TypeScript, generated from schema.json; never edit by hand
+package.json                  The npm workspace root (app and packages/*)
+scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync (its own package)
 docker/                       Docker Compose for TerminusDB
-.github/workflows/ci.yml      CI: lint and the generated-types drift check
+.github/workflows/ci.yml      CI: lint, type-check, the generated-types drift check, and the contract suite against a TerminusDB service container
 .claude/                      Context for AI-assisted development sessions: CLAUDE.md, PROJECT_CONTEXT.md, SESSION.md
 ```
 

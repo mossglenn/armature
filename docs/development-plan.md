@@ -760,8 +760,12 @@ it.
 **Serves:** P2 (tools-first needs a toolkit), the demo environment in PROJECT_CONTEXT.
 
 Work:
-- [ ] Move generated types into a workspace package (`packages/types`), published or consumable
-      by git reference; the generator writes there and `check:types` still guards drift.
+- [x] Move generated types into a workspace package (`packages/types`), published or consumable
+      by git reference; the generator writes there and `check:types` still guards drift. (Done
+      2026-10-21: `@armature/types`, TypeScript source with no build, exporting `.` and
+      `./schemas`; the repository became an npm workspace of `app` and `packages/*`, with
+      `scripts/` kept outside so the TerminusDB client resolves only there. Consumable by git
+      reference; not published.)
 - [ ] A thin typed client (`packages/client`): fetch wrappers over the v1 routes, branch and ref
       parameters, data-version handling, and the store-error mapping (now `app.onError` in
       `app/lib/api/app.ts`; formerly `handleTerminusError`) behind the boundary. CoQui's `httpHub` becomes a consumer of it, not a reimplementation.

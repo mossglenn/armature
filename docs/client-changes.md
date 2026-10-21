@@ -15,6 +15,26 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-21 · The schema's types are an installable package (`@armature/types`)
+
+**What changed.** The generated TypeScript interfaces, the schema as data (`CLASS_FIELDS`,
+`CLASS_KEY`, `CLASS_ANCESTORS`, `CLASS_CATEGORY`) and the Zod request schemas moved from
+`app/lib/` into `packages/types`, a workspace package named `@armature/types`, exporting `.`
+(types and schema data) and `./schemas` (the request schemas the write routes check a body
+with). It ships TypeScript source and no build, so a bundler compiles it with the code that
+imports it. Nothing in the API or the schema changed; the 145-test contract suite now also runs
+in CI against a TerminusDB service container on every change.
+
+**What a client does.** Install the package by git reference instead of copying `types.ts`
+(pnpm: `github:mossglenn/armature#path:packages/types`), and validate a body with the same Zod
+schema the hub will apply before sending it. A client that copied the file keeps working; the
+copy just no longer tracks the schema.
+
+**CoQui.** CoQui's `types.ts` ("the target schema", its PR 3) can become an import of
+`@armature/types`; the typed client over the routes (the next Phase 7 piece) will depend on it.
+
+---
+
 ## 2026-10-20 · Outcome records name their source (ADR-0063)
 
 **What changed.** A `LearningDataset` must carry `producedBy` (the `Assessment` whose

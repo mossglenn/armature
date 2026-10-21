@@ -240,7 +240,7 @@ The project also keeps a copy of the TerminusDB documentation in the repository 
 
 ### 8.3 One source of truth, with generated derivatives
 
-The schema file is the single source of truth. Everything else that describes the types is generated from it: the program's type definitions (`app/lib/types.ts`), the request-validation rules (`app/lib/schemas.ts`), and the human-readable schema appendix (`docs/SCHEMA_APPENDIX.md`). An automated check in CI (continuous integration, the automated checks run on every proposed change; Section 8.7) fails if the generated type definitions and validation rules drift from the schema (the readable appendix is not checked). Section 21.1 explains this in more detail.
+The schema file is the single source of truth. Everything else that describes the types is generated from it: the program's type definitions and the request-validation rules (the `@armature/types` package under `packages/types/`, which a tool in another repository can install), and the human-readable schema appendix (`docs/SCHEMA_APPENDIX.md`). An automated check in CI (continuous integration, the automated checks run on every proposed change; Section 8.7) fails if the generated type definitions and validation rules drift from the schema (the readable appendix is not checked). Section 21.1 explains this in more detail.
 
 ### 8.4 Reference clients and the two-client test
 
@@ -1007,10 +1007,10 @@ The seed currently has **no learning activities, activity groups, datasets or me
 
 ### 21.1 Generated types and validation rules
 
-The script `scripts/generate-types.js` reads the schema and writes two files:
+The script `scripts/generate-types.js` reads the schema and writes two files, which together form the `@armature/types` package (`packages/types/`; in `app/lib/` until Phase 7 moved them on 2026-10-21 so that a tool in another repository can install them):
 
-- `app/lib/types.ts`: the program's type definitions for every class, plus the schema itself as data the code can consult at run time: each class's category, its ancestors, its key, and every field with its kind and target type. The invariants engine, the impact read and the trace read all use this rather than hand-maintained lists.
-- `app/lib/schemas.ts`: strict validation rules (written with Zod, a validation library for TypeScript, the language the code is written in) for every class that can be written. These are the shape checks of Section 13.1.
+- `types.ts`: the program's type definitions for every class, plus the schema itself as data the code can consult at run time: each class's category, its ancestors, its key, and every field with its kind and target type. The invariants engine, the impact read and the trace read all use this rather than hand-maintained lists.
+- `schemas.ts`: strict validation rules (written with Zod, a validation library for TypeScript, the language the code is written in) for every class that can be written. These are the shape checks of Section 13.1.
 
 A second script, `scripts/generate-schema-appendix.js`, writes `docs/SCHEMA_APPENDIX.md`, a readable reference to every type and field.
 

@@ -42,9 +42,12 @@ schema/
   schema.json              # TerminusDB schema — single source of truth for all types
   docs/adr/                # Architecture Decision Records; README.md is the index with every ADR's status
 docker/                    # Docker Compose configuration (TerminusDB pinned to v12.0.7)
-.github/workflows/ci.yml   # CI: npm run lint + npm run check:types in app/
+.github/workflows/ci.yml   # CI: lint, typecheck and check:types at the root; the contract suite against a TerminusDB service container
+package.json               # The npm workspace root: app and packages/*; scripts/ stays outside so the TerminusDB client is resolvable only there (ADR-0055)
+packages/
+  types/                   # @armature/types (GENERATED src/, do not edit): types.ts (interfaces + schema as data) and schemas.ts (Zod); TypeScript source, no build; the app depends on it as a workspace, another repository by git reference
 scripts/
-  generate-types.js        # Derives app/lib/types.ts (types + schema as data) and app/lib/schemas.ts (Zod) from schema.json — run after schema changes
+  generate-types.js        # Derives packages/types/src/types.ts (types + schema as data) and schemas.ts (Zod) from schema.json — run after schema changes
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
   load_schema.js           # Replaces the schema graph in one full_replace; --clear-instances empties data first for breaking changes
   platform_checks.js       # Probes store behaviors the ADRs depend on, in a scratch database it creates and deletes (run before encoding a platform assumption)
@@ -84,8 +87,6 @@ app/
       export/
         exporter.ts        # Slices (membership by class or ancestor), unresolved references, schema normalization (the store's @max_cardinality "inf", check AE5), the three profiles (HMAC tokens under ARMATURE_EXPORT_KEY)
         slices.json        # The declared slices: full, outcomes-loop, review. A study's slice is an entry here, not code
-    types.ts               # GENERATED — do not edit; run npm run generate:types. Interfaces plus the schema as data: CLASS_CATEGORY, SUBDOCUMENT_CLASSES, CLASS_ANCESTORS, CLASS_KEY, CLASS_FIELDS, and the VALID_* enum arrays
-    schemas.ts             # GENERATED — do not edit; Zod request schemas, one per concrete class, from the same generator
   vitest.config.mts        # Vitest: '@' alias, reads .env.local so tests hit the same store as the app
 docs/
   how-armature-works.md    # The complete explainer for academic readers: purpose, history, every mechanism, decisions, future
@@ -125,11 +126,11 @@ The schema is the single source of truth for everything. Read `schema/schema.jso
 
 ### Types are generated, not hand-maintained
 
-`app/lib/types.ts` and `app/lib/schemas.ts` are **generated** from `schema/schema.json` by `scripts/generate-types.js`. Never edit them directly. `types.ts` carries the interfaces and the schema as runtime data (`CLASS_CATEGORY`, `CLASS_ANCESTORS`, `CLASS_KEY`, `CLASS_FIELDS`); `schemas.ts` carries one strict Zod schema per concrete class for the write routes.
+`packages/types/src/types.ts` and `packages/types/src/schemas.ts` (the `@armature/types` workspace package, imported as `@armature/types` and `@armature/types/schemas`; in `app/lib/` until 2026-10-21) are **generated** from `schema/schema.json` by `scripts/generate-types.js`. Never edit them directly. `types.ts` carries the interfaces and the schema as runtime data (`CLASS_CATEGORY`, `CLASS_ANCESTORS`, `CLASS_KEY`, `CLASS_FIELDS`); `schemas.ts` carries one strict Zod schema per concrete class for the write routes.
 
 After any change to `schema/schema.json`:
 ```bash
-# From armature/app/
+# From the repository root
 npm run generate:types
 
 # Verify (also runs in CI)
@@ -215,7 +216,7 @@ TerminusDB enforces field types, required fields, enum values, minimum cardinali
 Every non-obvious decision should have a rationale — in code comments, in ADRs, or in the schema documentation. This is Armature practicing what it preaches.
 
 ### 4. Schema changes require an ADR
-Any modification to `schema/schema.json` that changes existing types or adds new ones warrants an ADR. Adding an ADR first, then implementing, is the preferred order. After schema changes, always regenerate `app/lib/types.ts` (see The Schema section above) and commit both files together.
+Any modification to `schema/schema.json` that changes existing types or adds new ones warrants an ADR. Adding an ADR first, then implementing, is the preferred order. After schema changes, always regenerate `packages/types` (see The Schema section above) and commit the schema and the generated files together.
 
 ### 5. Framework vs. plugin boundary
 Ask before adding anything: "Does this belong in the graph infrastructure, or in a specific tool's UX?" System-of-record concerns (artifact typing, relationships, schema versioning) belong here. Editing workflows, import/export formats, and UI patterns belong in plugins.
@@ -283,10 +284,10 @@ Say "update session" and follow the prompt in `.claude/prompts/update-session.md
 ### After schema changes
 1. Write or update the ADR in `schema/docs/adr/`
 2. Update `schema/schema.json`
-3. Run `npm run generate:types` from `armature/app/`
+3. Run `npm run generate:types` from the repository root
 4. Run `npm run check:types` to verify output
 5. Run `node scripts/generate-schema-appendix.js` from the repository root
-6. Commit `schema.json`, `app/lib/types.ts`, `app/lib/schemas.ts` and `docs/SCHEMA_APPENDIX.md` together in the same commit
+6. Commit `schema.json`, `packages/types/src/types.ts`, `packages/types/src/schemas.ts` and `docs/SCHEMA_APPENDIX.md` together in the same commit
 
 ### Adding an ADR
 1. Find the next available number in `schema/docs/adr/`
@@ -302,7 +303,7 @@ Say "update session" and follow the prompt in `.claude/prompts/update-session.md
 - **Don't** add owned subdocuments for relationships — every relationship between documents is a reference (ADR-0002). The embedded exceptions are an item's parts (`Fragment`, `TextFragment`, `ItemOption`; ADR-0022, ADR-0033), addressed by `fragmentId`, never by their nested store ids, and the outward coordinates `ExternalRef` and `Attachment` (ADR-0030), which have no identity at all and are never addressed
 - **Don't** put UI logic, import/export formats, or plugin-specific code in this repo
 - **Don't** change `schema.json` without an ADR
-- **Don't** edit `app/lib/types.ts` manually — it's generated; change `schema.json` and run `generate:types`
+- **Don't** edit `packages/types/src/` manually — it's generated; change `schema.json` and run `generate:types`
 - **Don't** write API routes as Next.js route handlers — every route is a Hono route in `app/lib/api/` under `/api/v1` (ADR-0054); the catch-all is the only file under `app/app/api/`
 - **Don't** import from `next` anywhere under `app/lib/api/` — the host appears only in `app/app/api/[[...route]]/route.ts`
 - **Don't** add the `terminusdb` client to `app/` — the API layer reaches the store through its HTTP adapter (ADR-0055); the client is a dependency of `scripts/` only. The one exception would be `lib/woql.js` to build query JSON the adapter posts, and the first such use amends the ADR
