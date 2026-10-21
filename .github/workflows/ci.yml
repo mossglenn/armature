@@ -3,9 +3,15 @@
 # Two jobs, run in parallel on every push to main and every pull request:
 #
 #   app       Guards the contracts that need no store: `schema/schema.json` and the
-#             generated `app/lib/types.ts` and `app/lib/schemas.ts` agree
-#             (check:types), the app lints clean, and it type-checks (`tsc`; lint
-#             alone missed an argument-count error once, 2026-10-20).
+#             generated `packages/types` agree (check:types), the app lints clean,
+#             and the app and the packages type-check (`tsc`; lint alone missed
+#             an argument-count error once, 2026-10-20).
+#
+# The repository is an npm workspace (root package.json: app and packages/*), so
+# one `npm ci` at the root installs the app and the packages it depends on.
+# scripts/ is deliberately outside the workspace: the TerminusDB client stays
+# resolvable from scripts/node_modules only (ADR-0055), so the contract job
+# installs it separately.
 #
 #   contract  The contract suite (Phase 7 of docs/development-plan.md): starts
 #             TerminusDB as a service container, waits for it, loads the schema,
@@ -24,19 +30,16 @@ jobs:
   app:
     name: Lint, type-check and generated-types drift check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npm run typecheck
       - run: npm run check:types
 
   contract:
@@ -64,14 +67,13 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
-            app/package-lock.json
+            package-lock.json
             scripts/package-lock.json
       - name: Install the scripts' dependencies (the TerminusDB client)
         run: npm ci
         working-directory: scripts
-      - name: Install the app's dependencies
+      - name: Install the workspace (the app and the packages)
         run: npm ci
-        working-directory: app
       - name: Wait for TerminusDB
         run: node scripts/wait_for_store.js
       - name: Load the schema
@@ -80,4 +82,3 @@ jobs:
         run: node scripts/seed_data.js
       - name: Run the contract suite
         run: npm test
-        working-directory: app
