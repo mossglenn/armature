@@ -20,7 +20,7 @@ A hub is the Armature API in front of one TerminusDB database. Two ways to have 
 
 | Way | Command | Address |
 |---|---|---|
-| An instance: store, hub and viewer as containers (what a hosted deployment runs; [`deployment.md`](deployment.md)) | `cd docker && docker compose --profile hub up -d --build` | `http://localhost:3100`, from the machine only |
+| An instance: store, hub and viewer as containers (a hosted deployment adds Caddy with `--profile public`; [`deployment.md`](deployment.md)) | `cd docker && docker compose --profile hub up -d --build` | `http://localhost:3100`, from the machine only |
 | Store in Docker, the API as a process on your machine | `cd docker && docker compose up -d`, then in `app/`: `npm run build:hub && npm run start:hub` | `http://localhost:3100` |
 
 Armature's own pages (the viewer, `npm run dev` in `app/`, port 3000) are a client of whichever hub `ARMATURE_HUB_URL` names, exactly as your tool will be; they serve no API of their own.

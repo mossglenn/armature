@@ -808,7 +808,15 @@ Work:
       the hub need not be published at all. Left to decide: the server (a small VPS fits the
       compose file as is; PROJECT_CONTEXT named Railway or Render), and, before any writing
       client reaches it from elsewhere, the `oidc` resolver (ADR-0032) or an authenticating
-      proxy.
+      proxy. (Server chosen 2026-10-21: a small virtual private server running the compose
+      file as is, a DigitalOcean Droplet, over Railway, Render, Fly.io and App Platform, which
+      has no persistent volumes. Rehearsed the same day on a fresh Ubuntu 24.04 VM (Lima, 2
+      virtual CPUs, 4 GB), which found three gaps, now closed: no restart policy, so nothing
+      came back after a reboot; operator scripts that needed Node on the server, now the
+      `operator` compose service; and no TLS, now Caddy behind the `public` profile with the
+      viewer moved to loopback. Measured: 375 MiB running, a 1.65 GB peak building on the
+      server; Docker's published ports bypass `ufw`. `deployment.md` § "A hosted instance".
+      Left: the Droplet itself, with a domain.)
 - [x] `docs/schema-guide.md` revised from the reference-client perspective: what a tool author
       needs to know to write and read the graph. (A first conceptual version was written on
       2026-10-08, with `docs/api.md` and `docs/how-armature-works.md`. Rewritten 2026-10-21 in

@@ -53,7 +53,7 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 
 - the per-request version contract (ADR-0059): `Armature-Version` and `Armature-Capabilities` headers, `GET /discover` and `GET /schema`
 
-- an instance as three containers: the store, the hub (`docker/hub.Dockerfile`, the API bundled into one file and served by Node) and the viewer (`docker/viewer.Dockerfile`, the pages as a client of the hub); `docker compose --profile hub up` runs them on one private network with only the viewer public ([Running an instance](docs/deployment.md); Phase 7, 2026-10-21)
+- an instance as three containers: the store, the hub (`docker/hub.Dockerfile`, the API bundled into one file and served by Node) and the viewer (`docker/viewer.Dockerfile`, the pages as a client of the hub); `docker compose --profile hub up` runs them on one private network on loopback, and `--profile public` adds Caddy as the only public container ([Running an instance](docs/deployment.md); Phase 7, 2026-10-21)
 
 **Next:** the rest of Phase 7 (one hosted instance, the schema guide for tool authors). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
@@ -114,7 +114,7 @@ cd app && npm run dev
 
 Then open <http://localhost:3000> for the viewer, or call the API directly at <http://localhost:3100/api/v1>.
 
-An instance runs store, hub and viewer as three containers on one private network, with only the viewer's port public; the schema and seed are still loaded from the machine as in step 4. [Running an instance](docs/deployment.md) is the administrator's guide:
+An instance runs store, hub and viewer as three containers on one private network, all on loopback (a hosted one adds Caddy for HTTPS with `--profile public`); the schema and seed are still loaded from the machine as in step 4, or through the `operator` service on a server without Node. [Running an instance](docs/deployment.md) is the administrator's guide:
 
 ```bash
 cd docker && docker compose --profile hub up -d --build && cd ..
@@ -174,7 +174,7 @@ docs/
   development-plan.md         The phased roadmap, principles, open questions and platform facts
   armature-asks-from-Coqui.md What the first plugin asked for and learned (a dated handoff)
   research-path.md            How a learning scientist stands up a constrained Armature for one study
-  deployment.md               Running an instance: the terms, the three containers, who can do what, the steps
+  deployment.md               Running an instance: the terms, the containers, who can do what, the steps, a hosted instance
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
   research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings
@@ -186,7 +186,7 @@ packages/types/               @armature/types: the schema as TypeScript, generat
 packages/client/              @armature/client: every /api/v1 route as a typed function (see packages/client/README.md)
 package.json                  The npm workspace root (app and packages/*)
 scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync (its own package)
-docker/                       Docker Compose for the store, and with --profile hub the hub and viewer containers; their two Dockerfiles
+docker/                       Docker Compose for the store; --profile hub adds the hub and viewer, --profile public Caddy in front; their Dockerfiles, the Caddyfile, the operator entrypoint
 .github/workflows/ci.yml      CI: lint, type-check, the generated-types drift check, the hub bundle, the contract suite against a TerminusDB service container, and both container images
 .claude/                      Context for AI-assisted development sessions: CLAUDE.md, PROJECT_CONTEXT.md, SESSION.md
 ```
