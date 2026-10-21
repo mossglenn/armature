@@ -91,6 +91,11 @@ const DOMAINS = [
     ids: ['User', 'DesignRecord', 'ArmatureDocument'],
   },
   {
+    label: 'Outside the Graph',
+    description: 'Embedded coordinates that point out of the graph: identifiers in other systems, and verifiable references to bytes or to a revision of a tree of bytes in a store the hub may or may not operate. Any artifact and any fragment may carry them (ADR-0030).',
+    ids: ['ExternalRef', 'Attachment'],
+  },
+  {
     label: 'Evidence & Needs Analysis',
     description: 'Evidence of learning gaps and the needs they inform. The upstream entry point into the artifact graph.',
     ids: ['LearningEvidence', 'LearningMetric', 'DescriptiveEvidence', 'LearningDataset', 'LearningNeed', 'NeedEvidenceLink'],
@@ -108,7 +113,7 @@ const DOMAINS = [
   {
     label: 'Learning Activities & Course Structure',
     description: 'Instructional activities and the hierarchical containers that organize them into deliverable courses.',
-    ids: ['LearningActivity', 'ActivityGroup', 'ActivityGroupMember', 'ModuleObjective', 'Module', 'ModuleActivityLink', 'ModuleActivityGroupLink', 'Course'],
+    ids: ['LearningActivity', 'ActivityGroup', 'ActivityGroupMember', 'ActivityItemLink', 'ModuleObjective', 'Module', 'ModuleActivityLink', 'ModuleActivityGroupLink', 'Course'],
   },
   {
     label: 'Design Rationale',
@@ -242,6 +247,7 @@ function renderEnum(id) {
 
 const ENUM_GROUPS = [
   { label: 'Objectives', ids: ['BloomsLevel', 'ObjectiveState', 'ObjectiveRole', 'PrerequisiteType'] },
+  { label: 'Outside the Graph', ids: ['ExternalSystem', 'AttachmentStore'] },
   { label: 'Assessment', ids: ['ItemType', 'ItemStatus'] },
   { label: 'Evidence & Needs', ids: ['EvidenceMethod', 'ConfidenceLevel', 'NeedPriority'] },
   { label: 'Activities', ids: ['ActivityType'] },
