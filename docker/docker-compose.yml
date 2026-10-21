@@ -5,6 +5,9 @@
 #   docker compose --profile hub up -d --build an instance: the store, the hub and the
 #                                              viewer, three containers on one private
 #                                              network; what a hosted deployment runs
+#   docker compose run --rm operator node <script>
+#                                              one of scripts/ (load_schema.js, seed_data.js)
+#                                              against the store, from a Node container
 #
 # What the machine publishes, and to whom:
 #   viewer  3000 on every interface   the public face; its pages only read
@@ -72,5 +75,28 @@ services:
     depends_on:
       - hub
 
+  operator:
+    # The operator scripts (scripts/: wait_for_store, load_schema, seed_data), run in
+    # a throwaway Node container on the private network, so a server needs Docker and
+    # nothing else and the store keeps its loopback binding:
+    #   docker compose run --rm operator node load_schema.js
+    # The repository is mounted read-only; the scripts' dependencies live in a volume,
+    # installed when the lock file changes (operator-entrypoint.sh), so nothing is
+    # written into the checkout.
+    image: node:22-alpine
+    profiles: [operator]
+    volumes:
+      - ..:/repo:ro
+      - operator-modules:/deps
+    environment:
+      - TERMINUS_URL=http://terminusdb:6363
+      - TERMINUS_USER=admin
+      - TERMINUS_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
+      - TERMINUS_DB=${TERMINUS_DB:-armature}
+    entrypoint: ["sh", "/repo/docker/operator-entrypoint.sh"]
+    depends_on:
+      - terminusdb
+
 volumes:
   terminusdb-data:
+  operator-modules:
