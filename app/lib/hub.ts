@@ -2,11 +2,11 @@
  * The hub as its own process: the Armature API served by Node's HTTP server
  * (ADR-0026 decision 4, ADR-0054, built in Phase 7).
  *
- * `app/lib/api/app.ts` is host-neutral; this module is one of its two hosts.
- * The other is Next.js, through `app/app/api/[[...route]]/route.ts`. Both
- * serve the same `app` object, so a plugin sees the same `/api/v1` contract
- * from either. The Node adapter (`@hono/node-server`) turns Node's request
- * and response objects into the web-standard ones the app is written against.
+ * `app/lib/api/app.ts` is host-neutral; this module is its host. (Until
+ * 2026-10-21 Next.js was a second host through a catch-all route; the pages
+ * are now a client of the hub through `lib/viewer.ts`, so there is one hub.)
+ * The Node adapter (`@hono/node-server`) turns Node's request and response
+ * objects into the web-standard ones the app is written against.
  *
  * `startHub` is separate from the entry file (`app/server.ts`) so a test can
  * start the server on an ephemeral port and compare its answers with

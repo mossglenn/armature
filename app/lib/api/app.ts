@@ -2,10 +2,11 @@
  * The Armature API as a Hono application (ADR-0054; ADRs are the
  * architecture decision records in schema/docs/adr/).
  *
- * This module is host-neutral: nothing here imports from `next`. The Next.js
- * app mounts it from `app/app/api/[[...route]]/route.ts` through `@hono/vercel`;
- * a standalone process could serve the same object with `@hono/node-server`,
- * which remains the long-term destination.
+ * This module is host-neutral: nothing here imports from `next`. Its host is
+ * `app/server.ts` through `app/lib/hub.ts` (`@hono/node-server`), bundled by
+ * `npm run build:hub` and run by the container `docker/hub.Dockerfile` builds.
+ * Until 2026-10-21 Next.js also mounted it through a catch-all route; the
+ * Next.js app is now the viewer, a client of the hub like any plugin.
  *
  * Route groups live in `./routes/` and reach the store only through the
  * adapter in `./store.ts` (ADR-0055). Phase 2 (ADR-0025) added the branch,
