@@ -341,7 +341,7 @@ The vocabulary, used the same way everywhere in this document: a **server** is a
 
 The Next.js application is the viewer: Armature's own pages (Section 18). They call a hub exactly as a plugin does, through the same client library, so they cannot do anything a plugin could not, and they need nothing but the hub's address.
 
-The database, TerminusDB, runs in a Docker container (Docker is software that runs programs in isolated, reproducible environments called containers) defined in `docker/docker-compose.yml`, pinned to version 12.0.7. The same file can run the hub beside it (`docker compose --profile hub up`), which is how a hosted instance runs; locally the store alone runs in Docker and the API on the machine.
+The database, TerminusDB, runs in a Docker container (Docker is software that runs programs in isolated, reproducible environments called containers) defined in `docker/docker-compose.yml`, pinned to version 12.0.7. The same file can run the hub and the viewer beside it (`docker compose --profile hub up`), and with a web server in front for encrypted public access (`--profile public`, Caddy), which is how a hosted instance runs; locally the store alone runs in Docker and the API on the machine.
 
 ### 10.2 Why a versioned address prefix
 
@@ -1131,7 +1131,7 @@ The session log also lists a small fix (a race condition in the branch routes wh
 - Generated types moved into a package other tools can install.
 - A small client library: ready-made code other tools can use to call the API (application programming interface).
 - An Armature-owned **contract test**: CI (continuous integration, the automated checks run on every pull request) starts a database, loads the schema and seed, and exercises every route and every rule. The database-backed tests join CI here.
-- The API served as its own program in a container (an isolated, packaged environment), with the Next.js pages as a separate demo interface (done 2026-10-21: `app/server.ts` and `docker/hub.Dockerfile` for the hub, `docker/viewer.Dockerfile` for the pages as a client of it, and the compose file running store, hub and viewer as one instance; `docs/deployment.md`); one hosted instance for public demonstration (not yet).
+- The API served as its own program in a container (an isolated, packaged environment), with the Next.js pages as a separate demo interface (done 2026-10-21: `app/server.ts` and `docker/hub.Dockerfile` for the hub, `docker/viewer.Dockerfile` for the pages as a client of it, and the compose file running store, hub and viewer as one instance; `docs/deployment.md`); one hosted instance for public demonstration (rehearsed on a local virtual machine 2026-10-21; a small rented server chosen, not yet running).
 - A schema guide written from a tool author's perspective (done 2026-10-21: `docs/schema-guide.md`, in three parts, a hub and the client, the graph, the work of a tool).
 - **Exit criterion:** a developer with the repository, Docker (the container software) and the client package can write a new plugin without reading TerminusDB documentation.
 
