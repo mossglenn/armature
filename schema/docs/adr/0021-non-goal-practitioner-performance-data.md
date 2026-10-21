@@ -24,6 +24,11 @@ generated field map, so a future `attestedBy` is refused without a change. It li
 layer because the generic list is the one place a filter by person is one parameter away; a
 plugin that needs "my own work" asks for it under the plugin's own name, outside the hub.
 
+**Note 2026-10-20:** export-time anonymization is built (ADR-0031): `GET /api/v1/export` offers
+the `pseudonymous` profile (stable keyed tokens for every `User` and every reference to one) and the
+`institutional` profile (the token and `institution`) this section anticipated below. The caveats
+below stand: free text is not scrubbed and small teams are re-identifiable from context.
+
 ## Context
 
 Armature records who is responsible for each record entering the graph. `createdBy` is on `ArmatureDocument` and propagates to every inheriting type (ADR-0015). Proposed types that capture design activity — `DesignFinding` (ADR-0020) and extensions to `DesignNote` — will carry it too.
