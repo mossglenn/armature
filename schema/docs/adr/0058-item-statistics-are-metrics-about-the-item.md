@@ -14,6 +14,11 @@ Accepted and implemented (2026-10-18). Removes `AssessmentItem.difficultyIndex` 
 the open question ADR-0056 left on ADR-0009's fields and the plan's §6 entry "Item statistics:
 stored or computed?".
 
+**Note 2026-10-20:** the seed carries two item statistics of the kind this ADR describes
+(`LearningMetric/mod3-bias-type-difficulty`, `LearningMetric/mod3-effective-prompt-difficulty`), each
+`derivedFrom` the spring pilot dataset with its `asOf`; ADR-0063 requires every metric to name its
+dataset or an external source (constraint 20).
+
 ## Context
 
 ADR-0009 added `difficultyIndex` and `discriminationIndex` to `AssessmentItem` as classical item
