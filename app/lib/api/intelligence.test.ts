@@ -593,3 +593,38 @@ describe('GET /api/v1/intelligence/attestations/:type/:id (Phase 5 exit criterio
     expect(unknown.status).toBe(404);
   });
 });
+
+describe('Narrative 1 on the seed (Phase 6, ADR-0063)', () => {
+  it('traces the pilot difficulty of the bias item back to its module, and reads coverage as delivered at the dataset asOf', async () => {
+    const body = await json('/api/v1/intelligence/trace/LearningMetric/mod3-bias-type-difficulty');
+    expect(body.root).toMatchObject({ type: 'LearningMetric', value: 0.38, unit: 'proportion correct' });
+    const byType = (type: string) => body.nodes.filter((n: { type: string }) => n.type === type);
+    expect(byType('LearningDataset').map((n: { id: string }) => n.id)).toEqual(['LearningDataset/mod3-spring-pilot']);
+    expect(byType('Assessment').map((n: { id: string }) => n.id)).toEqual(['Assessment/mod3-assessment']);
+    // The walk goes through the assessment to every item the cohort met, not only the metric's subject.
+    expect(byType('AssessmentItem').map((n: { id: string }) => n.id)).toEqual(
+      expect.arrayContaining(['AssessmentItem/bias-type-mc', 'AssessmentItem/effective-prompt-mc', 'AssessmentItem/appropriate-use-mc'])
+    );
+    expect(byType('LearningObjective').map((n: { id: string }) => n.id)).toEqual(expect.arrayContaining(['LearningObjective/distinguish-bias-types']));
+    // The prompt item is reused in Module 2's assessment, so its module is reached too (item reuse, Section 12.5).
+    expect(byType('Module').map((n: { id: string }) => n.id)).toEqual(expect.arrayContaining(['Module/risks-and-ethics', 'Module/ai-in-learning-design']));
+
+    // "Adequate when": the dataset names the commit the cohort met (ADR-0057); coverage reads there.
+    const asOf = byType('LearningDataset')[0].asOf as string;
+    expect(asOf).toMatch(/^[a-z0-9]+$/);
+    expect(body.root.asOf).toBe(asOf);
+    const coverage = await json(`/api/v1/intelligence/coverage/risks-and-ethics?ref=${asOf}`);
+    const bias = coverage.objectives.find((o: { objective: { id: string } }) => o.objective.id === 'LearningObjective/distinguish-bias-types');
+    expect(bias.coverage).toEqual({ status: 'PartiallyAssessed', items: 1 });
+    expect(bias.assessedBy.map((i: { id: string }) => i.id)).toEqual(['AssessmentItem/bias-type-mc']);
+
+    // The item's statistics are metrics about it (ADR-0058), listed by subject.
+    const stats = await json('/api/v1/documents/LearningMetric?subject=AssessmentItem/bias-type-mc');
+    expect(stats.map((m: { '@id': string }) => m['@id'])).toEqual(['LearningMetric/mod3-bias-type-difficulty']);
+
+    // The dataset names both its sources (ADR-0063): the assessment here and the LMS activity.
+    const dataset = await json('/api/v1/documents/LearningDataset/mod3-spring-pilot');
+    expect(dataset.producedBy).toBe('Assessment/mod3-assessment');
+    expect(dataset.externalRefs[0]).toMatchObject({ system: 'xAPI' });
+  });
+});

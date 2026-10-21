@@ -15,6 +15,12 @@
  *   1 DesignFinding (on the Draft item)
  *   1 Attestation (a verdict on one option of an Approved item, in a second
  *     commit so its asOf can name the first; ADR-0028)
+ *   1 LearningDataset and 3 LearningMetrics (one administration of the Module 3
+ *     capstone to a spring pilot cohort, in a third commit whose asOf names the
+ *     first; two item difficulties and a mean score; ADR-0057, ADR-0058, ADR-0063),
+ *     so Narrative 1 walks on main
+ *   external references (ADR-0030): a CASE competency on one objective, an xAPI
+ *     activity on the dataset
  *   1 Course
  *   1 User (User/demo-designer, the identity the tests and local clients send)
  *
@@ -207,6 +213,10 @@ const documents = [
     "bloomsLevel": "Analyze",
     "state": "Active",
     "generatedBy": id("LearningNeed", "conceptual-gap"),
+    // The competency this objective realizes in a (fictional) state framework (ADR-0030).
+    "externalRefs": [
+      { "@type": "ExternalRef", "system": "CASE", "identifier": "https://case.example.edu/ims/case/v1p0/CFItems/ai-eth-2-1", "label": "AI-ETH.2.1 Identify sources of bias in AI systems" },
+    ],
   },
 
   {
@@ -573,6 +583,66 @@ const attestation = (asOf) => ({
   "attestedBy": id("User", "demo-designer"),
 });
 
+// One administration of the Module 3 capstone (ADR-0063): the dataset names the
+// assessment that produced it and the LMS activity it was exported from; its
+// metrics derive from it. asOf names the seed commit, the state the cohort met,
+// so coverage read at ref=<asOf> is "adequate when". Written in a third commit
+// for the same reason as the attestation. Narrative 1 starts from the bias
+// item's difficulty: approved and attested, yet only 38% of the pilot got it.
+const outcomes = (asOf) => [
+  {
+    "@type": "LearningDataset",
+    "@id": id("LearningDataset", "mod3-spring-pilot"),
+    "label": "Module 3 capstone, spring 2026 pilot",
+    "description": "Results of the Module 3 Capstone Assessment administered to the spring 2026 pilot cohort of 24 learners, exported from the LMS item analysis.",
+    "cohort": "Spring 2026 pilot",
+    "administrationDate": "2026-05-14",
+    "producedBy": id("Assessment", "mod3-assessment"),
+    "externalRefs": [
+      { "@type": "ExternalRef", "system": "xAPI", "identifier": "https://lms.example.edu/xapi/activities/mod3-capstone", "label": "LMS activity" },
+    ],
+    "asOf": asOf,
+  },
+  {
+    "@type": "LearningMetric",
+    "@id": id("LearningMetric", "mod3-bias-type-difficulty"),
+    "label": "Item difficulty: bias type item, spring pilot",
+    "description": "Proportion of the pilot cohort answering the bias-type item correctly.",
+    "collectedAt": "2026-05-15T09:00:00Z",
+    "source": "LMS item analysis export",
+    "value": 0.38,
+    "unit": "proportion correct",
+    "derivedFrom": id("LearningDataset", "mod3-spring-pilot"),
+    "subject": id("AssessmentItem", "bias-type-mc"),
+    "asOf": asOf,
+  },
+  {
+    "@type": "LearningMetric",
+    "@id": id("LearningMetric", "mod3-effective-prompt-difficulty"),
+    "label": "Item difficulty: effective prompt item, spring pilot",
+    "description": "Proportion of the pilot cohort answering the effective-prompt item correctly.",
+    "collectedAt": "2026-05-15T09:00:00Z",
+    "source": "LMS item analysis export",
+    "value": 0.83,
+    "unit": "proportion correct",
+    "derivedFrom": id("LearningDataset", "mod3-spring-pilot"),
+    "subject": id("AssessmentItem", "effective-prompt-mc"),
+    "asOf": asOf,
+  },
+  {
+    "@type": "LearningMetric",
+    "@id": id("LearningMetric", "mod3-mean-score"),
+    "label": "Mean score, Module 3 capstone, spring pilot",
+    "description": "Mean proportion of available points earned by the pilot cohort; about the cohort as a whole, so it names no subject.",
+    "collectedAt": "2026-05-15T09:00:00Z",
+    "source": "LMS gradebook export",
+    "value": 0.71,
+    "unit": "proportion of points",
+    "derivedFrom": id("LearningDataset", "mod3-spring-pilot"),
+    "asOf": asOf,
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -613,6 +683,13 @@ async function main() {
     {},
     null,
     "Seed demo data: an expert affirms the key of the bias item",
+  );
+  console.log("Recording the spring pilot results...");
+  await client.addDocument(
+    outcomes(seedCommit),
+    {},
+    null,
+    "Seed demo data: results of the Module 3 capstone, spring 2026 pilot cohort",
   );
 
   console.log(`  → Done.\n`);
