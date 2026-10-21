@@ -61,7 +61,7 @@ vitest.config.mts             Test configuration: the @ alias, and .env.local so
 
 ## Tests
 
-`npm test` runs 145 integration tests that call the Hono app in-process and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. The tests are not yet in CI; Phase 7 of the development plan adds a database service container so they can run there.
+`npm test` runs 145 integration tests that call the Hono app in-process and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. They are the contract suite: CI runs them against a TerminusDB service container on every push and pull request (`.github/workflows/ci.yml`, the `contract` job: wait for the store, load the schema, seed, `npm test`). `vitest.global-setup.mts` waits until the seeded database answers a read of `main`, then warms the store with the tests' kind of work (a scratch branch, one write, one coverage read, the branch deleted afterward) before the first test file starts, since a store on a cold machine has stalled mid-suite past the test timeout while a cheap read answered at once; `vitest.env.ts` reads `.env.local` for both the setup and the workers.
 
 ## Rules for code in this directory
 
