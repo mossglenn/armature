@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The standalone hub's bundle (npm run build:hub), generated, not committed.
+    "dist/**",
   ]),
 ]);
 
