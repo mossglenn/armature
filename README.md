@@ -64,7 +64,7 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 | If you want to... | Read |
 |---|---|
 | Understand what Armature is, how it works and why | [How Armature Works](docs/how-armature-works.md) |
-| Understand the schema's concepts and patterns | [Schema guide](docs/schema-guide.md) |
+| Build a tool on Armature: the schema's concepts and patterns, reading and writing through the client, handling refusals, mapping your own concepts | [Schema guide for tool authors](docs/schema-guide.md) |
 | Look up a type or field | [Schema appendix](docs/SCHEMA_APPENDIX.md) (generated from `schema/schema.json`) |
 | Call the API | [API reference](docs/api.md) |
 | See why a decision was made | [Architecture Decision Records](schema/docs/adr/README.md) |
@@ -171,7 +171,7 @@ schema/
   docs/adr/                   Architecture Decision Records, with an index in README.md
 docs/
   how-armature-works.md       The complete explainer (start here)
-  schema-guide.md             Conceptual guide to the schema
+  schema-guide.md             The schema guide for tool authors: concepts, patterns, the work of a tool
   api.md                      Reference for every /api/v1 route
   SCHEMA_APPENDIX.md          Generated reference for every type and field
   development-plan.md         The phased roadmap, principles, open questions and platform facts

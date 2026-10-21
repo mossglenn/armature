@@ -98,7 +98,7 @@ app/
   vitest.config.mts        # Vitest: '@' alias, reads .env.local so tests hit the same store as the app
 docs/
   how-armature-works.md    # The complete explainer for academic readers: purpose, history, every mechanism, decisions, future
-  schema-guide.md          # Conceptual guide to the schema: patterns, rules, worked examples
+  schema-guide.md          # The schema guide for tool authors (Phase 7): a hub and the client, the graph's patterns and rules, reading, writing, refusals by code, mapping a tool's concepts (CoQui's as the example), worked examples with the client
   api.md                   # Reference for every /api/v1 route, envelope, query parameter and error code
   SCHEMA_APPENDIX.md       # GENERATED — do not edit; run node scripts/generate-schema-appendix.js (not drift-checked in CI)
   development-plan.md      # Phased plan; §6 open questions; §9 lists verified TerminusDB platform facts

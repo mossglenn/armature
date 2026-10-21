@@ -803,9 +803,14 @@ Work:
       rather than the source. Where to host (PROJECT_CONTEXT names Railway or Render) and the
       `oidc` resolver it needs before anyone but the demo team can reach a writing route
       (ADR-0032) are decided with it.
-- [ ] `docs/schema-guide.md` revised from the reference-client perspective: what a tool author
+- [x] `docs/schema-guide.md` revised from the reference-client perspective: what a tool author
       needs to know to write and read the graph. (A first conceptual version was written on
-      2026-10-08, with `docs/api.md` and `docs/how-armature-works.md`.)
+      2026-10-08, with `docs/api.md` and `docs/how-armature-works.md`. Rewritten 2026-10-21 in
+      three parts: a hub and the client; the graph, the conceptual core kept; the work of a tool,
+      with reading, writing, every refusal by code and what to do with it, CoQui's mappings as the
+      worked example of mapping a tool's concepts, examples through `@armature/client`, export,
+      runtime discovery, what to do when the schema does not fit, and a list of things never to
+      do.)
 
 Exit: a developer with the repo, Docker and the client package can write a new plugin without
 reading TerminusDB documentation.

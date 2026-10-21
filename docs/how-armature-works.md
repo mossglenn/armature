@@ -1130,7 +1130,7 @@ The session log also lists a small fix (a race condition in the branch routes wh
 - A small client library: ready-made code other tools can use to call the API (application programming interface).
 - An Armature-owned **contract test**: CI (continuous integration, the automated checks run on every pull request) starts a database, loads the schema and seed, and exercises every route and every rule. The database-backed tests join CI here.
 - The API served as its own program in a container (an isolated, packaged environment), with the Next.js pages as a separate demo interface (done 2026-10-21: `app/server.ts`, `docker/hub.Dockerfile`, and a `hub` service in the compose file); one hosted instance for public demonstration (not yet).
-- A schema guide written from a tool author's perspective.
+- A schema guide written from a tool author's perspective (done 2026-10-21: `docs/schema-guide.md`, in three parts, a hub and the client, the graph, the work of a tool).
 - **Exit criterion:** a developer with the repository, Docker (the container software) and the client package can write a new plugin without reading TerminusDB documentation.
 
 ## 25. Rich artifacts: beyond multiple choice
