@@ -11,14 +11,15 @@
 
 ## Status
 
-Proposed (drafted 2026-10-20). Nothing is built on it. Adopts the *capabilities* half of research
-candidate ADR-0039 ("API evolution: capabilities, projections and cadence",
-`docs/research/adr-candidates.md`); the candidate's versioned projections and release cadence
-stay candidates, since no breaking shape change has yet been needed. Resolves the deferral in
-ADR-0026's consequences ("whether and how versions are negotiated beyond the prefix").
-
-Built in Phase 7 of `docs/development-plan.md` with the typed client package, or earlier if the
-first trigger in the Consequences arrives. Acceptance is a separate step; see Open.
+Accepted and implemented (2026-10-21), with the open question decided: a revision newer than
+the hub's is served on a read and refused on a write (decision 3, as amended below). Built in
+Phase 7 with the typed client package, which sends `Armature-Version` on every call. Drafted
+2026-10-20 as Proposed. Adopts the *capabilities* half of research candidate ADR-0039 ("API
+evolution: capabilities, projections and cadence", `docs/research/adr-candidates.md`); the
+candidate's versioned projections and release cadence stay candidates, since no breaking shape
+change has yet been needed. Resolves the deferral in ADR-0026's consequences ("whether and how
+versions are negotiated beyond the prefix"). Builds `GET /api/v1/schema`, which ADR-0027
+decision 4 scheduled and no phase had owned.
 
 ## Context
 
@@ -94,6 +95,17 @@ This was found during the precedents survey of 2026-10-20
      client can pick one and retry or report it;
    - no header: the request proceeds under the hub's current revision. Until Phase 7's client
      exists every client omits it, and a hub must not break them.
+   - the revision is **newer** than the newest the hub serves (decided at acceptance,
+     2026-10-21): a **read** (`GET`, `HEAD`) proceeds under the hub's current revision, and the
+     response header says which; a **write** (any other method) is refused with **400**
+     `unsupported_version`, the same body, so the client stops before its first commit. The line
+     is the one the API already draws: reads happen at a ref and need no identity, writes go to a
+     branch and need one. Revisions within the prefix are additive, so an older hub's answer to a
+     read is a subset a newer client already handles, while a write from a newer client may rely
+     on a rule this hub does not enforce, which the hub cannot detect and must not let land.
+     Refusing reads too (the Model Context Protocol's rule) would lock a slightly newer client
+     out of data it could use; serving writes too would let the graph's guarantees depend on a
+     client reading a header.
 
    Every response carries the revision it was served under, in an `Armature-Version` response
    header, beside `ETag`.
@@ -197,12 +209,29 @@ This was found during the precedents survey of 2026-10-20
 
 ## Open
 
-- Whether the hub should answer `unsupported_version` for a revision *newer* than its own, or
-  serve it under the current revision and let the response header tell the client. MCP refuses
-  any version it does not implement. Refusing is safer for an unattended writer; serving is
-  kinder to a human in a browser. Decide at acceptance.
+- ~~Whether the hub should answer `unsupported_version` for a revision *newer* than its own, or
+  serve it under the current revision and let the response header tell the client.~~ Decided
+  2026-10-21: served on a read, refused on a write (decision 3). The reasoning is recorded there.
 - Whether CoQui's existing version check should be replaced by the client package or simply
   read `Armature-Version` from responses. CoQui's call, at its boundary.
+
+## Implementation notes (2026-10-21)
+
+- The revisions a hub serves are a constant, `REVISIONS` in `app/lib/api/version.ts`, newest
+  first; a test checks it against the dated headings of `docs/client-changes.md`, the record
+  decision 2 names, so the two cannot drift. Every entry since the first is served: revisions are
+  additive, so a hub at the newest serves them all.
+- The capabilities and their settings live beside the revisions in the same module, each mapped
+  to the route prefix it covers; a test walks the Hono app's route table and fails on a route
+  under no capability (the consequence "a route added without a capability fails a test").
+  `armature/export` and `armature/discover` join the first set, since both exist.
+- `Armature-Capabilities` is read on every request; an identifier the hub does not know is
+  refused with 400 `unsupported_capability` (`unsupported`, `supported`), since every capability
+  the hub defines is `reject`.
+- `GET /api/v1/schema` returns the schema graph at a ref in the reloadable form the export uses
+  (ADR-0031, check AE5), with the commit in `ETag`.
+- The client package sends `Armature-Version` with the revision it was written against and
+  returns the response header as `version` on every result.
 
 ## Related
 
