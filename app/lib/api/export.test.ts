@@ -51,7 +51,7 @@ describe('GET /api/v1/export (ADR-0031)', () => {
     expect(out.schema.some((e) => e['@id'] === 'AssessmentItem')).toBe(true);
     // The store's decoration is gone (platform check AE5), so the schema reloads.
     expect(JSON.stringify(out.schema)).not.toContain('"@max_cardinality":"inf"');
-    expect(out.documents.length).toBeGreaterThanOrEqual(49);
+    expect(out.documents.length).toBeGreaterThanOrEqual(53);
     expect(out.armature.counts.documents).toBe(out.documents.length);
     const user = out.documents.find((d) => d['@type'] === 'User')!;
     expect(user).toMatchObject({ '@id': 'User/demo-designer', displayName: 'Demo Designer' });
