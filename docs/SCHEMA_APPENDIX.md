@@ -431,7 +431,7 @@ _category: artifact · extends `LearningEvidence` · key: Random_
 ### `LearningDataset`
 _category: artifact · extends `ArmatureDocument` · key: Random_
 
-> A named collection of learning performance data, typically produced when an Assessment is administered to a cohort. Inherits label, description from ArmatureDocument. Serves as the source for LearningMetrics derived from that administration. producedBy links back to the Assessment that generated this dataset, closing the provenance chain: Assessment → LearningDataset → LearningMetric. Optional because a dataset may come from an external source or a pre-Armature assessment not yet modeled in the graph. PLANNED API CONSTRAINT (docs/development-plan.md Phase 6, not yet enforced): producedBy will be required when a dataset is created by an Armature-administered assessment.
+> A named collection of learning performance data, typically produced when an Assessment is administered to a cohort. Inherits label, description from ArmatureDocument. Serves as the source for LearningMetrics derived from that administration. producedBy links back to the Assessment that generated this dataset, closing the provenance chain: Assessment → LearningDataset → LearningMetric. Optional because a dataset may come from an external source or a pre-Armature assessment not yet modeled in the graph. API CONSTRAINT 20 (ADR-0063): a dataset names its source, producedBy or at least one externalRef (the system it was imported from); one with neither is refused (dataset_without_source).
 
 | Field | Type | Notes |
 |-------|------|-------|
