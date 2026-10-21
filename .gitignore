@@ -33,6 +33,9 @@ Thumbs.db
 .next/
 out/
 build/
+
+# The standalone hub's bundle (app: npm run build:hub)
+app/dist/
 .vercel
 next-env.d.ts
 *.tsbuildinfo
