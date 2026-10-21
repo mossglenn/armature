@@ -11,6 +11,10 @@
 ## Status
 Accepted
 
+**Note 2026-10-20:** amended by ADR-0030, a second embedded exception beside the item parts of
+ADR-0022 and ADR-0033: `ExternalRef` and `Attachment` are subdocuments on any artifact (attachments
+on any fragment too), because a coordinate pointing out of the graph has no identity of its own.
+
 **Amended by ADR-0022 and ADR-0033** (2026-10-07; noted 2026-10-08): no relationship *between
 documents* is ownership, but an item's parts (`Fragment`, which is abstract, and its specializations
 `TextFragment` and `ItemOption`) are subdocuments embedded in `AssessmentItem`. They are the one

@@ -15,7 +15,11 @@ checks M to T, results in §Verification. Decision 6 amended 2026-10-08 with the
 rule Phase 3 was to decide. Makes ADR-0010's versioning deferral a decision; resolves
 the data-version token question ADR-0054 left open; absorbs research candidate 0036's no-rewrite
 rule. Research candidates 0037 (release pointers), 0046 (change feed) and the delegation trailers
-proposed for this ADR are deferred, with the reason for each in §Consequences.
+proposed for this ADR are deferred, with the reason for each in §Consequences. Amended
+2026-10-20 by ADR-0030 decision 6: for an artifact whose bytes live in an asset store, the design
+process data this ADR promises is carried by the graph commits that move its `Attachment.revision`
+or `contentHash`, with author and reason, plus the asset store's own log reached through the
+reference; the graph is a projection of the asset history, never a replay.
 
 **Corrected 2026-10-08:** the verification table covers checks M to V (with S), not M to T.
 Amends ADR-0010 (its versioning deferral is now decided) and confirms ADR-0015's commit-level

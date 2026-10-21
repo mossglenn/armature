@@ -46,11 +46,10 @@ always mirrored: if ADR-A says it amends ADR-B, ADR-B's status says "Amended by 
 ADRs are numbered in the order they were written, with four digits (ADR-0001, ADR-0002, ...).
 The sequence has deliberate gaps:
 
-- **0030, 0031 and 0034 are reserved and not yet written.** The development plan
+- **0031 and 0034 are reserved and not yet written.** The development plan
   (`docs/development-plan.md` §5) reserved the block 0024 to 0034 for decisions it scheduled;
-  the others in that block have been written (ADR-0028, Attestation, on 2026-10-18). The three
-  unwritten ones are:
-  - **ADR-0030: External references and attachments** (Phase 6).
+  the others in that block have been written (ADR-0028, Attestation, on 2026-10-18; ADR-0030,
+  External references and attachments, on 2026-10-20). The two unwritten ones are:
   - **ADR-0031: Export profiles and schema slices** (Phase 6).
   - **ADR-0034: Interaction types and renderers as versioned artifacts** (when the first non-text
     question type is needed).
@@ -120,6 +119,7 @@ are not yet written; see [Numbering](#numbering).
 | [0027](0027-schema-self-description.md) | Schema Self-Description via `@metadata` | Accepted and implemented, except decision 4 (`GET /api/v1/schema` not built) | Every schema class carries a category label (infrastructure, fragment, artifact or relationship) that tools and code generators read from the schema itself. |
 | [0028](0028-attestation.md) | Attestation — A Person's Verdict on a Design Record as of a Commit | Accepted and implemented (2026-10-18); amends ADR-0012, ADR-0020 and ADR-0057 (decision 5) | A person records that they endorse a record or one part of it, or affirm or decline a claim about it, as of a saved version; Armature works out on request whether that part has changed since. Notes and findings can also point at one part of a question. |
 | [0029](0029-coverage-algorithm.md) | Coverage Algorithm | Accepted for decisions 1 to 3; superseded in part by ADR-0056 (decisions 4 to 6; decision 7 moot) | For each objective a module declares, coverage counts the distinct questions placed in the module's assessments: 0 is Uncovered, 1 Partially Assessed, 2 to 4 Fully Assessed, 5 or more Over-Assessed. |
+| [0030](0030-external-references-and-attachments.md) | External References and Attachments | Accepted and implemented (2026-10-20); amends ADR-0002, ADR-0025 and ADR-0033 | A record can name an identifier in another system (a CASE competency, a QTI item) and can reference files, or one revision of a tree of files, held in a store outside the graph, always with a fingerprint of the bytes. A question's part can be a picture instead of text. The graph never holds the files. |
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
