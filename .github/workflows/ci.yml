@@ -1,12 +1,18 @@
 # Armature CI (continuous integration)
 #
-# Guards the two contracts the repository relies on without a running store:
-#   1. `schema/schema.json` and the generated `app/lib/types.ts` and
-#      `app/lib/schemas.ts` agree (check:types)
-#   2. the Next.js app lints clean
+# Two jobs, run in parallel on every push to main and every pull request:
 #
-# A contract suite that starts TerminusDB as a service container, loads the schema
-# and exercises every route is Phase 7 of docs/development-plan.md.
+#   app       Guards the contracts that need no store: `schema/schema.json` and the
+#             generated `app/lib/types.ts` and `app/lib/schemas.ts` agree
+#             (check:types), the app lints clean, and it type-checks (`tsc`; lint
+#             alone missed an argument-count error once, 2026-10-20).
+#
+#   contract  The contract suite (Phase 7 of docs/development-plan.md): starts
+#             TerminusDB as a service container, waits for it, loads the schema,
+#             seeds the demonstration course and runs `npm test` in app/, which
+#             calls the Hono app in-process against that store and exercises every
+#             /api/v1 route and every invariant. The Vitest global setup waits again
+#             for the seeded database before the first test file starts.
 name: CI
 
 on:
@@ -16,7 +22,7 @@ on:
 
 jobs:
   app:
-    name: Lint and generated-types drift check
+    name: Lint, type-check and generated-types drift check
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,4 +36,48 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npx tsc --noEmit -p tsconfig.json
       - run: npm run check:types
+
+  contract:
+    name: Contract suite against TerminusDB
+    runs-on: ubuntu-latest
+    services:
+      terminusdb:
+        # The same image and tag docker/docker-compose.yml pins.
+        image: terminusdb/terminusdb-server:v12.0.7
+        ports:
+          - 6363:6363
+        env:
+          TERMINUSDB_ADMIN_PASS: admin
+          TERMINUSDB_SERVER_NAME: localhost
+    env:
+      # What app/.env.local holds locally; the scripts read the same variables.
+      TERMINUS_URL: http://localhost:6363
+      TERMINUS_USER: admin
+      TERMINUS_PASS: admin
+      TERMINUS_DB: armature
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            scripts/package-lock.json
+      - name: Install the scripts' dependencies (the TerminusDB client)
+        run: npm ci
+        working-directory: scripts
+      - name: Install the app's dependencies
+        run: npm ci
+        working-directory: app
+      - name: Wait for TerminusDB
+        run: node scripts/wait_for_store.js
+      - name: Load the schema
+        run: node scripts/load_schema.js
+      - name: Seed the demonstration course
+        run: node scripts/seed_data.js
+      - name: Run the contract suite
+        run: npm test
+        working-directory: app
