@@ -6,7 +6,14 @@ This document describes every route of the Armature API (application programming
 
 ### Base path and versioning
 
-Every route is under `/api/v1`. The version segment is part of the contract; a change that would break existing clients goes under a new version (ADR-0026). When the app runs locally the full address is `http://localhost:3000/api/v1/...`. Finer than the prefix, nothing is negotiated yet: ADR-0059 (Proposed, 2026-10-20) describes per-request `Armature-Version` and `Armature-Capabilities` headers and a `GET /discover` route, none of which is built; the dated entries in [`client-changes.md`](client-changes.md) are the revisions it would name.
+Every route is under `/api/v1`. The version segment is part of the contract; a change that would break existing clients goes under a new version (ADR-0026). When the app runs locally the full address is `http://localhost:3000/api/v1/...`.
+
+Within the prefix the contract has dated **revisions** (ADR-0059): each dated entry in [`client-changes.md`](client-changes.md) is one, named by its date, `YYYY-MM-DD`. Revisions are additive, so a hub serves every revision up to its newest. Nothing is negotiated up front and the hub keeps nothing between requests; each request is answered on its own:
+
+- **`Armature-Version: <revision>`** (request, optional) names the revision the client was written against. A revision the hub serves: the request proceeds. Older than the oldest it serves, or not a revision at all: **400** `unsupported_version`, with `requested` and `supported` (the revisions served, newest first). Newer than the newest it serves: a read (`GET`) proceeds under the hub's current revision; a write is **400** `unsupported_version`, since it may rely on a rule this hub does not enforce. No header: the request proceeds under the current revision.
+- **`Armature-Version: <revision>`** (response, always) says which revision served the answer, beside `ETag`, on errors too.
+- **`Armature-Capabilities: <id>, <id>`** (request, optional) declares the hub features the client is about to rely on, by identifier (`armature/documents`, `armature/intelligence.coverage`, …; a feature someone else defines carries a reverse domain name, `edu.example/…`). One the hub lacks: **400** `unsupported_capability`, with `unsupported` and `supported`. Every capability the hub defines is `reject`: it is never silently served under core behavior.
+- **`GET /discover`** answers the same questions in one call for a client that wants to know before its first write; see [Discovery](#discovery). The `@armature/client` package sends `Armature-Version` on every call and returns the response header as `version`.
 
 ### Reading at a ref
 
@@ -307,6 +314,30 @@ The slice configuration: `{ "<name>": { description, classes } }`.
 
 ---
 
+## Discovery
+
+### `GET /discover`
+
+What this hub is, for a client that wants to know before its first write (ADR-0059 decision 6). No ref, no identity; the same at every ref. Response:
+
+```
+{
+  versions:     [ "2026-10-21", "2026-10-20", ... ],       // the revisions served, newest first
+  capabilities: { "armature/documents": { fallback: "reject", batchLimit: 500, historyCount: 20 },
+                  "armature/intelligence.coverage": { fallback: "reject", fullyAssessedAt: 2, overAssessedAbove: 4 },
+                  ... },                                   // each with its fallback and its settings
+  schema:       { route: "/api/v1/schema" }
+}
+```
+
+A capability's `fallback` says what a hub that lacks it does with a request that declares it: `reject` (refuse by name) or `ignore` (serve under core behavior). Every capability the hub defines is `reject`. The settings are the defaults of the behavior's parameters, so a client can read them rather than assume them.
+
+### `GET /schema?branch=|ref=`
+
+The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, categories and fields from the hub rather than from a copy of `schema.json`: `{ ref, schema: [ { "@type": "@context", ... }, { "@id": "LearningObjective", "@type": "Class", ... }, ... ] }`, with the commit in `ETag`. The entries are in the form the export carries and the store reloads (the store's own `@max_cardinality: "inf"` decoration removed; ADR-0031). Every class carries `@metadata.armature.category`.
+
+---
+
 ## Error codes
 
 | Status | Code | Meaning |
@@ -320,6 +351,8 @@ The slice configuration: `{ "<name>": { description, classes } }`.
 | 400 | `bad_id` | An identifier that does not begin with its type, or an identifier on a type that derives its own |
 | 400 | `unknown_field` | A filter or user field the type does not have |
 | 400 | `ambiguous_ref`, `branch_required`, `write_at_commit` | Misused `branch` / `ref` parameters |
+| 400 | `unsupported_version` | `Armature-Version` names a revision this hub does not serve (older, unknown, or newer on a write); `requested`, `supported` (ADR-0059) |
+| 400 | `unsupported_capability` | `Armature-Capabilities` names a feature this hub lacks; `unsupported`, `supported` (ADR-0059) |
 | 400 | `bad_if_match`, `bad_query`, `range_required`, `since_required` | Malformed headers or query parameters |
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
 | 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused`, `unknown_profile`, `unknown_slice` | Route-specific refusals |

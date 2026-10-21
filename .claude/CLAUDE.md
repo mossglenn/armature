@@ -80,12 +80,14 @@ app/
         coverage.ts        # The coverage algorithm (ADR-0029 decisions 1 to 3) and its vocabulary; computed on read, never stored (ADR-0056)
         graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
       errors.ts            # ApiError: status + stable code + message, rendered by onError
+      version.ts           # The per-request version contract (ADR-0059): REVISIONS (the dated entries of docs/client-changes.md, newest first; a test checks they agree), CAPABILITIES (each mapped to its route prefix; a route under none fails a test), discovery(), and `negotiate`, the middleware on every request: Armature-Version (a newer revision is served on a read, refused on a write), Armature-Capabilities, and the Armature-Version response header
       routes/
         documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
         intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
         export.ts          # GET /export?profile=&slice= (the graph at a ref as one JSON-LD document with its reloadable schema) and /export/slices (ADR-0031)
+        discover.ts        # GET /discover (the revisions served, the capabilities with their settings, where the schema is; no ref, no identity) and GET /schema?branch=|ref= (the schema graph at a ref in the reloadable form, commit in ETag; ADR-0027 decision 4, built with ADR-0059)
       export/
         exporter.ts        # Slices (membership by class or ancestor), unresolved references, schema normalization (the store's @max_cardinality "inf", check AE5), the three profiles (HMAC tokens under ARMATURE_EXPORT_KEY)
         slices.json        # The declared slices: full, outcomes-loop, review. A study's slice is an entry here, not code

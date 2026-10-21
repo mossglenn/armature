@@ -244,9 +244,9 @@ TerminusDB
   change. Every route Phases 2 to 6 add is a Hono route; the legacy Next.js handlers die in
   Phase 3.
 - **The schema describes itself.** `@metadata.armature.category` on every class (done, ADR-0027);
-  a `GET /schema` route (not yet built, and no phase currently owns it; see §6); generated types
-  (done) and a typed client (Phase 7) derived from the same file. Tools discover types
-  from the hub, not from a hand-maintained list.
+  a `GET /schema` route (built 2026-10-21 with ADR-0059, beside `GET /discover`); generated types
+  (done) and a typed client (done 2026-10-21, `@armature/client`) derived from the same file.
+  Tools discover types from the hub, not from a hand-maintained list.
 
 ### Rich artifacts: four layers with different homes
 
@@ -814,7 +814,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0024 | Client-supplied identifiers | 1 | Accepted and implemented | Resolves 0016 decision 5 and 0023's open question. Its lossless-write requirement (candidate 0035) is still open; see §6 |
 | 0025 | Design process data lives in the commit graph | 2 | Accepted and implemented; amended by 0030 | Reconciles the paper's model with the store; amended 2026-10-20 for externally versioned artifacts (0030 decision 6) |
 | 0026 | API host and route versioning | 0 | Accepted; decision 1 amended by 0054 | Resolved the PROJECT_CONTEXT contradiction; the legacy routes it named were retired in Phase 3 |
-| 0027 | Schema self-description via `@metadata` | 1 | Accepted and implemented, except `GET /schema` | Replaced `JUNCTION_IDS`; `GET /api/v1/schema` not built (see §6) |
+| 0027 | Schema self-description via `@metadata` | 1 | Accepted and implemented | Replaced `JUNCTION_IDS`; `GET /api/v1/schema` built 2026-10-21 with ADR-0059 |
 | 0028 | Attestation | 5 | Accepted and implemented 2026-10-18 | Generic form of CoQui's proposal, with the claim optional; Hash key over subject, fragment, claim and attester; staleness a read; `fragmentId` on notes and findings; amends ADR-0057 decision 5 for attestations |
 | 0029 | Coverage algorithm | 4 | Decisions 1 to 3 accepted 2026-10-08; 4 to 6 superseded by 0056 | Counted over placements; two figures; default thresholds as parameters |
 | 0030 | External references and attachments | 6 | Accepted and implemented 2026-10-20 | P6; `externalRefs` and `attachments` on every artifact, `attachments` on every fragment, `text` optional; mandatory content hash with IANA algorithm names, `revision` for versioned stores (constraint 18), a fragment has content (constraint 19); backend and hub-managed endpoints left open; amends 0025, 0033, 0002 |
@@ -827,7 +827,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0056 | Coverage is computed on read, never stored | 4 | Accepted 2026-10-08 | Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6; the graph stores decisions and observations, the reads derive the rest |
 | 0057 | Records that refer to a state of the graph name its commit (`asOf`) | Before or with Phase 5 (needed by Phase 6) | Accepted and implemented 2026-10-18 | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head on create, keeps it on replace, copies a dataset's onto its metrics, and validates a supplied or kept id (rule 13); closes Narrative 1's "adequate when" |
 | 0058 | Item statistics are metrics about the item | With Phase 6's importer (decided early) | Accepted and implemented 2026-10-18 | `LearningMetric.subject: Optional<DesignRecord>`; `difficultyIndex` and `discriminationIndex` removed; constraint 13 checks a metric's subject at its `asOf`; the trace follows `subject` both ways |
-| 0059 | Capability negotiation per request | 7 (with the typed client), or on the first trigger it names | Proposed 2026-10-20 | Adopts candidate 0039's capabilities half, from MCP's per-request model: dated contract revisions in `Armature-Version`, namespaced capabilities in `Armature-Capabilities`, `GET /api/v1/discover`, 400 `unsupported_version` and `unsupported_capability` listing what the hub serves; no handshake; shape changes stay a new prefix (ADR-0026). Resolves ADR-0026's deferral; gives `GET /api/v1/schema` an owner by implication |
+| 0059 | Capability negotiation per request | 7 (with the typed client) | Accepted and implemented 2026-10-21; a newer revision served on a read, refused on a write | Adopts candidate 0039's capabilities half, from MCP's per-request model: dated contract revisions in `Armature-Version`, namespaced capabilities in `Armature-Capabilities`, `GET /api/v1/discover`, 400 `unsupported_version` and `unsupported_capability` listing what the hub serves; no handshake; shape changes stay a new prefix (ADR-0026). Resolves ADR-0026's deferral; gives `GET /api/v1/schema` an owner by implication |
 | 0060 | Items may exist unaligned | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | Amends 0013: no minimum on `AssessmentItem.assesses`; rule 1 retired; the alignment read lists `itemsWithoutObjective`; rule 2 stands until a client shows the activity case; encouraging alignment is a §6 question |
 | 0061 | Formative use of items inside activities | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | `ActivityItemLink` junction with optional `sequence` (constraint 17); counts toward no coverage; trace follows it; the module-content view nests it when built; annotates 0003, 0005, 0029 |
 | 0063 | Outcome records name their source | 6 | Accepted and implemented 2026-10-20 | Constraint 20: a dataset has `producedBy` or an `externalRef`, a metric `derivedFrom` or an `externalRef`; closes the rule deferred since Phase 1; the seed gains one administration so Narrative 1 walks on `main` |
@@ -854,10 +854,10 @@ what evidence would be enough.
   cohort meeting one version of the item, so they are `LearningMetric`s whose `subject` is the item
   rather than fields on it. `difficultyIndex` and `discriminationIndex` left the schema; summaries
   are reads.
-- **`GET /api/v1/schema`.** ADR-0027 decision 4 scheduled a route returning the schema graph so a
-  tool can discover types from the hub, for "Phase 2 or 3"; it was not built, and no phase owns it
-  now. Phase 7's toolkit is the natural home. Evidence: a second plugin that needs to discover
-  types at run time rather than from generated files.
+- **`GET /api/v1/schema`.** *Resolved 2026-10-21: built with ADR-0059, which points at it from
+  `GET /discover`.* ADR-0027 decision 4 scheduled a route returning the schema graph so a
+  tool can discover types from the hub, for "Phase 2 or 3"; it was not built, and no phase owned it
+  until Phase 7's toolkit.
 - **How `ModuleObjective` declarations are written.** *Resolved 2026-10-18: the generic path is
   the decision, recorded on ADR-0007.* ADR-0007 decided the API would create a
   declaration "programmatically" when a designer assigned an objective to a module, and that it
