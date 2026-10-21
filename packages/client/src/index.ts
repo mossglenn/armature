@@ -12,12 +12,22 @@
  *
  * The client takes a `fetch`, so a test can hand it a Hono app's `request`
  * and exercise every route in-process; the hub's own contract test does that
- * (app/lib/api/client.test.ts). Version negotiation (ADR-0059: the
- * Armature-Version header and GET /discover) is the next unit of work; until
- * it lands the client sends no version header and the hub serves its current
- * revision.
+ * (app/lib/api/client.test.ts).
+ *
+ * The version contract (ADR-0059): every call names the contract revision
+ * this client was written against in `Armature-Version` (CLIENT_REVISION),
+ * and every result carries the revision the hub served it under as
+ * `version`. A hub that does not serve the client's revision refuses with
+ * `unsupported_version` and lists what it does serve; a hub older than the
+ * client serves reads and refuses writes. A client may also declare the
+ * capabilities it relies on (`capabilities`), refused by name when the hub
+ * lacks one. `discover()` asks a hub about itself first, when a caller wants
+ * to know before its first write.
  */
 import type { ClassMap, ClassName, TerminusDocument, User } from '@armature/types';
+
+/** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
+export const CLIENT_REVISION = '2026-10-21';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -30,6 +40,22 @@ export interface ClientOptions {
   fetch?: FetchLike;
   /** Extra headers on every request. */
   headers?: Record<string, string>;
+  /** The revision sent as `Armature-Version`; CLIENT_REVISION by default, `null` to send none. */
+  version?: string | null;
+  /** Capability identifiers this caller relies on, sent as `Armature-Capabilities`; the hub refuses by name what it lacks. */
+  capabilities?: string[];
+}
+
+/** The body of GET /discover: the hub, not the graph. */
+export interface Discovery {
+  versions: string[];
+  capabilities: Record<string, { fallback: 'ignore' | 'reject'; [setting: string]: unknown }>;
+  schema: { route: string };
+}
+
+export interface SchemaResult {
+  ref: string;
+  schema: Array<Record<string, unknown>>;
 }
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Response | Promise<Response>;
@@ -46,10 +72,11 @@ export interface OnBranch {
   ifMatch?: string;
 }
 
-/** What a route answered, with the commit it was served from or created (the `ETag`). */
+/** What a route answered, with the commit it was served from or created (the `ETag`) and the revision that served it. */
 export interface HubResult<T> {
   data: T;
   commit?: string;
+  version?: string;
 }
 
 /** The hub's error body `{ error, message, ...details }` as a thrown error. */
@@ -289,6 +316,9 @@ export function createClient(options: ClientOptions) {
     }
     const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
     if (options.user) headers['Armature-User'] = options.user;
+    const version = options.version === undefined ? CLIENT_REVISION : options.version;
+    if (version) headers['Armature-Version'] = version;
+    if (options.capabilities?.length) headers['Armature-Capabilities'] = options.capabilities.join(', ');
     if (ifMatch) headers['If-Match'] = `"${ifMatch}"`;
     const init: RequestInit = { method, headers };
     if (body !== undefined) {
@@ -315,12 +345,21 @@ export function createClient(options: ClientOptions) {
         details
       );
     }
-    return { data: parsed as T, commit: commitFrom(res) };
+    return { data: parsed as T, commit: commitFrom(res), version: res.headers.get('armature-version') ?? undefined };
   }
 
   const at = ({ branch, ref }: AtRef): Query => ({ branch, ref });
 
   return {
+    /** `GET /discover`: the revisions the hub serves, its capabilities with their settings, and where the schema is. */
+    discover() {
+      return call<Discovery>('/discover');
+    },
+    /** `GET /schema` at a ref: the schema graph as the store reloads it, with the commit. */
+    schema(opts: AtRef = {}) {
+      return call<SchemaResult>('/schema', { query: at(opts) });
+    },
+
     documents: {
       /** `GET /documents/:type` at a ref, optionally filtered and paged. */
       list<K extends ClassName>(type: K, opts: ListOptions = {}) {
