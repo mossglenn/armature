@@ -93,6 +93,13 @@
 //      hash is a change to the fragment that carries it, and nested subdocument ids regenerate
 //      at every depth on replace
 //
+//   AE. Export and re-import (ADR-0031): the schema graph is readable at a commit; every instance
+//      document at a commit comes back in one read with no type given; a branch created with no
+//      origin is empty; the exported schema loads into it once the store's own decoration
+//      (@max_cardinality "inf" on every Set) is dropped; every exported document posts back in
+//      one request with its @id (Hash-keyed records and nested subdocument ids included); the two
+//      states compare equal once nested ids are removed
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -806,6 +813,49 @@ async function main() {
   const adAt3 = await readAt(adHead3, "Item/ad");
   const adChanged = (adAt2?.options ?? []).filter((o, i) => deepCanon(o) !== deepCanon(adAt3?.options?.[i])).map((o) => o.fragmentId);
   record("AD7", adChanged.join(",") === "pic" ? "PASS" : "FAIL", `changing an attachment's hash changes exactly the fragment that carries it: [${adChanged}]`);
+
+  // AE: export and re-import (ADR-0031).
+  const aeHead = await head("main");
+  r = await api("GET", `/api/document/admin/${DB}/local/commit/${aeHead}?graph_type=schema&as_list=true`);
+  const aeSchema = Array.isArray(r.json) ? r.json : [];
+  record("AE1", r.status === 200 && aeSchema.some((e) => e["@type"] === "@context") && aeSchema.some((e) => e["@id"] === "Att") ? "PASS" : "FAIL",
+    `schema graph read at a commit: ${r.status}, ${aeSchema.length} entries, with @context ${aeSchema.some((e) => e["@type"] === "@context")}`);
+  r = await api("GET", `/api/document/admin/${DB}/local/commit/${aeHead}?as_list=true`);
+  const aeDocs = Array.isArray(r.json) ? r.json : [];
+  record("AE2", r.status === 200 && aeDocs.length > 5 ? "PASS" : "FAIL",
+    `every instance document at a commit in one read, no type given: ${r.status}, ${aeDocs.length} documents, types ${short([...new Set(aeDocs.map((d) => d["@type"]))])}`);
+  r = await api("POST", `/api/branch/admin/${DB}/local/branch/ae-empty`, {});
+  record("AE3", r.status === 200 ? "PASS" : "FAIL", `create a branch with no origin: ${r.status} ${r.status === 200 ? "" : short(r.json)}`);
+  r = await api("GET", at("branch/ae-empty", "as_list=true"));
+  const aeEmptyDocs = Array.isArray(r.json) ? r.json : null;
+  const aeEmptySchema = await api("GET", at("branch/ae-empty", "graph_type=schema&as_list=true"));
+  record("AE4", "INFO", `the new branch holds ${aeEmptyDocs ? aeEmptyDocs.length + " documents" : "an unreadable instance graph: " + short(r.json)} and a schema graph of ${Array.isArray(aeEmptySchema.json) ? aeEmptySchema.json.length + " entries" : short(aeEmptySchema.json)}`);
+  // The store decorates every Set it returns with @max_cardinality "inf", which it then refuses
+  // to load (api:BadCast nonNegativeInteger). An export normalizes the schema it emits.
+  r = await api("POST", at("branch/ae-empty", `graph_type=schema&full_replace=true&${commit("ae schema as read")}`), aeSchema);
+  record("AE5a", r.status !== 200 ? "INFO" : "INFO", `the schema exactly as the store returned it ${r.status === 200 ? "loads" : "does not load: " + r.status + " " + short(r.json?.["api:error"]?.["@type"]) + " on " + short(r.json?.["api:error"]?.["api:document"]?.["@id"])}`);
+  const aeNormal = aeSchema.map((e) => {
+    const out = {};
+    for (const [k, v] of Object.entries(e)) {
+      out[k] = v && typeof v === "object" && !Array.isArray(v) && v["@max_cardinality"] === "inf"
+        ? Object.fromEntries(Object.entries(v).filter(([kk]) => kk !== "@max_cardinality")) : v;
+    }
+    return out;
+  });
+  r = await api("POST", at("branch/ae-empty", `graph_type=schema&full_replace=true&${commit("ae schema")}`), aeNormal);
+  record("AE5", r.status === 200 ? "PASS" : "FAIL", `the exported schema loads into the empty branch once @max_cardinality "inf" is dropped: ${r.status} ${r.status === 200 ? "" : short(r.json)}`);
+  r = await api("POST", at("branch/ae-empty", commit("ae import")), aeDocs);
+  record("AE6", r.status === 200 ? "PASS" : "FAIL",
+    `every exported document posted back in one request with its @id, Hash-keyed records and nested subdocument ids included: ${r.status} ${r.status === 200 ? "" : short(r.json?.["api:error"] ?? r.json)}`);
+  r = await api("GET", at("branch/ae-empty", "as_list=true"));
+  const aeBack = Array.isArray(r.json) ? r.json : [];
+  const aeIndex = (list) => Object.fromEntries(list.map((d) => [d["@id"], deepCanon(d)]));
+  const aeA = aeIndex(aeDocs), aeB = aeIndex(aeBack);
+  const aeDiff = [...new Set([...Object.keys(aeA), ...Object.keys(aeB)])].filter((k) => aeA[k] !== aeB[k]);
+  const aeNestedKept = JSON.stringify(aeBack) === JSON.stringify(aeDocs);
+  record("AE7", aeBack.length === aeDocs.length && aeDiff.length === 0 ? "PASS" : "FAIL",
+    `read back ${aeBack.length} of ${aeDocs.length} documents; differing once nested @ids are removed: ${aeDiff.length} ${short(aeDiff.slice(0, 5))}; byte-identical including nested ids: ${aeNestedKept}`);
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/ae-empty`, {});
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
