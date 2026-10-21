@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { CLASS_FIELDS, type FieldShape } from '@/lib/types';
+import { CLASS_FIELDS, type FieldShape } from '@armature/types';
 import { isKnownType, isWritable } from '../classes';
 import { ApiError } from '../errors';
 import {

@@ -1,4 +1,4 @@
-import { CLASS_ANCESTORS, CLASS_CATEGORY, CLASS_FIELDS } from '@/lib/types';
+import { CLASS_ANCESTORS, CLASS_CATEGORY, CLASS_FIELDS } from '@armature/types';
 
 /**
  * What the schema says about a class, read from the generated maps

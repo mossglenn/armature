@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import type { User } from '@/lib/types';
+import type { User } from '@armature/types';
 import { ApiError } from './errors';
 import { createStore, StoreError, type Store, type TerminusDocument } from './store';
 

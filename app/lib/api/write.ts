@@ -1,5 +1,5 @@
-import { CLASS_FIELDS, CLASS_KEY, type FieldShape } from '@/lib/types';
-import { DOCUMENT_SCHEMAS } from '@/lib/schemas';
+import { CLASS_FIELDS, CLASS_KEY, type FieldShape } from '@armature/types';
+import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
 import { hasAttestedBy, hasCreatedBy, isWritable } from './classes';
 import { ApiError } from './errors';
 import { userCopyFor, type ResolvedUser } from './identity';

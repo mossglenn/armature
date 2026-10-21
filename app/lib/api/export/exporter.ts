@@ -1,4 +1,4 @@
-import { CLASS_ANCESTORS, CLASS_FIELDS, type FieldShape } from '@/lib/types';
+import { CLASS_ANCESTORS, CLASS_FIELDS, type FieldShape } from '@armature/types';
 import type { TerminusDocument } from '../store';
 import slicesJson from './slices.json';
 

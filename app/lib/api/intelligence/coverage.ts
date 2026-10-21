@@ -1,4 +1,4 @@
-import type { ItemStatus } from '../../types';
+import type { ItemStatus } from '@armature/types';
 
 /**
  * The coverage algorithm (architecture decision record ADR-0029, decisions 1

@@ -1,4 +1,4 @@
-import { CLASS_CATEGORY } from '@/lib/types';
+import { CLASS_CATEGORY } from '@armature/types';
 import type { TerminusDocument } from '../store';
 import type { Violation } from './index';
 

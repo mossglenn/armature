@@ -1,4 +1,4 @@
-import { CLASS_FIELDS, type FieldShape } from '@/lib/types';
+import { CLASS_FIELDS, type FieldShape } from '@armature/types';
 import { inheritsFrom } from '../classes';
 import type { TerminusDocument } from '../store';
 import type { Violation, WriteContext } from './index';
