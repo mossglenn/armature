@@ -129,7 +129,7 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 6 | Activity groups are flat | follows from rule 0 |
 | 7 | Coverage is never stored | nothing to check; the schema has no coverage field |
 | 8 | `fragmentId` is unique across an item's stem, options and feedback | `duplicate_fragment_id` |
-| 9 | Option text is unique within an item; option count and number of correct options suit the item type | `duplicate_option_text`, `option_count`, `correct_option_count` |
+| 9 | Option text, where present, is unique within an item; option count and number of correct options suit the item type (a picture option has no text; rule 19 checks it has an attachment) | `duplicate_option_text`, `option_count`, `correct_option_count` |
 | 10 | A placement is not `Approved` while its item is `Draft` or `InReview`, in either direction | `instance_ahead_of_item` |
 | 11 | A `Dismissed` finding has a `resolutionRationale` | `rationale_required` |
 | 12 | An identifier is not reused across types | 409 `type_conflict` |
@@ -138,6 +138,10 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 15 | An attestation's `attestedBy` is the caller | `attester_not_caller` |
 | 16 | A `fragmentId` on an `Attestation`, `DesignNote` or `DesignFinding` names a part of its one subject: at `asOf` when that is checked, otherwise as the write leaves the subject | `fragment_needs_one_subject`, `unknown_fragment` |
 | 17 | Within an activity, formative uses of items never share a `sequence` (`ActivityItemLink`, ADR-0061) | `duplicate_sequence` |
+| 18 | An `Attachment` is a verifiable coordinate: `revision` is present when `store` is `Git` or `Lore`, and `contentHash` is lower-case hexadecimal of the length `hashAlgorithm` implies for the algorithms the hub knows (`sha-256`, `sha-512`, `sha-384`, `sha-224`, `sha-1`, `md5`, `blake2b-256`, `blake2b-512`, `blake2s-256`, named as in the IANA Named Information Hash Algorithm Registry); an unknown algorithm is accepted unchecked. Checked on the artifact's `attachments` and on every fragment's (ADR-0030) | `revision_required`, `hash_malformed` |
+| 19 | A fragment carries `text` or at least one attachment (ADR-0030) | `empty_fragment` |
+
+Every `ArmatureDocument` may carry `externalRefs` (identifiers in other systems: `{ "@type": "ExternalRef", system, identifier, label? }`) and `attachments`; every fragment may carry `attachments` (`{ "@type": "Attachment", store, storeUri, contentHash, hashAlgorithm, revision?, path?, container?, mediaType?, byteSize?, role?, label? }`). Both are embedded subdocuments: send them inline, never store their nested `@id`, and expect the field to be absent on read when the set is empty. The hub checks their shape and rules 18 and 19; it does not fetch bytes or verify a hash in this phase (ADR-0030).
 
 There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5; ADR-0062, proposed, describes that operator surface: a delete as a commit, a whole-branch rule check, and a replace that can skip the hub's rules, none of it on `/api/v1`).
 

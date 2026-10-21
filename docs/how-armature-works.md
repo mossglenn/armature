@@ -493,6 +493,7 @@ Read left to right, this is the instructional design process: **evidence** groun
 **Parts of items (fragments).**
 
 - **`Fragment`** (abstract), **`TextFragment`** and **`ItemOption`**: the embedded parts of an assessment item (Section 12.7).
+- **`ExternalRef`** and **`Attachment`**: embedded coordinates that point out of the graph, at an identifier in another system or at bytes in a file store, carried by any artifact and (attachments) by any fragment (Section 12.7, ADR-0030, 20 October 2026).
 
 **Abstract roots.**
 
@@ -555,9 +556,9 @@ An assessment item is not a flat record. Its stem, each option and each piece of
 
 ```
 AssessmentItem
-  stem               TextFragment   { fragmentId, text }
+  stem               TextFragment   { fragmentId, text?, attachments }
   options            List of ItemOption
-                       { fragmentId, text, isCorrect, feedback?, purpose? }
+                       { fragmentId, text?, attachments, isCorrect, feedback?, purpose? }
   correctFeedback    TextFragment   (optional)
   incorrectFeedback  TextFragment   (optional)
 ```
@@ -572,6 +573,8 @@ An `ItemOption` can carry a `purpose`: free text saying what the option is for, 
 2. CoQui's development asked whether an option ever needs identity independent of its item. The answer was no: options are never shared across items, and moving an option to another item would silently change its meaning. The `Response` document was removed and options were embedded in the item (ADR-0022). The database's history still reports which option changed between two versions, because it compares nested structure.
 3. Embedded parts have no identity of their own in the database. A platform check (J4) confirmed that every time an item is replaced, the database regenerates the internal identifiers of its parts. So part identity has to come from somewhere else: the **`fragmentId`**, assigned once by the authoring tool when the part is created, never derived from position or display order, and never reused (ADR-0023). Armature checks only that fragment identifiers are unique within an item.
 4. To avoid making multiple-choice options the only possible kind of part, options were modeled as one specialization of an abstract `Fragment` (ADR-0033). Future item types (drag-and-drop, hotspot, media) can add new fragment kinds beside them without re-identifying anything. A tool that has never seen a particular item type can still list its fragments, read their text, and attach a comment to one.
+
+**Parts that are not text (ADR-0030, 20 October 2026).** A fragment's `text` is optional. An option that is a picture, a stem that is an audio clip, carries an **attachment** instead: a reference to the bytes in a file store, with the store named, the file's path, the store's own revision when it is versioned, and always a content hash (a fingerprint of the bytes, with the algorithm named as in the IANA registry: `sha-256`, `sha-1` and so on). A fragment must carry text or at least one attachment (rule 19); an attachment in a versioned store must name a revision, and its hash must have the length its algorithm implies (rule 18). The graph never holds the bytes. Because a changed hash is a change to the fragment, re-exporting an image makes every attestation on that option stale (Section 17), exactly as rewording it would. Any artifact can also carry attachments of its own (a rendered export, a source document, the asset tree a learning object was built against) and **external references**: identifiers in other systems such as a CASE competency, a QTI item or an xAPI activity, with the system named and nothing else copied in.
 
 The `fragmentId` is modeled on the fragment part of a web address (the `#section` in `page.html#section`): a stable resource plus an address within it. A comment about a part is addressed to the pair (item identifier, fragment identifier).
 
@@ -625,7 +628,7 @@ Two abstract classes sit at the top of the hierarchy.
 
 **Why `DesignRecord` exists.** Before it, being annotatable was tied to having a name: only types inheriting `ArmatureDocument` could be the subject of a note, so six of the seven relationship types could not carry a note. Whether a relationship could carry rationale was decided by whether it happened to have a label, which ADR-0017 called "an accident, not a decision."
 
-**Categories as metadata (ADR-0017, ADR-0027).** Every class declares one of four categories in its schema metadata (descriptive tags attached to the class): `infrastructure` (`User` and the two abstract roots), `fragment` (the parts of an item), `artifact` (the primary documents, notes and findings) or `relationship` (the junction documents). The rule: *a category becomes a class only when something must reference it; otherwise it is metadata.* `DesignRecord` is a class because notes reference it; "relationship" is metadata because nothing needs to hold "any relationship." `PrerequisiteRecord` shows why: it is both a named artifact and a relationship, which as classes would need multiple inheritance (one class with two parents), but as metadata is simply a tag.
+**Categories as metadata (ADR-0017, ADR-0027).** Every class declares one of four categories in its schema metadata (descriptive tags attached to the class): `infrastructure` (`User`, the two abstract roots and, since ADR-0030, the two embedded coordinates `ExternalRef` and `Attachment`), `fragment` (the parts of an item), `artifact` (the primary documents, notes and findings) or `relationship` (the junction documents). The rule: *a category becomes a class only when something must reference it; otherwise it is metadata.* `DesignRecord` is a class because notes reference it; "relationship" is metadata because nothing needs to hold "any relationship." `PrerequisiteRecord` shows why: it is both a named artifact and a relationship, which as classes would need multiple inheritance (one class with two parents), but as metadata is simply a tag.
 
 The categories mean the schema describes itself. The generators (the scripts that derive code from the schema; Section 21.1) read them (a class without a category fails the build), and any tool can read them to treat relationships differently from artifacts. CoQui's notes called this "the single highest-leverage change" for a second plugin.
 
@@ -670,7 +673,7 @@ Every write passes two kinds of check before anything is saved.
 
 ### 13.2 The rules in plain language
 
-The project numbers the rules 0 to 13 (the numbering is used across the documentation and tests).
+The project numbers the rules 0 to 19 (the numbering is used across the documentation and tests).
 
 | # | Rule | Why |
 |---|---|---|
@@ -683,7 +686,7 @@ The project numbers the rules 0 to 13 (the numbering is used across the document
 | 6 | An activity group never contains another group | Groups are deliberately flat; this follows from rule 0, because a group member must be a `LearningActivity` |
 | 7 | Coverage is never stored | Coverage is computed when read (Section 17). There is nothing to check, because the schema has no coverage field |
 | 8 | Every fragment of an item has a unique `fragmentId` | Part addresses must be unambiguous |
-| 9 | Option text is present and unique within an item, and the number of correct options suits the item type | Multiple choice and true/false need exactly one correct option (true/false exactly two options); multiple select needs at least one |
+| 9 | Option text, where present, is unique within an item, and the number of correct options suits the item type | Multiple choice and true/false need exactly one correct option (true/false exactly two options); multiple select needs at least one. Presence moved to rule 19 when options could be pictures (ADR-0030) |
 | 10 | A placement cannot be approved while its item is still draft or in review, and an item cannot drop back to draft or review while a placement of it is approved | Placement clearance never runs ahead of the item's own review (Section 12.8) |
 | 11 | A dismissed finding must give a reason | Dismissals must be inspectable |
 | 12 | A write cannot reuse an identifier that belongs to a document of another type | Identifiers belong to one type for the life of the database (answered with 409, conflict) |
@@ -692,6 +695,8 @@ The project numbers the rules 0 to 13 (the numbering is used across the document
 | 15 | An attestation's attester is the person making the request | A verdict carries the name of the person who gave it, never one supplied in the body (ADR-0028, ADR-0032) |
 | 16 | A part named on an attestation, note or finding exists in its one subject | A verdict or concern about a part must point at a real part (ADR-0028) |
 | 17 | Within an activity, items used formatively never share a position number | Order must be unambiguous (ADR-0061) |
+| 18 | An attachment in a versioned store names a revision, and its content hash has the length its algorithm implies | A reference to bytes must name one state and be checkable by anyone with access to the store (ADR-0030) |
+| 19 | A fragment carries text or at least one attachment | A part with neither is nothing to review (ADR-0030) |
 
 Rule 2 is enforced both by the database (as a minimum count) and by the shape check; rule 1 was retired. Rule 6 is a consequence of rule 0. The rest are code in the invariants engine.
 
@@ -1099,8 +1104,8 @@ The session log also lists a small fix (a race condition in the branch routes wh
 
 **Goal:** reference external standards without duplicating them (P6), and make data-first adoption by researchers possible (P7, P8).
 
-- **External references and attachments (ADR-0030, reserved).** Two optional sets on every artifact. *External references* point to identifiers in other systems, with the system named: CASE (Competencies and Academic Standards Exchange), QTI (Question and Test Interoperability), xAPI (Experience API), LTI (Learning Tools Interoperability) or other. *Attachments* reference files, or a specific revision of a tree of files, in a store the hub may or may not operate, always with a content hash (a fingerprint that detects a missing or altered file), and with revision and path when the store is versioned. The graph never holds the files themselves.
-- **Externally versioned artifacts (ADR-0025 amendment).** For an artifact whose files live in an asset store, the graph records the commits that move its reference, each with author and reason; the asset store keeps its own fine-grained history, reachable through the reference. "A projection, not a replay."
+- **External references and attachments (ADR-0030, accepted and implemented 20 October 2026).** Two optional sets on every artifact, and attachments on every fragment (Section 12.7). *External references* point to identifiers in other systems, with the system named: CASE (Competencies and Academic Standards Exchange), QTI (Question and Test Interoperability), xAPI (Experience API), LTI (Learning Tools Interoperability) or other. *Attachments* reference files, or a specific revision of a tree of files, in a store the hub may or may not operate, always with a content hash (a fingerprint that detects a missing or altered file), and with revision and path when the store is versioned. The graph never holds the files themselves.
+- **Externally versioned artifacts (ADR-0025 amendment, made by ADR-0030 decision 6).** For an artifact whose files live in an asset store, the graph records the commits that move its reference, each with author and reason; the asset store keeps its own fine-grained history, reachable through the reference. "A projection, not a replay."
 - **Export profiles and schema slices (ADR-0031, reserved).** Export the whole graph or a declared slice at a commit, as JSON-LD (JSON for Linked Data, a variant of JavaScript Object Notation that carries the meaning of fields), under a profile: `full`, `pseudonymous` (stable tokens instead of user identities) or `institutional` (institution only). A slice, such as needs → objectives → outcomes, is a configuration file, not code.
 - **An outcomes import path.** Datasets, metrics and item statistics (metrics about the item, ADR-0058) written through the ordinary write route; one dataset seeded so Narrative 1 is live end to end.
 - **A guide for researchers** (`docs/research-path.md`): how to stand up a constrained Armature for one study.
@@ -1124,7 +1129,7 @@ The session log also lists a small fix (a race condition in the branch routes wh
 The project's standing scope, stated by its author, is the position paper's full vision, including complex learning objects such as simulations, which the development plan describes as "trees of large binaries, edited in place by several people over many revisions." Near-term simplifications are recorded as matters of timing, never of scope. The development plan's "four layers" model shows how richer artifacts fit without a redesign:
 
 1. **Structure lives in the graph, always.** For a drag-and-drop item: the instructions, the draggable parts, the drop zones, the correct mapping, the objectives assessed. For a simulation: the manifest of scenarios, parameters and what each measures. Structure is what design intelligence reads.
-2. **Content lives in a store, referenced from a fragment.** The `fragmentId` names the slot; an attachment reference names what fills it. Replacing an image is an ordinary graph write with an author and a reason.
+2. **Content lives in a store, referenced from a fragment.** The `fragmentId` names the slot; an attachment reference names what fills it. Replacing an image is an ordinary graph write with an author and a reason. *Built 20 October 2026 (ADR-0030): the reference shape, with its mandatory hash and its revision for versioned stores, is in the schema; the hub-managed store and its endpoints wait for a client with a file to attach.*
 3. **Behavior belongs to the item *type*, versioned as an artifact of its own (ADR-0034, a reserved Architecture Decision Record).** Drag-and-drop logic is shared by every drag-and-drop item; what varies per item is data. An item would declare "an instance of interaction type X at version N," and the type's renderer (the code that displays and runs it) is a versioned asset. This follows H5P (an open framework for interactive web content, which pairs content data with a versioned library) and the Portable Custom Interactions of QTI (Question and Test Interoperability). A renderer change becomes an impact-analysis question across every item of that type. **The hub never serves executable content from a graph document.**
 4. **Rationale stays where it is:** commits, notes, findings, attestations.
 
