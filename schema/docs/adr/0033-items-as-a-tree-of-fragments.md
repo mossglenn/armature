@@ -20,6 +20,10 @@ invariants listed in §Consequences are enforced since Phase 3 as constraints 8 
 (`app/lib/api/invariants/assessmentItem.ts`). ADR-0030 and ADR-0034, cited below, are planned in
 `docs/development-plan.md` §5 and not yet written.
 
+**Note 2026-10-20:** ADR-0030 is written and built: `Fragment.text` is `Optional`, every fragment
+may carry `attachments`, and constraint 19 requires text or at least one attachment. ADR-0034 is
+still reserved.
+
 ## Context
 
 ADR-0022 embeds an item's stem and options in the item document; ADR-0023 gives each part a
@@ -56,6 +60,9 @@ Platform behaviour, verified on TerminusDB v12.0.7 (`scripts/platform_checks.js`
 
    > **Later change (2026-10-08):** ADR-0030 (external references and attachments) is planned for
    > Phase 6 and not yet written; `text` is still required.
+   >
+   > **Later change (2026-10-20):** ADR-0030 is written; `text` is `Optional` and a fragment may
+   > carry `attachments`, with constraint 19 requiring one or the other.
 
 2. **`TextFragment` and `ItemOption` are its specialisations.** `TextFragment` adds nothing and
    exists so stem and feedback slots are typed to text rather than to the abstract, which would
@@ -112,5 +119,5 @@ Platform behaviour, verified on TerminusDB v12.0.7 (`scripts/platform_checks.js`
 ## Related
 - ADR-0022, ADR-0023 — the decisions this generalises
 - ADR-0027 — the `fragment` category
-- ADR-0030 (planned) — attachment references on fragments; relaxes `text` to Optional
+- ADR-0030 (written 2026-10-20) — attachment references on fragments; relaxes `text` to Optional
 - ADR-0034 (planned) — interaction types and renderers; adds the type version

@@ -38,6 +38,10 @@ metadata one level, which the `armature` namespace does.
    | Category | Classes | Meaning |
    |---|---|---|
    | `infrastructure` | `User`, `DesignRecord`, `ArmatureDocument` | Not records of design in themselves: the identity type and the abstract roots |
+
+   > **Later change (2026-10-20):** ADR-0030 adds `ExternalRef` and `Attachment` to
+   > `infrastructure`: embedded coordinates that point out of the graph, not records of design and
+   > not parts; a fifth category was declined until a reader needs the distinction.
    | `fragment` | `Fragment`, `TextFragment`, `ItemOption` | `@subdocument` classes: addressable parts of an artifact, returned inline, never referenced from outside (ADR-0033) |
    | `artifact` | the primary instructional documents, `DesignNote`, `DesignFinding` | Things a designer authors or the API computes about them |
    | `relationship` | the seven junction documents, including `PrerequisiteRecord` | Reified relationships carrying their own data |
