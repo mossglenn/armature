@@ -1,26 +1,26 @@
 #!/usr/bin/env node
 /**
  * generate-types.js
- * Generates app/lib/types.ts and app/lib/schemas.ts from Armature's schema.json.
+ * Generates the @armature/types package (packages/types/src/types.ts and
+ * schemas.ts) from Armature's schema.json.
  *
  * schema.json is the single source of truth for all type information.
  * This generator derives TypeScript interfaces and union types from it
- * so that app/lib/types.ts never needs to be hand-maintained.
+ * so that the types package never needs to be hand-maintained. The app
+ * imports them as `@armature/types` and `@armature/types/schemas` (a
+ * workspace package since Phase 7, 2026-10-21; before that, app/lib/).
  *
  * Usage (from repo root):
- *   node scripts/generate-types.js           # write types.ts and schemas.ts
- *   node scripts/generate-types.js --check   # exit 1 if either is out of sync
- *
- * Usage (from armature/app/):
- *   npm run generate:types
- *   npm run check:types
+ *   npm run generate:types                   # write types.ts and schemas.ts
+ *   npm run check:types                      # exit 1 if either is out of sync
+ *   (or node scripts/generate-types.js [--check] directly)
  *
  * --check is intended for CI (continuous integration). It regenerates both
  * files in memory, diffs them against the committed versions, and exits
  * non-zero if either differs. Run `npm run generate:types` to fix drift.
  *
  * Schema path:  schema/schema.json   (relative to repo root)
- * Output paths: app/lib/types.ts, app/lib/schemas.ts   (relative to repo root)
+ * Output paths: packages/types/src/types.ts, packages/types/src/schemas.ts
  *
  * --- Type mapping decisions ---
  *
@@ -115,8 +115,8 @@ const __dirname = dirname(__filename);
 
 const CHECK_MODE = process.argv.includes('--check');
 const schemaPath = join(__dirname, '../schema/schema.json');
-const outputPath = join(__dirname, '../app/lib/types.ts');
-const schemasPath = join(__dirname, '../app/lib/schemas.ts');
+const outputPath = join(__dirname, '../packages/types/src/types.ts');
+const schemasPath = join(__dirname, '../packages/types/src/schemas.ts');
 
 const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
 

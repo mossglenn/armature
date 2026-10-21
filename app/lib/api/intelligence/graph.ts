@@ -1,5 +1,5 @@
-import { CLASS_FIELDS, VALID_BloomsLevel, type FieldShape } from '@/lib/types';
-import { DOCUMENT_SCHEMAS } from '@/lib/schemas';
+import { CLASS_FIELDS, VALID_BloomsLevel, type FieldShape } from '@armature/types';
+import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
 import { inheritsFrom } from '../classes';
 import { StoreError, type Store, type TerminusDocument } from '../store';
 

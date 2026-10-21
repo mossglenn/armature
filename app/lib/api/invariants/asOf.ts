@@ -1,4 +1,4 @@
-import { CLASS_FIELDS } from '@/lib/types';
+import { CLASS_FIELDS } from '@armature/types';
 import { StoreError, type TerminusDocument } from '../store';
 import type { Violation, WriteContext } from './index';
 
