@@ -734,7 +734,7 @@ Work:
       routes or schema. The hub-managed endpoints are not built until a reference client has a
       concrete file to attach; the tool-managed path costs nothing beyond the validator and
       lands with ADR-0030.
-- [ ] **ADR-0031: Export profiles and schema slices.** A `GET /api/v1/export?ref=&profile=`
+- [x] **ADR-0031: Export profiles and schema slices** (written and built 2026-10-20: `GET /api/v1/export` with `full`, `pseudonymous` and `institutional` profiles, slices in `app/lib/api/export/slices.json`, `unresolved` references reported, re-import an operator step; the exit criterion below is met by `export.test.ts`; platform check AE). A `GET /api/v1/export?ref=&profile=`
       route producing JSON-LD (the store's native shape) for the whole graph or a declared
       slice. The documentation lists Turtle and RDF/XML content negotiation under enterprise
       pages; verify on the open-source build before promising any format beyond JSON and
@@ -804,7 +804,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0028 | Attestation | 5 | Accepted and implemented 2026-10-18 | Generic form of CoQui's proposal, with the claim optional; Hash key over subject, fragment, claim and attester; staleness a read; `fragmentId` on notes and findings; amends ADR-0057 decision 5 for attestations |
 | 0029 | Coverage algorithm | 4 | Decisions 1 to 3 accepted 2026-10-08; 4 to 6 superseded by 0056 | Counted over placements; two figures; default thresholds as parameters |
 | 0030 | External references and attachments | 6 | Accepted and implemented 2026-10-20 | P6; `externalRefs` and `attachments` on every artifact, `attachments` on every fragment, `text` optional; mandatory content hash with IANA algorithm names, `revision` for versioned stores (constraint 18), a fragment has content (constraint 19); backend and hub-managed endpoints left open; amends 0025, 0033, 0002 |
-| 0031 | Export profiles and schema slices | 6 | Reserved, not written | P7, P8; implements ADR-0021's deferred section |
+| 0031 | Export profiles and schema slices | 6 | Accepted and implemented 2026-10-20 | P7, P8; implements ADR-0021's deferred section; the graph at a ref as one JSON-LD document with its reloadable schema; three profiles, HMAC tokens under `ARMATURE_EXPORT_KEY`; slices as configuration with unresolved references reported; re-import is operator work (0062); JSON-LD only |
 | 0032 | Identity resolution | 3 | Accepted and implemented | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |
 | 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Accepted; shape implemented | Abstract `Fragment` subdocument; `ItemOption` as a specialization; generic kinds with `sys:JSON` payload and per-kind validation land with the first non-text item type |
 | 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | Reserved, not written | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI, Portable Custom Interactions, as precedents); the hub never serves executable content from a graph document, and renderers load sandboxed under a content security policy (CSP) |
@@ -1152,6 +1152,14 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - Reset and squash exist; reset moves the head and keeps commits.
 
 **Writes, identity and concurrency** (Phases 2 and 3)
+- *Verified (2026-10-20, check AE, for ADR-0031):* the schema graph is readable at a commit path;
+  every instance document at a commit comes back in one read with no type given; a branch created
+  with no origin is empty, with a schema graph of one entry; the schema the store returns is **not**
+  the schema it accepts, since it decorates every `Set` with `@max_cardinality: "inf"` and refuses
+  that as `api:BadCast`, so an export drops the decoration before emitting the schema; with that
+  done, the schema loads into the empty branch and every exported document posts back in one
+  request with its `@id`, Hash-keyed records and nested subdocument ids included, and the two
+  states compare equal once nested ids are removed (they regenerate).
 - *Verified (2026-10-20, check AC, for ADR-0062):* the document API's `DELETE` is refused with
   400 `api:SchemaCheckFailure` while another document references the target; otherwise it answers
   204 and is a commit carrying the given author and message, after which the document is gone

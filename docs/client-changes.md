@@ -15,6 +15,35 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-20 · Export profiles and schema slices (ADR-0031)
+
+**What changed.** A new read, `GET /api/v1/export?branch=|ref=&profile=&slice=`, returns the
+graph at a ref as one JSON-LD document: the store's `@context`, the schema as it can be reloaded,
+and the documents of the slice under the profile, with the commit in `ETag` and in `armature.ref`.
+Profiles: `full`, `pseudonymous` (every `User` a stable token, every reference to one rewritten,
+nothing else about the person), `institutional` (the token plus `institution`). Slices are a
+configuration (`GET /api/v1/export/slices`): `full`, `outcomes-loop`, `review`. References that
+leave a slice are listed in `armature.unresolved`, never dropped from a document.
+
+**What a client does.**
+
+- **An exporter plugin reads the whole graph at a commit in one request**, instead of walking the
+  list routes; `armature.ref` is the commit to stamp into whatever it produces (ADR-0057).
+- **A research exporter asks for `profile=pseudonymous`** and, where the deployment has set
+  `ARMATURE_EXPORT_KEY`, gets tokens that are the same across exports (`pseudonyms: "stable"`).
+  It does not scrub free text; that is the exporter's job if it matters to the study.
+- **A study declares its slice** as a list of class names in `app/lib/api/export/slices.json`, by
+  pull request, not by code.
+- **Nothing imports through the API.** Reproducing an export is an operator step: load `schema`,
+  post `documents` (ADR-0062).
+
+**CoQui:** no change. **text2qti exporter** (planned, outside this repository): reads
+`GET /api/v1/export?ref=<commit>` and emits from `documents`.
+
+Detail: ADR-0031; the API reference's Export section.
+
+---
+
 ## 2026-10-20 · External references and attachments (ADR-0030)
 
 **What changed.** Every artifact (every type inheriting `ArmatureDocument`) may carry two new
