@@ -669,7 +669,7 @@ for a dropped option, and all `Current` on the round branch and at the attested 
 
 CoQui receives: ask 4's attestation half, and the type its outbox is holding rows for.
 
-### Phase 6: Ecosystem and the research path (2 sessions) — in progress since 2026-10-20
+### Phase 6: Ecosystem and the research path (2 sessions) — done 2026-10-20 (PRs #24, #25 and the outcomes PR); the hub-managed attachment endpoints wait for a client with a file
 
 **Goal.** Make the paper's §5 and §6 structurally possible: external standards by reference,
 and data-first adoption by learning scientists.
@@ -742,12 +742,12 @@ Work:
       (institution only, per ADR-0021's cheapest option). Slices are declared as lists of
       classes in a small JSON file, so the needs-to-objectives-to-outcomes slice the paper
       describes is a configuration, not code.
-- [ ] **Outcomes import path.** `LearningDataset`, `LearningMetric` and item statistics
+- [x] **Outcomes import path** (2026-10-20, ADR-0063: constraint 20, a dataset or metric names its source; the seed carries one administration and Narrative 1 walks on `main`). `LearningDataset`, `LearningMetric` and item statistics
       (metrics whose `subject` is the item, ADR-0058, decided and built 2026-10-18) through the
       generic write route, with an invariant for `producedBy` when the assessment is Armature's.
       Seed one dataset so Narrative 1 is live end to end. A bank-wide summary read ("items by
       latest difficulty") is built when the importer or a reviewing client names the summary it needs.
-- [ ] A short `docs/research-path.md` describing how a scientist would stand up a constrained
+- [x] (2026-10-20) A short `docs/research-path.md` describing how a scientist would stand up a constrained
       Armature for one study: which slice, which profile, what the collection instrument writes.
 
 Exit: an export at a commit, re-imported into an empty database, reproduces the graph; the
@@ -816,6 +816,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0059 | Capability negotiation per request | 7 (with the typed client), or on the first trigger it names | Proposed 2026-10-20 | Adopts candidate 0039's capabilities half, from MCP's per-request model: dated contract revisions in `Armature-Version`, namespaced capabilities in `Armature-Capabilities`, `GET /api/v1/discover`, 400 `unsupported_version` and `unsupported_capability` listing what the hub serves; no handshake; shape changes stay a new prefix (ADR-0026). Resolves ADR-0026's deferral; gives `GET /api/v1/schema` an owner by implication |
 | 0060 | Items may exist unaligned | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | Amends 0013: no minimum on `AssessmentItem.assesses`; rule 1 retired; the alignment read lists `itemsWithoutObjective`; rule 2 stands until a client shows the activity case; encouraging alignment is a §6 question |
 | 0061 | Formative use of items inside activities | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | `ActivityItemLink` junction with optional `sequence` (constraint 17); counts toward no coverage; trace follows it; the module-content view nests it when built; annotates 0003, 0005, 0029 |
+| 0063 | Outcome records name their source | 6 | Accepted and implemented 2026-10-20 | Constraint 20: a dataset has `producedBy` or an `externalRef`, a metric `derivedFrom` or an `externalRef`; closes the rule deferred since Phase 1; the seed gains one administration so Narrative 1 walks on `main` |
 | 0062 | Operator repair is a commit outside the plugin API | 7 (the toolkit), or on the first repair that needs it | Proposed 2026-10-20 | Gives 0024 decision 5 its meaning; 0025 decision 6 holds for operators; three tools (`check`, `delete`, `put --unchecked`) reusing the adapter and the invariants engine in-process; no superuser mode and no raw query route on `/api/v1` (§8) |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than

@@ -48,7 +48,7 @@ scripts/
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
   load_schema.js           # Replaces the schema graph in one full_replace; --clear-instances empties data first for breaking changes
   platform_checks.js       # Probes store behaviors the ADRs depend on, in a scratch database it creates and deletes (run before encoding a platform assumption)
-  seed_data.js             # Inserts the demo course (48 documents plus their embedded fragments, then one Attestation in a second commit whose asOf names the first; no activities, datasets or metrics)
+  seed_data.js             # Inserts the demo course: 48 documents plus their embedded fragments, then one Attestation in a second commit whose asOf names the first, then one LearningDataset and three LearningMetrics in a third (ADR-0063), so Narrative 1 walks on main; a CASE reference on one objective and an xAPI reference on the dataset (ADR-0030); no activities
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill); also npm run sync:terminusdb-docs
 app/
@@ -70,7 +70,7 @@ app/
       classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy or attestedBy
       write.ts             # The one write pipeline: Zod shape → attestedBy → 409 on a foreign id (Hash keys: required fields in the store, Optional ones matched in the hub) → createdBy and asOf → invariants → one commit
       fragments.ts         # A record's parts by fragmentId, from the schema's fragment category, and the canonical form two states are compared in (constraint 16, attestation staleness)
-      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), asOf.ts (constraint 13), fragmentRef.ts (constraint 16), attachments.ts (constraints 18 and 19), one module per constrained type
+      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), asOf.ts (constraint 13), fragmentRef.ts (constraint 16), attachments.ts (constraints 18 and 19), observations.ts (constraint 20), one module per constrained type
       intelligence/
         coverage.ts        # The coverage algorithm (ADR-0029 decisions 1 to 3) and its vocabulary; computed on read, never stored (ADR-0056)
         graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
@@ -95,6 +95,7 @@ docs/
   development-plan.md      # Phased plan; §6 open questions; §9 lists verified TerminusDB platform facts
   armature-asks-from-Coqui.md  # CoQui's dated handoff (2026-10-05): its asks and lessons; a status banner says what landed
   client-changes.md        # What client tools (CoQui first) must act on, newest first: what changed, what a client does, CoQui's mappings. Add an entry for every change to /api/v1 or the schema a client would act on
+  research-path.md         # How a learning scientist stands up a constrained Armature for one study: instance, what the tools write, slice, profile, export at a pinned commit, reproduction, process questions only (Phase 6)
   demo-api.md              # RETIRED demo-era API spec, kept for history
   positionpaper/           # The position paper (March 2026); not edited
   research/                # Standards-precedents survey, candidate ADRs 0035–0053, reading list (2026-10-06 snapshot); schema-precedents-and-plugin-candidates.md (2026-10-20); three client mappings (DQ QuestionBank Core, Tessera, QuiQui)
@@ -185,8 +186,9 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 17. `ActivityItemLink.sequence` — must be unique within a `LearningActivity`; independent of every module and group sequence (`duplicate_sequence`; ADR-0061)
 18. `Attachment` — a verifiable coordinate: `revision` present when `store` is a versioned kind (`Git`, `Lore`; `revision_required`), and `contentHash` lower-case hexadecimal of the length `hashAlgorithm` implies for the IANA registry names the hub knows (`sha-256`, `sha-512`, `sha-1`, `md5` and so on; `hash_malformed`); an unknown algorithm is accepted unchecked. Checked wherever an attachment sits, on the artifact or on a fragment (ADR-0030; `invariants/attachments.ts`)
 19. `Fragment` — carries text or at least one attachment (`empty_fragment`; ADR-0030). `Fragment.text` is `Optional` in the schema since ADR-0030
+20. `LearningDataset` and `LearningMetric` — name their source: a dataset has `producedBy` or at least one `externalRef` (`dataset_without_source`); a metric has `derivedFrom` or at least one `externalRef` (`metric_without_source`). Nothing is inferred about whose assessment it was (ADR-0063; `invariants/observations.ts`)
 
-Pending, not yet enforced: `LearningDataset.producedBy` required for Armature-administered assessments (Phase 6). The list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021's non-aggregation guard) and filters `Optional` enum or reference and `Set` fields in the hub, since the store answers those template queries with a 500 (checks Y2, Y3, Y5).
+The pending rule on `LearningDataset.producedBy` became constraint 20 on 2026-10-20 (ADR-0063). The list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021's non-aggregation guard) and filters `Optional` enum or reference and `Set` fields in the hub, since the store answers those template queries with a 500 (checks Y2, Y3, Y5).
 
 ### Junction document pattern
 
@@ -237,6 +239,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0013** — Minimum cardinality at schema level (supersedes ADR-0006, whose "the API enforces what the store cannot" principle the invariants engine now carries); amended by ADR-0060, which removed the minimum on `AssessmentItem.assesses`
 - **ADR-0060** — Items may exist unaligned: `assesses` is zero or more, rule 1 retired, the alignment read lists `itemsWithoutObjective`; `LearningActivity.targets` keeps its minimum until a client shows the case; how to encourage alignment without requiring it is open (plan §6)
 - **ADR-0061** — Formative use of items inside activities: `ActivityItemLink` (activity, item, optional `sequence`; constraint 17); counts toward no coverage; the trace follows it downstream and shows an activity with its modules
+- **ADR-0063** — Outcome records name their source: a dataset has `producedBy` or an `externalRef`, a metric has `derivedFrom` or an `externalRef` (constraint 20); closes the rule the plan deferred since Phase 1, made expressible by ADR-0030; the seed gains one administration (a dataset and three metrics in a third commit) so Narrative 1 walks on `main`
 - **ADR-0031** — Export profiles and schema slices: `GET /api/v1/export` returns the graph at a ref with its reloadable schema; profiles rewrite people only (`full`, `pseudonymous` with HMAC tokens, `institutional`); slices are configuration in `slices.json`, membership by class or ancestor, references leaving the slice reported as `unresolved`, never dropped; re-import is operator work; JSON-LD only, no vocabulary-mapped context yet
 - **ADR-0030** — External references and attachments: `externalRefs` and `attachments` subdocument sets on every `ArmatureDocument`, `attachments` on every `Fragment`, `Fragment.text` optional; the graph never holds bytes; `contentHash` and `hashAlgorithm` (IANA registry names) mandatory, `revision` required for versioned stores (constraint 18), a fragment has text or an attachment (constraint 19); an artifact whose bytes live in an asset store carries its design history as the graph commits that move its reference, a projection of the asset history, never a replay (amends ADR-0025); the tool-managed path is built, the hub-managed endpoints wait for a client with a file
 - **ADR-0007** — ModuleObjective as the junction for a module's declaration (its computed field superseded by ADR-0056)

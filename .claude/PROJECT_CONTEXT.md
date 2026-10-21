@@ -85,7 +85,7 @@ Show how outcome data can be traced back through the graph to identify at-risk o
 
 Flow: LearningMetric → (derivedFrom) LearningDataset → (producedBy) Assessment → ItemInstance → AssessmentItem → (assesses) LearningObjective → ModuleObjective → Module, then the coverage read for that module
 
-The trace read (`GET /api/v1/intelligence/trace/LearningMetric/<id>`) walks this path; the coverage read answers the last question. "Adequate *when*" is the coverage read at `ref=<asOf>`: the dataset records the commit the cohort's assessment was taken from, the metric carries the same value, and the trace reports it on both nodes (ADR-0057).
+The trace read (`GET /api/v1/intelligence/trace/LearningMetric/<id>`) walks this path; the coverage read answers the last question. Since 2026-10-20 the seed carries one administration (ADR-0063), so the walk runs on `main` from `LearningMetric/mod3-bias-type-difficulty`: the bias item, approved and attested, that only 38% of the pilot cohort answered correctly. "Adequate *when*" is the coverage read at `ref=<asOf>`: the dataset records the commit the cohort's assessment was taken from, the metric carries the same value, and the trace reports it on both nodes (ADR-0057).
 
 The demo should show: "Here's a cohort that performed poorly. Here are the items they struggled with. Here are the objectives those items assess. Here's the module that declared those objectives. Here's whether the module's assessment coverage was adequate."
 
@@ -101,7 +101,7 @@ This demonstrates Armature as pre-delivery design-time intelligence.
 ### Demo environment
 - Local: TerminusDB in Docker Compose and the API on the host (`npm run dev`) for screen-capture video; Phase 7 containerizes the API so Compose runs both
 - Web: Deployed to Railway or Render for stakeholder access
-- Seed data: A realistic but fictional course ("Introduction to AI for Instructional Designers", 48 documents, then one attestation in a second commit). It has no activities, datasets or metrics yet, so Narrative 1 is demonstrated in tests that write a dataset and metric on a scratch branch; seeding one dataset is planned for Phase 6
+- Seed data: A realistic but fictional course ("Introduction to AI for Instructional Designers", 48 documents, then one attestation in a second commit, then one dataset and three metrics in a third, since 2026-10-20). Narrative 1 walks on `main` from `LearningMetric/mod3-bias-type-difficulty`; the seed has no activities, so formative use is shown only in tests
 
 ---
 
