@@ -18,10 +18,12 @@
 # The schema and the data are loaded from the machine either way. The hub needs no
 # running store to start: every request opens its own connection, and a store that is
 # not up yet answers as a 500 until it is. Set TERMINUSDB_ADMIN_PASS on any machine
-# that is not a laptop; `admin` is the development default only.
+# that is not a laptop; `admin` is the development default only. Every service
+# restarts with Docker (`unless-stopped`), so an instance survives a reboot.
 services:
   terminusdb:
     image: terminusdb/terminusdb-server:v12.0.7
+    restart: unless-stopped
     ports:
       - "${TERMINUSDB_BIND:-127.0.0.1}:6363:6363"
     volumes:
@@ -35,6 +37,7 @@ services:
       context: ..
       dockerfile: docker/hub.Dockerfile
     profiles: [hub]
+    restart: unless-stopped
     ports:
       - "${ARMATURE_HUB_BIND:-127.0.0.1}:${ARMATURE_HUB_PORT:-3100}:3100"
     environment:
@@ -57,6 +60,7 @@ services:
       context: ..
       dockerfile: docker/viewer.Dockerfile
     profiles: [hub]
+    restart: unless-stopped
     ports:
       - "${ARMATURE_VIEWER_BIND:-0.0.0.0}:${ARMATURE_VIEWER_PORT:-3000}:3000"
     environment:
