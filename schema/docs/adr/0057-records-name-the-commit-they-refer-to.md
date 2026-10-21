@@ -31,6 +31,11 @@ before Phase 6's outcomes importer and alongside ADR-0028's Attestation, which a
 planned and not yet written. The Attestation's `asOf` exists only in the specification for ADR-0028
 in `docs/development-plan.md` Phase 5.
 
+**Note 2026-10-20:** ADR-0063 adds constraint 20 beside this one: a dataset or metric names its
+source (`producedBy` or `derivedFrom`, or an `externalRef`), so the state `asOf` pins is one the
+record can be traced from. The seed's third commit carries a dataset and three metrics whose `asOf`
+is the seed's first commit.
+
 ## Context
 
 A `LearningDataset` records that an `Assessment` was administered to a cohort, and a

@@ -123,7 +123,7 @@ are not yet written; see [Numbering](#numbering).
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
-### 0054–0062: Later decisions (October 2026)
+### 0054–0063: Later decisions (October 2026)
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -136,6 +136,7 @@ are not yet written; see [Numbering](#numbering).
 | [0060](0060-items-may-exist-unaligned.md) | Items May Exist Unaligned | Accepted and implemented (2026-10-20); amends ADR-0013 | A question may be stored before anyone has said which objective it assesses. It then counts toward no objective, and the alignment read lists every such question so the gap is visible. How Armature encourages alignment without requiring it is an open question. |
 | [0061](0061-formative-use-of-items-in-activities.md) | Formative Use of Items Inside Activities | Accepted and implemented (2026-10-20); annotates ADR-0003, ADR-0005 and ADR-0029 | A question asked during an activity (a poll, a practice question) is recorded by a small link record naming the activity, the question and the order. It carries no score and counts toward no coverage; the trace and impact reads reach it. |
 | [0062](0062-operator-repair-outside-the-plugin-api.md) | Operator Repair Is a Commit Outside the Plugin API | Proposed (2026-10-20); gives ADR-0024 decision 5 its meaning; ADR-0025 decision 6 holds for operators | When the API's rules will not let a tool fix a broken state, an operator with the database's credentials repairs it from outside the API, always by a new commit with an author and a reason, never by rewriting history. Three tools: a check that lists every rule the data breaks, a delete, and a replace that can skip the hub's rules. No raw query route and no superuser mode on the API. |
+| [0063](0063-outcome-records-name-their-source.md) | Outcome Records Name Their Source | Accepted and implemented (2026-10-20); annotates ADR-0057 and ADR-0058 | Results that enter Armature must say where they came from: the assessment inside Armature that produced them, or a reference to the outside system they were imported from. The demonstration course now carries one administration's results, so the outcomes-to-design walk runs on the seed. |
 
 ## How to add an ADR
 
@@ -144,7 +145,7 @@ are not yet written; see [Numbering](#numbering).
    otherwise have to reverse-engineer from the code.
 2. **Pick the number.** If you are writing one of the reserved decisions (0030, 0031, 0034),
    use its reserved number. Otherwise take the next number after the highest existing ADR
-   (ADR-0062 at the time of writing). If the decision adopts a research candidate from
+   (ADR-0063 at the time of writing). If the decision adopts a research candidate from
    `docs/research/adr-candidates.md`, name the candidate in the Status section, as ADR-0025 does
    for candidate 0036 and ADR-0059 for candidate 0039.
 3. **Name the file** `NNNN-short-decision-title.md` in this directory.
