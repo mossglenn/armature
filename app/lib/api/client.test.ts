@@ -7,7 +7,7 @@
  * error body as a HubError. The routes' own behavior is app.test.ts,
  * write.test.ts, intelligence.test.ts and export.test.ts.
  */
-import { createClient, HubError } from '@armature/client';
+import { CLIENT_REVISION, createClient, HubError } from '@armature/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './app';
 import { createStore } from './store';
@@ -179,6 +179,33 @@ describe('@armature/client over the app in-process', () => {
     expect(attestations.data.summary.attestations).toBeGreaterThan(0);
     const impact = await hub.intelligence.impact('LearningObjective', 'distinguish-ai-approaches');
     expect(impact.data.summary.references).toBeGreaterThan(0);
+  });
+
+  it('names its revision on every call and reads the one that served it (ADR-0059)', async () => {
+    const res = await hub.documents.list('Course');
+    expect(res.version).toBe(CLIENT_REVISION);
+    expect(res.commit).toBeDefined();
+    const discovery = await hub.discover();
+    expect(discovery.data.versions[0]).toBe(CLIENT_REVISION);
+    expect(discovery.data.capabilities['armature/documents'].fallback).toBe('reject');
+    const schema = await hub.schema({ ref: res.commit });
+    expect(schema.data.ref).toBe(res.commit);
+    expect(schema.data.schema.some((e) => e['@id'] === 'AssessmentItem')).toBe(true);
+  });
+
+  it('is refused by name when it relies on a capability the hub lacks, or names a revision it does not serve', async () => {
+    const reliant = createClient({ baseUrl: 'http://hub.test', fetch: (i, init) => app.request(i, init), capabilities: ['armature/documents', 'edu.example/retention-policy'] });
+    const cap = await reliant.branches.list().catch((e) => e);
+    expect(cap).toBeInstanceOf(HubError);
+    expect(cap.code).toBe('unsupported_capability');
+    expect(cap.details.unsupported).toEqual(['edu.example/retention-policy']);
+
+    const future = createClient({ baseUrl: 'http://hub.test', user: 'demo-designer@example.edu', fetch: (i, init) => app.request(i, init), version: '2099-01-01' });
+    expect((await future.branches.list()).version).toBe(CLIENT_REVISION); // a read is served
+    const write = await future.branches.create(`future-${stamp}`).catch((e) => e); // a write is not
+    expect(write).toBeInstanceOf(HubError);
+    expect(write.code).toBe('unsupported_version');
+    expect(write.details.supported[0]).toBe(CLIENT_REVISION);
   });
 
   it('reads an export under a profile and the slice configuration', async () => {
