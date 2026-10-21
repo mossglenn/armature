@@ -18,6 +18,7 @@ The app needs the TerminusDB container running with the schema and seed loaded (
 | `TERMINUS_PASS` | Its password; must match `TERMINUSDB_ADMIN_PASS` given to the container | `admin` |
 | `TERMINUS_DB` | Database name | `armature` |
 | `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local | `header` |
+| `ARMATURE_EXPORT_KEY` | Optional. The key under which `GET /api/v1/export?profile=pseudonymous` derives user tokens (ADR-0031); set it so the same person has the same token in every export, leave it unset and each export mints its own | unset |
 
 ## Scripts
 
@@ -50,8 +51,9 @@ lib/
     errors.ts                 ApiError: status, stable code, message
     invariants/               The invariants engine: rules 0 to 19, one module per constrained type
     intelligence/             The coverage algorithm and the per-request graph reader
-    routes/                   documents, branches, users, intelligence
-    *.test.ts                 Integration tests (app, write, intelligence)
+    routes/                   documents, branches, users, intelligence, export
+    export/                   The export's slices (slices.json) and profiles (ADR-0031)
+    *.test.ts                 Integration tests (app, write, intelligence, export)
   types.ts                    GENERATED: TypeScript types plus the schema as data
   schemas.ts                  GENERATED: Zod request schemas, one per writable class
 vitest.config.mts             Test configuration: the @ alias, and .env.local so tests hit the same database
@@ -59,7 +61,7 @@ vitest.config.mts             Test configuration: the @ alias, and .env.local so
 
 ## Tests
 
-`npm test` runs 135 integration tests that call the Hono app in-process and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. The tests are not yet in CI; Phase 7 of the development plan adds a database service container so they can run there.
+`npm test` runs 142 integration tests that call the Hono app in-process and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. The tests are not yet in CI; Phase 7 of the development plan adds a database service container so they can run there.
 
 ## Rules for code in this directory
 

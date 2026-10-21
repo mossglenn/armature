@@ -288,6 +288,24 @@ Every document that references this one, found from the schema's reference field
 
 ---
 
+## Export
+
+### `GET /export?branch=|ref=&profile=<full|pseudonymous|institutional>&slice=<name>`
+
+The graph at a ref as one JSON-LD document (ADR-0031): `{ "@context", "armature": { ref, profile, slice, pseudonyms, counts: { documents, byType }, unresolved }, "schema", "documents" }`. `documents` are the store's native shape, unchanged; `schema` is the schema graph at the same ref as it can be reloaded (the store's `@max_cardinality: "inf"` decoration removed, platform check AE5); the `ETag` is the commit exported and `armature.ref` repeats it. Defaults: `profile=full`, `slice=full`.
+
+Profiles rewrite people only. `full` keeps `User` documents as stored. `pseudonymous` replaces every `User` by `{ "@id": "User/<token>", "@type": "User", "externalId": "<token>" }` and rewrites every reference to a user (`createdBy`, `attestedBy`, any field whose target is `User`) to the token's id; nothing else about the person is kept. `institutional` adds `institution` to that. The token is an HMAC-SHA256 of the `User` id under `ARMATURE_EXPORT_KEY`; with the key set, `pseudonyms` is `stable` and the same person has the same token in every export of the deployment; without it a key is minted per export and `pseudonyms` is `per-export`. Free text is not scrubbed.
+
+A slice is a named list of classes (`GET /export/slices`); a document is included when its type is one of them or inherits one. `unresolved` lists every reference from an included document to one that is not included (`{ id, field, target }`); nothing is dropped from a document. The `full` slice has none and is the only one that reproduces the graph when re-imported.
+
+There is no import route. Re-import is an operator action outside this API (ADR-0062): load `schema` into an empty database or branch, then post `documents` in one request. Errors: 400 `unknown_profile`, `unknown_slice`; 404 `unknown_ref`.
+
+### `GET /export/slices`
+
+The slice configuration: `{ "<name>": { description, classes } }`.
+
+---
+
 ## Error codes
 
 | Status | Code | Meaning |
@@ -303,7 +321,7 @@ Every document that references this one, found from the schema's reference field
 | 400 | `ambiguous_ref`, `branch_required`, `write_at_commit` | Misused `branch` / `ref` parameters |
 | 400 | `bad_if_match`, `bad_query`, `range_required`, `since_required` | Malformed headers or query parameters |
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
-| 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused` | Route-specific refusals |
+| 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused`, `unknown_profile`, `unknown_slice` | Route-specific refusals |
 | 401 | `identity_required`, `unknown_user` | No identity, or an unregistered one |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit |
 | 409 | `type_conflict` | An identifier held by another type (rule 12) |
