@@ -1,16 +1,19 @@
 # Armature's containers (see docs/deployment.md for the whole picture).
 #
-#   docker compose up -d                       the store only: local development, with
-#                                              the hub run on the machine (npm run start:hub)
-#   docker compose --profile hub up -d --build an instance: the store, the hub and the
-#                                              viewer, three containers on one private
-#                                              network; what a hosted deployment runs
-#   docker compose run --rm operator node <script>
-#                                              one of scripts/ (load_schema.js, seed_data.js)
-#                                              against the store, from a Node container
+#   docker compose up -d                          the store only: local development, with
+#                                                 the hub run on the machine (npm run start:hub)
+#   docker compose --profile hub up -d --build    an instance on this machine: the store, the
+#                                                 hub and the viewer, three containers on one
+#                                                 private network, all on loopback
+#   docker compose --profile public up -d --build a hosted instance: the same three with Caddy
+#                                                 in front, the only container a visitor reaches
+#   docker compose run --rm operator node <script> one of scripts/ (load_schema.js, seed_data.js)
+#                                                 against the store, from a Node container
 #
 # What the machine publishes, and to whom:
-#   viewer  3000 on every interface   the public face; its pages only read
+#   caddy   80 and 443 everywhere     the public face (profile `public`): HTTPS for
+#                                     ARMATURE_SITE, proxied to the viewer on the network
+#   viewer  3000 on loopback only     its pages only read; ARMATURE_VIEWER_BIND widens it
 #   hub     3100 on loopback only     for operators on the machine (curl /discover, a
 #                                     client run locally); nothing beyond the machine,
 #                                     because the `header` identity resolver trusts the
@@ -39,7 +42,7 @@ services:
     build:
       context: ..
       dockerfile: docker/hub.Dockerfile
-    profiles: [hub]
+    profiles: [hub, public]
     restart: unless-stopped
     ports:
       - "${ARMATURE_HUB_BIND:-127.0.0.1}:${ARMATURE_HUB_PORT:-3100}:3100"
@@ -62,10 +65,10 @@ services:
     build:
       context: ..
       dockerfile: docker/viewer.Dockerfile
-    profiles: [hub]
+    profiles: [hub, public]
     restart: unless-stopped
     ports:
-      - "${ARMATURE_VIEWER_BIND:-0.0.0.0}:${ARMATURE_VIEWER_PORT:-3000}:3000"
+      - "${ARMATURE_VIEWER_BIND:-127.0.0.1}:${ARMATURE_VIEWER_PORT:-3000}:3000"
     environment:
       # The hub by its service name: the pages fetch from it inside the network.
       - ARMATURE_HUB_URL=http://hub:3100
@@ -74,6 +77,28 @@ services:
       - ARMATURE_HUB_PUBLIC_URL=${ARMATURE_HUB_PUBLIC_URL:-}
     depends_on:
       - hub
+
+  caddy:
+    # The front door of a hosted instance: TLS with a certificate it obtains and
+    # renews itself for ARMATURE_SITE (a domain whose DNS points at this machine),
+    # proxying to the viewer by its service name. `:80` serves plain HTTP on any
+    # address, for a rehearsal without a domain.
+    image: caddy:2.10.2-alpine
+    profiles: [public]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the account key; kept so a restart does not ask again.
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - ARMATURE_SITE=${ARMATURE_SITE:-localhost}
+    depends_on:
+      - viewer
 
   operator:
     # The operator scripts (scripts/: wait_for_store, load_schema, seed_data), run in
@@ -99,4 +124,6 @@ services:
 
 volumes:
   terminusdb-data:
+  caddy-data:
+  caddy-config:
   operator-modules:

@@ -1,0 +1,14 @@
+# The public face of a hosted instance (docker-compose.yml, profile `public`).
+#
+# ARMATURE_SITE is the address Caddy answers for. A domain (demo.example.org)
+# gets a certificate from Let's Encrypt automatically, which needs ports 80 and
+# 443 open and the domain's DNS pointing at this machine. `:80` serves plain
+# HTTP for any address, for a rehearsal without a domain.
+#
+# Only the viewer is behind it. The hub is never proxied: its `header` identity
+# resolver trusts the caller (ADR-0032), so it stays on the private network until
+# an authenticating resolver or proxy exists (docs/deployment.md).
+{$ARMATURE_SITE} {
+	encode zstd gzip
+	reverse_proxy viewer:3000
+}
