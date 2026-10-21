@@ -46,9 +46,10 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 - one write path for every document type, enforcing every rule the database cannot (the invariants engine), with the author and reason recorded on every change
 - identity resolution for people and AI agents
 - the five design-intelligence reads (coverage, alignment, trace, impact, and attestation staleness) and a read-only Coverage View page
-- 126 integration tests
+- external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
+- 145 integration tests
 
-**Next:** Phase 6 (the ecosystem and the research path: external references, export profiles, an outcomes importer), once Phase 5's attestations (a person's verdict on a design record or one part of it, as of a commit, with staleness computed on request) are merged. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+**Next:** Phase 7 (the toolkit and deployment: a typed client package, a contract test in CI, a containerized hub). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
 **Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
@@ -65,6 +66,7 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 | Read the argument for Armature | [Position paper](docs/positionpaper/Armature-Position-Paper.html) |
 | See what the first plugin asked for | [CoQui handoff](docs/armature-asks-from-Coqui.md) |
 | Catch a client tool up with what changed | [Changes for client tools](docs/client-changes.md) |
+| Use Armature as a research instrument for one study | [The research path](docs/research-path.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
 | Work on the code (including with an AI assistant) | [.claude/CLAUDE.md](.claude/CLAUDE.md), [.claude/SESSION.md](.claude/SESSION.md) |
 
@@ -125,7 +127,7 @@ curl -X PUT "http://localhost:3000/api/v1/documents/DesignNote/my-note?branch=my
 
 Writes need the `Armature-User` header carrying a registered user's external identifier; the seed registers `demo-designer@example.edu`. The [API reference](docs/api.md) documents every route.
 
-**Tests.** `npm test` in `app/` runs the 95 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
+**Tests.** `npm test` in `app/` runs the 145 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
 
 **After a schema change.** Run `npm run generate:types` in `app/` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
 
@@ -154,6 +156,7 @@ docs/
   SCHEMA_APPENDIX.md          Generated reference for every type and field
   development-plan.md         The phased roadmap, principles, open questions and platform facts
   armature-asks-from-Coqui.md What the first plugin asked for and learned (a dated handoff)
+  research-path.md            How a learning scientist stands up a constrained Armature for one study
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
   research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings

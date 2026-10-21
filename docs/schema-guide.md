@@ -223,6 +223,7 @@ Rules:
 | | An attestation's claim comes whole and its attester is the caller (rules 14, 15) |
 | | A named part exists in the record's one subject (rule 16) |
 | | An attachment names a revision when its store is versioned, and its hash has the length its algorithm implies (rule 18) |
+| | A dataset or metric names its source, inside the graph or outside it (rule 20) |
 
 The database does **not** check that a reference points at the right *class* of document (platform check L). Never describe a typed reference as "schema-enforced"; the API enforces it. The full rule list, with response codes, is in the [API reference](api.md#the-write-pipeline).
 

@@ -15,6 +15,29 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-20 · Outcome records name their source (ADR-0063)
+
+**What changed.** A `LearningDataset` must carry `producedBy` (the `Assessment` whose
+administration produced it) or at least one `externalRef`; a `LearningMetric` must carry
+`derivedFrom` or at least one `externalRef`. Neither: 422 `dataset_without_source` or
+`metric_without_source` (rule 20). This replaces the rule the schema documentation had carried as
+"planned" since Phase 1. The seed now holds one administration (a dataset and three metrics), so
+Narrative 1 runs on `main`.
+
+**What a client does.**
+
+- **An importer names the source of every dataset and metric it writes.** Results of an Armature
+  assessment: `producedBy`. Results from elsewhere: an `ExternalRef` (`system: "xAPI"` or
+  `"Other"`, the identifier the source uses). A metric derived from a dataset needs nothing more.
+- **A benchmark or third-party figure** is a metric with an `externalRef` and no `derivedFrom`.
+
+**CoQui:** no change. **Outcomes importer** (planned): maps the LMS activity or export id onto the
+dataset's `externalRefs` beside `producedBy`.
+
+Detail: ADR-0063; the API reference's rules table (rule 20).
+
+---
+
 ## 2026-10-20 · Export profiles and schema slices (ADR-0031)
 
 **What changed.** A new read, `GET /api/v1/export?branch=|ref=&profile=&slice=`, returns the

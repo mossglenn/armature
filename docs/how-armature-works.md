@@ -673,7 +673,7 @@ Every write passes two kinds of check before anything is saved.
 
 ### 13.2 The rules in plain language
 
-The project numbers the rules 0 to 19 (the numbering is used across the documentation and tests).
+The project numbers the rules 0 to 20 (the numbering is used across the documentation and tests).
 
 | # | Rule | Why |
 |---|---|---|
@@ -697,6 +697,7 @@ The project numbers the rules 0 to 19 (the numbering is used across the document
 | 17 | Within an activity, items used formatively never share a position number | Order must be unambiguous (ADR-0061) |
 | 18 | An attachment in a versioned store names a revision, and its content hash has the length its algorithm implies | A reference to bytes must name one state and be checkable by anyone with access to the store (ADR-0030) |
 | 19 | A fragment carries text or at least one attachment | A part with neither is nothing to review (ADR-0030) |
+| 20 | A dataset names the assessment that produced it or the outside system it came from; a metric names its dataset or an outside system | A measurement with no source is not evidence, and the outcomes-to-design trace would break at its first link (ADR-0063) |
 
 Rule 2 is enforced both by the database (as a minimum count) and by the shape check; rule 1 was retired. Rule 6 is a consequence of rule 0. The rest are code in the invariants engine.
 
@@ -969,6 +970,8 @@ The project's context document defines two narratives the system must be able to
 
 The path: metric → dataset → assessment → items → objectives → module declarations → module. The trace read walks it; the coverage read answers the last question. "Adequate *when*?" is answered exactly since ADR-0057 (an Architecture Decision Record) was accepted on 18 October 2026: the dataset records the commit the cohort's assessment was taken from in `asOf`, the metric carries the same value, the trace reports it, and the coverage read at `ref=<asOf>` is the module as the cohort met it. The Narrative 1 test checks all of this.
 
+Since 20 October 2026 the walk runs on the seed itself: `GET /api/v1/intelligence/trace/LearningMetric/mod3-bias-type-difficulty` starts from an item that was approved and attested yet answered correctly by only 38% of the pilot cohort, and the coverage read at the dataset's `asOf` shows the module's one item for that objective.
+
 This narrative demonstrates Armature as post-delivery intelligence infrastructure.
 
 ### 19.2 Narrative 2: graph-informed authoring
@@ -983,7 +986,7 @@ This narrative demonstrates Armature as design-time intelligence.
 
 > **[Brevity candidate]** Details of the demonstration data could move to an appendix.
 
-The repository includes a demonstration graph (`scripts/seed_data.js`), a realistic but fictional course about artificial intelligence (AI): **"Introduction to AI for Instructional Designers."** It holds 48 documents (plus their embedded parts), written in one commit, and one attestation written in a second commit so that it can name the first as the state it judged:
+The repository includes a demonstration graph (`scripts/seed_data.js`), a realistic but fictional course about artificial intelligence (AI): **"Introduction to AI for Instructional Designers."** It holds 48 documents (plus their embedded parts), written in one commit; one attestation written in a second commit so that it can name the first as the state it judged; and, since 20 October 2026 (ADR-0063), one dataset and three metrics written in a third commit that also names the first: one administration of the Module 3 capstone to a spring pilot cohort, with the difficulty of two items and the cohort's mean score. One objective carries a CASE competency reference and the dataset an xAPI activity reference (ADR-0030). The first commit holds:
 
 - 1 course, 3 modules, 3 assessments;
 - 2 learning needs, each grounded in descriptive evidence through a need-evidence link;
@@ -1107,8 +1110,8 @@ The session log also lists a small fix (a race condition in the branch routes wh
 - **External references and attachments (ADR-0030, accepted and implemented 20 October 2026).** Two optional sets on every artifact, and attachments on every fragment (Section 12.7). *External references* point to identifiers in other systems, with the system named: CASE (Competencies and Academic Standards Exchange), QTI (Question and Test Interoperability), xAPI (Experience API), LTI (Learning Tools Interoperability) or other. *Attachments* reference files, or a specific revision of a tree of files, in a store the hub may or may not operate, always with a content hash (a fingerprint that detects a missing or altered file), and with revision and path when the store is versioned. The graph never holds the files themselves.
 - **Externally versioned artifacts (ADR-0025 amendment, made by ADR-0030 decision 6).** For an artifact whose files live in an asset store, the graph records the commits that move its reference, each with author and reason; the asset store keeps its own fine-grained history, reachable through the reference. "A projection, not a replay."
 - **Export profiles and schema slices (ADR-0031, accepted and implemented 20 October 2026).** `GET /api/v1/export` returns the whole graph or a declared slice at a commit, as JSON-LD (JSON for Linked Data, a variant of JavaScript Object Notation that carries the meaning of fields), under a profile: `full`, `pseudonymous` (stable tokens instead of user identities) or `institutional` (institution only). A slice, such as needs → objectives → outcomes, is a configuration file, not code. The file carries the schema as it can be reloaded, so a full export loaded into an empty database reproduces the graph (the phase's exit criterion, met by the export tests); re-import is an operator step outside the API, because the API's write path would overwrite authorship and refuse the source's commit ids. Pseudonyms are keyed hashes under a deployment key, the same person getting the same token across exports; free text is not scrubbed.
-- **An outcomes import path.** Datasets, metrics and item statistics (metrics about the item, ADR-0058) written through the ordinary write route; one dataset seeded so Narrative 1 is live end to end.
-- **A guide for researchers** (`docs/research-path.md`): how to stand up a constrained Armature for one study.
+- **An outcomes import path (done 20 October 2026, ADR-0063).** Datasets, metrics and item statistics (metrics about the item, ADR-0058) written through the ordinary write route, each naming its source inside or outside the graph (rule 20); one administration seeded so Narrative 1 is live end to end.
+- **A guide for researchers** (`docs/research-path.md`, written 20 October 2026): how to stand up a constrained Armature for one study, which slice and profile to choose, how to export at a pinned commit and reproduce it, and which questions stay out of scope.
 - **Exit criterion:** an export at a commit, re-imported into an empty database, reproduces the graph; the pseudonymous profile contains no names or emails.
 
 **Standards named in this plan.** CASE for competency frameworks; QTI for assessment items; xAPI and Caliper (another learning-activity standard) for learning activity records; LTI for launching tools from a learning management system (LMS); SCORM (Sharable Content Object Reference Model) and cmi5 (a profile of xAPI for launching and tracking packaged content) for packaged content. The principle (P6) is to reference them by identifier, never to translate between them; the plan's list of things it declines to do includes any import or export *format* beyond JSON-LD, which are plugin work.

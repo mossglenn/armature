@@ -61,7 +61,7 @@ vitest.config.mts             Test configuration: the @ alias, and .env.local so
 
 ## Tests
 
-`npm test` runs 142 integration tests that call the Hono app in-process and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. The tests are not yet in CI; Phase 7 of the development plan adds a database service container so they can run there.
+`npm test` runs 145 integration tests that call the Hono app in-process and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. The tests are not yet in CI; Phase 7 of the development plan adds a database service container so they can run there.
 
 ## Rules for code in this directory
 
