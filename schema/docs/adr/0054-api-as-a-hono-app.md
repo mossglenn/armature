@@ -217,6 +217,15 @@ Two consequences the decision did not anticipate, found by the spike:
   deployment change" means "a deployment change plus a build configuration", which is still not a
   handler change.
 
+  > **Later change (2026-10-21):** the alias question dissolved before Phase 7 reached it:
+  > by then nothing under `app/lib/api/` imported with `@/` (the pages and the catch-all route
+  > still do). A build step was needed all the same, because the workspace packages
+  > (`@armature/types`, the Zod schemas) ship TypeScript source with extensionless imports that
+  > Node's module loader refuses. `npm run build:hub` (esbuild) bundles `app/server.ts`, the
+  > API, the packages, hono and zod into one `dist/server.mjs`; `docker/hub.Dockerfile` runs it.
+  > The entry serves the same `app` object through `@hono/node-server` (check 5 of the spike),
+  > and `app/lib/hub.test.ts` compares its answers over a socket with `app.request()`.
+
 Everything else as anticipated:
 
 - The host move is a deployment change in fact, not only in intent. Every route written from
@@ -238,7 +247,7 @@ Everything else as anticipated:
 - Phase 7's contract test and typed client both get a foundation they would otherwise have to
   build. Phase 7's "containerize the app" item becomes "serve the Hono app with the Node adapter
   in a container"; the Next.js app remains the demo UI and may be deployed separately or not at
-  all.
+  all. (Done as described, 2026-10-21.)
 - The plan §3 line "Next.js stays the host for now" is still true. Its parenthetical becomes
   "Hono inside Next.js".
 - CoQui is unaffected. It addresses `/api/v1/...` and never sees the host.

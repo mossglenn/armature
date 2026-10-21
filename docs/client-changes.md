@@ -15,6 +15,20 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-21 · The hub runs as its own process and container
+
+**What changed.** Nothing in the contract. The API that Next.js served on port 3000 is also
+served by a standalone Node process (`npm run build:hub && npm run start:hub` in `app/`, port
+3100) and by a container (`docker compose --profile hub up` in `docker/`, port 3100), both the
+same application under the same `/api/v1`. A hosted instance will be the container.
+
+**What a client does.** Make the hub's base address configuration, if it was not already: the
+development address `http://localhost:3000/api/v1` and the container's
+`http://localhost:3100/api/v1` are the same hub. `@armature/client` takes it as `baseUrl`.
+
+**CoQui.** When an instance is hosted, its address replaces the recorded hub, which becomes the
+fallback; until then nothing changes.
+
 ## 2026-10-21 · The version contract: `Armature-Version`, `Armature-Capabilities`, `GET /discover`, `GET /schema` (ADR-0059)
 
 **What changed.** The contract has dated revisions: every dated entry of this file is one, and

@@ -65,6 +65,13 @@ not follow is that the boundary must be a separate process today. The boundary i
    Because clients address `/api/v1/...` and never the host, the move is a deployment change:
    the same handlers behind a different server, with the prefix preserved.
 
+   > **Later change (2026-10-21):** done in Phase 7, by the plan rather than a trigger. The
+   > separate service is `app/server.ts`, the same Hono application served by Node through
+   > `@hono/node-server`, bundled into one file and packaged by `docker/hub.Dockerfile`; the
+   > compose file runs store and hub together under the `hub` profile. No handler changed. Next.js
+   > remains a second host for development and for the pages; whether it keeps mounting the API
+   > once an instance is hosted is a deployment choice, not a contract one.
+
 ## Consequences
 
 - `PROJECT_CONTEXT.md` and `CLAUDE.md` describe one stack. The "Express vs. Fastify" open question

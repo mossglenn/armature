@@ -335,11 +335,11 @@ The rule matters for three reasons.
 
 ### 10.1 Where the code runs
 
-The API is written with **Hono**, a small web framework built on the standard web request and response types that every modern JavaScript environment supports (ADR-0054, an Architecture Decision Record). It currently runs inside a **Next.js** web application (Next.js is a framework for building websites), which serves it under the address prefix `/api/v1/`. Only one file in the repository (`app/app/api/[[...route]]/route.ts`) knows that Next.js is the host; nothing in the API code imports anything from Next.js. Moving the API to a separate server later is therefore a deployment change, not a rewrite (ADR-0026 records the triggers for that move).
+The API is written with **Hono**, a small web framework built on the standard web request and response types that every modern JavaScript environment supports (ADR-0054, an Architecture Decision Record). It has two hosts. During development it runs inside a **Next.js** web application (Next.js is a framework for building websites), which serves it under the address prefix `/api/v1/`; only one file in the repository (`app/app/api/[[...route]]/route.ts`) knows that Next.js is the host, and nothing in the API code imports anything from Next.js. Since Phase 7 (2026-10-21) it also runs as its own program: `app/server.ts` serves the same application with Node's HTTP server, a build step (esbuild) folds the API and its packages into one file, and `docker/hub.Dockerfile` packages that file with Node as a container holding nothing else. Moving the API to a separate server was therefore a deployment change, not a rewrite, as ADR-0026 said it would be (ADR-0026 decision 4). A tool sees the same `/api/v1` from either host; a test starts the standalone one on a spare port and checks that its answers match the in-process ones.
 
 The same Next.js application also serves Armature's own pages (Section 18). Those pages call the API in exactly the way a plugin would, so they cannot do anything a plugin could not.
 
-The database, TerminusDB, runs in a Docker container (Docker is software that runs programs in isolated, reproducible environments called containers) defined in `docker/docker-compose.yml`, pinned to version 12.0.7.
+The database, TerminusDB, runs in a Docker container (Docker is software that runs programs in isolated, reproducible environments called containers) defined in `docker/docker-compose.yml`, pinned to version 12.0.7. The same file can run the hub beside it (`docker compose --profile hub up`), which is how a hosted instance runs; locally the store alone runs in Docker and the API on the machine.
 
 ### 10.2 Why a versioned address prefix
 
@@ -1034,7 +1034,7 @@ Adding a new type is therefore one edit to the schema (with its category and key
 
 The tests (`app/lib/api/*.test.ts`, run with the Vitest test runner) call the API (application programming interface) in-process, inside the test program rather than over the network, against the running database: 38 for reads, version control and identity; 31 for the write path, including a failing and a passing test for every rule in Section 13; and 26 for the intelligence reads, including both narratives. Tests work on scratch branches they create and delete; the shared `main` branch and the seed are never modified (with one documented exception: tests of user registration write test users to `main`, because that is where users live, and remove them afterward).
 
-CI runs on every pull request and checks style (lint) and drift in the generated type and validation files. The database-backed tests are not yet in CI; Phase 7 will add a database container to the CI service so they can run there.
+CI runs on every pull request and checks style (lint), types, drift in the generated type and validation files, that the standalone hub bundles, and that its container image builds and starts. Since Phase 7 (2026-10-21) the database-backed tests run there too, against a database container CI starts fresh each time.
 
 ### 21.5 Vendored database documentation
 
@@ -1129,7 +1129,7 @@ The session log also lists a small fix (a race condition in the branch routes wh
 - Generated types moved into a package other tools can install.
 - A small client library: ready-made code other tools can use to call the API (application programming interface).
 - An Armature-owned **contract test**: CI (continuous integration, the automated checks run on every pull request) starts a database, loads the schema and seed, and exercises every route and every rule. The database-backed tests join CI here.
-- The API served as its own program in a container (an isolated, packaged environment), with the Next.js pages as a separate demo interface; one hosted instance for public demonstration.
+- The API served as its own program in a container (an isolated, packaged environment), with the Next.js pages as a separate demo interface (done 2026-10-21: `app/server.ts`, `docker/hub.Dockerfile`, and a `hub` service in the compose file); one hosted instance for public demonstration (not yet).
 - A schema guide written from a tool author's perspective.
 - **Exit criterion:** a developer with the repository, Docker (the container software) and the client package can write a new plugin without reading TerminusDB documentation.
 
@@ -1253,7 +1253,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **Design relation** | A meaningfully named connection between artifacts that expresses a design decision |
 | **`DesignRecord`** | The abstract supertype of every artifact and relationship; what notes and findings can be about |
 | **Diff** | A structured description of what changed between two states |
-| **Docker** | Software that runs programs in isolated containers; Armature runs its database in one |
+| **Docker** | Software that runs programs in isolated containers; Armature runs its database in one, and since Phase 7 can run the hub in another |
 | **Document** | One record in the database, with a type, an identifier and fields |
 | **Enum (enumeration)** | A field restricted to a fixed list of values |
 | **ETag (entity tag) / If-Match** | Standard web headers. Armature puts the commit a response came from in `ETag`; a client sends a commit in `If-Match` to say "only write if nothing changed since" |
