@@ -12,13 +12,15 @@
  * merge, history and diff routes; Phase 3 added identity resolution and the
  * users routes (ADR-0032), the generic write path and the invariants engine;
  * Phase 4 adds the design-intelligence reads (coverage, alignment, trace,
- * impact), derived from structure alone (plan P4).
+ * impact), derived from structure alone (plan P4); Phase 6 adds the export
+ * route (ADR-0031): the graph at a commit under a profile and a slice.
  */
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { ApiError } from './errors';
 import { branches } from './routes/branches';
 import { documents } from './routes/documents';
+import { exportRoutes } from './routes/export';
 import { intelligence } from './routes/intelligence';
 import { users } from './routes/users';
 import { isUnknownRef, StoreError } from './store';
@@ -29,6 +31,7 @@ app.route('/documents', documents);
 app.route('/branches', branches);
 app.route('/users', users);
 app.route('/intelligence', intelligence);
+app.route('/export', exportRoutes);
 
 /**
  * Maps errors to responses. Hub errors render themselves; store errors are
