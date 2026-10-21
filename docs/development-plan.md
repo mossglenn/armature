@@ -766,9 +766,15 @@ Work:
       `./schemas`; the repository became an npm workspace of `app` and `packages/*`, with
       `scripts/` kept outside so the TerminusDB client resolves only there. Consumable by git
       reference; not published.)
-- [ ] A thin typed client (`packages/client`): fetch wrappers over the v1 routes, branch and ref
+- [x] A thin typed client (`packages/client`): fetch wrappers over the v1 routes, branch and ref
       parameters, data-version handling, and the store-error mapping (now `app.onError` in
       `app/lib/api/app.ts`; formerly `handleTerminusError`) behind the boundary. CoQui's `httpHub` becomes a consumer of it, not a reimplementation.
+      (Done 2026-10-21: `@armature/client`, one function per route in the reference's five
+      groups, `{ data, commit }` results with the commit from the `ETag`, `ifMatch` → `If-Match`,
+      `HubError` carrying the stable code and the body's details, reads typed by the new
+      `ClassMap` in `@armature/types`; it takes a `fetch`, and `app/lib/api/client.test.ts` runs
+      every route through it over `app.request` in-process. It sends no `Armature-Version`
+      until ADR-0059 is built, the next unit.)
 - [x] **Contract test owned by Armature.** A test suite that starts TerminusDB as a CI service
       container, loads the schema, seeds, and exercises every v1 route and every invariant.
       CoQui's planned `armature:check` becomes a second opinion, not the only one. (Done

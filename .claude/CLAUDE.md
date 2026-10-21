@@ -45,7 +45,8 @@ docker/                    # Docker Compose configuration (TerminusDB pinned to 
 .github/workflows/ci.yml   # CI: lint, typecheck and check:types at the root; the contract suite against a TerminusDB service container
 package.json               # The npm workspace root: app and packages/*; scripts/ stays outside so the TerminusDB client is resolvable only there (ADR-0055)
 packages/
-  types/                   # @armature/types (GENERATED src/, do not edit): types.ts (interfaces + schema as data) and schemas.ts (Zod); TypeScript source, no build; the app depends on it as a workspace, another repository by git reference
+  types/                   # @armature/types (GENERATED src/, do not edit): types.ts (interfaces, ClassMap, schema as data) and schemas.ts (Zod); TypeScript source, no build; the app depends on it as a workspace, another repository by git reference
+  client/                  # @armature/client: every /api/v1 route as a typed function (refs, ETag as commit, If-Match, Armature-User, envelopes, HubError with the stable code); takes a fetch, so app/lib/api/client.test.ts runs it over app.request in-process. Sends no Armature-Version until ADR-0059 is built
 scripts/
   generate-types.js        # Derives packages/types/src/types.ts (types + schema as data) and schemas.ts (Zod) from schema.json — run after schema changes
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
@@ -65,6 +66,7 @@ app/
     api/
       app.ts               # The Armature API: Hono app, basePath /api/v1, mounts routes/, onError mapping. Never imports from next
       app.test.ts          # In-process Vitest tests via app.request(): reads, the Phase 2 walkthrough, users and identity; need the container running (users tests write to and clean up main)
+      client.test.ts       # The contract test for @armature/client: every route through the client's fetch option over app.request (refs, commit from ETag, If-Match → 412, identity, envelopes, HubError codes)
       write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
       intelligence.test.ts # The five intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion); attestations made on a round branch, merged, then reported Stale after a fragment changes (Phase 5 exit criterion)
       store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
