@@ -1,42 +1,19 @@
+import { HubError, type CoverageItem, type CoverageVerdict as Verdict } from '@armature/client';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { app } from '@/lib/api/app';
+import { hubPublicUrl, viewerHub } from '@/lib/viewer';
 
 /**
  * The Coverage View (plan §4 Phase 4; PROJECT_CONTEXT's demo payoff): a
- * read-only page over GET /api/v1/intelligence/coverage/:moduleId. It calls
- * the Hono app in-process, the same object the catch-all route serves, so
- * the page is a client of the API like any plugin and never reads the store.
+ * read-only page over GET /api/v1/intelligence/coverage/:moduleId, read from
+ * the hub over HTTP through @armature/client, so the page is a client of the
+ * API like any plugin and never reads the store (lib/viewer.ts).
  * `?branch=` reads another branch; `?fullyAssessedAt=&overAssessedAbove=`
  * change the cut (architecture decision record ADR-0029, decision 3); the
  * commit the data came from is shown. Nothing here is stored: coverage is
  * computed at read time (ADR-0056).
  */
 export const dynamic = 'force-dynamic';
-
-type Verdict = 'Uncovered' | 'PartiallyAssessed' | 'FullyAssessed' | 'OverAssessed';
-
-interface Summary { id: string; type: string; label?: string; bloomsLevel?: string; status?: string }
-interface Placement { id: string; assessment: string; status: string }
-interface AssessedBy extends Summary { eligibility: 'delivered' | 'projected' | 'none'; placements: Placement[] }
-interface Figure { status: Verdict; items: number }
-interface Declaration {
-  id: string;
-  role: string;
-  sequence?: number;
-  roleRationale?: string;
-  objective: Summary;
-  coverage: Figure;
-  projected: Figure;
-  assessedBy: AssessedBy[];
-}
-interface Coverage {
-  module: Summary;
-  thresholds: { fullyAssessedAt: number; overAssessedAbove: number };
-  summary: { declared: number; coverage: Record<Verdict, number>; projected: Record<Verdict, number>; undeclared: number };
-  objectives: Declaration[];
-  undeclared: Array<{ objective: Summary; assessedBy: AssessedBy[] }>;
-}
 
 const VERDICTS: Verdict[] = ['Uncovered', 'PartiallyAssessed', 'FullyAssessed', 'OverAssessed'];
 const VERDICT_LABEL: Record<Verdict, string> = {
@@ -81,7 +58,7 @@ function Counts({ title, counts }: { title: string; counts: Record<Verdict, numb
   );
 }
 
-function Items({ items }: { items: AssessedBy[] }) {
+function Items({ items }: { items: CoverageItem[] }) {
   if (items.length === 0) return <p className="text-sm text-zinc-500 dark:text-zinc-400">No items placed in this module assess it.</p>;
   return (
     <ul className="space-y-1 text-sm">
@@ -117,11 +94,17 @@ export default async function CoveragePage({
   if (overAssessedAbove) params_.set('overAssessedAbove', overAssessedAbove);
   const query = params_.size ? `?${params_.toString()}` : '';
   const branchQuery = branch ? `?branch=${encodeURIComponent(branch)}` : '';
-  const res = await app.request(`/api/v1/intelligence/coverage/${encodeURIComponent(moduleId)}${query}`);
-  if (res.status === 404) notFound();
-  if (!res.ok) throw new Error(`The coverage read failed: ${res.status} ${await res.text()}`);
-  const data = (await res.json()) as Coverage;
-  const commit = res.headers.get('etag')?.replace(/"/g, '');
+  // A threshold is passed through as given; the hub answers bad_query for one
+  // it cannot read, and that refusal is shown rather than hidden.
+  const threshold = (value?: string) => (value === undefined ? undefined : Number(value));
+  const result = await viewerHub()
+    .intelligence.coverage(moduleId, { branch, fullyAssessedAt: threshold(fullyAssessedAt), overAssessedAbove: threshold(overAssessedAbove) })
+    .catch((err: unknown) => {
+      if (err instanceof HubError && err.status === 404) notFound();
+      throw err;
+    });
+  const { data, commit } = result;
+  const publicHub = hubPublicUrl();
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10 font-sans">
@@ -203,10 +186,15 @@ export default async function CoveragePage({
       )}
 
       <footer className="border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        Verdicts are computed by the API at read time from the placements and items as they stand; nothing is stored (ADR-0056). Raw data:{' '}
-        <a className="font-mono hover:underline" href={`/api/v1/intelligence/coverage/${encodeURIComponent(moduleId)}${query}`}>
-          /api/v1/intelligence/coverage/{moduleId}
-        </a>
+        Verdicts are computed by the hub at read time from the placements and items as they stand; nothing is stored (ADR-0056).
+        {publicHub && (
+          <>
+            {' '}Raw data:{' '}
+            <a className="font-mono hover:underline" href={`${publicHub}/api/v1/intelligence/coverage/${encodeURIComponent(moduleId)}${query}`}>
+              /api/v1/intelligence/coverage/{moduleId}
+            </a>
+          </>
+        )}
       </footer>
     </main>
   );
