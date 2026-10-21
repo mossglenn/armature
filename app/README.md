@@ -28,8 +28,7 @@ The app needs the TerminusDB container running with the schema and seed loaded (
 | `npm run build`, `npm start` | Production build and server |
 | `npm run lint` | ESLint (runs in CI, continuous integration) |
 | `npm test` | The integration tests (Vitest) against the running database; see below |
-| `npm run generate:types` | Regenerate `lib/types.ts` and `lib/schemas.ts` from `../schema/schema.json` |
-| `npm run check:types` | Fail if those generated files have drifted from the schema (runs in CI) |
+| `npm run typecheck` | `tsc --noEmit` (runs in CI) |
 | `npm run sync:terminusdb-docs` | Refresh the vendored TerminusDB documentation in `../docs/vendor/terminusdb/` |
 
 ## Layout
@@ -67,5 +66,5 @@ vitest.config.mts             Test configuration: the @ alias, and .env.local so
 
 - Nothing under `lib/api/` imports from `next` (ADR-0054).
 - Only `lib/api/store.ts` talks to TerminusDB, over HTTP (ADR-0055). The `terminusdb` JavaScript client is a dependency of `../scripts/` only.
-- Never edit `lib/types.ts` or `lib/schemas.ts`; change `../schema/schema.json` and regenerate.
+- The types and the Zod request schemas come from `@armature/types` (`../packages/types`, a workspace package generated from `../schema/schema.json`); never edit them, change the schema and run `npm run generate:types` at the root.
 - Pages are clients of the API like any plugin: they call `app.request()` and never the store.

@@ -282,6 +282,6 @@ returns the dataset, assessment, items, objectives, needs and evidence the metri
 2. Edit `schema/schema.json`. A new class needs `@metadata.armature.category` and an explicit `@key` (`Random` for artifacts; `Hash` over the defining references for junctions). Document every field in `@documentation`, and say "API CONSTRAINT:" for any rule the database cannot express.
 3. If the change relies on a database behavior not yet recorded in `docs/development-plan.md` §9, add a check to `scripts/platform_checks.js` and run it.
 4. If the type has rules the database cannot express, add a validator in `app/lib/api/invariants/` and register it, with a failing and a passing test.
-5. Run `npm run generate:types` in `app/` and `node scripts/generate-schema-appendix.js` at the root.
-6. Commit the schema, `app/lib/types.ts`, `app/lib/schemas.ts` and `docs/SCHEMA_APPENDIX.md` together.
+5. Run `npm run generate:types` and `node scripts/generate-schema-appendix.js` at the root.
+6. Commit the schema, `packages/types/src/types.ts`, `packages/types/src/schemas.ts` and `docs/SCHEMA_APPENDIX.md` together.
 7. For a change that is not backward-compatible at demonstration scale: `node scripts/load_schema.js --clear-instances`, then `node scripts/seed_data.js`. A deployment holding real data uses TerminusDB's schema migration endpoint instead (ADR-0022).
