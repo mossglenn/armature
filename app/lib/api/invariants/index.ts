@@ -119,7 +119,7 @@ export async function checkInvariants(ctx: WriteContext): Promise<void> {
   const violations: Violation[] = [];
   for (const [index, doc] of ctx.batch.entries()) {
     violations.push(...(await checkReferences(doc, index, ctx)));
-    violations.push(...(await checkAttachments(doc, index, ctx)));
+    violations.push(...(await checkAttachments(doc, index)));
     if (hasAsOf(doc['@type'])) violations.push(...(await checkAsOf(doc, index, ctx)));
     if (namesFragment(doc['@type'])) violations.push(...(await checkFragmentRef(doc, index, ctx)));
     const validator = VALIDATORS[doc['@type']];
