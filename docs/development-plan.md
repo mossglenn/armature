@@ -765,16 +765,20 @@ Work:
 - [ ] A thin typed client (`packages/client`): fetch wrappers over the v1 routes, branch and ref
       parameters, data-version handling, and the store-error mapping (now `app.onError` in
       `app/lib/api/app.ts`; formerly `handleTerminusError`) behind the boundary. CoQui's `httpHub` becomes a consumer of it, not a reimplementation.
-- [ ] **Contract test owned by Armature.** A test suite that starts TerminusDB as a CI service
+- [x] **Contract test owned by Armature.** A test suite that starts TerminusDB as a CI service
       container, loads the schema, seeds, and exercises every v1 route and every invariant.
-      CoQui's planned `armature:check` becomes a second opinion, not the only one.
+      CoQui's planned `armature:check` becomes a second opinion, not the only one. (Done
+      2026-10-21: the `contract` job in `.github/workflows/ci.yml` runs the existing 145-test
+      suite against a v12.0.7 service container after `scripts/wait_for_store.js`,
+      `load_schema.js` and `seed_data.js`; `app/vitest.global-setup.mts` waits for the seeded
+      database and warms it with a branch, a write and a read before the first test file. `tsc --noEmit` joined the lint job the same day.)
 - [ ] Containerize the hub: an entry file that serves the Hono app with `@hono/node-server`,
       behind a build or transpile step that resolves the `@/` path alias (Node cannot; the
       ADR-0054 spike needed `tsx` for the standalone check). A compose file that runs store and hub
       together; deploy one hosted instance for the public demo so CoQui's recorded hub is a
       fallback rather than the source. The Next.js app becomes the demo UI only, deployed
-      separately or not at all. The contract test above runs through `app.request()` against the
-      service container, so `npm test` joins CI here.
+      separately or not at all. (The contract test above runs through `app.request()` against the
+      service container, so `npm test` joined CI with it, before the hub was containerized.)
 - [ ] `docs/schema-guide.md` revised from the reference-client perspective: what a tool author
       needs to know to write and read the graph. (A first conceptual version was written on
       2026-10-08, with `docs/api.md` and `docs/how-armature-works.md`.)

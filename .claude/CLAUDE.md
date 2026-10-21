@@ -269,7 +269,7 @@ The full index, with every ADR's status, is `schema/docs/adr/README.md`.
 3. Read any files relevant to today's work
 
 ### Tests
-`npm test` in `app/` runs Vitest. The tests under `app/lib/api/` call the Hono app in-process with `app.request()` and read from the TerminusDB container, so the container must be up with the seed loaded. They are integration tests and are not in CI until Phase 7 adds a TerminusDB service container; CI runs lint and the types drift check only.
+`npm test` in `app/` runs Vitest. The tests under `app/lib/api/` call the Hono app in-process with `app.request()` and read from the TerminusDB container, so the container must be up with the seed loaded. They are the contract suite: CI's `contract` job (`.github/workflows/ci.yml`) starts TerminusDB v12.0.7 as a service container, waits for it (`scripts/wait_for_store.js`), loads the schema, seeds and runs them on every push and pull request (Phase 7). `app/vitest.global-setup.mts` waits until the seeded database answers a read of `main`, then does the tests' kind of work once (a scratch branch, a write through the pipeline, a coverage read; the branch deleted afterward) before the first test file starts, because a store on a cold machine has stalled mid-suite past the 15-second test timeout and the cheap read never caught it. The `app` job runs lint, `tsc --noEmit` and the types drift check.
 
 ### Session end
 Say "update session" and follow the prompt in `.claude/prompts/update-session.md`.

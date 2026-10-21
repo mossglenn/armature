@@ -192,7 +192,8 @@ Two things learned that the decision did not anticipate:
   to expose the raw store token or a hub-shaped one.
 - Vitest with Next's `@/` path alias needs one line of alias config, and `.env.local` is read by
   the config so tests hit the same store the app does. The tests are integration tests and need the
-  container; they are not in CI until Phase 7 adds a TerminusDB service container.
+  container; they are not in CI until Phase 7 adds a TerminusDB service container. (Phase 7
+  did so on 2026-10-21: the `contract` job in `.github/workflows/ci.yml`.)
 
 The gate is satisfied; the ADR was accepted on the result.
 

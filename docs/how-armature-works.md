@@ -1206,7 +1206,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 
 - **Identity is trusted, not authenticated.** The current resolver believes whatever identity a request claims. Routes that change data must stay on the local machine until an authenticating resolver exists.
 - **Not yet tested at scale.** The intelligence reads and the merge-base search (finding the common starting point of two branches) make many small requests. This is negligible for the seed course but will need database queries written in WOQL (Web Object Query Language, TerminusDB's query language) for large courses. History walks are capped at 5,000 commits per branch.
-- **Database-backed tests are not in CI (continuous integration) yet.** They run locally against a live database (Phase 7).
+- **The database-backed tests run in CI (continuous integration) against a store that starts fresh every time.** Since Phase 7 (2026-10-21) CI starts TerminusDB as a service container, loads the schema and the seed, and runs the suite. A store that has just started on a cold machine has stalled on one request mid-suite, so the suite waits for the seeded database and then exercises it once (a branch, a write, a read) before it begins; whether that is enough is being watched.
 - **The coverage thresholds are unevidenced**, and coverage inherits the reliability of the alignments it counts (Section 17.1).
 - **Capture burden is the historical killer of rationale tools.** Armature's answer (capture as a byproduct of useful tools; the commit message as the primary rationale) is a strategy, not yet a demonstrated result.
 - **One real client.** Every generalization so far rests on CoQui plus imagined reference clients.

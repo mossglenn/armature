@@ -47,9 +47,9 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 - identity resolution for people and AI agents
 - the five design-intelligence reads (coverage, alignment, trace, impact, and attestation staleness) and a read-only Coverage View page
 - external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
-- 145 integration tests
+- 145 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
 
-**Next:** Phase 7 (the toolkit and deployment: a typed client package, a contract test in CI, a containerized hub). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+**Next:** the rest of Phase 7 (the toolkit and deployment: a typed client package, a containerized hub). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
 **Not yet suitable for shared deployment:** the current identity resolver trusts the caller, so the routes that change data must stay on the local machine. See [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
