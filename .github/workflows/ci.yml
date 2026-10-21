@@ -1,11 +1,12 @@
 # Armature CI (continuous integration)
 #
-# Two jobs, run in parallel on every push to main and every pull request:
+# Three jobs, run in parallel on every push to main and every pull request:
 #
 #   app       Guards the contracts that need no store: `schema/schema.json` and the
 #             generated `packages/types` agree (check:types), the app lints clean,
-#             and the app and the packages type-check (`tsc`; lint alone missed
-#             an argument-count error once, 2026-10-20).
+#             the app and the packages type-check (`tsc`; lint alone missed
+#             an argument-count error once, 2026-10-20), and the standalone hub
+#             bundles (`build:hub`, esbuild over app/server.ts).
 #
 # The repository is an npm workspace (root package.json: app and packages/*), so
 # one `npm ci` at the root installs the app and the packages it depends on.
@@ -17,8 +18,14 @@
 #             TerminusDB as a service container, waits for it, loads the schema,
 #             seeds the demonstration course and runs `npm test` in app/, which
 #             calls the Hono app in-process against that store and exercises every
-#             /api/v1 route and every invariant. The Vitest global setup waits again
-#             for the seeded database before the first test file starts.
+#             /api/v1 route and every invariant, and serves it once over a socket
+#             (lib/hub.test.ts). The Vitest global setup waits again for the seeded
+#             database before the first test file starts.
+#
+#   hub       Builds the hub's container image (docker/hub.Dockerfile) and checks
+#             that it starts and answers GET /api/v1/discover, the one read that
+#             needs no store. What the hub answers over a socket is the contract
+#             job's hub test; this job guards the image itself.
 name: CI
 
 on:
@@ -28,7 +35,7 @@ on:
 
 jobs:
   app:
-    name: Lint, type-check and generated-types drift check
+    name: Lint, type-check, generated-types drift check and hub bundle
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +48,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run check:types
+      - run: npm run build:hub --workspace app
 
   contract:
     name: Contract suite against TerminusDB
@@ -82,3 +90,24 @@ jobs:
         run: node scripts/seed_data.js
       - name: Run the contract suite
         run: npm test
+
+  hub:
+    name: Hub container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -f docker/hub.Dockerfile -t armature-hub .
+      - name: Start it and wait for GET /discover
+        run: |
+          docker run -d --name hub -p 3100:3100 armature-hub
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3100/api/v1/discover > /tmp/discover.json; then
+              echo "answered after ${i}s"; cat /tmp/discover.json; exit 0
+            fi
+            sleep 1
+          done
+          echo "the hub did not answer within 30s"; docker logs hub; exit 1
+      - name: Show the log and stop
+        if: always()
+        run: docker logs hub; docker rm -f hub
