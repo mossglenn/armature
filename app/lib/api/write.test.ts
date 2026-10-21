@@ -795,4 +795,109 @@ describe('generic write path and invariants (Phase 3)', () => {
       expect((await res.json()).error).toBe('person_filter_refused');
     });
   });
+  describe('external references and attachments (constraints 18 and 19; ADR-0030)', () => {
+    const sha = 'ab'.repeat(32);
+    const image = (overrides: Record<string, unknown> = {}) => ({
+      '@type': 'Attachment',
+      store: 'Git',
+      storeUri: 'https://example.edu/course-assets.git',
+      revision: 'c0ffee1',
+      path: 'img/bias-types.png',
+      contentHash: sha,
+      hashAlgorithm: 'sha-256',
+      mediaType: 'image/png',
+      ...overrides,
+    });
+    const picture = (fragmentId: string, isCorrect: boolean, hash = sha) => ({
+      '@type': 'ItemOption',
+      fragmentId,
+      isCorrect,
+      attachments: [image({ contentHash: hash })],
+    });
+    const textOption = (fragmentId: string, text: string, isCorrect: boolean) => ({ '@type': 'ItemOption', fragmentId, text, isCorrect });
+
+    it('an objective names its CASE competency and reads it back', async () => {
+      const id = `LearningObjective/ext-${stamp}`;
+      const res = await put(`/api/v1/documents/${id}${q}`, {
+        message: 'Align with the state framework',
+        document: {
+          label: 'Explain how training data shapes model behavior',
+          state: 'Active',
+          externalRefs: [{ '@type': 'ExternalRef', system: 'CASE', identifier: 'https://case.example.edu/ims/case/v1p0/CFItems/4f2c', label: 'AI.2.1' }],
+        },
+      });
+      expect(res.status).toBe(200);
+      const doc = await (await get(`/api/v1/documents/${id}${q}`)).json();
+      expect(doc.externalRefs).toHaveLength(1);
+      expect(doc.externalRefs[0]).toMatchObject({ system: 'CASE', identifier: 'https://case.example.edu/ims/case/v1p0/CFItems/4f2c', label: 'AI.2.1' });
+    });
+
+    it('refuses a versioned store without a revision and a malformed hash, both at once (constraint 18)', async () => {
+      const res = await put(`/api/v1/documents/AssessmentItem/att-bad-${stamp}${q}`, {
+        message: 'x',
+        document: item(`att-bad-${stamp}`, { attachments: [image({ revision: undefined }), image({ contentHash: 'not-hex' })] }),
+      });
+      expect(res.status).toBe(422);
+      const found = await codes(res);
+      expect(found).toContain('revision_required');
+      expect(found).toContain('hash_malformed');
+      expect(found).toHaveLength(2);
+    });
+
+    it('accepts an option that is a picture, and an attachment whose algorithm the hub does not know', async () => {
+      const id = `att-pic-${stamp}`;
+      const res = await put(`/api/v1/documents/AssessmentItem/${id}${q}`, {
+        message: 'A picture option',
+        document: item(id, {
+          options: [picture('pic', true), textOption('b', 'Beta', false)],
+          attachments: [image({ store: 'Other', storeUri: 'lore://assets.example.edu', revision: undefined, hashAlgorithm: 'lore-v1', contentHash: 'ZZ-not-hex', role: 'source' })],
+        }),
+      });
+      expect(res.status).toBe(200);
+      const doc = await (await get(`/api/v1/documents/AssessmentItem/${id}${q}`)).json();
+      expect(doc.options[0].text).toBeUndefined();
+      expect(doc.options[0].attachments[0]).toMatchObject({ store: 'Git', contentHash: sha, revision: 'c0ffee1' });
+      expect(doc.attachments[0]).toMatchObject({ hashAlgorithm: 'lore-v1', role: 'source' });
+    });
+
+    it('refuses a fragment with neither text nor an attachment (constraint 19); two pictures are not duplicate text, two equal texts still are (constraint 9)', async () => {
+      const empty = await put(`/api/v1/documents/AssessmentItem/att-empty-${stamp}${q}`, {
+        message: 'x',
+        document: item(`att-empty-${stamp}`, { options: [{ '@type': 'ItemOption', fragmentId: 'a', isCorrect: true }, textOption('b', 'Beta', false)] }),
+      });
+      expect(empty.status).toBe(422);
+      expect(await codes(empty)).toEqual(['empty_fragment']);
+
+      const twoPictures = await put(`/api/v1/documents/AssessmentItem/att-two-${stamp}${q}`, {
+        message: 'Two picture options',
+        document: item(`att-two-${stamp}`, { options: [picture('p1', true), picture('p2', false, 'cd'.repeat(32))] }),
+      });
+      expect(twoPictures.status).toBe(200);
+
+      const dup = await put(`/api/v1/documents/AssessmentItem/att-dup-${stamp}${q}`, {
+        message: 'x',
+        document: item(`att-dup-${stamp}`, { options: [textOption('a', 'Same', true), textOption('b', 'Same', false)] }),
+      });
+      expect(dup.status).toBe(422);
+      expect(await codes(dup)).toEqual(['duplicate_option_text']);
+    });
+
+    it('a new revision of a picture makes the attestation on that option stale (ADR-0028)', async () => {
+      const id = `att-stale-${stamp}`;
+      const ITEM = `AssessmentItem/${id}`;
+      const doc = item(id, { options: [picture('pic', true), textOption('b', 'Beta', false)] });
+      expect((await put(`/api/v1/documents/${ITEM}${q}`, { message: 'Item with a picture', document: doc })).status).toBe(200);
+      const attest = await post(`/api/v1/documents${q}`, {
+        message: 'The picture shows the right chart',
+        documents: [{ '@type': 'Attestation', subject: ITEM, fragmentId: 'pic', verdict: 'Affirmed' }],
+      });
+      expect(attest.ok).toBe(true);
+      const read = async () => (await (await get(`/api/v1/intelligence/attestations/${ITEM}${q}`)).json()).attestations[0].state;
+      expect(await read()).toBe('Current');
+
+      const reexported = item(id, { options: [picture('pic', true, 'ef'.repeat(32)), textOption('b', 'Beta', false)] });
+      expect((await put(`/api/v1/documents/${ITEM}${q}`, { message: 'Re-exported the chart at a new revision', document: reexported })).status).toBe(200);
+      expect(await read()).toBe('Stale');
+    });
+  });
 });

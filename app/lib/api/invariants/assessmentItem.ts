@@ -5,8 +5,9 @@ import type { Violation, WriteContext } from './index';
  * AssessmentItem (ADR-0018, ADR-0022, ADR-0023, ADR-0033):
  *
  *   8  fragmentId is unique across the stem, the options and the feedbacks
- *   9  option text is unique within the item (presence is the schema's job),
- *      and the number of correct options suits the itemType
+ *   9  option text, where present, is unique within the item (presence is
+ *      constraint 19's job since ADR-0030: a picture option has none), and
+ *      the number of correct options suits the itemType
  *  10  an item may not drop back to Draft or InReview while a placement of
  *      it is Approved (the ItemInstance validator checks the other side)
  *
@@ -43,7 +44,8 @@ export async function validateAssessmentItem(
 
   const seenText = new Map<string, number>();
   options.forEach((o, i) => {
-    const text = String(o.text ?? '').trim();
+    if (typeof o.text !== 'string' || o.text.trim() === '') return; // a picture option; constraint 19 checks it has an attachment
+    const text = o.text.trim();
     const first = seenText.get(text);
     if (first !== undefined) push('duplicate_option_text', `options[${i}]`, `option text duplicates options[${first}]`);
     else seenText.set(text, i);

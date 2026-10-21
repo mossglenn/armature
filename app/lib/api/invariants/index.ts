@@ -3,6 +3,7 @@ import { StoreError, type Store, type TerminusDocument } from '../store';
 import { namesFragment } from '../fragments';
 import { checkAsOf, hasAsOf } from './asOf';
 import { validateAssessmentItem } from './assessmentItem';
+import { checkAttachments } from './attachments';
 import { validateAttestation } from './attestation';
 import { validateDesignFinding } from './designFinding';
 import { checkFragmentRef } from './fragmentRef';
@@ -29,7 +30,7 @@ import { checkReferences } from './references';
  *   7  coverage                   nothing to check: computed on read by the intelligence
  *                                routes, never stored (ADR-0056)
  *   8  fragmentId unique          assessmentItem.ts
- *   9  option text, correct count assessmentItem.ts
+ *   9  option text, correct count assessmentItem.ts (text unique where present; a picture option has none)
  *  10  placement not ahead of item itemInstance.ts and assessmentItem.ts (both sides)
  *  11  dismissal needs rationale  designFinding.ts
  *  12  id held by another type    the write pipeline, 409 (ADR-0024)
@@ -43,6 +44,9 @@ import { checkReferences } from './references';
  *  16  a named part exists        fragmentRef.ts (generic, every class with a top-level fragmentId:
  *                                one subject, and it has that part at asOf or after the write)
  *  17  formative use sequence     moduleContent.ts (ActivityItemLink.sequence unique within an activity; ADR-0061)
+ *  18  attachment is a coordinate  attachments.ts (generic, every document: revision present for a
+ *                                versioned store; contentHash the length its algorithm implies; ADR-0030)
+ *  19  a fragment has content     attachments.ts (text or at least one attachment; ADR-0030)
  *
  * A validator sees the whole batch and the branch being written, never main
  * by default. Every violation is collected and reported at once as a 422.
@@ -115,6 +119,7 @@ export async function checkInvariants(ctx: WriteContext): Promise<void> {
   const violations: Violation[] = [];
   for (const [index, doc] of ctx.batch.entries()) {
     violations.push(...(await checkReferences(doc, index, ctx)));
+    violations.push(...(await checkAttachments(doc, index, ctx)));
     if (hasAsOf(doc['@type'])) violations.push(...(await checkAsOf(doc, index, ctx)));
     if (namesFragment(doc['@type'])) violations.push(...(await checkFragmentRef(doc, index, ctx)));
     const validator = VALIDATORS[doc['@type']];
