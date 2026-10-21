@@ -429,6 +429,13 @@ line();
 line(`export type ClassName = keyof typeof CLASS_CATEGORY;`);
 line(`export type ClassCategory = typeof CLASS_CATEGORY[ClassName];`);
 line();
+line(`/** Every class name mapped to its interface, so a client can type a read by the class it names (Phase 7, @armature/client). */`);
+line(`export interface ClassMap {`);
+for (const entry of Object.values(classes)) {
+  line(`  ${entry['@id']}: ${entry['@id']};`);
+}
+line(`}`);
+line();
 line(`/** Subdocument classes: returned inline, never addressable on their own (ADR-0022, ADR-0033). */`);
 line(`export const SUBDOCUMENT_CLASSES = [`);
 for (const id of subdocIds) line(`  "${id}",`);
