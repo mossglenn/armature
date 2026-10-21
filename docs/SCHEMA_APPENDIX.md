@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-10-20_
+_Schema snapshot · Generated 2026-10-21_
 
 ---
 
@@ -40,6 +40,8 @@ classDiagram
     +string label
     +string? description
     +User? createdBy
+    +Set<ExternalRef> externalRefs
+    +Set<Attachment> attachments
   }
 
   class LearningEvidence {
@@ -94,11 +96,34 @@ classDiagram
     +LearningObjective prerequisite
   }
 
+  class ExternalRef {
+    <<subdocument>>
+    +ExternalSystem system
+    +string identifier
+    +string? label
+  }
+
+  class Attachment {
+    <<subdocument>>
+    +AttachmentStore store
+    +string storeUri
+    +string? container
+    +string? revision
+    +string? path
+    +string contentHash
+    +string hashAlgorithm
+    +string? mediaType
+    +integer? byteSize
+    +string? role
+    +string? label
+  }
+
   class Fragment {
     <<abstract>>
     <<subdocument>>
     +string fragmentId
-    +string text
+    +string? text
+    +Set<Attachment> attachments
   }
 
   class TextFragment {
@@ -252,6 +277,8 @@ classDiagram
 
   %% Relationships (solid: reference; dotted: optional; diamond: embedded subdocument)
   ArmatureDocument ..> User : createdBy
+  ArmatureDocument *-- ExternalRef : externalRefs
+  ArmatureDocument *-- Attachment : attachments
   LearningMetric ..> LearningDataset : derivedFrom
   LearningMetric ..> DesignRecord : subject
   LearningDataset ..> Assessment : producedBy
@@ -260,6 +287,7 @@ classDiagram
   LearningObjective ..> LearningNeed : generatedBy
   PrerequisiteRecord --> LearningObjective : objective
   PrerequisiteRecord --> LearningObjective : prerequisite
+  Fragment *-- Attachment : attachments
   AssessmentItem *-- TextFragment : stem
   AssessmentItem *-- ItemOption : options
   AssessmentItem *-- TextFragment : correctFeedback
@@ -319,13 +347,49 @@ _No additional fields._
 ### `ArmatureDocument`
 _category: infrastructure · **abstract** · extends `DesignRecord`_
 
-> Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Six of the seven junction documents (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. The seventh, PrerequisiteRecord, is a relationship that also carries a name and so inherits it. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, an agent User for records an AI or other tool wrote. The API sets it on every document it creates (ADR-0032); it is optional because records written outside the API may lack it. See ADR-0014, ADR-0015, ADR-0032. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).
+> Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Six of the seven junction documents (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. The seventh, PrerequisiteRecord, is a relationship that also carries a name and so inherits it. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, an agent User for records an AI or other tool wrote. The API sets it on every document it creates (ADR-0032); it is optional because records written outside the API may lack it. Every artifact may also carry externalRefs (identifiers in other systems: CASE, QTI, xAPI, LTI) and attachments (verifiable references to bytes or to a revision of a tree of bytes in a store outside the graph); both are optional subdocument sets that point outward and copy nothing in (ADR-0030). See ADR-0014, ADR-0015, ADR-0030, ADR-0032. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `label` | `string` | required |
 | `description` | `string?` | optional |
 | `createdBy` | `User?` | optional |
+| `externalRefs` | `Set<ExternalRef>` | required, embedded subdocument |
+| `attachments` | `Set<Attachment>` | required, embedded subdocument |
+
+## Outside the Graph
+
+_Embedded coordinates that point out of the graph: identifiers in other systems, and verifiable references to bytes or to a revision of a tree of bytes in a store the hub may or may not operate. Any artifact and any fragment may carry them (ADR-0030)._
+
+### `ExternalRef`
+_category: infrastructure · **subdocument** · key: Random_
+
+> An identifier in another system, embedded in the artifact that aligns with it (ADR-0030): a LearningObjective's CASE competency, an AssessmentItem's QTI source, a LearningDataset's xAPI activity. Points outward: nothing from the other system is copied into the graph beyond the identifier and an optional label. Carries no relation to its target (exact, broad, narrow); when a client needs a graded alignment it is an optional enum added beside identifier, seeded from CTDL-ASN. A subdocument with a Random key: it has no identity outside its artifact, its nested store id regenerates on every replace and must never be stored, and it is not a part (no fragmentId), so notes and attestations are about the artifact, never the reference. Category infrastructure: a coordinate, not a record of design.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `system` | `ExternalSystem` | required |
+| `identifier` | `string` | required |
+| `label` | `string?` | optional |
+
+### `Attachment`
+_category: infrastructure · **subdocument** · key: Random_
+
+> A reference to bytes, or to a revision of a tree of bytes, in a store the hub may or may not operate (ADR-0030): an image behind an ItemOption, a rendered export of a Module, the asset tree a simulation was built against. The graph never holds the bytes. The reference is a verifiable coordinate: contentHash and hashAlgorithm are mandatory, so a reader with access to the store can check that what it fetched is what the designer meant, whatever the backend. revision and path are in the shape from day one so a versioned asset can be named without a schema change. A subdocument with a Random key, like a fragment: no identity outside its artifact, a nested store id that regenerates on every replace and must never be stored. A change to an attachment on a fragment is a change to that fragment, so attestations on the part go stale (ADR-0028). API CONSTRAINT 18: revision is present when store is a versioned kind (Git, Lore); contentHash is lower-case hexadecimal of the length hashAlgorithm implies, for algorithms the hub knows. The hub does not fetch or verify bytes in this phase; a reference is a claim the writing tool makes under its own name. Category infrastructure: a coordinate, not a record of design.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `store` | `AttachmentStore` | required |
+| `storeUri` | `string` | required |
+| `container` | `string?` | optional |
+| `revision` | `string?` | optional |
+| `path` | `string?` | optional |
+| `contentHash` | `string` | required |
+| `hashAlgorithm` | `string` | required |
+| `mediaType` | `string?` | optional |
+| `byteSize` | `integer?` | optional |
+| `role` | `string?` | optional |
+| `label` | `string?` | optional |
 
 ## Evidence & Needs Analysis
 
@@ -431,12 +495,13 @@ _Reusable items in an item bank, each a tree of addressable fragments, assembled
 ### `Fragment`
 _category: fragment · **abstract** · **subdocument** · key: Random_
 
-> Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a record about a part points at it through the compound reference { document @id, fragmentId } rather than at the whole document: Attestation, DesignNote and DesignFinding each carry an optional fragmentId beside their subject (ADR-0028 decision 6, the general rule for any record about a part). Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is required today; when attachment references arrive (planned ADR-0030, not yet written) it becomes Optional so an image or audio fragment can carry no inline text, a weakening change that needs no migration. Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.
+> Abstract subdocument: one addressable part of an artifact. An item is a tree of fragments (the stem, each option, each feedback), and a record about a part points at it through the compound reference { document @id, fragmentId } rather than at the whole document: Attestation, DesignNote and DesignFinding each carry an optional fragmentId beside their subject (ADR-0028 decision 6, the general rule for any record about a part). Fragments have no graph identity of their own: a subdocument IRI nests under its parent, is regenerated on every replace, and cannot be referenced from another document, which is exactly why fragmentId exists. text is Optional since ADR-0030: an image or audio fragment carries an attachment and no inline text. API CONSTRAINT 19: a fragment carries text or at least one attachment; one with neither is refused (empty_fragment). A change to a fragment's attachment (a new content hash, a new revision) is a change to the fragment, so attestations on the part go stale (ADR-0028). Generic fragment kinds with a validated JSON payload are the next step for item types whose parts are not text or options; they sit beside ItemOption without re-keying anything. See ADR-0022, ADR-0023, ADR-0033.
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `fragmentId` | `string` | required |
-| `text` | `string` | required |
+| `text` | `string?` | optional |
+| `attachments` | `Set<Attachment>` | required, embedded subdocument |
 
 ### `TextFragment`
 _category: fragment · **subdocument** · extends `Fragment` · key: Random_
@@ -448,7 +513,7 @@ _No additional fields._
 ### `ItemOption`
 _category: fragment · **subdocument** · extends `Fragment` · key: Random_
 
-> One answer option of an AssessmentItem, embedded in the item as a subdocument. Replaces the former standalone Response document: options are never shared across items and an option's meaning depends on its stem and siblings, so independent identity bought nothing and made accidental relocation possible. Per-option change history is unaffected: the store diffs into nested structure, so a diff between two commits of the item reports which option changed. API CONSTRAINTS: text is required (inherited as a Fragment field); option text must be unique within one item; fragmentId must be unique within the item. See ADR-0022, ADR-0023.
+> One answer option of an AssessmentItem, embedded in the item as a subdocument. Replaces the former standalone Response document: options are never shared across items and an option's meaning depends on its stem and siblings, so independent identity bought nothing and made accidental relocation possible. Per-option change history is unaffected: the store diffs into nested structure, so a diff between two commits of the item reports which option changed. API CONSTRAINTS: an option carries text or an attachment (constraint 19, ADR-0030; a picture option has no text); option text, where present, must be unique within one item (constraint 9); fragmentId must be unique within the item. See ADR-0022, ADR-0023.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -528,6 +593,17 @@ _category: relationship · extends `DesignRecord` · key: Hash(group, activity)_
 |-------|------|-------|
 | `group` | `ActivityGroup` | required |
 | `activity` | `LearningActivity` | required |
+| `sequence` | `integer?` | optional |
+
+### `ActivityItemLink`
+_category: relationship · extends `DesignRecord` · key: Hash(activity, item)_
+
+> Formative use of an AssessmentItem inside a LearningActivity: a poll in a lecture, a question on a content page, a practice set (ADR-0061). Distinct from ItemInstance, which places an item in an Assessment with points and clearance. A formative use carries no points, no clearance and no verdict, and it counts toward nothing: coverage (ADR-0029) counts assessment placements only, and an objective practiced here but assessed nowhere is still Uncovered. Within one activity an item is used at most once: the @key is Hash over (activity, item), so the store derives the id, a client never supplies one, and writing the same pair again replaces the use. sequence orders the items within the activity when the order matters. Fields that a later client needs (a purpose, a grading note) are added as optional fields beside sequence (ADR-0010), never by reusing ItemInstance.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `activity` | `LearningActivity` | required |
+| `item` | `AssessmentItem` | required |
 | `sequence` | `integer?` | optional |
 
 ### `ModuleObjective`
@@ -631,21 +707,6 @@ _category: relationship · extends `DesignRecord` · key: Hash(subject, fragment
 | `asOf` | `string?` | optional |
 | `attestedBy` | `User?` | optional |
 
-## Other classes
-
-_Classes not yet placed in a domain section above; add them to DOMAINS in the generator._
-
-### `ActivityItemLink`
-_category: relationship · extends `DesignRecord` · key: Hash(activity, item)_
-
-> Formative use of an AssessmentItem inside a LearningActivity: a poll in a lecture, a question on a content page, a practice set (ADR-0061). Distinct from ItemInstance, which places an item in an Assessment with points and clearance. A formative use carries no points, no clearance and no verdict, and it counts toward nothing: coverage (ADR-0029) counts assessment placements only, and an objective practiced here but assessed nowhere is still Uncovered. Within one activity an item is used at most once: the @key is Hash over (activity, item), so the store derives the id, a client never supplies one, and writing the same pair again replaces the use. sequence orders the items within the activity when the order matters. Fields that a later client needs (a purpose, a grading note) are added as optional fields beside sequence (ADR-0010), never by reusing ItemInstance.
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `activity` | `LearningActivity` | required |
-| `item` | `AssessmentItem` | required |
-| `sequence` | `integer?` | optional |
-
 ---
 
 ## Enumerations
@@ -687,6 +748,27 @@ _category: relationship · extends `DesignRecord` · key: Hash(activity, item)_
 - `Hard`
 - `Soft`
 - `Corequisite`
+
+### Outside the Graph
+
+### `ExternalSystem`
+
+> The outside system an ExternalRef names an identifier in (ADR-0030). CASE: Competencies and Academic Standards Exchange, a competency framework; QTI: Question and Test Interoperability, an assessment item or test; xAPI: the Experience API, a statement or activity id; LTI: Learning Tools Interoperability, a tool or resource link; Other: a system not yet named here. Extended as clients arrive; the identifier is always the other system's own.
+
+- `CASE`
+- `QTI`
+- `xAPI`
+- `LTI`
+- `Other`
+
+### `AttachmentStore`
+
+> The kind of store an Attachment points into (ADR-0030). S3: an object store addressed by bucket and key, versioned per object when the bucket is; Lore: Epic Games' content-addressed asset store, versioned by revision hash; Git: a repository, versioned by commit; Other: a store not yet named here. Naming a kind the hub does not operate is allowed; it tells a reader how to interpret storeUri, container, revision and path. API CONSTRAINT 18: Git and Lore are versioned kinds, so an Attachment naming one carries a revision.
+
+- `S3`
+- `Lore`
+- `Git`
+- `Other`
 
 ### Assessment
 

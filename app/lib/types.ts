@@ -148,6 +148,25 @@ export const VALID_AttestationVerdict = [
 
 export type AttestationVerdict = typeof VALID_AttestationVerdict[number];
 
+export const VALID_ExternalSystem = [
+  "CASE",
+  "QTI",
+  "xAPI",
+  "LTI",
+  "Other",
+] as const;
+
+export type ExternalSystem = typeof VALID_ExternalSystem[number];
+
+export const VALID_AttachmentStore = [
+  "S3",
+  "Lore",
+  "Git",
+  "Other",
+] as const;
+
+export type AttachmentStore = typeof VALID_AttachmentStore[number];
+
 // ────────────────────────────────────────────────────────
 // Base type
 // ────────────────────────────────────────────────────────
@@ -177,6 +196,30 @@ export interface ArmatureDocument extends DesignRecord {
   label: string;
   description?: string;
   createdBy?: string;  // User @id
+  externalRefs: ExternalRef[];
+  attachments: Attachment[];
+}
+
+/** @subdocument — returned inline with a nested @id; cannot be referenced from another document */
+export interface ExternalRef extends TerminusDocument {
+  system: ExternalSystem;
+  identifier: string;
+  label?: string;
+}
+
+/** @subdocument — returned inline with a nested @id; cannot be referenced from another document */
+export interface Attachment extends TerminusDocument {
+  store: AttachmentStore;
+  storeUri: string;
+  container?: string;
+  revision?: string;
+  path?: string;
+  contentHash: string;
+  hashAlgorithm: string;
+  mediaType?: string;
+  byteSize?: number;
+  role?: string;
+  label?: string;
 }
 
 // ────────────────────────────────────────────────────────
@@ -186,7 +229,8 @@ export interface ArmatureDocument extends DesignRecord {
 /** @abstract · @subdocument — returned inline with a nested @id; cannot be referenced from another document */
 export interface Fragment extends TerminusDocument {
   fragmentId: string;
-  text: string;
+  text?: string;
+  attachments: Attachment[];
 }
 
 /** @subdocument — returned inline with a nested @id; cannot be referenced from another document */
@@ -377,6 +421,8 @@ export const CLASS_CATEGORY = {
   NeedEvidenceLink: "relationship",
   LearningObjective: "artifact",
   PrerequisiteRecord: "relationship",
+  ExternalRef: "infrastructure",
+  Attachment: "infrastructure",
   Fragment: "fragment",
   TextFragment: "fragment",
   ItemOption: "fragment",
@@ -402,6 +448,8 @@ export type ClassCategory = typeof CLASS_CATEGORY[ClassName];
 
 /** Subdocument classes: returned inline, never addressable on their own (ADR-0022, ADR-0033). */
 export const SUBDOCUMENT_CLASSES = [
+  "ExternalRef",
+  "Attachment",
   "Fragment",
   "TextFragment",
   "ItemOption",
@@ -420,6 +468,8 @@ export const CLASS_ANCESTORS = {
   NeedEvidenceLink: ["DesignRecord"],
   LearningObjective: ["ArmatureDocument", "DesignRecord"],
   PrerequisiteRecord: ["ArmatureDocument", "DesignRecord"],
+  ExternalRef: [],
+  Attachment: [],
   Fragment: [],
   TextFragment: ["Fragment"],
   ItemOption: ["Fragment"],
@@ -450,6 +500,8 @@ export const CLASS_KEY = {
   NeedEvidenceLink: {"type":"Hash","fields":["need","evidence"]},
   LearningObjective: {"type":"Random"},
   PrerequisiteRecord: {"type":"Hash","fields":["objective","prerequisite"]},
+  ExternalRef: {"type":"Random"},
+  Attachment: {"type":"Random"},
   Fragment: {"type":"Random"},
   TextFragment: {"type":"Random"},
   ItemOption: {"type":"Random"},
@@ -494,11 +546,15 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
   },
   LearningEvidence: {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     collectedAt: {"type":"xsd:dateTime","kind":"primitive","optional":false,"many":false},
     source: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
   },
@@ -506,6 +562,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     collectedAt: {"type":"xsd:dateTime","kind":"primitive","optional":false,"many":false},
     source: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     value: {"type":"xsd:decimal","kind":"primitive","optional":false,"many":false},
@@ -518,6 +576,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     collectedAt: {"type":"xsd:dateTime","kind":"primitive","optional":false,"many":false},
     source: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     method: {"type":"EvidenceMethod","kind":"enum","optional":false,"many":false},
@@ -527,6 +587,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     administrationDate: {"type":"xsd:date","kind":"primitive","optional":true,"many":false},
     cohort: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     producedBy: {"type":"Assessment","kind":"reference","optional":true,"many":false},
@@ -536,6 +598,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     rationale: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     priority: {"type":"NeedPriority","kind":"enum","optional":true,"many":false},
   },
@@ -548,6 +612,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     bloomsLevel: {"type":"BloomsLevel","kind":"enum","optional":true,"many":false},
     state: {"type":"ObjectiveState","kind":"enum","optional":false,"many":false},
     generatedBy: {"type":"LearningNeed","kind":"reference","optional":true,"many":false},
@@ -556,22 +622,45 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     rationale: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     prerequisiteType: {"type":"PrerequisiteType","kind":"enum","optional":false,"many":false},
     objective: {"type":"LearningObjective","kind":"reference","optional":false,"many":false},
     prerequisite: {"type":"LearningObjective","kind":"reference","optional":false,"many":false},
   },
+  ExternalRef: {
+    system: {"type":"ExternalSystem","kind":"enum","optional":false,"many":false},
+    identifier: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    label: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+  },
+  Attachment: {
+    store: {"type":"AttachmentStore","kind":"enum","optional":false,"many":false},
+    storeUri: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    container: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    revision: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    path: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    contentHash: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    hashAlgorithm: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    mediaType: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    byteSize: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
+    role: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    label: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+  },
   Fragment: {
     fragmentId: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
-    text: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    text: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
   },
   TextFragment: {
     fragmentId: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
-    text: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    text: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
   },
   ItemOption: {
     fragmentId: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
-    text: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    text: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     isCorrect: {"type":"xsd:boolean","kind":"primitive","optional":false,"many":false},
     feedback: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     purpose: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
@@ -580,6 +669,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     stem: {"type":"TextFragment","kind":"subdocument","optional":false,"many":false},
     options: {"type":"ItemOption","kind":"subdocument","optional":true,"many":true},
     correctFeedback: {"type":"TextFragment","kind":"subdocument","optional":true,"many":false},
@@ -601,6 +692,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     randomize: {"type":"xsd:boolean","kind":"primitive","optional":false,"many":false},
     passingScore: {"type":"xsd:decimal","kind":"primitive","optional":true,"many":false},
     retakes: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
@@ -610,6 +703,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     activityType: {"type":"ActivityType","kind":"enum","optional":true,"many":false},
     targets: {"type":"LearningObjective","kind":"reference","optional":false,"many":true,"min":1},
   },
@@ -617,6 +712,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
   },
   ActivityGroupMember: {
     group: {"type":"ActivityGroup","kind":"reference","optional":false,"many":false},
@@ -639,6 +736,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
     course: {"type":"Course","kind":"reference","optional":false,"many":false},
   },
@@ -656,6 +755,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     rationale: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     subject: {"type":"DesignRecord","kind":"reference","optional":false,"many":true,"min":1},
     category: {"type":"DesignNoteCategory","kind":"enum","optional":true,"many":false},
@@ -665,6 +766,8 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
     finding: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     subject: {"type":"DesignRecord","kind":"reference","optional":false,"many":true,"min":1},
     regarding: {"type":"DesignRecord","kind":"reference","optional":true,"many":false},
@@ -689,5 +792,7 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
+    attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
   },
 };

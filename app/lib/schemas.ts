@@ -7,7 +7,7 @@
 // Phase 3). Shape only: cross-document rules live in the invariants engine.
 
 import { z } from 'zod';
-import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict } from './types';
+import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict, VALID_ExternalSystem, VALID_AttachmentStore } from './types';
 
 /**
  * A reference to another document: its id, or { "@ref": "<capture>" } naming a
@@ -17,18 +17,44 @@ export const ReferenceSchema = z.union([z.string().min(1), z.strictObject({ '@re
 
 // ── Subdocuments (inline; @type required, nested @id ignored) ─────────────────
 
+export const ExternalRefSchema = z.strictObject({
+  '@id': z.string().optional(),
+  '@type': z.literal('ExternalRef'),
+  system: z.enum(VALID_ExternalSystem),
+  identifier: z.string().min(1).max(10_000),
+  label: z.string().min(1).max(10_000).optional(),
+});
+
+export const AttachmentSchema = z.strictObject({
+  '@id': z.string().optional(),
+  '@type': z.literal('Attachment'),
+  store: z.enum(VALID_AttachmentStore),
+  storeUri: z.string().min(1).max(10_000),
+  container: z.string().min(1).max(10_000).optional(),
+  revision: z.string().min(1).max(10_000).optional(),
+  path: z.string().min(1).max(10_000).optional(),
+  contentHash: z.string().min(1).max(10_000),
+  hashAlgorithm: z.string().min(1).max(10_000),
+  mediaType: z.string().min(1).max(10_000).optional(),
+  byteSize: z.number().int().optional(),
+  role: z.string().min(1).max(10_000).optional(),
+  label: z.string().min(1).max(10_000).optional(),
+});
+
 export const TextFragmentSchema = z.strictObject({
   '@id': z.string().optional(),
   '@type': z.literal('TextFragment'),
   fragmentId: z.string().min(1).max(10_000),
-  text: z.string().min(1).max(10_000),
+  text: z.string().min(1).max(10_000).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
 });
 
 export const ItemOptionSchema = z.strictObject({
   '@id': z.string().optional(),
   '@type': z.literal('ItemOption'),
   fragmentId: z.string().min(1).max(10_000),
-  text: z.string().min(1).max(10_000),
+  text: z.string().min(1).max(10_000).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   isCorrect: z.boolean(),
   feedback: z.string().min(1).max(10_000).optional(),
   purpose: z.string().min(1).max(10_000).optional(),
@@ -56,6 +82,8 @@ export const LearningMetricSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   collectedAt: z.iso.datetime(),
   source: z.string().min(1).max(10_000),
   value: z.number(),
@@ -72,6 +100,8 @@ export const DescriptiveEvidenceSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   collectedAt: z.iso.datetime(),
   source: z.string().min(1).max(10_000),
   method: z.enum(VALID_EvidenceMethod),
@@ -85,6 +115,8 @@ export const LearningDatasetSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   administrationDate: z.iso.date().optional(),
   cohort: z.string().min(1).max(10_000).optional(),
   producedBy: ReferenceSchema.optional(),
@@ -98,6 +130,8 @@ export const LearningNeedSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   rationale: z.string().min(1).max(10_000),
   priority: z.enum(VALID_NeedPriority).optional(),
 });
@@ -118,6 +152,8 @@ export const LearningObjectiveSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   bloomsLevel: z.enum(VALID_BloomsLevel).optional(),
   state: z.enum(VALID_ObjectiveState),
   generatedBy: ReferenceSchema.optional(),
@@ -130,6 +166,8 @@ export const PrerequisiteRecordSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   rationale: z.string().min(1).max(10_000),
   prerequisiteType: z.enum(VALID_PrerequisiteType),
   objective: ReferenceSchema,
@@ -143,6 +181,8 @@ export const AssessmentItemSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   stem: TextFragmentSchema,
   options: z.array(ItemOptionSchema).optional(),
   correctFeedback: TextFragmentSchema.optional(),
@@ -172,6 +212,8 @@ export const AssessmentSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   randomize: z.boolean(),
   passingScore: z.number().optional(),
   retakes: z.number().int().optional(),
@@ -185,6 +227,8 @@ export const LearningActivitySchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   activityType: z.enum(VALID_ActivityType).optional(),
   targets: z.array(ReferenceSchema).min(1),
 });
@@ -196,6 +240,8 @@ export const ActivityGroupSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
 });
 
 export const ActivityGroupMemberSchema = z.strictObject({
@@ -234,6 +280,8 @@ export const ModuleSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   sequence: z.number().int().optional(),
   course: ReferenceSchema,
 });
@@ -263,6 +311,8 @@ export const DesignNoteSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   rationale: z.string().min(1).max(10_000),
   subject: z.array(ReferenceSchema).min(1),
   category: z.enum(VALID_DesignNoteCategory).optional(),
@@ -276,6 +326,8 @@ export const DesignFindingSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   finding: z.string().min(1).max(10_000),
   subject: z.array(ReferenceSchema).min(1),
   regarding: ReferenceSchema.optional(),
@@ -308,6 +360,8 @@ export const CourseSchema = z.strictObject({
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
   createdBy: ReferenceSchema.optional(),
+  externalRefs: z.array(ExternalRefSchema).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
 });
 
 /** Every concrete document class by @id. */
