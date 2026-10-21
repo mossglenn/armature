@@ -27,6 +27,11 @@ history. The interim `Armature-User` header (decision 2) and the provisional doc
 below that call it planned predate it. It adopts no content hash beside the commit id (candidate
 0036's pin), relying on decision 6: a commit id stays valid because history is never rewritten.
 
+**Note 2026-10-20:** ADR-0062 (Proposed) extends decision 6 to operators: a repair made outside
+the plugin API is a new commit too, and the store's document delete is one (check AC). Scratch
+branches left by tests and probes may be deleted by an operator who names them as scratch; a branch
+holding design work follows the rule below.
+
 ## Context
 
 The position paper's third principle (plan §1 P3) promises version control modeled on Git:
