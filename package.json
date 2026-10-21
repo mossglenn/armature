@@ -1,0 +1,18 @@
+{
+  "name": "armature",
+  "private": true,
+  "description": "Graph-based infrastructure for learning engineering: the schema, the API and the packages tools build on",
+  "license": "MIT",
+  "workspaces": [
+    "app",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace app",
+    "lint": "npm run lint --workspace app",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm test --workspace app",
+    "generate:types": "node scripts/generate-types.js",
+    "check:types": "node scripts/generate-types.js --check"
+  }
+}
