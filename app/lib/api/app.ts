@@ -13,25 +13,33 @@
  * users routes (ADR-0032), the generic write path and the invariants engine;
  * Phase 4 adds the design-intelligence reads (coverage, alignment, trace,
  * impact), derived from structure alone (plan P4); Phase 6 adds the export
- * route (ADR-0031): the graph at a commit under a profile and a slice.
+ * route (ADR-0031): the graph at a commit under a profile and a slice;
+ * Phase 7 adds the per-request version contract (ADR-0059): the
+ * Armature-Version and Armature-Capabilities headers, read by `negotiate`
+ * on every request, and the discovery and schema routes.
  */
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { ApiError } from './errors';
 import { branches } from './routes/branches';
+import { discover } from './routes/discover';
 import { documents } from './routes/documents';
 import { exportRoutes } from './routes/export';
 import { intelligence } from './routes/intelligence';
 import { users } from './routes/users';
 import { isUnknownRef, StoreError } from './store';
+import { CURRENT_REVISION, negotiate } from './version';
 
 export const app = new Hono().basePath('/api/v1');
+
+app.use('*', negotiate);
 
 app.route('/documents', documents);
 app.route('/branches', branches);
 app.route('/users', users);
 app.route('/intelligence', intelligence);
 app.route('/export', exportRoutes);
+app.route('/', discover);
 
 /**
  * Maps errors to responses. Hub errors render themselves; store errors are
@@ -39,6 +47,8 @@ app.route('/export', exportRoutes);
  * 500 with the detail in the server log, never in the response.
  */
 app.onError((err, c) => {
+  // An error answer still says which revision served it (ADR-0059 decision 3).
+  c.header('Armature-Version', CURRENT_REVISION);
   if (err instanceof ApiError) {
     return c.json({ error: err.code, message: err.message, ...err.details }, err.status);
   }
