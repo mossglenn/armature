@@ -19,7 +19,7 @@ The app needs the TerminusDB container running with the schema and seed loaded (
 | `TERMINUS_DB` | Database name | `armature` |
 | `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local | `header` |
 | `ARMATURE_EXPORT_KEY` | Optional. The key under which `GET /api/v1/export?profile=pseudonymous` derives user tokens (ADR-0031); set it so the same person has the same token in every export, leave it unset and each export mints its own | unset |
-| `PORT`, `HOST` | The standalone hub only (`npm run start:hub` and the container): where it listens. The Next.js host ignores them | `3100`, `0.0.0.0` |
+| `PORT`, `HOST` | The standalone hub only (`npm run start:hub` and the container): where it listens. Loopback by default because the `header` resolver trusts the caller; the container sets `HOST=0.0.0.0` inside its own network and `docker-compose.yml` confines what is published. The Next.js host ignores them | `3100`, `127.0.0.1` |
 
 The standalone hub reads `.env.local` from its working directory as Next.js does (a variable already set in the environment wins); the container has no such file and takes everything from `docker-compose.yml`, which publishes its port on loopback only by default (`ARMATURE_HUB_BIND`), because the `header` resolver trusts the caller.
 
