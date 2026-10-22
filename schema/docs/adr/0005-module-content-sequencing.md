@@ -17,6 +17,14 @@ ordering the items an activity uses formatively (constraint 17). The composed mo
 this ADR assigns to the API, still unbuilt, nests an activity's items under the activity when it
 is built.
 
+**Note (2026-10-22):** the composed view is built: `GET /api/v1/intelligence/module-content/:moduleId`
+(capability `armature/intelligence.module-content`). Decided with it: the read sits with the
+intelligence reads (computed at a ref, like coverage); an entry without a `sequence`, which the
+schema allows at every level, follows those with one, by link id; and the view is a tree of
+placements, so an activity the keys let appear twice in one module (standalone and in a group, or
+in two groups) is shown at each place with the link that put it there and named in `repeated`,
+never refused. See the note under Consequences.
+
 ## Context
 A module's content is heterogeneous — it can contain standalone LearningActivities and ActivityGroups, interleaved in a pedagogically meaningful order. These are stored in two separate junction document types: `ModuleActivityLink` and `ModuleActivityGroupLink`.
 
@@ -56,3 +64,8 @@ Module
   > `app/lib/api/invariants/moduleContent.ts`, answered with 422 `invariant_violation`. Contiguity
   > is not required. A composed, ordered view of a module's content is not yet an API route: clients
   > read the link documents through `GET /api/v1/documents/:type` and sort them.
+
+  > **Later change (2026-10-22):** The composed view is the read
+  > `GET /api/v1/intelligence/module-content/:moduleId`, which merges the two link types by
+  > `sequence`, nests each group's members and each activity's formative items (ADR-0061) in their
+  > own orders, and never combines the integers. Clients no longer sort the links themselves.

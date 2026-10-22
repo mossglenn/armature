@@ -45,9 +45,9 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 - a version-controlled API: reads at any branch or commit, history and differences per document, branches, three-way merges with conflict reports
 - one write path for every document type, enforcing every rule the database cannot (the invariants engine), with the author and reason recorded on every change
 - identity resolution for people and AI agents
-- the six design-intelligence reads (coverage, alignment, trace, impact, attestation staleness and item statistics) and a read-only Coverage View page that shows each item's statistics beside the coverage it counts toward
+- the seven design-intelligence reads (coverage, alignment, trace, impact, attestation staleness, item statistics and a module's content in teaching order) and a read-only Coverage View page that shows each item's statistics beside the coverage it counts toward, and the module's activities in order
 - external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
-- 175 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
+- 197 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
 
 - `@armature/types` and `@armature/client`, installable packages a plugin builds on: the schema as TypeScript and every route as a typed function (Phase 7, 2026-10-21)
 
@@ -143,7 +143,7 @@ curl -X PUT "http://localhost:3100/api/v1/documents/DesignNote/my-note?branch=my
 
 Writes need the `Armature-User` header carrying a registered user's external identifier; the seed registers `demo-designer@example.edu`. The [API reference](docs/api.md) documents every route.
 
-**Tests.** `npm test` in `app/` runs the 175 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
+**Tests.** `npm test` in `app/` runs the 197 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
 
 **After a schema change.** Run `npm run generate:types` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
 

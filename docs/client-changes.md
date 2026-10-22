@@ -15,6 +15,25 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-22 · A module's content in teaching order
+
+**What changed.** `GET /api/v1/intelligence/module-content/:moduleId` returns a module's
+activities and groups merged by `sequence`, each group's members in their order, and each
+activity's formative items (`ActivityItemLink`) in theirs, at any ref (ADR-0005). Each entry has
+`kind` (`activity` or `group`) and the `link` that placed it; an entry without a `sequence` comes
+last. An activity placed more than once in the module appears at every placement and is named in
+`repeated`. Capability `armature/intelligence.module-content`; `@armature/client` adds
+`intelligence.moduleContent()`. Same revision as the entry below: the capability is what a client
+declares to find out whether a hub has the read.
+
+**What a client does.** Nothing unless it shows or exports a module's activities. One that does
+reads this instead of listing `ModuleActivityLink`, `ModuleActivityGroupLink`,
+`ActivityGroupMember` and `ActivityItemLink` and sorting them itself. A client that assumed one
+node per activity keys its nodes by `link` instead.
+
+**CoQui.** Nothing: CoQui reviews items, not module content. An item's formative uses remain in
+the trace and impact reads.
+
 ## 2026-10-22 · Item statistics in one read
 
 **What changed.** `GET /api/v1/intelligence/item-statistics` returns the item statistics in the

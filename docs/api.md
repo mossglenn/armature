@@ -218,7 +218,7 @@ AI agents are ordinary users whose `externalId` begins with `agent:` (for exampl
 
 ## Design intelligence
 
-All six reads compute their answers from the graph at the requested ref; nothing they report is stored (ADR-0056). Each accepts `?branch=` or `?ref=` and returns the commit in `ETag`.
+All seven reads compute their answers from the graph at the requested ref; nothing they report is stored (ADR-0056). Each accepts `?branch=` or `?ref=` and returns the commit in `ETag`.
 
 ### `GET /intelligence/coverage/:moduleId`
 
@@ -314,6 +314,31 @@ Response:
 ```
 
 Errors: 404 `not_found` for an unknown module.
+
+### `GET /intelligence/module-content/:moduleId`
+
+A module's content in teaching order, the composed view ADR-0005 assigns the API. The module's `ModuleActivityLink`s and `ModuleActivityGroupLink`s are merged by `sequence` (one namespace, constraint 3); each group's members follow in their `ActivityGroupMember` order (constraint 4); each activity carries the items it uses formatively in their `ActivityItemLink` order (ADR-0061, constraint 17). The three sequences are never combined. Every `sequence` is optional in the schema: an entry without one follows those with one, ordered by link id, and carries no `sequence`. `:moduleId` is the bare id (`how-ai-works`), as for coverage.
+
+The view is a tree of placements, not a set of activities. The keys allow one activity both standalone and inside a group of the same module, or in two of its groups; it appears at each place, each time with the `link` that put it there (a `ModuleActivityLink` or an `ActivityGroupMember`), and `repeated` names it with every placement. Nothing calls that an error. A module's assessments are not content in this sense: read them through coverage.
+
+Response:
+
+```
+{
+  module:  { id, type, label },
+  summary: { entries, groups, activities, placements, formativeUses, unsequenced },
+  content: [
+    { kind: "activity", sequence?, link,
+      activity: { id, type, label, activityType?, targets: [ "<objective id>", ... ] },
+      items: [ { sequence?, link, item: { id, type, label, bloomsLevel, status } } ] },
+    { kind: "group", sequence?, link, group: { id, type, label },
+      members: [ { sequence?, link, activity, items } ] } ],
+  repeated: [ { activity: { id, type, label }, placements: [ "<link id>", ... ] } ]
+}
+```
+
+`activities` counts distinct activities and `placements` every place one appears; `unsequenced` counts links at any level without a `sequence`. Formative uses count toward no coverage. Errors: 404 `not_found` for an unknown module.
+
 ### `GET /intelligence/impact/:type/:id`
 
 Every document that references this one, found from the schema's reference fields: `{ document, summary: { references, byType }, references: [ { id, type, label, field, within? } ] }`. For a junction, `within` names what it sits in (the assessment a placement belongs to, the module a declaration is for).

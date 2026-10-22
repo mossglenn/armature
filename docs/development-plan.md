@@ -919,7 +919,11 @@ what evidence would be enough.
   Either amend ADR-0007 so the generic path is the recorded decision (the two-client test favors
   it: a curriculum mapper and an AI design assistant would both write declarations), or add a
   rule restricting writes. Evidence: the objective and curriculum mapper reference client.
-- **The ordered module-content view.** ADR-0005 assigns the API the job of merging
+- **The ordered module-content view.** *Resolved 2026-10-22: built as
+  `GET /api/v1/intelligence/module-content/:moduleId`, with the Coverage View as its first
+  client. A tree of placements: an activity placed twice in one module appears at each place and
+  in `repeated`; an unsequenced entry comes last (ADR-0005's note of that date). The course tree
+  at one commit, the course builder's other ask, waits for that client.* ADR-0005 assigns the API the job of merging
   `ModuleActivityLink` and `ModuleActivityGroupLink` by `sequence` into one ordered view of a
   module, with each group's members in their own order. The uniqueness rules are enforced
   (constraints 3 and 4), but the composed view has not been built; clients sort the links
