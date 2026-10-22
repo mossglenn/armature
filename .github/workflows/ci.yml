@@ -17,7 +17,10 @@
 #
 #   contract  The contract suite (Phase 7 of docs/development-plan.md): starts
 #             TerminusDB as a service container, waits for it, loads the schema,
-#             seeds the demonstration course and runs `npm test` in app/, which
+#             seeds the demonstration course, checks the seed against every rule
+#             with the operator's `check` (ADR-0062; the seed is written outside
+#             the API, so nothing else would notice a seed that breaks a rule),
+#             and runs `npm test` in app/, which
 #             calls the Hono app in-process against that store and exercises every
 #             /api/v1 route and every invariant, and serves it once over a socket
 #             (lib/hub.test.ts). The Vitest global setup waits again for the seeded
@@ -102,6 +105,8 @@ jobs:
         run: node scripts/load_schema.js
       - name: Seed the demonstration course
         run: node scripts/seed_data.js
+      - name: Check the seed against every rule
+        run: npm run operator --workspace app -- check
       - name: Run the contract suite
         run: npm test
 
