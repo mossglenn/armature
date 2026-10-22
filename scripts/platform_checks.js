@@ -100,6 +100,12 @@
 //      one request with its @id (Hash-keyed records and nested subdocument ids included); the two
 //      states compare equal once nested ids are removed
 //
+// Operator commit marker (ADR-0062), added 2026-10-22:
+//   AF. A change made on a transient branch from a target's head and applied onto the target is
+//      one commit there carrying the given author and metadata, for an insert and for a delete;
+//      the transient commits stay readable by id once their branches are deleted; an apply of
+//      an empty diff makes no commit
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -856,6 +862,43 @@ async function main() {
   record("AE7", aeBack.length === aeDocs.length && aeDiff.length === 0 ? "PASS" : "FAIL",
     `read back ${aeBack.length} of ${aeDocs.length} documents; differing once nested @ids are removed: ${aeDiff.length} ${short(aeDiff.slice(0, 5))}; byte-identical including nested ids: ${aeNestedKept}`);
   await api("DELETE", `/api/branch/admin/${DB}/local/branch/ae-empty`, {});
+
+  // AF: the operator commit marker (ADR-0062). The document API ignores commit metadata (V4) and
+  // apply stores it (V2), so a repair is made on a transient branch cut at the target's head and
+  // applied onto the target as one commit with the marker.
+  const afBranch = (name, origin) => api("POST", `/api/branch/admin/${DB}/local/branch/${name}`, { origin: `admin/${DB}/local/${origin}` });
+  const afApply = (base, source, message, metadata) =>
+    api("POST", `/api/apply/admin/${DB}/local/branch/af-target`, { before_commit: base, after_commit: source, commit_info: { author: "operator-probe", message, metadata } });
+  const afMarker = (rulesSkipped) => ({ armature: { operator: { tool: "probe", rulesSkipped } } });
+  await afBranch("af-target", "branch/main");
+  const afBase1 = await head("af-target");
+  await afBranch("af-tx1", `commit/${afBase1}`);
+  await api("POST", at("branch/af-tx1", commit("af insert on the transient branch")), { "@type": "Artifact", "@id": "Artifact/af-doc", label: "af" });
+  const afTx1 = await head("af-tx1");
+  r = await afApply(afBase1, afTx1, "af operator insert", afMarker(false));
+  const afHead1 = (await log("af-target", 1))?.[0];
+  const afDoc = (await api("GET", at("branch/af-target", "id=Artifact/af-doc"))).json;
+  record("AF1", r.status === 200 && afHead1?.author === "operator-probe" && afHead1?.metadata?.armature?.operator?.rulesSkipped === false && afDoc?.label === "af" ? "PASS" : "FAIL",
+    `an insert applied from a transient branch: ${r.status}; target head author ${afHead1?.author}, metadata ${short(afHead1?.metadata)}; document on the target: ${afDoc?.label === "af" ? "yes" : "no"}`);
+  await afBranch("af-tx2", `commit/${afHead1?.identifier}`);
+  await api("DELETE", at("branch/af-tx2", `${commit("af delete on the transient branch")}&id=Artifact/af-doc`));
+  const afTx2 = await head("af-tx2");
+  r = await afApply(afHead1?.identifier, afTx2, "af operator delete", afMarker(true));
+  const afHead2 = (await log("af-target", 1))?.[0];
+  const afAfter = (await api("GET", at("branch/af-target", "id=Artifact/af-doc"))).json;
+  const afDeleted = typeof afAfter === "string" ? afAfter.includes("api:DocumentNotFound") : afAfter?.["@type"] !== "Artifact";
+  record("AF2", r.status === 200 && afHead2?.metadata?.armature?.operator?.rulesSkipped === true && afHead2?.identifier !== afHead1?.identifier && afDeleted ? "PASS" : "FAIL",
+    `a delete applied from a transient branch: ${r.status}; a new head with metadata ${short(afHead2?.metadata)}; document ${afDeleted ? "gone" : "still there"} on the target`);
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/af-tx1`, {});
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/af-tx2`, {});
+  const afOrphans = await Promise.all([afTx1, afTx2].map(commitDoc));
+  record("AF3", afOrphans.every((c) => c?.["@type"] === "ValidCommit") ? "PASS" : "INFO",
+    `the transient commits once their branches are deleted: ${afOrphans.map((c) => c?.["@type"] ?? "missing").join(", ")} (readable by id, on no branch)`);
+  r = await afApply(afHead2?.identifier, afHead2?.identifier, "af empty", afMarker(false));
+  const afHead3 = await head("af-target");
+  record("AF4", r.status === 200 && afHead3 === afHead2?.identifier ? "PASS" : "INFO",
+    `apply of an empty diff: ${r.status}; ${afHead3 === afHead2?.identifier ? "no commit made" : "a commit was made: " + afHead3}`);
+  await api("DELETE", `/api/branch/admin/${DB}/local/branch/af-target`, {});
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
