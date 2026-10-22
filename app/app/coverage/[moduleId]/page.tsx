@@ -1,4 +1,11 @@
-import { HubError, type CoverageItem, type CoverageVerdict as Verdict, type ItemStatistic } from '@armature/client';
+import {
+  HubError,
+  type CoverageItem,
+  type CoverageVerdict as Verdict,
+  type ItemStatistic,
+  type ModuleContentReport,
+  type PlacedActivity,
+} from '@armature/client';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { hubPublicUrl, viewerHub } from '@/lib/viewer';
@@ -17,6 +24,12 @@ import { hubPublicUrl, viewerHub } from '@/lib/viewer';
  * for the module, every administration newest first (ADR-0058 decision 3):
  * an approved, attested item that a cohort mostly got wrong is Narrative 1's
  * starting point, and the page shows it next to the coverage it counts toward.
+ *
+ * Below, the module's content in teaching order from
+ * GET /api/v1/intelligence/module-content/:moduleId at the same commit
+ * (ADR-0005): activities and groups, each activity with the objectives it
+ * targets and the items it asks formatively, which count toward no coverage
+ * (ADR-0061).
  */
 export const dynamic = 'force-dynamic';
 
@@ -102,6 +115,75 @@ function Items({ items, statistics }: { items: CoverageItem[]; statistics: Stati
   );
 }
 
+/** An objective's label where the coverage report names it, else its id. */
+type Labels = Map<string, string>;
+
+function Sequence({ value }: { value?: number }) {
+  return <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums text-zinc-500 dark:text-zinc-400">{value ?? '·'}</span>;
+}
+
+function Activity({ placed, labels }: { placed: PlacedActivity; labels: Labels }) {
+  const { activity, items } = placed;
+  return (
+    <li className="flex gap-3 py-2">
+      <Sequence value={placed.sequence} />
+      <div className="min-w-0 text-sm">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="font-medium">{activity.label ?? activity.id}</span>
+          {activity.activityType && <span className="text-zinc-500 dark:text-zinc-400">{activity.activityType}</span>}
+        </div>
+        <p className="text-zinc-600 dark:text-zinc-400">
+          Targets {activity.targets.map((t) => labels.get(t) ?? t).join('; ')}
+        </p>
+        {items.length > 0 && (
+          <ul className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            {items.map((u) => (
+              <li key={u.link}>
+                Asks <span className="text-zinc-900 dark:text-zinc-100">{u.item.label ?? u.item.id}</span> formatively (item {u.item.status})
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function Content({ report, labels }: { report: ModuleContentReport; labels: Labels }) {
+  if (report.content.length === 0) return <p className="text-sm text-zinc-500 dark:text-zinc-400">No activities are placed in this module.</p>;
+  return (
+    <>
+      <ol className="divide-y divide-zinc-200 dark:divide-zinc-800">
+        {report.content.map((entry) =>
+          entry.kind === 'activity' ? (
+            <Activity key={entry.link} placed={entry} labels={labels} />
+          ) : (
+            <li key={entry.link} className="flex gap-3 py-2">
+              <Sequence value={entry.sequence} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  {entry.group.label ?? entry.group.id}
+                  <span className="ml-2 font-normal text-zinc-500 dark:text-zinc-400">group</span>
+                </p>
+                <ol className="mt-1 border-l border-zinc-200 pl-2 dark:border-zinc-800">
+                  {entry.members.map((m) => (
+                    <Activity key={m.link} placed={m} labels={labels} />
+                  ))}
+                </ol>
+              </div>
+            </li>
+          )
+        )}
+      </ol>
+      {report.repeated.length > 0 && (
+        <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+          Placed more than once: {report.repeated.map((r) => `${r.activity.label ?? r.activity.id} (${r.placements.length} times)`).join('; ')}.
+        </p>
+      )}
+    </>
+  );
+}
+
 export default async function CoveragePage({
   params,
   searchParams,
@@ -129,8 +211,15 @@ export default async function CoveragePage({
     });
   const { data, commit } = result;
   // At the commit the coverage was read at, so both describe one state.
-  const stats = await hub.intelligence.itemStatistics({ module: moduleId, ...(commit ? { ref: commit } : { branch }) });
+  const sameState = commit ? { ref: commit } : { branch };
+  const [stats, content] = await Promise.all([
+    hub.intelligence.itemStatistics({ module: moduleId, ...sameState }),
+    hub.intelligence.moduleContent(moduleId, sameState),
+  ]);
   const statistics: Statistics = new Map(stats.data.items.map((x) => [x.item.id, x.statistics]));
+  const labels: Labels = new Map(
+    [...data.objectives, ...data.undeclared].flatMap(({ objective }) => (objective.label ? [[objective.id, objective.label] as const] : []))
+  );
   const publicHub = hubPublicUrl();
 
   return (
@@ -212,6 +301,14 @@ export default async function CoveragePage({
         </section>
       )}
 
+      <section className="mb-10">
+        <h2 className="mb-1 text-lg font-semibold">Module content</h2>
+        <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+          Activities and groups in teaching order. Items asked inside an activity are formative and count toward no coverage.
+        </p>
+        <Content report={content.data} labels={labels} />
+      </section>
+
       <footer className="border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
         Verdicts are computed by the hub at read time from the placements and items as they stand; nothing is stored (ADR-0056).
         Item statistics are imported measurements, one per administration, newest first (ADR-0058).
@@ -220,6 +317,10 @@ export default async function CoveragePage({
             {' '}Raw data:{' '}
             <a className="font-mono hover:underline" href={`${publicHub}/api/v1/intelligence/coverage/${encodeURIComponent(moduleId)}${query}`}>
               /api/v1/intelligence/coverage/{moduleId}
+            </a>
+            {', '}
+            <a className="font-mono hover:underline" href={`${publicHub}/api/v1/intelligence/module-content/${encodeURIComponent(moduleId)}${branchQuery}`}>
+              /api/v1/intelligence/module-content/{moduleId}
             </a>
           </>
         )}
