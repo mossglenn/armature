@@ -51,7 +51,7 @@ describe('GET /api/v1/export (ADR-0031)', () => {
     expect(out.schema.some((e) => e['@id'] === 'AssessmentItem')).toBe(true);
     // The store's decoration is gone (platform check AE5), so the schema reloads.
     expect(JSON.stringify(out.schema)).not.toContain('"@max_cardinality":"inf"');
-    expect(out.documents.length).toBeGreaterThanOrEqual(53);
+    expect(out.documents.length).toBeGreaterThanOrEqual(66);
     expect(out.armature.counts.documents).toBe(out.documents.length);
     const user = out.documents.find((d) => d['@type'] === 'User')!;
     expect(user).toMatchObject({ '@id': 'User/demo-designer', displayName: 'Demo Designer' });
@@ -82,10 +82,13 @@ describe('GET /api/v1/export (ADR-0031)', () => {
       expect(u['@id']).toBe(`User/${String(u.externalId)}`);
     }
     const userIds = new Set(users.map((u) => u['@id']));
-    // The seed's documents were written outside the API and carry no createdBy (ADR-0032);
-    // the attestation carries attestedBy. Every user reference that exists must be a token.
+    // The seed names its two people in createdBy (the designer, and the reviewer on the
+    // finding) and the reviewer in attestedBy. Every user reference must be a token, and
+    // two people stay two tokens.
     const authored = first.documents.filter((d) => typeof d.createdBy === 'string');
+    expect(authored.length).toBeGreaterThan(0);
     for (const d of authored) expect(userIds.has(String(d.createdBy))).toBe(true);
+    expect(new Set(authored.map((d) => d.createdBy)).size).toBe(2);
     const attested = first.documents.filter((d) => d['@type'] === 'Attestation');
     expect(attested.length).toBeGreaterThan(0);
     for (const a of attested) expect(userIds.has(String(a.attestedBy))).toBe(true);
@@ -106,6 +109,8 @@ describe('GET /api/v1/export (ADR-0031)', () => {
     const user = out.documents.find((d) => d['@type'] === 'User')!;
     expect(Object.keys(user).sort()).toEqual(['@id', '@type', 'externalId', 'institution']);
     expect(user.institution).toBe('Example University');
+    const institutions = out.documents.filter((d) => d['@type'] === 'User').map((u) => u.institution);
+    expect(new Set(institutions)).toEqual(new Set(['Example University', 'Partner College']));
     expect(JSON.stringify(out.documents)).not.toContain('Demo Designer');
   });
 

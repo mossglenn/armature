@@ -114,13 +114,19 @@ describe('GET /api/v1/intelligence/coverage/:moduleId', () => {
 });
 
 describe('GET /api/v1/intelligence/alignment', () => {
-  it('finds no below-level item in the seed and every objective without an activity', async () => {
+  it("finds no below-level item in the seed, the objectives Module 1's activities leave out, and the Draft item no one has aligned", async () => {
     const body = await json('/api/v1/intelligence/alignment');
-    expect(body.scope).toEqual({ objectives: 7, items: 6, activities: 0 });
+    expect(body.scope).toEqual({ objectives: 7, items: 7, activities: 3 });
     expect(body.itemsBelowObjective).toEqual([]);
     expect(body.objectivesWithoutItemAtLevel.map((o: { id: string }) => o.id)).toEqual(['LearningObjective/describe-model-training']);
-    expect(body.objectivesWithoutActivity).toHaveLength(7);
-    expect(body.itemsWithoutObjective).toEqual([]);
+    expect(ids(body.objectivesWithoutActivity).sort()).toEqual([
+      'LearningObjective/distinguish-bias-types',
+      'LearningObjective/evaluate-ai-objectives',
+      'LearningObjective/evaluate-appropriate-use',
+      'LearningObjective/identify-ai-limitations',
+      'LearningObjective/write-effective-prompts',
+    ]);
+    expect(ids(body.itemsWithoutObjective)).toEqual(['AssessmentItem/training-loop-mc']);
     expect(body.unleveled).toEqual({ objectives: [], items: [] });
   });
 
@@ -182,7 +188,7 @@ describe('GET /api/v1/intelligence/impact/:type/:id', () => {
   it('lists everything that references an objective, with what each junction sits in', async () => {
     const body = await json('/api/v1/intelligence/impact/LearningObjective/distinguish-ai-approaches');
     expect(body.document.id).toBe('LearningObjective/distinguish-ai-approaches');
-    expect(body.summary.byType).toEqual({ AssessmentItem: 1, ModuleObjective: 1, PrerequisiteRecord: 2 });
+    expect(body.summary.byType).toEqual({ AssessmentItem: 1, LearningActivity: 1, ModuleObjective: 1, PrerequisiteRecord: 2 });
     const declaration = body.references.find((r: { type: string }) => r.type === 'ModuleObjective');
     expect(declaration.field).toBe('references');
     expect(declaration.within).toEqual([expect.objectContaining({ field: 'module', id: 'Module/how-ai-works', label: 'How AI Systems Work' })]);
@@ -266,7 +272,7 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
     expect(write.status).toBe(200);
 
     const bankWide = await json(`/api/v1/intelligence/alignment${q}`);
-    expect(ids(bankWide.itemsWithoutObjective)).toEqual([itemId]);
+    expect(ids(bankWide.itemsWithoutObjective).sort()).toEqual([...ids(before.itemsWithoutObjective), itemId].sort());
     expect(bankWide.scope.items).toBe(before.scope.items); // it assesses nothing, so it is in no objective's scope
 
     const placedIn = await json(`/api/v1/intelligence/alignment${q}&module=Module/ai-in-learning-design`);
@@ -283,7 +289,8 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
       message: 'Lecture 1 polls the room with the hallucination item',
       documents: [
         { '@type': 'LearningActivity', '@id': ACT, label: 'Lecture 1', targets: [objective] },
-        { '@type': 'ModuleActivityLink', module: 'Module/how-ai-works', activity: ACT, sequence: 1 },
+        // 3: the seed's own Module 1 content holds 1 and 2 (constraint 3)
+        { '@type': 'ModuleActivityLink', module: 'Module/how-ai-works', activity: ACT, sequence: 3 },
         { '@type': 'ActivityItemLink', activity: ACT, item: 'AssessmentItem/hallucination-mc', sequence: 1 },
       ],
     });
@@ -581,7 +588,7 @@ describe('GET /api/v1/intelligence/attestations/:type/:id (Phase 5 exit criterio
       fragmentId: 'bias-type-mc-opt-a',
       claimRef: 'seed:key-is-correct',
       verdict: 'Affirmed',
-      attestedBy: 'User/demo-designer',
+      attestedBy: 'User/demo-reviewer',
       state: 'Current',
     });
     const trace = await json('/api/v1/intelligence/trace/AssessmentItem/bias-type-mc');
