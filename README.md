@@ -55,7 +55,7 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 
 - an instance as three containers: the store, the hub (`docker/hub.Dockerfile`, the API bundled into one file and served by Node) and the viewer (`docker/viewer.Dockerfile`, the pages as a client of the hub); `docker compose --profile hub up` runs them on one private network on loopback, and `--profile public` adds Caddy as the only public container ([Running an instance](docs/deployment.md); Phase 7, 2026-10-21)
 
-**Next:** the rest of Phase 7 (one hosted instance, the schema guide for tool authors). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+**Next:** the rest of Phase 7: a standing hosted instance (the deployment was verified on a DigitalOcean Droplet on 2026-10-21 and destroyed by choice) and, before a writing client reaches one from elsewhere, the `oidc` resolver or an authenticating proxy. Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
 
 **Not yet suitable for public writes:** the current identity resolver trusts the caller, so the hub's port stays on the server's loopback and only the read-only viewer is published; writes happen on the server until an authenticating resolver exists. See [Running an instance](docs/deployment.md) and [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 

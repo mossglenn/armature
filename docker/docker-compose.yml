@@ -23,8 +23,9 @@
 #
 # The schema and the data are loaded from the machine either way. The hub needs no
 # running store to start: every request opens its own connection, and a store that is
-# not up yet answers as a 500 until it is. Set TERMINUSDB_ADMIN_PASS on any machine
-# that is not a laptop; `admin` is the development default only. Every service
+# not up yet answers as a 500 until it is. On any machine that is not a laptop, put
+# TERMINUSDB_ADMIN_PASS and ARMATURE_SITE in docker/.env (mode 600; Git ignores it),
+# which Compose reads on every command here; `admin` is the development default only. Every service
 # restarts with Docker (`unless-stopped`), so an instance survives a reboot.
 services:
   terminusdb:

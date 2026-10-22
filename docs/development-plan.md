@@ -816,7 +816,13 @@ Work:
       `operator` compose service; and no TLS, now Caddy behind the `public` profile with the
       viewer moved to loopback. Measured: 375 MiB running, a 1.65 GB peak building on the
       server; Docker's published ports bypass `ufw`. `deployment.md` § "A hosted instance".
-      Left: the Droplet itself, with a domain.)
+      Left: the Droplet itself, with a domain.) (Run the same day on a DigitalOcean Droplet,
+      `s-2vcpu-4gb` in `nyc3`, at `armature.amosglenn.com`: a Let's Encrypt certificate on the
+      first attempt, HTTPS with a redirect from HTTP, the hub's and store's ports dropped by the
+      provider's firewall, back 26 seconds after a reboot. One more gap closed: the settings
+      belong in `docker/.env`, since an `up` without them recreates the hub with the
+      development password. Destroyed by choice afterward, so this item stays open until an
+      instance is kept; standing one up is `deployment.md`'s steps.)
 - [x] `docs/schema-guide.md` revised from the reference-client perspective: what a tool author
       needs to know to write and read the graph. (A first conceptual version was written on
       2026-10-08, with `docs/api.md` and `docs/how-armature-works.md`. Rewritten 2026-10-21 in
