@@ -117,7 +117,10 @@ plan §6), decided on evidence from the first imported bank.
 **Neutral**
 
 - The seed is unchanged: every seed item is aligned, so `itemsWithoutObjective` is empty on `main`
-  and the behavior is shown in tests.
+  and the behavior is shown in tests. *Note 2026-10-22: the seed now holds one unaligned Draft
+  item, `training-loop-mc`, written for Module 1's training-loop activity and used there
+  formatively, so `itemsWithoutObjective` on `main` lists it beside Describe Model Training, the
+  Uncovered objective it will probably serve.*
 - Rule 2 stands, so the explainer's rule table keeps one "at least one objective" row.
 
 ## Open
