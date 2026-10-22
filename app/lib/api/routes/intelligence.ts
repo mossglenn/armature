@@ -397,6 +397,14 @@ async function moduleContext(graph: Graph, doc: TerminusDocument): Promise<Array
       const next = await graph.get(String(link.module));
       if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'module', through: link['@id'] } });
     }
+    // Placed through a group, which is placement all the same (ADR-0005); the
+    // edge names the group's link into the module.
+    for (const member of await graph.where('ActivityGroupMember', 'activity', from)) {
+      for (const link of await graph.where('ModuleActivityGroupLink', 'group', String(member.group))) {
+        const next = await graph.get(String(link.module));
+        if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'module', through: link['@id'] } });
+      }
+    }
   }
   return hops;
 }

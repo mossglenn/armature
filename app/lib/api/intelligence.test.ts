@@ -161,6 +161,15 @@ describe('GET /api/v1/intelligence/trace/:type/:id', () => {
     expect(finding.regarding).toBe('LearningObjective/identify-ai-limitations');
   });
 
+  it("reaches the module of an activity placed through its group, from an item used in it (ADR-0005, ADR-0061)", async () => {
+    const body = await json('/api/v1/intelligence/trace/AssessmentItem/training-loop-mc');
+    const use = body.edges.find((e: { via: string }) => e.via === 'activity');
+    expect(use).toMatchObject({ from: 'AssessmentItem/training-loop-mc', to: 'LearningActivity/training-loop-worked-example' });
+    const placed = body.edges.find((e: { from: string; via: string }) => e.from === 'LearningActivity/training-loop-worked-example' && e.via === 'module');
+    expect(placed).toMatchObject({ to: 'Module/how-ai-works' });
+    expect(placed.through).toMatch(/^ModuleActivityGroupLink\//);
+  });
+
   it('walks evidence down to the items that rest on it', async () => {
     const body = await json('/api/v1/intelligence/trace/DescriptiveEvidence/survey-ai-concepts');
     const nodeIds = ids(body.nodes);
