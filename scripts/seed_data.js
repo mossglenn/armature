@@ -7,14 +7,20 @@
  * Graph structure:
  *   2 LearningNeeds → 2 DescriptiveEvidence (via NeedEvidenceLink)
  *   7 LearningObjectives (4 with PrerequisiteRecords)
- *   3 Modules → 3 Assessments → 7 ItemInstances
- *   6 AssessmentItems, each with embedded stem and 4 options (24 options)
+ *   3 Modules → 3 Assessments → 8 ItemInstances
+ *   8 AssessmentItems, each with embedded stem and 4 options (32 options); one
+ *     is a Draft that assesses no objective yet (ADR-0060)
  *   7 ModuleObjectives (design intent only; coverage is computed on read,
- *     architecture decision record ADR-0056)
+ *     architecture decision record ADR-0056). Write Effective Prompts in
+ *     Module 2 has two Approved items, so it reads FullyAssessed; every other
+ *     declaration is Uncovered or PartiallyAssessed
+ *   Module 1's activities: a Practice activity and an ActivityGroup of two
+ *     sharing the module's sequence (ADR-0005), and the Draft item used
+ *     formatively inside one of them (ActivityItemLink, ADR-0061)
  *   2 DesignNotes (one on an AssessmentItem, one on a ModuleObjective junction)
- *   1 DesignFinding (on the Draft item)
- *   1 Attestation (a verdict on one option of an Approved item, in a second
- *     commit so its asOf can name the first; ADR-0028)
+ *   1 DesignFinding (on the Draft item), raised by the reviewer
+ *   1 Attestation (the reviewer's verdict on one option of an Approved item,
+ *     in a second commit so its asOf can name the first; ADR-0028)
  *   1 LearningDataset and 3 LearningMetrics (one administration of the Module 3
  *     capstone to a spring pilot cohort, in a third commit whose asOf names the
  *     first; two item difficulties and a mean score; ADR-0057, ADR-0058, ADR-0063),
@@ -22,7 +28,14 @@
  *   external references (ADR-0030): a CASE competency on one objective, an xAPI
  *     activity on the dataset
  *   1 Course
- *   1 User (User/demo-designer, the identity the tests and local clients send)
+ *   2 Users: User/demo-designer, the identity the tests and local clients send,
+ *     and User/demo-reviewer, a subject-matter reviewer from a partner college.
+ *     Every record whose class carries createdBy names one of them: the
+ *     reviewer the finding, the designer the rest. The API sets createdBy from
+ *     the caller (ADR-0032); the seed writes the store directly and sets it
+ *
+ * Every rule the hub enforces holds over the seed: CI runs the operator's
+ * `check` after seeding (ADR-0062).
  *
  * Safe to re-run: clears existing instance data before inserting.
  *
@@ -36,6 +49,7 @@
  *   TERMINUS_DB     - Database name           (default: armature)
  */
 
+import { readFileSync } from "node:fs";
 import { WOQLClient } from "terminusdb";
 
 const TERMINUS_URL  = process.env.TERMINUS_URL  || "http://localhost:6363";
@@ -51,6 +65,23 @@ const TERMINUS_DB   = process.env.TERMINUS_DB   || "armature";
 // ---------------------------------------------------------------------------
 
 const id = (type, key) => `${type}/${key}`;
+
+// The classes that carry createdBy, read from the schema (declared or
+// inherited) so the seed keeps no list of types. A record whose class carries
+// it names the designer unless it names someone else already.
+const schemaClasses = Object.fromEntries(
+  JSON.parse(readFileSync(new URL("../schema/schema.json", import.meta.url), "utf8"))
+    .filter((c) => c["@type"] === "Class")
+    .map((c) => [c["@id"], c]),
+);
+const carriesCreatedBy = (name) => {
+  const c = schemaClasses[name];
+  if (!c) return false;
+  const parents = [c["@inherits"] ?? []].flat();
+  return "createdBy" in c || parents.some(carriesCreatedBy);
+};
+const authored = (docs) =>
+  docs.map((d) => (carriesCreatedBy(d["@type"]) && d.createdBy === undefined ? { ...d, createdBy: id("User", "demo-designer") } : d));
 
 // ---------------------------------------------------------------------------
 // Seed documents
@@ -71,6 +102,18 @@ const documents = [
     "externalId": "demo-designer@example.edu",
     "email": "demo-designer@example.edu",
     "institution": "Example University",
+  },
+
+  // The subject-matter reviewer: raises the finding on the Draft item and
+  // attests the bias item's key. From another institution, so the
+  // institutional export profile has two to report (ADR-0031).
+  {
+    "@type": "User",
+    "@id": id("User", "demo-reviewer"),
+    "displayName": "Demo Reviewer",
+    "externalId": "demo-reviewer@example.edu",
+    "email": "demo-reviewer@example.edu",
+    "institution": "Partner College",
   },
 
   // -------------------------------------------------------------------------
@@ -470,6 +513,46 @@ const documents = [
     "assesses": [id("LearningObjective", "write-effective-prompts")],
   },
 
+  // The second Approved item for Write Effective Prompts: with it, the Module 2
+  // declaration reads FullyAssessed (two to four distinct items, ADR-0029).
+  {
+    "@type": "AssessmentItem",
+    "@id": id("AssessmentItem", "revise-prompt-mc"),
+    "label": "Revising a weak prompt",
+    "stem": { "@type": "TextFragment", "fragmentId": "revise-prompt-mc-stem", "text": "A designer's prompt, \"Write quiz questions about prompt engineering,\" returns trivia-style recall questions. Which revision most directly addresses the problem?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "revise-prompt-mc-opt-a", "text": "Add \"Make them good questions.\"", "isCorrect": false, "feedback": "A vague request for quality gives the AI no criteria to act on." },
+      { "@type": "ItemOption", "fragmentId": "revise-prompt-mc-opt-b", "text": "Name the Bloom level, the audience and the objective each question should assess.", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "revise-prompt-mc-opt-c", "text": "Ask for more questions so the best ones can be chosen.", "isCorrect": false, "feedback": "More output of the same kind does not change the cognitive level of the questions.", "purpose": "Targets treating prompt quality as a volume problem." },
+      { "@type": "ItemOption", "fragmentId": "revise-prompt-mc-opt-d", "text": "Shorten the prompt so the AI is less likely to misread it.", "isCorrect": false, "feedback": "Brevity removes context; the original prompt already lacks the constraints that matter." },
+    ],
+    "status": "Approved",
+    "itemType": "MultipleChoice",
+    "bloomsLevel": "Apply",
+    "assesses": [id("LearningObjective", "write-effective-prompts")],
+  },
+
+  // Drafted for the training-loop activity before anyone aligned it, and used
+  // there formatively (below). It assesses nothing yet, so it counts toward no
+  // coverage and the alignment read lists it under itemsWithoutObjective
+  // (ADR-0060), beside Describe Model Training, the Uncovered objective it
+  // will probably serve.
+  {
+    "@type": "AssessmentItem",
+    "@id": id("AssessmentItem", "training-loop-mc"),
+    "label": "The step after a prediction",
+    "stem": { "@type": "TextFragment", "fragmentId": "training-loop-mc-stem", "text": "During training, what happens immediately after a model makes a prediction on a training example?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "training-loop-mc-opt-a", "text": "The prediction is compared with the correct answer to measure the error.", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "training-loop-mc-opt-b", "text": "A designer writes a new rule to handle that example.", "isCorrect": false, "feedback": "That describes building a rule-based system, not training a model.", "purpose": "Targets carrying the rule-based picture into training." },
+      { "@type": "ItemOption", "fragmentId": "training-loop-mc-opt-c", "text": "The model is released to learners.", "isCorrect": false, "feedback": "Deployment comes after training ends, not between its steps." },
+      { "@type": "ItemOption", "fragmentId": "training-loop-mc-opt-d", "text": "The training example is removed from the data set.", "isCorrect": false, "feedback": "Examples are used again across many passes; nothing is removed after one prediction." },
+    ],
+    "status": "Draft",
+    "itemType": "MultipleChoice",
+    "bloomsLevel": "Understand",
+  },
+
   {
     "@type": "AssessmentItem",
     "@id": id("AssessmentItem", "bias-type-mc"),
@@ -515,11 +598,58 @@ const documents = [
   // Module 2 assessment
   { "@type": "ItemInstance", "sequence": 1, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod2-assessment"), "implements": id("AssessmentItem", "evaluate-objective-mc") },
   { "@type": "ItemInstance", "sequence": 2, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod2-assessment"), "implements": id("AssessmentItem", "effective-prompt-mc") },
+  { "@type": "ItemInstance", "sequence": 3, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod2-assessment"), "implements": id("AssessmentItem", "revise-prompt-mc") },
 
   // Module 3 capstone — note item 4 (effective-prompt-mc) reused here
   { "@type": "ItemInstance", "sequence": 1, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod3-assessment"), "implements": id("AssessmentItem", "bias-type-mc") },
   { "@type": "ItemInstance", "sequence": 2, "pointValue": 3, "randomize": true, "status": "InReview", "assessment": id("Assessment", "mod3-assessment"), "implements": id("AssessmentItem", "appropriate-use-mc") },
   { "@type": "ItemInstance", "sequence": 3, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod3-assessment"), "implements": id("AssessmentItem", "effective-prompt-mc") },
+
+  // -------------------------------------------------------------------------
+  // Module 1 activities
+  // -------------------------------------------------------------------------
+
+  // A practice activity and a group of two, in one sequence space for the
+  // module (ADR-0005: ModuleActivityLink and ModuleActivityGroupLink share it).
+  // A group holds activities only (constraint 6). The group is the
+  // training-loop activity the note on Describe Model Training waits for.
+  {
+    "@type": "LearningActivity",
+    "@id": id("LearningActivity", "sort-ai-systems"),
+    "label": "Sort the systems",
+    "description": "Learners sort eight described tools into rule-based systems and machine learning models, then compare their sorting with a short explanation of each.",
+    "activityType": "Practice",
+    "targets": [id("LearningObjective", "distinguish-ai-approaches")],
+  },
+  {
+    "@type": "ActivityGroup",
+    "@id": id("ActivityGroup", "how-a-model-learns"),
+    "label": "How a model learns",
+    "description": "The training loop in two steps: watch one model learn, then trace a single training step by hand.",
+  },
+  {
+    "@type": "LearningActivity",
+    "@id": id("LearningActivity", "training-loop-video"),
+    "label": "Watch a model learn",
+    "description": "A four-minute video of a small classifier improving over successive passes through its training data.",
+    "activityType": "Video",
+    "targets": [id("LearningObjective", "describe-model-training")],
+  },
+  {
+    "@type": "LearningActivity",
+    "@id": id("LearningActivity", "training-loop-worked-example"),
+    "label": "Trace one training step",
+    "description": "A worked example that follows one training example through prediction, error and adjustment.",
+    "activityType": "WorkedExample",
+    "targets": [id("LearningObjective", "describe-model-training")],
+  },
+  { "@type": "ModuleActivityLink", "sequence": 1, "module": id("Module", "how-ai-works"), "activity": id("LearningActivity", "sort-ai-systems") },
+  { "@type": "ModuleActivityGroupLink", "sequence": 2, "module": id("Module", "how-ai-works"), "group": id("ActivityGroup", "how-a-model-learns") },
+  { "@type": "ActivityGroupMember", "sequence": 1, "group": id("ActivityGroup", "how-a-model-learns"), "activity": id("LearningActivity", "training-loop-video") },
+  { "@type": "ActivityGroupMember", "sequence": 2, "group": id("ActivityGroup", "how-a-model-learns"), "activity": id("LearningActivity", "training-loop-worked-example") },
+  // The Draft item as a check inside the worked example (ADR-0061): formative
+  // use carries no points and no clearance, and counts toward no coverage.
+  { "@type": "ActivityItemLink", "sequence": 1, "activity": id("LearningActivity", "training-loop-worked-example"), "item": id("AssessmentItem", "training-loop-mc") },
 
   // -------------------------------------------------------------------------
   // Design Note
@@ -562,11 +692,12 @@ const documents = [
     "regarding": id("LearningObjective", "identify-ai-limitations"),
     "confidence": "Medium",
     "status": "Open",
+    "createdBy": id("User", "demo-reviewer"),
   },
 
 ];
 
-// An expert affirmed the key of the bias item (ADR-0028). It is written in a
+// The reviewer affirmed the key of the bias item (ADR-0028). It is written in a
 // second commit because asOf names the commit the verdict is about, and a
 // commit cannot name itself. Hash-keyed: the store mints the id from subject,
 // fragmentId, claimRef and attestedBy, so the seed supplies none. The API
@@ -580,7 +711,7 @@ const attestation = (asOf) => ({
   "verdict": "Affirmed",
   "reason": "The scenario describes an unrepresentative training set; the distractors name output or human biases.",
   "asOf": asOf,
-  "attestedBy": id("User", "demo-designer"),
+  "attestedBy": id("User", "demo-reviewer"),
 });
 
 // One administration of the Module 3 capstone (ADR-0063): the dataset names the
@@ -666,7 +797,7 @@ async function main() {
   // the string "replace" became the commit message).
   console.log("Replacing instance data with the seed...");
   await client.addDocument(
-    documents,
+    authored(documents),
     { full_replace: true },
     null,
     "Seed demo data: Introduction to AI for Instructional Designers",
@@ -686,7 +817,7 @@ async function main() {
   );
   console.log("Recording the spring pilot results...");
   await client.addDocument(
-    outcomes(seedCommit),
+    authored(outcomes(seedCommit)),
     {},
     null,
     "Seed demo data: results of the Module 3 capstone, spring 2026 pilot cohort",

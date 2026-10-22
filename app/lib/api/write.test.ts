@@ -325,8 +325,9 @@ describe('generic write path and invariants (Phase 3)', () => {
         message: 'Sequence the module',
         documents: [
           ...scaffold,
-          { '@type': 'ModuleActivityLink', module: MODULE, activity: A, sequence: 1 },
-          { '@type': 'ModuleActivityGroupLink', module: MODULE, group: G, sequence: 2 },
+          // 11 and 12: the seed's own Module 1 content holds 1 and 2
+          { '@type': 'ModuleActivityLink', module: MODULE, activity: A, sequence: 11 },
+          { '@type': 'ModuleActivityGroupLink', module: MODULE, group: G, sequence: 12 },
         ],
       });
       expect(res.status).toBe(200);
