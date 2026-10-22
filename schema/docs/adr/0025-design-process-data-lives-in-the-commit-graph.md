@@ -36,6 +36,9 @@ the plugin API is a new commit too, and the store's document delete is one (chec
 branches left by tests and probes may be deleted by an operator who names them as scratch; a branch
 holding design work follows the rule below.
 
+**Note 2026-10-22:** ADR-0062 is accepted and built: the operator's `delete --scratch-branch` takes
+only a name starting `test-`, `warmup-`, `anon-` or `future-`, and every other repair is a commit.
+
 ## Context
 
 The position paper's third principle (plan §1 P3) promises version control modeled on Git:

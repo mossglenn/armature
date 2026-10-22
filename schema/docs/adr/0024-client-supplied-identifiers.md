@@ -20,6 +20,10 @@ decision 4 is constraint 12 (409 `type_conflict`). **Open:** the lossless-write 
 the plugin API" is: an operator surface outside `/api/v1`, with store credentials, that deletes a
 document as a commit and never rewrites history.
 
+**Note 2026-10-22:** ADR-0062 is accepted and built. Decision 5's operation is the operator's
+`delete` (`app/lib/operator/repair.ts`), a commit by the operator's `User`; a deleted id is free to
+write again, under any type, which is how an id written under the wrong type is cleared.
+
 ## Context
 
 Two identifier conventions have coexisted since the first seed: the seed script supplies readable
