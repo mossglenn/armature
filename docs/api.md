@@ -176,6 +176,8 @@ Merges another branch into `:name` with the database's three-way merge (ADR-0025
 - Headers: `Armature-User` (required).
 - Body: `{ "message": "...", "from": "<source branch>" }`.
 - Success: `{ commit, base, source, target, upToDate: false }`. The merge commit records the merged source commit in its metadata (`armature.mergeSource`).
+
+A commit an operator made outside this API (ADR-0062) carries `armature.operator` in its metadata instead: `{ "tool": "put" | "delete", "rulesSkipped": true | false }`. It appears wherever a head's `metadata` does; a document's history shows the operator's message, which says when the hub's rules were skipped.
 - Already merged: `{ commit: <target head>, base, source, target, upToDate: true }`, with no new commit.
 - No shared history: 409 `no_common_ancestor`.
 - Conflict: **409** `merge_conflict` with `{ base, source, target, conflicts }`. Each conflict is either `{ id, field, base, target, source }` (both sides changed a field; the three values) or `{ id, op: "InsertConflict" }` (both sides created the same identifier with different content). Nothing is resolved automatically; the target branch is unchanged.

@@ -809,7 +809,9 @@ Work:
       they are. `check` runs the invariants engine over a whole branch with the two write-only
       rules skipped by code, and found nothing in the seed; `put --unchecked` passes the
       pipeline's `invariants: 'skip'`, which no route may pass. Building `delete` corrected the
-      AC4 fact in §9. CI bundles the tools and runs them inside the hub's image.)
+      AC4 fact in §9. CI bundles the tools and runs them inside the hub's image.) (The same day:
+      every operator commit marked `armature.operator` in its metadata, through a transient
+      branch and `apply`, check AF; and `check` over the seed as a CI step after seeding.)
 - [ ] Deploy one hosted instance for the public demo so CoQui's recorded hub is a fallback
       rather than the source. What runs is settled and documented (`docs/deployment.md`,
       2026-10-21): the compose file's three containers on one server, the viewer public, the hub
@@ -1231,6 +1233,12 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   (*Corrected 2026-10-22:* it did not. The text body passed through as the document until
   building ADR-0062's `delete` showed a write reusing the deleted id refused as `type_conflict`;
   the adapter's `request()` now raises the embedded status.)
+- *Verified (2026-10-22, check AF, for ADR-0062's operator marker):* a change made on a transient
+  branch cut at a target's head (`origin` a commit) and applied onto the target with
+  `commit_info.metadata` is one commit there with that author and metadata, for an insert and for a
+  document delete alike; its parent is the target's previous head. The transient commit stays
+  readable by id once its branch is deleted, on no branch. An apply of an empty diff answers 200
+  and makes no commit.
 - *Corrected:* the JavaScript client sets `author` from its connection user and provides no
   override on any write method. The HTTP document API accepts `author` and `message` query
   parameters on `POST`, `PUT` and `DELETE`. All store calls from the API layer go over HTTP

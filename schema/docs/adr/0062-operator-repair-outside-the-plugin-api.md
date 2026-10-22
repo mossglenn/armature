@@ -49,6 +49,24 @@ who is not a registered `User` and a repair without a reason; branch deletion ta
 `--scratch-branch` and a name starting `test-`, `warmup-`, `anon-` or `future-` (decision 7).
 The open items below remain open.
 
+**Note 2026-10-22, the marker and the seed check.** Two of the open items are closed the same day:
+
+- **Every operator commit is marked** in its metadata as
+  `{ "armature": { "operator": { "tool": "put" | "delete", "rulesSkipped": true | false } } }`, beside
+  the merge route's `mergeSource`. Since the document API drops commit metadata (V4), a repair is
+  made on a transient branch (`operator-…`) cut at the target's head and applied onto the target as
+  one commit carrying the marker, authored by the operator with the reason as the message; the
+  transient branch is deleted when the repair ends. A target that moved meanwhile is refused, not
+  merged, because a checked write was checked against the head it started from. Check AF
+  (2026-10-22) confirms that `apply` carries an insert and a delete this way, that the transient
+  commit stays readable by id on no branch, and that an empty diff makes no commit. The marker is
+  in the branch log and on a branch's head (`GET /api/v1/branches/:name`); `/api/history` entries
+  carry no metadata (V3c), so a document's history shows the operator's message, which keeps the
+  `[operator: the hub's rules were skipped]` note for that reason. `operator-` joins the scratch
+  prefixes, so a transient branch a crash left behind can be deleted.
+- **`check` runs in CI** after the seed is loaded, in the contract job, before the tests. The seed
+  is written outside the API, so nothing else would notice a seed that breaks a rule.
+
 ## Context
 
 The hub's write path applies seventeen rules to every write (CLAUDE.md, "Critical API constraints")
@@ -244,11 +262,21 @@ earlier check T2:
 
 - **A marker for operator commits** in commit metadata, so a reader of the log can filter them
   without parsing messages. The document API ignores a `metadata` parameter (V4); `apply` accepts
-  one (V2). Decide when `check` or `put` first needs to find earlier repairs.
+  one (V2). Decide when `check` or `put` first needs to find earlier repairs. *Done 2026-10-22,
+  before any tool needed it: see the second note under Status.*
 - **`check` as a scheduled job** over `main`, or as a CI step after the seed, once the tests run in
-  CI (Phase 7).
+  CI (Phase 7). *The CI step is done 2026-10-22 (second note under Status); a scheduled job over
+  a deployed instance's `main` is still open, and waits for an instance that is kept.*
 - **Whether the three tools ship in the Phase 7 toolkit** as a command of the client package or
-  stay scripts in this repository.
+  stay scripts in this repository. *Decided 2026-10-22: neither. They ship in the hub's image,
+  beside the hub, and not in `@armature/client`. The client package is a plugin's view of the
+  API, over HTTP and without store credentials; tools that write outside `/api/v1` with the
+  store's credentials do not belong in every plugin's dependencies. They reuse the hub's adapter,
+  rules and pipeline, so they are correct only at the hub's own version, which the image
+  guarantees and a separately released package would not. And they work only where the store's
+  credentials are, which on a server is the hub's container. If operators need them without a
+  checkout, a published hub image (plan, Phase 7 follow-ups) delivers them; if they ever need a
+  package of their own, it is a separate one versioned with the hub, never the client.*
 
 ## Related
 
