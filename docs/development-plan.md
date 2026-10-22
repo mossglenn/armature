@@ -1028,7 +1028,12 @@ what evidence would be enough.
   weight, because the graph gave them nowhere else to put it. Clients that would need it: the
   needs-analysis intake and the AI design assistant (proposing a need and the evidence against
   it). Until then the schema guide and the explainer say what `confidence` is and is not.
-- **Separate API service.** When Phase 7's container and client package exist, the move is
+- **Separate API service.** *Resolved 2026-10-21 (ADR-0026 decision 4, done):* the hub runs as
+  its own Node process (`app/server.ts` through `app/lib/hub.ts`, bundled by `npm run build:hub`)
+  and container (`docker/hub.Dockerfile`), and Next.js no longer mounts the API; the viewer is a
+  client of the hub through `@armature/client`. The move was as mechanical as predicted, because
+  the API was already a host-neutral Hono application (ADR-0054). Marked resolved 2026-10-22. The
+  record as raised: when Phase 7's container and client package exist, the move is
   mechanical. Evidence: a plugin that cannot or should not depend on a Next.js deployment, or
   the hosted demo needing independent scaling.
 - **Which store the hub operates for attachments, and when.** The reference shape (ADR-0030) is
