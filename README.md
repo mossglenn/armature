@@ -19,7 +19,7 @@ Armature models the design process as a graph, from problem definition through o
 - **Learning needs** grounded in **learning evidence** (quantitative metrics and qualitative findings), each link carrying the designer's confidence in that evidence
 - **Learning objectives** generated from needs, connected by **prerequisite records** that carry a type (hard, soft or corequisite) and a rationale
 - **Assessment items** in a reusable item bank that assess objectives, placed into **assessments** through **item instances**, with a review status on both the item and each placement
-- **Learning activities** that target objectives, organized into **modules** and **activity groups** in a defined order
+- **Learning activities** that target objectives, organized into **modules** and **lessons** in a defined order
 - **Module objectives** that record which objectives each module declares, and the role each plays there
 - **Design notes** (why a decision was made) and **design findings** (an evidence-grounded concern that something is wrong, and what became of it)
 

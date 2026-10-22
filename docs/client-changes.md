@@ -15,6 +15,24 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-22 · `ActivityGroup` is `Lesson`
+
+**What changed.** The ordered set of activities a module schedules is the class `Lesson`
+(ADR-0064), the peer of an `Assessment`; it was `ActivityGroup`. Its two links are renamed
+with it: `LessonActivityLink` (fields `lesson`, `activity`, `sequence`; Hash key over
+`(lesson, activity)`) replaces `ActivityGroupMember`, and `ModuleLessonLink` (fields `module`,
+`lesson`, `sequence`; Hash key over `(module, lesson)`) replaces `ModuleActivityGroupLink`.
+Constraints 3, 4 and 6 keep their numbers and meaning. The module-content read says
+`kind: "lesson"`, names the record in `lesson` and counts `summary.lessons`; `@armature/client`'s
+`ModuleContentEntry` and `ModuleContentReport` follow. Same revision as the entries below.
+
+**What a client does.** One that writes or reads activities in sequence uses the new class
+and field names; a document naming the old classes is refused as an unknown type. One that
+reads the module-content view reads `kind === 'lesson'` and `entry.lesson`. At demonstration
+scale the store is reloaded (`load_schema.js --clear-instances`, then the seed); for real data
+the rename is operator work (ADR-0064 § Platform checks). **CoQui:** nothing; it never writes
+activities or lessons.
+
 ## 2026-10-22 · A module's content in teaching order
 
 **What changed.** `GET /api/v1/intelligence/module-content/:moduleId` returns a module's
