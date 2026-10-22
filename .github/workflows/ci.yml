@@ -6,7 +6,8 @@
 #             generated `packages/types` agree (check:types), the app lints clean,
 #             the app and the packages type-check (`tsc`; lint alone missed
 #             an argument-count error once, 2026-10-20), and the standalone hub
-#             bundles (`build:hub`, esbuild over app/server.ts).
+#             and the operator tools bundle (`build:hub` and `build:operator`,
+#             esbuild over app/server.ts and app/operator.ts; ADR-0062).
 #
 # The repository is an npm workspace (root package.json: app and packages/*), so
 # one `npm ci` at the root installs the app and the packages it depends on.
@@ -26,7 +27,8 @@
 #             that it starts and answers GET /api/v1/discover, the one read that
 #             needs no store; then builds the viewer's image (docker/viewer.Dockerfile)
 #             and checks that it starts. What the hub answers over a socket is the
-#             contract job's hub test; this job guards the images themselves.
+#             contract job's hub test; this job guards the images themselves,
+#             including that the operator tools run inside the hub's image.
 #
 # Each job has a timeout, so a stalled install fails within minutes rather than
 # after GitHub's six-hour default. Healthy runs take 20 to 95 seconds a job. On
@@ -59,6 +61,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run check:types
       - run: npm run build:hub --workspace app
+      - run: npm run build:operator --workspace app
 
   contract:
     name: Contract suite against TerminusDB
@@ -123,6 +126,8 @@ jobs:
       - name: Show the log and stop
         if: always()
         run: docker logs hub; docker rm -f hub
+      - name: Run the operator tools inside the hub image
+        run: docker run --rm armature-hub node operator.mjs --help
       - name: Build the viewer image
         run: docker build -f docker/viewer.Dockerfile -t armature-viewer .
       - name: Start it and wait for a page
