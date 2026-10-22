@@ -39,6 +39,13 @@ export interface WriteOptions {
   who: ResolvedUser;
   message: string;
   ifMatch?: string;
+  /**
+   * `'skip'` leaves out step 4, the hub's rules, and nothing else: shape,
+   * identity, provenance and the store's own checks still apply. Only the
+   * operator's `put --unchecked` passes it (ADR-0062 decision 5); no route
+   * does, and a test reads the route files to keep it so.
+   */
+  invariants?: 'check' | 'skip';
 }
 
 export interface WriteResult {
@@ -149,7 +156,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   await fillAsOf(documents, existing, ctx, opts);
 
   // Step 4: invariants.
-  await checkInvariants(ctx);
+  if (opts.invariants !== 'skip') await checkInvariants(ctx);
 
   // Step 5: the write. The carried User first, then the caller's documents;
   // `ids` reports the caller's only.
