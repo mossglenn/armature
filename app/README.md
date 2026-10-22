@@ -3,7 +3,7 @@
 This directory holds two programs that share a package:
 
 1. **The Armature API and its host.** The API is a host-neutral [Hono](https://hono.dev) application in `lib/api/` (ADR-0054, an Architecture Decision Record in `schema/docs/adr/`). `server.ts` serves it as a standalone Node process through `lib/hub.ts` and `@hono/node-server`; `npm run build:hub` bundles it into `dist/server.mjs`, which `npm run start:hub` runs on this machine and the container image in `../docker/hub.Dockerfile` runs anywhere (ADR-0026 decision 4). A running API in front of a store is a **hub**.
-2. **The Armature viewer**, a [Next.js](https://nextjs.org) application with two read-only pages, the module index (`/`) and the Coverage View (`/coverage/<moduleId>`). The pages are a client of a hub like any plugin: they read it over HTTP through `@armature/client` (`lib/viewer.ts`) and know only the hub's address. `../docker/viewer.Dockerfile` packages them (Next's standalone output) as the public face of an instance, beside the hub and the store (`../docs/deployment.md`). Until 2026-10-21 Next.js also mounted the API through a catch-all route and the pages called it in-process; that made the viewer a second hub with its own store credentials, and it was removed.
+2. **The Armature viewer**, a [Next.js](https://nextjs.org) application with three read-only pages: the Design Graph (`/graph`, every record on a branch drawn in lifecycle columns; `../docs/graph-view-plan.md`), the module index (`/`) and the Coverage View (`/coverage/<moduleId>`). The pages are a client of a hub like any plugin: they read it over HTTP through `@armature/client` (`lib/viewer.ts`) and know only the hub's address; the browser never calls the hub. `../docker/viewer.Dockerfile` packages them (Next's standalone output) as the public face of an instance, beside the hub and the store (`../docs/deployment.md`). Until 2026-10-21 Next.js also mounted the API through a catch-all route and the pages called it in-process; that made the viewer a second hub with its own store credentials, and it was removed.
 
 The project's README at the repository root explains how to start the database and load the demonstration data. [How Armature Works](../docs/how-armature-works.md) explains everything the code does, and the [API reference](../docs/api.md) documents each route.
 
@@ -37,6 +37,7 @@ The hub reads `.env.local` from its working directory as Next.js does (a variabl
 | `npm run build`, `npm start` | The viewer's production build and server |
 | `npm run lint` | ESLint (runs in CI, continuous integration) |
 | `npm test` | The integration tests (Vitest) against the running database; see below |
+| `npm run test:e2e` | The browser smoke test (Playwright, `e2e/`): after `npm run build:hub` and `npm run build`, starts the hub and the viewer unless they are running and drives the Design Graph in Chromium (`npx playwright install chromium` once; runs in CI's `viewer` job) |
 | `npm run typecheck` | `tsc --noEmit` (runs in CI) |
 | `npm run sync:terminusdb-docs` | Refresh the vendored TerminusDB documentation in `../docs/vendor/terminusdb/` |
 
@@ -48,9 +49,12 @@ operator.ts                   The operator tools' command line (ADR-0062): check
 dist/                         The bundles (npm run build:hub, npm run build:operator); generated, not committed
 app/                          The viewer (Next.js); no route files, it hosts no API
   page.tsx                    The module index
+  graph/page.tsx              The Design Graph over GET /api/v1/export: the documents at the ref, people left out, handed to GraphView.tsx ('use client': derive, lay out and draw with React Flow; ArmatureNode, FilterRail, GraphPanel, Search beside it)
   coverage/[moduleId]/page.tsx  The Coverage View over GET /api/v1/intelligence/coverage/:moduleId, with each item's statistics from /intelligence/item-statistics and the module's content from /intelligence/module-content at the same commit
-  layout.tsx, globals.css     Page shell and styles (Tailwind CSS)
+  layout.tsx, globals.css     Page shell with the navigation, and styles (Tailwind CSS; the Design Graph's node and edge rules)
+e2e/graph.spec.ts             The browser smoke test (Playwright); playwright.config.ts starts the bundled hub and the built viewer
 lib/
+  graph/                      The Design Graph's pure modules: stages (the visual language as data), glyphs, derive, layout, relations, state, with their tests on a fixture and on the seed
   viewer.ts                   The viewer's hub: hubUrl() from ARMATURE_HUB_URL and viewerHub(), a read-only @armature/client
   hub.ts                      The API served by Node's HTTP server (@hono/node-server): startHub({ port }) for server.ts and the test
   hub.test.ts                 The standalone host over a real socket: the same answers as app.request(), headers included

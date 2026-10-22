@@ -46,6 +46,7 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 - one write path for every document type, enforcing every rule the database cannot (the invariants engine), with the author and reason recorded on every change
 - identity resolution for people and AI agents
 - the seven design-intelligence reads (coverage, alignment, trace, impact, attestation staleness, item statistics and a module's content in teaching order) and a read-only Coverage View page that shows each item's statistics beside the coverage it counts toward, and the module's activities in order
+- the Design Graph (`/graph`, 2026-10-22): every record on a branch at a commit drawn in lifecycle columns, every relationship a labeled edge, derived in the viewer from the schema as data; filters, search, selection with its fields, annotations and references, neighbors and upstream or downstream lit in place, every view a URL ([the visual language](docs/visual-language.md); [the plan](docs/graph-view-plan.md) for the Focus page, the Narrative 1 walk, lenses and figure export); a Playwright smoke test drives it in CI
 - external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
 - 197 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
 
@@ -156,7 +157,7 @@ Plugins (CoQui, future tools)  →  Armature API (/api/v1)  →  TerminusDB
 
 - **TerminusDB** stores the design graph as typed documents and keeps every change as a commit, with branches and merges built in.
 - **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). `app/server.ts` serves it as a standalone Node process, bundled into the container image `docker/hub.Dockerfile` builds (ADR-0026; Phase 7). A running API in front of a store is a **hub**: one address, `/api/v1`, that every client talks to.
-- **The Armature viewer** is the Next.js app's two read-only pages (`app/app/`), a client of a hub like any plugin: it reads over HTTP through `@armature/client` and knows only the hub's address.
+- **The Armature viewer** is the Next.js app's three read-only pages (`app/app/`: the Design Graph, the module index and the Coverage View), a client of a hub like any plugin: it reads over HTTP through `@armature/client` and knows only the hub's address; the browser never calls the hub.
 - **Plugins never talk to the database directly.** The API is where the rules, identity and history are enforced.
 - **The schema is the single source of truth.** Type definitions, request validation and the schema appendix are generated from `schema/schema.json`.
 
@@ -176,6 +177,7 @@ docs/
   research-path.md            How a learning scientist stands up a constrained Armature for one study
   deployment.md               Running an instance: the terms, the containers, who can do what, the steps, a hosted instance
   graph-view-plan.md          The Design Graph: the plan for the viewer's graph pages (Phase 8), the visual language and Narrative 1 as a walk
+  visual-language.md          How Armature draws a record, a relationship and the lifecycle: stages, hues, glyphs, chips, edges; the page's values, for papers and slides
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
   research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings
