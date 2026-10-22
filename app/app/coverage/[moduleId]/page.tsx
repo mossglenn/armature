@@ -27,7 +27,7 @@ import { hubPublicUrl, viewerHub } from '@/lib/viewer';
  *
  * Below, the module's content in teaching order from
  * GET /api/v1/intelligence/module-content/:moduleId at the same commit
- * (ADR-0005): activities and groups, each activity with the objectives it
+ * (ADR-0005): activities and lessons, each activity with the objectives it
  * targets and the items it asks formatively, which count toward no coverage
  * (ADR-0061).
  */
@@ -162,8 +162,8 @@ function Content({ report, labels }: { report: ModuleContentReport; labels: Labe
               <Sequence value={entry.sequence} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">
-                  {entry.group.label ?? entry.group.id}
-                  <span className="ml-2 font-normal text-zinc-500 dark:text-zinc-400">group</span>
+                  {entry.lesson.label ?? entry.lesson.id}
+                  <span className="ml-2 font-normal text-zinc-500 dark:text-zinc-400">lesson</span>
                 </p>
                 <ol className="mt-1 border-l border-zinc-200 pl-2 dark:border-zinc-800">
                   {entry.members.map((m) => (
@@ -304,7 +304,7 @@ export default async function CoveragePage({
       <section className="mb-10">
         <h2 className="mb-1 text-lg font-semibold">Module content</h2>
         <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-          Activities and groups in teaching order. Items asked inside an activity are formative and count toward no coverage.
+          Activities and lessons in teaching order. Items asked inside an activity are formative and count toward no coverage.
         </p>
         <Content report={content.data} labels={labels} />
       </section>

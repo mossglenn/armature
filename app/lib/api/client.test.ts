@@ -198,8 +198,8 @@ describe('@armature/client over the app in-process', () => {
     expect(content.data.module.id).toBe('Module/how-ai-works');
     const [first, second] = content.data.content;
     expect(first.kind === 'activity' && first.activity.activityType).toBe('Practice');
-    if (second.kind !== 'group') throw new Error('expected the group second');
-    expect(second.group.id).toBe('ActivityGroup/how-a-model-learns');
+    if (second.kind !== 'lesson') throw new Error('expected the lesson second');
+    expect(second.lesson.id).toBe('Lesson/how-a-model-learns');
     expect(second.members.map((m) => m.activity.id)).toEqual([
       'LearningActivity/training-loop-video',
       'LearningActivity/training-loop-worked-example',

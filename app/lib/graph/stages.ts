@@ -75,8 +75,7 @@ export const STAGES: Readonly<Record<string, StageEntry>> = {
   AssessmentItem: { stage: 3, hue: 'plum', glyph: 'item' },
   LearningActivity: { stage: 4, hue: 'leaf', glyph: 'activity' },
   Assessment: { stage: 5, hue: 'violet', glyph: 'assessment' },
-  // ActivityGroup is renamed Lesson in a follow-up (plan §14, item 15).
-  ActivityGroup: { stage: 5, hue: 'forest', glyph: 'group' },
+  Lesson: { stage: 5, hue: 'forest', glyph: 'lesson' },
   Module: { stage: 6, hue: 'magenta', glyph: 'module' },
   Course: { stage: 7, hue: 'yellow', glyph: 'course' },
   LearningDataset: { stage: 8, hue: 'cyan', glyph: 'dataset' },
