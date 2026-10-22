@@ -46,7 +46,7 @@ Each publication is a compose variable: `ARMATURE_VIEWER_BIND`, `ARMATURE_HUB_BI
 ## Who can do what
 
 - **Readers** reach the viewer through Caddy. Its pages only read, and they carry no identity, so nothing a reader does reaches a writing route. The viewer is read-only by construction, not because the hub enforces it (see below). Caddy proxies the viewer only: `/api/v1/…` at the public address is the viewer's 404, not the hub.
-- **Operators on the server** reach the hub on loopback (`curl http://127.0.0.1:3100/api/v1/discover`, a client run on the server) and the store on loopback with its password. This is where the schema and data are loaded, users registered, and repairs made.
+- **Operators on the server** reach the hub on loopback (`curl http://127.0.0.1:3100/api/v1/discover`, a client run on the server) and the store on loopback with its password. This is where the schema and data are loaded, users registered, and repairs made (see "Repair").
 - **Nobody else** reaches the hub or the store. The hub's identity resolver, `header`, trusts whatever `Armature-User` a request claims (ADR-0032), so a hub reachable from beyond the server would let anyone write as anyone. The loopback binding is the gate until an authenticating resolver (`oidc`, named and not built) or an authenticating proxy exists. Anything else placed on the private network can write to the hub; keep that network to these containers.
 
 Set `TERMINUSDB_ADMIN_PASS` on any server that is not a laptop, in `docker/.env` (step 1). The compose default, `admin`, is for development only, and the hub and the operator scripts take the same value for their own connections.
@@ -67,17 +67,28 @@ The server needs Docker with the Compose plugin and a checkout of this repositor
    - `docker compose run --rm operator node load_schema.js`
    - `docker compose run --rm operator node seed_data.js` for the demonstration course, or a re-import of an export for real data (ADR-0031 decision 4; `docs/research-path.md` §6)
 
-   The repository is mounted read-only; the scripts' dependencies are installed into a volume on first use and again only when `scripts/package-lock.json` changes (`docker/operator-entrypoint.sh`). Loading and repair are operator work against the store, outside the API (ADR-0062). On a laptop the same scripts also run directly with Node (`node scripts/load_schema.js`), reading `TERMINUS_URL` (default `http://localhost:6363`), `TERMINUS_USER`, `TERMINUS_PASS` and `TERMINUS_DB` (default `armature`) from the shell.
+   The repository is mounted read-only; the scripts' dependencies are installed into a volume on first use and again only when `scripts/package-lock.json` changes (`docker/operator-entrypoint.sh`). Loading is operator work against the store, outside the API (ADR-0062); so is repair, with the tools under "Repair". On a laptop the same scripts also run directly with Node (`node scripts/load_schema.js`), reading `TERMINUS_URL` (default `http://localhost:6363`), `TERMINUS_USER`, `TERMINUS_PASS` and `TERMINUS_DB` (default `armature`) from the shell.
 4. **Register the people** who will write, through the API on loopback: `POST /api/v1/users` with a registered caller (the seed registers `demo-designer@example.edu`):
    ```
    curl -X POST http://127.0.0.1:3100/api/v1/users -H 'Content-Type: application/json' \
      -H 'Armature-User: demo-designer@example.edu' \
      -d '{"message":"Register a reviewer","user":{"displayName":"…","externalId":"…"}}'
    ```
-   AI agents are users whose `externalId` begins with `agent:`. There are no routes to edit or delete a user; that is operator work too.
+   AI agents are users whose `externalId` begins with `agent:`. There are no routes to edit or delete a user; that is operator work too (see "Repair").
 5. **Point clients at it.** The viewer already is. A writing client such as CoQui needs the hub's address, which today means running it on the server or widening `ARMATURE_HUB_BIND` behind a proxy that authenticates and sets `Armature-User` itself.
 
 Optional: `ARMATURE_HUB_PUBLIC_URL` gives the viewer an address a reader's browser can follow for the raw-data links in page footers; unset, the links are omitted and the hub stays private. `ARMATURE_EXPORT_KEY` makes pseudonymous exports stable across runs (ADR-0031).
+
+## Repair
+
+A few states can be reached through the API and not left through it: an identifier written under the wrong type, a user with a typo, a record that predates a rule, a branch a crashed test left behind (ADR-0062). The operator tools repair them from the hub's container, where the store's credentials already are, and every repair is a new commit with an author and a reason; history is never rewritten. In `docker/`:
+
+- `docker compose exec hub node operator.mjs check` reports every rule the data on `main` breaks, in the shape the API's 422 uses. `--branch <name>` or `--commit <id>` checks another state, `--json` prints it for a program. It writes nothing and exits 1 when it finds something. Run it after every repair.
+- `docker compose exec hub node operator.mjs delete <id> --branch <name> --as <externalId> --reason "<why>"` deletes one document as a commit by that registered user. The store refuses to delete a document another one references; the deleted document stays readable at the commit before, which the tool prints.
+- `docker compose exec -T hub node operator.mjs put - --branch <name> --as <externalId> --reason "<why>" < fix.json` writes one document, or an array of them, through the same pipeline and rules as the API. A user's email is corrected this way on `main`. `--unchecked` skips the hub's rules, never the store's, for a repair that needs an intermediate state the rules refuse; the commit message says the rules were skipped, and `check` should run straight after.
+- `docker compose exec hub node operator.mjs delete --scratch-branch <name>` deletes a branch whose name starts with `test-`, `warmup-`, `anon-` or `future-`. A branch holding design work is never deleted; give it a name that marks it as abandoned instead.
+
+`--as` names the operator's own `User`, registered like anyone else (step 4); the same person may be a designer on one commit and an operator on the next, and the message says which. On a laptop, `npm run operator --workspace app -- check` builds and runs the same tools with `app/.env.local`.
 
 ## A hosted instance
 
@@ -121,6 +132,6 @@ A hub that serves several stores from one process is not built; until a deployme
 ## What is not there yet
 
 - **Authentication.** The `header` resolver trusts the caller; `oidc` is the named next resolver (ADR-0032). Until it exists, writes happen on the server or behind an authenticating proxy. Caddy is where such a proxy would sit (it can ask an identity provider before forwarding and set the header itself); that is not configured.
-- **An administrator's page.** Loading, repair and user edits are terminal commands with the store's password. ADR-0062 (Proposed) describes three operator tools (`check` a branch, `delete`, `put --unchecked`) as commands reusing the API's code with store credentials; a page over them would need authentication first and evidence of what administrators actually do, which the first deployment off a laptop is expected to provide (plan §6).
+- **An administrator's page.** Loading, repair and user edits are terminal commands with the store's password: the scripts, and the three operator tools of ADR-0062 in the hub's container (see "Repair"). A page over them would need authentication first and evidence of what administrators actually do, which the first deployment off a laptop is expected to provide (plan §6).
 - **A standing hosted instance.** One ran on a DigitalOcean Droplet on 2026-10-21, was verified from outside and was destroyed by choice; none is running. Standing one up again is the steps above; at the size used it costs $24 a month.
 - **Images built elsewhere.** The server builds its own images from the checkout. CI builds both images on every push but does not publish them; publishing them to a registry would let a 2 GB server pull rather than build.
