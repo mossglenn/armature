@@ -165,7 +165,7 @@ describe('@armature/client over the app in-process', () => {
     expect(users.data.map((u) => u['@id'])).toContain('User/demo-designer');
   });
 
-  it('reads the five intelligence routes with ids in either spelling', async () => {
+  it('reads the coverage, alignment, trace, attestation and impact routes with ids in either spelling', async () => {
     const coverage = await hub.intelligence.coverage('Module/how-ai-works', { fullyAssessedAt: 1 });
     expect(coverage.data.thresholds.fullyAssessedAt).toBe(1);
     expect(coverage.data.objectives.length).toBe(3);
@@ -179,6 +179,17 @@ describe('@armature/client over the app in-process', () => {
     expect(attestations.data.summary.attestations).toBeGreaterThan(0);
     const impact = await hub.intelligence.impact('LearningObjective', 'distinguish-ai-approaches');
     expect(impact.data.summary.references).toBeGreaterThan(0);
+  });
+
+  it('reads item statistics through the typed fields, with the commit and a module in either spelling', async () => {
+    const stats = await hub.intelligence.itemStatistics({ module: 'Module/risks-and-ethics', unit: 'proportion correct' });
+    expect(stats.commit).toMatch(/^[a-z0-9]+$/);
+    expect(stats.data.scope.module?.id).toBe('Module/risks-and-ethics');
+    expect(stats.data.units).toEqual(['proportion correct']);
+    const bias = stats.data.items.find((x) => x.item.id === 'AssessmentItem/bias-type-mc');
+    expect(bias?.statistics[0].metric.value).toBe(0.38);
+    expect(bias?.statistics[0].dataset?.cohort).toBe('Spring 2026 pilot');
+    expect(stats.data.itemsWithoutStatistics.map((i) => i.id)).toEqual(['AssessmentItem/appropriate-use-mc']);
   });
 
   it('names its revision on every call and reads the one that served it (ADR-0059)', async () => {

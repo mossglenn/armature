@@ -27,7 +27,7 @@
 import type { ClassMap, ClassName, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-10-21';
+export const CLIENT_REVISION = '2026-10-22';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -244,6 +244,22 @@ export interface AlignmentReport {
   objectivesWithoutActivity: unknown[];
   itemsWithoutObjective: unknown[];
   unleveled: { objectives: unknown[]; items: unknown[] };
+}
+
+/** One statistic about an item: the metric, and the administration it came from when it names one (ADR-0058). */
+export interface ItemStatistic {
+  metric: Summary;
+  collectedAt?: string;
+  dataset?: Summary & { cohort?: string; administrationDate?: string };
+}
+
+export interface ItemStatisticsReport {
+  scope: { module?: Summary; items: number; metrics: number };
+  /** Every unit among the metrics in scope, before `unit` filters them. */
+  units: string[];
+  /** Items with at least one statistic, each newest administration first. */
+  items: Array<{ item: Summary; statistics: ItemStatistic[] }>;
+  itemsWithoutStatistics: Summary[];
 }
 
 export interface TraceReport {
@@ -492,6 +508,13 @@ export function createClient(options: ClientOptions) {
         const { module, ...ref } = opts;
         return call<AlignmentReport>('/intelligence/alignment', {
           query: { ...at(ref), module: module && localPart('Module', module) },
+        });
+      },
+      /** `GET /intelligence/item-statistics?module=&unit=`: every metric about each item, newest administration first. */
+      itemStatistics(opts: AtRef & { module?: string; unit?: string } = {}) {
+        const { module, unit, ...ref } = opts;
+        return call<ItemStatisticsReport>('/intelligence/item-statistics', {
+          query: { ...at(ref), module: module && localPart('Module', module), unit },
         });
       },
       /** `GET /intelligence/trace/:type/:id`: the lifecycle walk from one document, both ways. */
