@@ -121,8 +121,8 @@ Every class declares a category in its schema metadata (`@metadata.armature.cate
 
 | Category | Classes | What it means for a tool |
 |---|---|---|
-| `artifact` | `Course`, `Module`, `LearningObjective`, `AssessmentItem`, `Assessment`, `LearningActivity`, `ActivityGroup`, `LearningNeed`, `LearningEvidence` (abstract), `LearningMetric`, `DescriptiveEvidence`, `LearningDataset`, `DesignNote`, `DesignFinding` | A primary design record with a `label`, an optional `description` and a `createdBy`. Writable. The tool chooses its identifier |
-| `relationship` | `NeedEvidenceLink`, `PrerequisiteRecord`, `ModuleObjective`, `ModuleActivityLink`, `ModuleActivityGroupLink`, `ActivityGroupMember`, `ItemInstance`, `ActivityItemLink`, `Attestation` | A junction document. Writable. Its identifier is derived from its key fields; a tool never supplies one |
+| `artifact` | `Course`, `Module`, `LearningObjective`, `AssessmentItem`, `Assessment`, `LearningActivity`, `Lesson`, `LearningNeed`, `LearningEvidence` (abstract), `LearningMetric`, `DescriptiveEvidence`, `LearningDataset`, `DesignNote`, `DesignFinding` | A primary design record with a `label`, an optional `description` and a `createdBy`. Writable. The tool chooses its identifier |
+| `relationship` | `NeedEvidenceLink`, `PrerequisiteRecord`, `ModuleObjective`, `ModuleActivityLink`, `ModuleLessonLink`, `LessonActivityLink`, `ItemInstance`, `ActivityItemLink`, `Attestation` | A junction document. Writable. Its identifier is derived from its key fields; a tool never supplies one |
 | `fragment` | `Fragment` (abstract), `TextFragment`, `ItemOption` | An embedded part of an item. Not a document; written as part of its item. Carries text, attachments or both |
 | `infrastructure` | `User`, `DesignRecord` (abstract), `ArmatureDocument` (abstract), `ExternalRef`, `Attachment` | Identity, abstract roots, and the two embedded coordinates that point out of the graph (Section 7.12). `User` has its own routes; the roots cannot be created; the coordinates are written as part of the record that carries them |
 
@@ -149,8 +149,8 @@ const { data } = await hub.documents.list('Assessment', { filter: { module: 'Mod
 | Need informed by evidence | `NeedEvidenceLink` with `confidence` |
 | Objective requires objective | `PrerequisiteRecord` with `prerequisiteType` and `rationale` |
 | Module declares objective | `ModuleObjective` with `role`, `roleRationale`, `sequence` |
-| Activity or group placed in module | `ModuleActivityLink` / `ModuleActivityGroupLink` with `sequence` |
-| Activity placed in group | `ActivityGroupMember` with `sequence` |
+| Activity or lesson placed in module | `ModuleActivityLink` / `ModuleLessonLink` with `sequence` |
+| Activity placed in lesson | `LessonActivityLink` with `sequence` |
 | Item placed in assessment | `ItemInstance` with `sequence`, `pointValue`, `randomize`, `status` |
 | Item used formatively in an activity | `ActivityItemLink` with optional `sequence`; no points or clearance, counts toward no coverage (ADR-0061) |
 
@@ -292,7 +292,7 @@ Rules:
 | The database checks | The API checks (the invariants engine) |
 |---|---|
 | Field types, required fields, enum values | That every reference names a document of the declared class (rule 0) |
-| Minimum set sizes (`@min_cardinality`) | Unique positions in modules, groups, assessments and activities (rules 3 to 5, 17) |
+| Minimum set sizes (`@min_cardinality`) | Unique positions in modules, lessons, assessments and activities (rules 3 to 5, 17) |
 | That a referenced document exists | Fragment and option rules (rules 8, 9, 19) |
 | Unique identifiers | Item and placement status consistency (rule 10) |
 | | A reason for every dismissal (rule 11) |
@@ -330,7 +330,7 @@ The database does **not** check that a reference points at the right *class* of 
 | `intelligence.impact(type, id)` | Everything that references this record, before it is changed | References by type, each with the field and the container it sits in |
 | `intelligence.attestations(type, id)` | Which verdicts on this record still hold | Each attestation with `Current`, `Stale`, `FragmentRemoved` or `Unanchored` |
 | `intelligence.itemStatistics({ module, unit })` | How the items performed, per administration | Each item with every metric about it, newest administration first, its cohort and date; the units in scope; items with none. Which figure is "the" difficulty is the tool's choice |
-| `intelligence.moduleContent(moduleId)` | What the module teaches, in what order (ADR-0005) | Its activities and groups merged by `sequence`, each group's members and each activity's formative items in their own order; each entry with the link that placed it (`kind` says activity or group); activities placed more than once listed in `repeated` |
+| `intelligence.moduleContent(moduleId)` | What the module teaches, in what order (ADR-0005) | Its activities and lessons merged by `sequence`, each lesson's activities and each activity's formative items in their own order; each entry with the link that placed it (`kind` says activity or lesson); activities placed more than once listed in `repeated` |
 
 The coverage thresholds are the hub's provisional cut; a tool passes its own and reads the hub's defaults from `discover()`. Formative uses of items (`ActivityItemLink`) and unaligned items count toward nothing.
 

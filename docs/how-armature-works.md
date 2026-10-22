@@ -471,12 +471,12 @@ Read left to right, this is the instructional design process: **evidence** groun
 **Instruction.**
 
 - **`LearningActivity`**: a reusable instructional activity that targets at least one objective, with an optional activity type (`Reading`, `Video`, `Simulation`, `WorkedExample`, `Discussion`, `Practice`, `Reflection`, `Other`). The type makes instructional strategy queryable: "which objectives have no practice activity?"
-- **`ActivityGroup`**: a reusable, named collection of activities with a defined order (for example, a worked example followed by two practice problems). Groups are deliberately flat: a group cannot contain another group.
+- **`Lesson`**: a reusable, named, ordered set of activities that a module schedules, the peer of an assessment (for example, a worked example followed by two practice problems); a designed sequence, not a timetable slot. Lessons are deliberately flat: a lesson cannot contain another lesson. (Called `ActivityGroup` until ADR-0064, 22 October 2026.)
 
 **Structure.**
 
 - **`Course`**: the top-level container for a design project. Deliberately minimal.
-- **`Module`**: an instructional unit within a course, optionally sequenced. It contains activities and groups (through junction documents), contains assessments (each assessment names its module), and declares the objectives it intends to address (through `ModuleObjective`).
+- **`Module`**: an instructional unit within a course, optionally sequenced. It contains activities and lessons (through junction documents), contains assessments (each assessment names its module), and declares the objectives it intends to address (through `ModuleObjective`).
 
 **Outcomes.**
 
@@ -513,8 +513,8 @@ A central pattern in Armature is that some relationships are not just references
 | Objective requires objective | `PrerequisiteRecord` junction, with `prerequisiteType` and `rationale` | The kind and reason for a prerequisite are the decision |
 | Module declares objective | `ModuleObjective` junction, with `role` (`Primary`, `Supporting`, `Prerequisite`), optional `roleRationale`, and `sequence` | The role an objective plays in a module is a decision |
 | Activity placed in module | `ModuleActivityLink` junction, with `sequence` | Order matters |
-| Group placed in module | `ModuleActivityGroupLink` junction, with `sequence` | Order matters |
-| Activity placed in group | `ActivityGroupMember` junction, with `sequence` | Order matters |
+| Lesson placed in module | `ModuleLessonLink` junction, with `sequence` | Order matters |
+| Activity placed in lesson | `LessonActivityLink` junction, with `sequence` | Order matters |
 | Item placed in assessment | `ItemInstance` junction, with `sequence`, `pointValue`, `randomize`, `status` | Placement has its own settings and its own clearance |
 | Item used formatively in an activity | `ActivityItemLink` junction, with an optional `sequence` (since 20 October 2026, ADR-0061) | A poll or practice question happens in an order, carries no score, and must not be mistaken for a graded placement |
 
@@ -530,27 +530,27 @@ ADR-0017 records a caution against overdoing this: naming a "relationship" categ
 
 ### 12.5 Reuse: the item bank and placements
 
-Reuse is a first-class design capability (ADR-0002: all relationships use references, not ownership). An activity can appear in several modules and groups; an item can appear in a pre-test and a post-test. This is why `AssessmentItem` (the reusable item) and `ItemInstance` (its placement in one assessment) are separate.
+Reuse is a first-class design capability (ADR-0002: all relationships use references, not ownership). An activity can appear in several modules and lessons; an item can appear in a pre-test and a post-test. This is why `AssessmentItem` (the reusable item) and `ItemInstance` (its placement in one assessment) are separate.
 
 **One placement per item per assessment.** An `ItemInstance`'s identity is derived from the pair (assessment, item), so the same item can be placed in an assessment at most once. Writing the same pair again replaces the placement, which keeps its position and point value freely editable. Two forms of the same test are modeled as two assessments. This was decided on 8 October 2026 as a timing decision rather than a permanent one: it will be revisited if the schema gains a section or form *inside* an assessment, or if an importer meets a source (such as QTI, the Question and Test Interoperability specification, which permits it) that references one item twice in one test.
 
 ### 12.6 Sequencing module content (ADR-0005)
 
-A module's content mixes standalone activities and activity groups in a pedagogical order, and each group has its own internal order. Armature uses two independent integer sequences:
+A module's content mixes standalone activities and lessons in a pedagogical order, and each lesson has its own internal order. Armature uses two independent integer sequences:
 
 ```
 Module
   ModuleActivityLink       sequence 1  → a standalone activity
-  ModuleActivityGroupLink  sequence 2  → an activity group
-    ActivityGroupMember    sequence 1  → first activity in the group
-    ActivityGroupMember    sequence 2  → second activity in the group
+  ModuleLessonLink  sequence 2  → a lesson
+    LessonActivityLink    sequence 1  → first activity in the lesson
+    LessonActivityLink    sequence 2  → second activity in the lesson
   ModuleActivityLink       sequence 3  → another standalone activity
     ActivityItemLink       sequence 1  → a question the activity asks in passing (ADR-0061)
 ```
 
-The two kinds of module link share one numbering space (no activity and group may both be at position 2), and group membership has its own numbering. Gaps are allowed (1, 2, 10) so a designer can insert without renumbering. The API enforces the uniqueness rules (Section 13, rules 3 and 4). ADR-0005 also assigned the API the job of merging the two kinds of link into one ordered view of a module's content; since 22 October 2026 the module-content read does it (Section 17.8), so a client no longer sorts the link documents itself.
+The two kinds of module link share one numbering space (no activity and lesson may both be at position 2), and a lesson's activities have their own numbering. Gaps are allowed (1, 2, 10) so a designer can insert without renumbering. The API enforces the uniqueness rules (Section 13, rules 3 and 4). ADR-0005 also assigned the API the job of merging the two kinds of link into one ordered view of a module's content; since 22 October 2026 the module-content read does it (Section 17.8), so a client no longer sorts the link documents itself.
 
-**Alternative rejected:** a composite value such as "2.1" (group 2, activity 1). It is compact but ambiguous: as a decimal, "2.10" equals "2.1."
+**Alternative rejected:** a composite value such as "2.1" (lesson 2, activity 1). It is compact but ambiguous: as a decimal, "2.10" equals "2.1."
 
 ### 12.7 Items as trees of fragments
 
@@ -682,10 +682,10 @@ The project numbers the rules 0 to 20 (the numbering is used across the document
 | 0 | Every reference must point to a document of the declared type (or a subtype) | The database checks only that the target exists. Without this rule, a module's `course` could name an assessment item, or a design note's subject could be a person |
 | 1 | *Retired 20 October 2026 (ADR-0060).* An item may assess no objective | An imported question bank holds questions before anyone aligns them; refusing them would keep a true state of the design out of the graph. An unaligned item counts toward nothing, and the alignment read lists it |
 | 2 | An activity targets at least one objective | Kept when rule 1 was retired: no tool has yet shown an activity that exists before it targets anything (ADR-0060, decision 4) |
-| 3 | Within a module, activity links and group links never share a position number | They share one sequence (Section 12.6) |
-| 4 | Within an activity group, members never share a position number | Order must be unambiguous |
+| 3 | Within a module, activity links and lesson links never share a position number | They share one sequence (Section 12.6) |
+| 4 | Within a lesson, activities never share a position number | Order must be unambiguous |
 | 5 | Within an assessment, placed items never share a position number | Same |
-| 6 | An activity group never contains another group | Groups are deliberately flat; this follows from rule 0, because a group member must be a `LearningActivity` |
+| 6 | A lesson never contains another lesson | Lessons are deliberately flat; this follows from rule 0, because a lesson's activity must be a `LearningActivity` |
 | 7 | Coverage is never stored | Coverage is computed when read (Section 17). There is nothing to check, because the schema has no coverage field |
 | 8 | Every fragment of an item has a unique `fragmentId` | Part addresses must be unambiguous |
 | 9 | Option text, where present, is unique within an item, and the number of correct options suits the item type | Multiple choice and true/false need exactly one correct option (true/false exactly two options); multiple select needs at least one. Presence moved to rule 19 when options could be pictures (ADR-0030) |
@@ -974,9 +974,9 @@ This is one of the most instructive decisions in the project's history, and it p
 
 **The question.** In what order does a module present its activities, which of them are grouped, and which questions does each activity ask along the way?
 
-**The answer.** `GET /api/v1/intelligence/module-content/<module>` merges the module's two kinds of link by their shared sequence, nests each group's members in the group's own order, and nests under each activity the items it uses formatively, in their order (Section 12.6). Each activity comes with its type (practice, video, worked example) and the objectives it targets. Entries without a sequence come last. Two tools on the reference list need this read: a course builder, which turns a module into a deliverable course in this order, and an activity designer, which plans a module's activities around its objectives.
+**The answer.** `GET /api/v1/intelligence/module-content/<module>` merges the module's two kinds of link by their shared sequence, nests each lesson's activities in the lesson's own order, and nests under each activity the items it uses formatively, in their order (Section 12.6). Each activity comes with its type (practice, video, worked example) and the objectives it targets. Entries without a sequence come last. Two tools on the reference list need this read: a course builder, which turns a module into a deliverable course in this order, and an activity designer, which plans a module's activities around its objectives.
 
-**What it shows rather than judges.** The schema allows the same activity to appear twice in one module, standalone and inside a group, or in two groups. The read shows it at every place it appears, each time with the link that put it there, and lists it as repeated without calling that an error. Revisiting an activity later in a module may be deliberate. The Coverage View shows this read below the coverage verdicts. In the seed, Module 1's objective *Describe Model Training* is uncovered by any assessment, yet two activities in the module's group target it: the gap is in assessment, not in teaching.
+**What it shows rather than judges.** The schema allows the same activity to appear twice in one module, standalone and inside a lesson, or in two lessons. The read shows it at every place it appears, each time with the link that put it there, and lists it as repeated without calling that an error. Revisiting an activity later in a module may be deliberate. The Coverage View shows this read below the coverage verdicts. In the seed, Module 1's objective *Describe Model Training* is uncovered by any assessment, yet two activities in the module's lesson target it: the gap is in assessment, not in teaching.
 ## 18. Armature's own pages: the Design Graph and the Coverage View
 
 The viewer, a Next.js application (Next.js is a web framework), is three read-only pages, Armature's visual interface and a client of a hub like any plugin:
@@ -1021,13 +1021,13 @@ The repository includes a demonstration graph (`scripts/seed_data.js`), a realis
 - 8 assessment items, each with a stem and four options carrying real answer text and fragment identifiers (one item with general incorrect feedback, four options with a stated `purpose`), placed 8 times (one item is reused in two assessments);
 - item statuses deliberately varied: 5 `Approved`, 1 `InReview`, 2 `Draft`, with matching placement statuses; one draft item assesses no objective yet and is placed in no assessment (ADR-0060);
 - 7 module-objective declarations, whose coverage covers the range: one `FullyAssessed` (Write Effective Prompts in Module 2, with two approved items), the rest `PartiallyAssessed` or `Uncovered`;
-- Module 1's activities: a practice activity and an activity group of two (a video and a worked example), placed in one sequence (ADR-0005), with the unaligned draft item used as a check inside the worked example (ADR-0061);
+- Module 1's activities: a practice activity and a lesson of two (a video and a worked example), placed in one sequence (ADR-0005), with the unaligned draft item used as a check inside the worked example (ADR-0061);
 - 2 design notes (one about an item, one about a module's declaration of an objective, demonstrating that relationships can be annotated);
 - 1 design finding, open, on the draft item, raised by the reviewer;
 - 2 users: the demo designer, and a subject-matter reviewer from a partner college. Every record whose type carries a creator names one of them (the reviewer the finding, the designer the rest), so an export's pseudonymous and institutional profiles have two people to rewrite;
 - 1 attestation: the reviewer affirms that the bias item's first option is its only correct answer, a claim about one part of an approved item (ADR-0028).
 
-Since 22 October 2026 the seed shows each mechanism on `main` rather than only in tests: coverage across its range, an item no one has aligned, activities in a module's sequence with a group and a formative use, and two people in every export. Five objectives still lack an activity, and the alignment read says so. Every rule the hub enforces holds over the seed: CI checks it with the operator's `check` after loading it (ADR-0062).
+Since 22 October 2026 the seed shows each mechanism on `main` rather than only in tests: coverage across its range, an item no one has aligned, activities in a module's sequence with a lesson and a formative use, and two people in every export. Five objectives still lack an activity, and the alignment read says so. Every rule the hub enforces holds over the seed: CI checks it with the operator's `check` after loading it (ADR-0062).
 
 ## 21. Supporting tools
 
@@ -1337,13 +1337,13 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | `ItemInstance` | relationship | assessment, implements, sequence, pointValue, randomize, status | hash (assessment, implements) |
 | `Assessment` | artifact | module, randomize, passingScore?, retakes? | random |
 | `LearningActivity` | artifact | targets (≥1), activityType? | random |
-| `ActivityGroup` | artifact | (label, description) | random |
-| `ActivityGroupMember` | relationship | group, activity, sequence? | hash (group, activity) |
+| `Lesson` | artifact | (label, description) | random |
+| `LessonActivityLink` | relationship | lesson, activity, sequence? | hash (lesson, activity) |
 | `ActivityItemLink` | relationship | activity, item, sequence? | hash (activity, item) |
 | `ModuleObjective` | relationship | module, references, role, roleRationale?, sequence? | hash (module, references) |
 | `Module` | artifact | course, sequence? | random |
 | `ModuleActivityLink` | relationship | module, activity, sequence? | hash (module, activity) |
-| `ModuleActivityGroupLink` | relationship | module, group, sequence? | hash (module, group) |
+| `ModuleLessonLink` | relationship | module, lesson, sequence? | hash (module, lesson) |
 | `DesignNote` | artifact | rationale, subject (≥1), category? | random |
 | `DesignFinding` | artifact | finding, subject (≥1), regarding?, evidence (a set, may be empty), confidence?, status, resolutionRationale?, asOf? | random |
 | `Course` | artifact | (label, description) | random |

@@ -67,7 +67,7 @@ scripts/
   generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
   load_schema.js           # Replaces the schema graph in one full_replace; --clear-instances empties data first for breaking changes
   platform_checks.js       # Probes store behaviors the ADRs depend on, in a scratch database it creates and deletes (run before encoding a platform assumption)
-  seed_data.js             # Inserts the demo course: 61 documents plus their embedded fragments, then one Attestation in a second commit whose asOf names the first, then one LearningDataset and three LearningMetrics in a third (ADR-0063), so Narrative 1 walks on main; a CASE reference on one objective and an xAPI reference on the dataset (ADR-0030); one FullyAssessed declaration (Module 2, prompts); Module 1's activities with a group and a formative use (ADR-0005, ADR-0061); an unaligned Draft item (ADR-0060); two Users, the designer and a reviewer, named in createdBy (filled from the schema's classes) and attestedBy. CI runs the operator's check over it
+  seed_data.js             # Inserts the demo course: 61 documents plus their embedded fragments, then one Attestation in a second commit whose asOf names the first, then one LearningDataset and three LearningMetrics in a third (ADR-0063), so Narrative 1 walks on main; a CASE reference on one objective and an xAPI reference on the dataset (ADR-0030); one FullyAssessed declaration (Module 2, prompts); Module 1's activities with a lesson and a formative use (ADR-0005, ADR-0061); an unaligned Draft item (ADR-0060); two Users, the designer and a reviewer, named in createdBy (filled from the schema's classes) and attestedBy. CI runs the operator's check over it
   migrate_schema_docs.js   # Reproduces past schema documentation migrations
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill); also npm run sync:terminusdb-docs
 app/
@@ -111,7 +111,7 @@ app/
         documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
-        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028), item-statistics?module=&unit= (every metric about each item, ADR-0058), module-content/:moduleId (activities and groups in teaching order, a tree of placements, ADR-0005): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
+        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028), item-statistics?module=&unit= (every metric about each item, ADR-0058), module-content/:moduleId (activities and lessons in teaching order, a tree of placements, ADR-0005): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
         export.ts          # GET /export?profile=&slice= (the graph at a ref as one JSON-LD document with its reloadable schema) and /export/slices (ADR-0031)
         discover.ts        # GET /discover (the revisions served, the capabilities with their settings, where the schema is; no ref, no identity) and GET /schema?branch=|ref= (the schema graph at a ref in the reloadable form, commit in ETag; ADR-0027 decision 4, built with ADR-0059)
       export/
@@ -192,8 +192,8 @@ To add a new type: (1) update `schema.json` (with ADR), giving the class `@metad
 | `PrerequisiteRecord` | Junction doc; carries `rationale` and `prerequisiteType` — design decision preserved as data |
 | `NeedEvidenceLink` | Junction doc; links LearningNeed to LearningEvidence with `confidence` weighting |
 | `ModuleActivityLink` | Junction doc; places LearningActivity in Module with `sequence` |
-| `ModuleActivityGroupLink` | Junction doc; places ActivityGroup in Module with `sequence` |
-| `ActivityGroupMember` | Junction doc; places LearningActivity in ActivityGroup with sub-`sequence` |
+| `ModuleLessonLink` | Junction doc; places a `Lesson` (an ordered set of activities, the peer of an assessment; `ActivityGroup` until ADR-0064) in Module with `sequence` |
+| `LessonActivityLink` | Junction doc; places LearningActivity in Lesson with sub-`sequence` |
 | `ActivityItemLink` | Junction doc; an item used formatively inside a LearningActivity (a poll, a practice question) with its own optional `sequence`; Hash key over `(activity, item)`; no points, no clearance, counts toward no coverage (ADR-0061) |
 
 ### Critical API constraints (not enforced by TerminusDB schema)
@@ -203,10 +203,10 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 0. **Every reference field's target must be an instance of the declared class or a subclass.** Generic, applies to every type. This is what keeps a `User` out of `DesignNote.subject` and an `AssessmentItem` out of `Module.course` (ADR-0014, ADR-0017 amended)
 1. *Retired 2026-10-20 (ADR-0060).* `AssessmentItem.assesses` may be empty or absent: an item may exist before it is aligned; it counts toward no objective's coverage, and `GET /api/v1/intelligence/alignment` lists it under `itemsWithoutObjective`. Readers treat an absent `assesses` as none (the store returns no field for an empty set)
 2. `LearningActivity.targets` — must contain at least one `LearningObjective` (schema `@min_cardinality`, ADR-0013; checked as shape by Zod, 400; kept after rule 1's retirement until a client shows an activity that exists before it targets anything, ADR-0060 decision 4)
-3. `ModuleActivityLink.sequence` and `ModuleActivityGroupLink.sequence` — must be unique across both types for a given Module (they share one integer namespace)
-4. `ActivityGroupMember.sequence` — must be unique within a group
+3. `ModuleActivityLink.sequence` and `ModuleLessonLink.sequence` — must be unique across both types for a given Module (they share one integer namespace)
+4. `LessonActivityLink.sequence` — must be unique within a lesson
 5. `ItemInstance.sequence` — must be unique within an Assessment
-6. `ActivityGroup` — must not contain other `ActivityGroup` instances (flatness constraint; falls out of constraint 0, since `ActivityGroupMember.activity` is a `LearningActivity`)
+6. `Lesson` — must not contain other `Lesson` instances (flatness constraint; falls out of constraint 0, since `LessonActivityLink.activity` is a `LearningActivity`)
 7. Coverage is never stored (ADR-0056). `GET /api/v1/intelligence/coverage/:moduleId` computes it at the requested ref from the distinct items placed in the module's assessments that assess each declared objective, twice: Approved placements of Approved items, and everything not Retired (ADR-0029 decisions 1 to 3; default cut 0 `Uncovered`, 1 `PartiallyAssessed`, 2 to 4 `FullyAssessed`, 5 or more `OverAssessed`, with the thresholds as query parameters and the counts in the response). No write recomputes anything; a `ModuleObjective` with a coverage field is an unknown key, 400. Nothing in the invariants engine checks this; the schema simply has no such field
 8. `fragmentId` — unique across all fragments (stem, options, feedbacks) of one `AssessmentItem`; never regenerated by the hub (ADR-0023, ADR-0033)
 9. `ItemOption.text` — unique within one item where present (presence is constraint 19's job since ADR-0030; a picture option has none); the number of correct options must suit `itemType` (ADR-0022)
@@ -217,7 +217,7 @@ These are enforced by the invariants engine in `app/lib/api/invariants/` on ever
 14. `Attestation.claimRef` and `claimText` — both present (a claim) or both absent (an endorsement), `claim_incomplete` (ADR-0028)
 15. `Attestation.attestedBy` — the resolved identity. The pipeline fills it before looking for the record to replace, since it is in the key; a body naming anyone else is `attester_not_caller` (ADR-0028, ADR-0032)
 16. `fragmentId` on `Attestation`, `DesignNote` and `DesignFinding` — the record names exactly one `subject` (`fragment_needs_one_subject`), which has a part with that `fragmentId` at `asOf` when that is checked, else as the write leaves it (`unknown_fragment`; ADR-0028 decision 6, `invariants/fragmentRef.ts`)
-17. `ActivityItemLink.sequence` — must be unique within a `LearningActivity`; independent of every module and group sequence (`duplicate_sequence`; ADR-0061)
+17. `ActivityItemLink.sequence` — must be unique within a `LearningActivity`; independent of every module and lesson sequence (`duplicate_sequence`; ADR-0061)
 18. `Attachment` — a verifiable coordinate: `revision` present when `store` is a versioned kind (`Git`, `Lore`; `revision_required`), and `contentHash` lower-case hexadecimal of the length `hashAlgorithm` implies for the IANA registry names the hub knows (`sha-256`, `sha-512`, `sha-1`, `md5` and so on; `hash_malformed`); an unknown algorithm is accepted unchecked. Checked wherever an attachment sits, on the artifact or on a fragment (ADR-0030; `invariants/attachments.ts`)
 19. `Fragment` — carries text or at least one attachment (`empty_fragment`; ADR-0030). `Fragment.text` is `Optional` in the schema since ADR-0030
 20. `LearningDataset` and `LearningMetric` — name their source: a dataset has `producedBy` or at least one `externalRef` (`dataset_without_source`); a metric has `derivedFrom` or at least one `externalRef` (`metric_without_source`). Nothing is inferred about whose assessment it was (ADR-0063; `invariants/observations.ts`)
@@ -229,7 +229,7 @@ The pending rule on `LearningDataset.producedBy` became constraint 20 on 2026-10
 Armature uses junction documents extensively for M:M relationships and semantically rich associations. This is intentional — relationships are first-class artifacts, not just edges. See ADR-0003.
 
 Every junction document follows the same pattern:
-- Named after both sides: `NeedEvidenceLink`, `ModuleActivityLink`, `ActivityGroupMember`, `ActivityItemLink`
+- Named after both sides: `NeedEvidenceLink`, `ModuleActivityLink`, `LessonActivityLink`, `ActivityItemLink`
 - Carries the relationship-level data that makes it worth reifying
 - Back-reference pattern: children carry the parent reference, not the other way around (ADR-0004)
 
@@ -273,6 +273,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0013** — Minimum cardinality at schema level (supersedes ADR-0006, whose "the API enforces what the store cannot" principle the invariants engine now carries); amended by ADR-0060, which removed the minimum on `AssessmentItem.assesses`
 - **ADR-0060** — Items may exist unaligned: `assesses` is zero or more, rule 1 retired, the alignment read lists `itemsWithoutObjective`; `LearningActivity.targets` keeps its minimum until a client shows the case; how to encourage alignment without requiring it is open (plan §6)
 - **ADR-0061** — Formative use of items inside activities: `ActivityItemLink` (activity, item, optional `sequence`; constraint 17); counts toward no coverage; the trace follows it downstream and shows an activity with its modules
+- **ADR-0064** — `ActivityGroup` is `Lesson` (2026-10-22): an ordered set of activities a module schedules, the peer of an assessment; `LessonActivityLink` (field `lesson`) and `ModuleLessonLink` (field `lesson`) replace `ActivityGroupMember` and `ModuleActivityGroupLink`; constraints 3, 4 and 6 keep their numbers; the module-content read says `kind: "lesson"`; earlier ADRs keep the old names
 - **ADR-0063** — Outcome records name their source: a dataset has `producedBy` or an `externalRef`, a metric has `derivedFrom` or an `externalRef` (constraint 20); closes the rule the plan deferred since Phase 1, made expressible by ADR-0030; the seed gains one administration (a dataset and three metrics in a third commit) so Narrative 1 walks on `main`
 - **ADR-0031** — Export profiles and schema slices: `GET /api/v1/export` returns the graph at a ref with its reloadable schema; profiles rewrite people only (`full`, `pseudonymous` with HMAC tokens, `institutional`); slices are configuration in `slices.json`, membership by class or ancestor, references leaving the slice reported as `unresolved`, never dropped; re-import is operator work; JSON-LD only, no vocabulary-mapped context yet
 - **ADR-0030** — External references and attachments: `externalRefs` and `attachments` subdocument sets on every `ArmatureDocument`, `attachments` on every `Fragment`, `Fragment.text` optional; the graph never holds bytes; `contentHash` and `hashAlgorithm` (IANA registry names) mandatory, `revision` required for versioned stores (constraint 18), a fragment has text or an attachment (constraint 19); an artifact whose bytes live in an asset store carries its design history as the graph commits that move its reference, a projection of the asset history, never a replay (amends ADR-0025); the tool-managed path is built, the hub-managed endpoints wait for a client with a file

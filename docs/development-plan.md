@@ -109,7 +109,7 @@ adopted into the hub when at least two reference clients would need the same cap
 | **CoQui** (real) | SME review of assessment items in rounds | Read by id at a commit; branch per round; replace-by-id writes; findings; attestations on item parts; users; history |
 | **Objective and curriculum mapper** | Author objectives, prerequisites, module declarations; link to CASE competencies | Transitive prerequisite queries; objective history and impact analysis; external competency references; ModuleObjective writes; coverage reads |
 | **Needs-analysis intake** | Record evidence, needs, priorities; the LEED-tracker decision log as a graph | Evidence and need writes; NeedEvidenceLink confidence; DesignNote and a future DesignDecision; provenance trace from objective back to evidence |
-| **Activity and strategy designer** | Plan activities and groups per module; see strategy coverage | Sequenced module content (ADR-0005); "which objectives have no Practice activity" queries; ActivityGroup flatness enforced |
+| **Activity and strategy designer** | Plan activities and lessons per module; see strategy coverage | Sequenced module content (ADR-0005); "which objectives have no Practice activity" queries; Lesson flatness enforced |
 | **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistics as metrics about the item (ADR-0058); xAPI and QTI references; bulk atomic writes |
 | **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description; attachments resolvable or deliberately excluded per profile |
 | **AI design assistant** | Propose items, objectives or alignments inside another tool | Agent `User` provenance; design-intelligence reads for context; the same write path and constraints as humans |
@@ -960,8 +960,8 @@ what evidence would be enough.
   client. A tree of placements: an activity placed twice in one module appears at each place and
   in `repeated`; an unsequenced entry comes last (ADR-0005's note of that date). The course tree
   at one commit, the course builder's other ask, waits for that client.* ADR-0005 assigns the API the job of merging
-  `ModuleActivityLink` and `ModuleActivityGroupLink` by `sequence` into one ordered view of a
-  module, with each group's members in their own order. The uniqueness rules are enforced
+  `ModuleActivityLink` and `ModuleLessonLink` by `sequence` into one ordered view of a
+  module, with each lesson's activities in their own order. The uniqueness rules are enforced
   (constraints 3 and 4), but the composed view has not been built; clients sort the links
   themselves. Evidence: the activity and strategy designer reference client, or a Coverage View
   that shows a module's activities. *Since 2026-10-18 the course builder reference client needs

@@ -24,7 +24,7 @@ Abbreviations: ADR (Architecture Decision Record), CVD (color-vision deficiency)
 | 3 | Items | `AssessmentItem` | plum | `#9a3f8f` | `#b35aa8` | circle-help |
 | 4 | Activities | `LearningActivity` | leaf | `#3bb360` | `#2ea957` | play |
 | 5 | Assessments and lessons | `Assessment` | violet | `#6250d6` | `#9085e9` | clipboard-check |
-| 5 | | `ActivityGroup` (to be renamed `Lesson`) | forest | `#2b641d` | `#3a732c` | layers |
+| 5 | | `Lesson` | forest | `#2b641d` | `#3a732c` | layers |
 | 6 | Modules | `Module` | magenta | `#e87ba4` | `#d55181` | box |
 | 7 | Course | `Course` | yellow | `#eda100` | `#c98500` | book-open |
 | 8 | Datasets | `LearningDataset` | cyan | `#0e8fb0` | `#1aa3c4` | table |

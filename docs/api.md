@@ -130,10 +130,10 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 0 | Every reference names an existing document of the declared class or a subclass | `unknown_reference`, `unknown_capture`, `reference_class` |
 | 1 | *Retired 2026-10-20 (ADR-0060).* An item may assess no objective; the alignment read lists such items | none |
 | 2 | `LearningActivity.targets` has at least one objective | 400 `invalid_document` (shape) |
-| 3 | Module content positions are unique across activity links and group links in a module | `duplicate_sequence` |
-| 4 | Group member positions are unique within a group | `duplicate_sequence` |
+| 3 | Module content positions are unique across activity links and lesson links in a module | `duplicate_sequence` |
+| 4 | Activity positions are unique within a lesson | `duplicate_sequence` |
 | 5 | Item positions are unique within an assessment | `duplicate_sequence` |
-| 6 | Activity groups are flat | follows from rule 0 |
+| 6 | Lessons are flat | follows from rule 0 |
 | 7 | Coverage is never stored | nothing to check; the schema has no coverage field |
 | 8 | `fragmentId` is unique across an item's stem, options and feedback | `duplicate_fragment_id` |
 | 9 | Option text, where present, is unique within an item; option count and number of correct options suit the item type (a picture option has no text; rule 19 checks it has an attachment) | `duplicate_option_text`, `option_count`, `correct_option_count` |
@@ -270,7 +270,7 @@ evidence ← need-evidence link → need ← objective ← item ← placement �
                                                  item ← formative use → activity
 ```
 
-with an item's formative uses (`ActivityItemLink`, ADR-0061) followed downstream to the activities that use it, and modules attached as context to every objective (through its declarations), assessment and activity (through its module links, its own or, for an activity in a group, the group's) reached, and a metric's `subject`, the record it measures, followed in both directions (an item statistic leads to its item, and an item to the metrics about it; ADR-0058). Accepted types: `LearningMetric`, `LearningDataset`, `Assessment`, `AssessmentItem`, `LearningObjective`, `LearningNeed`, `DescriptiveEvidence`, `Module`, `LearningActivity`. Any other type is a 400 `untraceable_type`.
+with an item's formative uses (`ActivityItemLink`, ADR-0061) followed downstream to the activities that use it, and modules attached as context to every objective (through its declarations), assessment and activity (through its module links, its own or, for an activity in a lesson, the lesson's) reached, and a metric's `subject`, the record it measures, followed in both directions (an item statistic leads to its item, and an item to the metrics about it; ADR-0058). Accepted types: `LearningMetric`, `LearningDataset`, `Assessment`, `AssessmentItem`, `LearningObjective`, `LearningNeed`, `DescriptiveEvidence`, `Module`, `LearningActivity`. Any other type is a 400 `untraceable_type`.
 
 Response: `{ root, nodes: [ summary ], edges: [ { from, to, via, through?, confidence?, status?, role? } ], annotations: [ design notes, findings and attestations about any node reached ] }`. A note or finding about one part carries its `fragmentId`; an attestation is reported as by the attestations read below, with its `state`. `via` is the field followed; `through` is the junction document passed through, with its data. A dataset, metric or finding summary carries its `asOf`: read the rest of the design as that cohort met it, or as that finding judged it, at `?ref=<asOf>`.
 
@@ -317,21 +317,21 @@ Errors: 404 `not_found` for an unknown module.
 
 ### `GET /intelligence/module-content/:moduleId`
 
-A module's content in teaching order, the composed view ADR-0005 assigns the API. The module's `ModuleActivityLink`s and `ModuleActivityGroupLink`s are merged by `sequence` (one namespace, constraint 3); each group's members follow in their `ActivityGroupMember` order (constraint 4); each activity carries the items it uses formatively in their `ActivityItemLink` order (ADR-0061, constraint 17). The three sequences are never combined. Every `sequence` is optional in the schema: an entry without one follows those with one, ordered by link id, and carries no `sequence`. `:moduleId` is the bare id (`how-ai-works`), as for coverage.
+A module's content in teaching order, the composed view ADR-0005 assigns the API. The module's `ModuleActivityLink`s and `ModuleLessonLink`s are merged by `sequence` (one namespace, constraint 3); each lesson's activities follow in their `LessonActivityLink` order (constraint 4); each activity carries the items it uses formatively in their `ActivityItemLink` order (ADR-0061, constraint 17). The three sequences are never combined. Every `sequence` is optional in the schema: an entry without one follows those with one, ordered by link id, and carries no `sequence`. `:moduleId` is the bare id (`how-ai-works`), as for coverage.
 
-The view is a tree of placements, not a set of activities. The keys allow one activity both standalone and inside a group of the same module, or in two of its groups; it appears at each place, each time with the `link` that put it there (a `ModuleActivityLink` or an `ActivityGroupMember`), and `repeated` names it with every placement. Nothing calls that an error. A module's assessments are not content in this sense: read them through coverage.
+The view is a tree of placements, not a set of activities. The keys allow one activity both standalone and inside a lesson of the same module, or in two of its lessons; it appears at each place, each time with the `link` that put it there (a `ModuleActivityLink` or a `LessonActivityLink`), and `repeated` names it with every placement. Nothing calls that an error. A module's assessments are not content in this sense: read them through coverage.
 
 Response:
 
 ```
 {
   module:  { id, type, label },
-  summary: { entries, groups, activities, placements, formativeUses, unsequenced },
+  summary: { entries, lessons, activities, placements, formativeUses, unsequenced },
   content: [
     { kind: "activity", sequence?, link,
       activity: { id, type, label, activityType?, targets: [ "<objective id>", ... ] },
       items: [ { sequence?, link, item: { id, type, label, bloomsLevel, status } } ] },
-    { kind: "group", sequence?, link, group: { id, type, label },
+    { kind: "lesson", sequence?, link, lesson: { id, type, label },
       members: [ { sequence?, link, activity, items } ] } ],
   repeated: [ { activity: { id, type, label }, placements: [ "<link id>", ... ] } ]
 }
