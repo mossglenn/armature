@@ -240,6 +240,20 @@ export class Store {
     }
     const commit = commitFromDataVersion(res.headers.get('terminusdb-data-version'));
     if (!res.ok) throw new StoreError(res.status, errorType(body), body);
+    // A GET of a document deleted from the branch answers HTTP 200 with the
+    // error response as text: a "Status: 404" line, headers, a blank line,
+    // then the JSON (check AC4). Read the embedded status, so it fails as the
+    // 404 it is and a deleted id is free to write again.
+    const embedded = typeof body === 'string' ? /^Status: (\d{3})\r?\n[\s\S]*?\r?\n\r?\n([\s\S]*)$/.exec(body) : null;
+    if (embedded && Number(embedded[1]) >= 400) {
+      let inner: unknown = embedded[2];
+      try {
+        inner = JSON.parse(embedded[2]);
+      } catch {
+        // Keep the text.
+      }
+      throw new StoreError(Number(embedded[1]), errorType(inner), inner);
+    }
     return { status: res.status, body, commit };
   }
 
