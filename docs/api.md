@@ -218,7 +218,7 @@ AI agents are ordinary users whose `externalId` begins with `agent:` (for exampl
 
 ## Design intelligence
 
-All five reads compute their answers from the graph at the requested ref; nothing they report is stored (ADR-0056). Each accepts `?branch=` or `?ref=` and returns the commit in `ETag`.
+All six reads compute their answers from the graph at the requested ref; nothing they report is stored (ADR-0056). Each accepts `?branch=` or `?ref=` and returns the commit in `ETag`.
 
 ### `GET /intelligence/coverage/:moduleId`
 
@@ -292,6 +292,28 @@ Response:
 
 The judged part is the fragment named by `fragmentId`, or the whole record when there is none. It is read at `asOf` and at the requested ref and compared with every nested `@id` removed and fragments matched by `fragmentId`, so reordering an item's options changes no fragment (it does change the whole item). `Stale`: the part differs. `FragmentRemoved`: the record no longer has the part. `Unanchored`: no `asOf`, or the subject is not at it. A stale verdict is still a true record of what its attester affirmed then. The comparison works after a merge, when the commit attested is on another branch. The read takes no attester parameter and reports no count per person (ADR-0021).
 
+
+### `GET /intelligence/item-statistics`
+
+The item statistics in the bank, or with `?module=` (`Module/<id>` or the bare id) in the module's assessments: each item with every `LearningMetric` whose `subject` is that item (ADR-0058), newest administration first (the dataset's `administrationDate`, then the metric's `collectedAt`). Nothing is summarized: which figure counts as an item's difficulty (the latest administration, one cohort, the spread across cohorts) is the client's choice, and the response carries what it needs to choose. `?unit=` keeps the metrics in one unit (free text, matched exactly); `units` lists every unit in scope before that filter. A metric with no `subject`, or one about something other than an item in scope, is not reported here.
+
+Response:
+
+```
+{
+  scope: { module?: { id, type, label }, items, metrics },
+  units: [ "proportion correct", ... ],
+  items: [
+    { item: { id, type, label, bloomsLevel, status },
+      statistics: [
+        { metric:  { id, type, label, value, unit, asOf },
+          collectedAt?,
+          dataset?: { id, type, label, asOf, cohort?, administrationDate? } } ] } ],
+  itemsWithoutStatistics: [ { id, type, label, ... } ]
+}
+```
+
+Errors: 404 `not_found` for an unknown module.
 ### `GET /intelligence/impact/:type/:id`
 
 Every document that references this one, found from the schema's reference fields: `{ document, summary: { references, byType }, references: [ { id, type, label, field, within? } ] }`. For a junction, `within` names what it sits in (the assessment a placement belongs to, the module a declaration is for).

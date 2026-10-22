@@ -72,7 +72,7 @@ scripts/
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill); also npm run sync:terminusdb-docs
 app/
   app/page.tsx             # The viewer's index: a branch's modules, each linking to its Coverage View; reads the hub through lib/viewer.ts, never the store
-  app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4), read from the hub
+  app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4), with each item's statistics from /intelligence/item-statistics at the same commit (ADR-0058's first client), read from the hub
                            # (No route file: since 2026-10-21 Next.js hosts no API; the catch-all route and @hono/vercel are gone)
   app/layout.tsx           # Page shell (titled Armature)
   server.ts                # The standalone hub's entry: .env.local, PORT (3100) and HOST (loopback by default; the header resolver trusts the caller), startHub, SIGTERM; what build:hub bundles and the container runs
@@ -89,7 +89,7 @@ app/
       app.test.ts          # In-process Vitest tests via app.request(): reads, the Phase 2 walkthrough, users and identity; need the container running (users tests write to and clean up main)
       client.test.ts       # The contract test for @armature/client: every route through the client's fetch option over app.request (refs, commit from ETag, If-Match → 412, identity, envelopes, HubError codes)
       write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
-      intelligence.test.ts # The five intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion); attestations made on a round branch, merged, then reported Stale after a fragment changes (Phase 5 exit criterion)
+      intelligence.test.ts # The six intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion); attestations made on a round branch, merged, then reported Stale after a fragment changes (Phase 5 exit criterion)
       store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
       identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
@@ -106,7 +106,7 @@ app/
         documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
-        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
+        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028), item-statistics?module=&unit= (every metric about each item, ADR-0058): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
         export.ts          # GET /export?profile=&slice= (the graph at a ref as one JSON-LD document with its reloadable schema) and /export/slices (ADR-0031)
         discover.ts        # GET /discover (the revisions served, the capabilities with their settings, where the schema is; no ref, no identity) and GET /schema?branch=|ref= (the schema graph at a ref in the reloadable form, commit in ETag; ADR-0027 decision 4, built with ADR-0059)
       export/
@@ -280,7 +280,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0054** — The API is a Hono application (host-neutral; nothing under `app/lib/api/` imports from `next`)
 - **ADR-0055** — The API layer reaches TerminusDB over HTTP through one adapter (the JavaScript client stays in `scripts/`)
 - **ADR-0057** — Records that refer to a state of the graph name its commit (`asOf`): filled from the branch head, kept on replace, constraint 13
-- **ADR-0058** — Item statistics are `LearningMetric`s about the item (`subject`), not fields on it; summaries are reads
+- **ADR-0058** — Item statistics are `LearningMetric`s about the item (`subject`), not fields on it; summaries are reads. `GET /api/v1/intelligence/item-statistics` (2026-10-22) groups them by item, newest administration first, and picks no "latest": the client chooses; the Coverage View is its first client
 - **ADR-0028** — Attestation: a person's verdict on a record or part as of a commit; the claim optional; Hash key with `attestedBy` from identity; staleness a read; `fragmentId` on notes and findings (constraints 14 to 16)
 - **ADR-0062** (accepted and built 2026-10-22) — Operator repair outside the plugin API: a state the rules will not let a client leave is repaired with store credentials, as a new commit by the operator's registered `User` with the reason as the message, marked `armature.operator` in its metadata (a document delete is one; the store refuses to delete a referenced document); three tools in `app/lib/operator/` reuse the adapter, the invariants engine and the pipeline in-process (`check` a whole branch, `delete` a document or a scratch branch, `put` with `--unchecked` skipping the hub's rules only), bundled like the hub and shipped in the hub's image, never in `@armature/client` (decided 2026-10-22), so they run in the hub's container (`docker compose exec hub node operator.mjs check`; locally `npm run operator --workspace app -- check`); no superuser mode and no raw query route on `/api/v1`
 

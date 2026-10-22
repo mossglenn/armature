@@ -48,7 +48,7 @@ operator.ts                   The operator tools' command line (ADR-0062): check
 dist/                         The bundles (npm run build:hub, npm run build:operator); generated, not committed
 app/                          The viewer (Next.js); no route files, it hosts no API
   page.tsx                    The module index
-  coverage/[moduleId]/page.tsx  The Coverage View over GET /api/v1/intelligence/coverage/:moduleId
+  coverage/[moduleId]/page.tsx  The Coverage View over GET /api/v1/intelligence/coverage/:moduleId, with each item's statistics from /intelligence/item-statistics at the same commit
   layout.tsx, globals.css     Page shell and styles (Tailwind CSS)
 lib/
   viewer.ts                   The viewer's hub: hubUrl() from ARMATURE_HUB_URL and viewerHub(), a read-only @armature/client

@@ -848,7 +848,7 @@ Nothing else is written. In particular, no coverage figure is recomputed: approv
 
 ## 17. Design intelligence: what the graph can tell you
 
-Design intelligence is principle P4: analyses that come "from structure, not AI [artificial intelligence]," owned by the hub and exposed as **reads** any tool can call, so plugins do not each reimplement them. Phase 4 delivered four, all under `/api/v1/intelligence/`, all available at any ref (so any of them can be asked of the design as it was at a past commit).
+Design intelligence is principle P4: analyses that come "from structure, not AI [artificial intelligence]," owned by the hub and exposed as **reads** any tool can call, so plugins do not each reimplement them. Phase 4 delivered four, all under `/api/v1/intelligence/` (six by October 2026, with attestation staleness and item statistics), all available at any ref (so any of them can be asked of the design as it was at a past commit).
 
 ### 17.1 Coverage: are a module's declared objectives adequately assessed?
 
@@ -961,6 +961,14 @@ This is one of the most instructive decisions in the project's history, and it p
 
 > **[Interpretive framing]** The distinction ADR-0056 draws, between recorded observations and the indicators computed from them, parallels the measurement distinction between data and the scoring model applied to it. Storing the counts and letting the cut vary is analogous to reporting raw scores alongside a provisional cut score.
 
+
+### 17.7 Item statistics: how did the items perform? (ADR-0058, built 22 October 2026)
+
+**The question.** For the items in the bank, or in one module's assessments, what did each cohort that took them score?
+
+**The answer.** `GET /api/v1/intelligence/item-statistics` lists each item with every measurement about it (a `LearningMetric` whose `subject` is the item, Section 12.14), newest administration first, each with its value and unit, the cohort and date of the administration, and the design state it describes (`asOf`). Items with no measurement are listed apart, and a `unit` filter keeps one kind of figure.
+
+**What it leaves to the reader.** It does not pick a difficulty for an item. The latest administration, one cohort's figure and the spread across cohorts answer different questions, and the decision record left that choice to the tools that ask. The Coverage View, the first such tool, shows every administration beside each item, so a reader sees an approved and attested item that only 38% of the pilot cohort answered correctly next to the coverage verdict it counts toward.
 ## 18. Armature's own pages: the Coverage View
 
 The viewer, a Next.js application (Next.js is a web framework), is two read-only pages, Armature's first visual interface and a client of a hub like any plugin:
@@ -1226,7 +1234,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 - **Some list filters read a whole type.** The database cannot filter on an optional or multi-valued reference or an optional enumerated field (platform check Y), so the hub lists the type and filters it (for example, all items that assess a given objective). The answer is correct; the cost grows with the type, and a query in TerminusDB's own query language will replace it when a type outgrows a list.
 - **Some decided capabilities are unbuilt.** The schema-discovery route promised by ADR-0027 (an Architecture Decision Record) and the ordered module-content view assigned by ADR-0005 do not exist yet; neither is currently assigned to a phase.
 - **Lossless writes are unsolved.** A tool built against an older schema can erase newer fields by replacing a document (research lesson 1).
-- **Item statistics have no bank-wide summary yet** (Section 12.14). Each figure is recorded with its cohort and design version, but "items by latest difficulty" is not yet a read.
+- **Item statistics are read, not summarized** (Sections 12.14 and 17.7). Since 22 October 2026 one read returns every figure about each item with its cohort and design version, but it deliberately names no "latest" difficulty: which figure counts is each tool's choice, and a shared summary waits for a second tool to want the same one.
 - **The non-aggregation commitment is policy, not structure.** Anyone with bulk access can compute what ADR-0021 forbids; the hub only declines to make it easy.
 - **Pedagogical assumptions are built in.** The schema makes the learning objective the central node and uses Bloom's taxonomy. The research survey recommends stating such assumptions explicitly, framed as pedagogical pluralism rather than neutrality (candidate ADR-0050), which has not yet been done.
 
