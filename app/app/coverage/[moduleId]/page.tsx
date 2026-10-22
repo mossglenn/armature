@@ -1,4 +1,4 @@
-import { HubError, type CoverageItem, type CoverageVerdict as Verdict } from '@armature/client';
+import { HubError, type CoverageItem, type CoverageVerdict as Verdict, type ItemStatistic } from '@armature/client';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { hubPublicUrl, viewerHub } from '@/lib/viewer';
@@ -12,6 +12,11 @@ import { hubPublicUrl, viewerHub } from '@/lib/viewer';
  * change the cut (architecture decision record ADR-0029, decision 3); the
  * commit the data came from is shown. Nothing here is stored: coverage is
  * computed at read time (ADR-0056).
+ *
+ * Beside each item, its statistics from GET /api/v1/intelligence/item-statistics
+ * for the module, every administration newest first (ADR-0058 decision 3):
+ * an approved, attested item that a cohort mostly got wrong is Narrative 1's
+ * starting point, and the page shows it next to the coverage it counts toward.
  */
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +63,24 @@ function Counts({ title, counts }: { title: string; counts: Record<Verdict, numb
   );
 }
 
-function Items({ items }: { items: CoverageItem[] }) {
+type Statistics = Map<string, ItemStatistic[]>;
+
+function Performance({ statistics }: { statistics?: ItemStatistic[] }) {
+  if (!statistics?.length) return null;
+  return (
+    <ul className="w-full pl-4 text-xs text-zinc-600 dark:text-zinc-400">
+      {statistics.map((s) => (
+        <li key={s.metric.id}>
+          {s.dataset?.cohort ?? s.dataset?.label ?? 'Imported'}
+          {s.dataset?.administrationDate && <> ({s.dataset.administrationDate})</>}:{' '}
+          <span className="font-mono tabular-nums text-zinc-900 dark:text-zinc-100">{s.metric.value}</span> {s.metric.unit}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Items({ items, statistics }: { items: CoverageItem[]; statistics: Statistics }) {
   if (items.length === 0) return <p className="text-sm text-zinc-500 dark:text-zinc-400">No items placed in this module assess it.</p>;
   return (
     <ul className="space-y-1 text-sm">
@@ -73,6 +95,7 @@ function Items({ items }: { items: CoverageItem[] }) {
           <span className={item.eligibility === 'delivered' ? 'text-emerald-700 dark:text-emerald-300' : 'text-zinc-500 dark:text-zinc-400'}>
             {ELIGIBILITY_LABEL[item.eligibility]}
           </span>
+          <Performance statistics={statistics.get(item.id)} />
         </li>
       ))}
     </ul>
@@ -97,13 +120,17 @@ export default async function CoveragePage({
   // A threshold is passed through as given; the hub answers bad_query for one
   // it cannot read, and that refusal is shown rather than hidden.
   const threshold = (value?: string) => (value === undefined ? undefined : Number(value));
-  const result = await viewerHub()
+  const hub = viewerHub();
+  const result = await hub
     .intelligence.coverage(moduleId, { branch, fullyAssessedAt: threshold(fullyAssessedAt), overAssessedAbove: threshold(overAssessedAbove) })
     .catch((err: unknown) => {
       if (err instanceof HubError && err.status === 404) notFound();
       throw err;
     });
   const { data, commit } = result;
+  // At the commit the coverage was read at, so both describe one state.
+  const stats = await hub.intelligence.itemStatistics({ module: moduleId, ...(commit ? { ref: commit } : { branch }) });
+  const statistics: Statistics = new Map(stats.data.items.map((x) => [x.item.id, x.statistics]));
   const publicHub = hubPublicUrl();
 
   return (
@@ -154,7 +181,7 @@ export default async function CoveragePage({
               </div>
               {d.roleRationale && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{d.roleRationale}</p>}
               <div className="mt-3">
-                <Items items={d.assessedBy} />
+                <Items items={d.assessedBy} statistics={statistics} />
               </div>
             </li>
           ))}
@@ -177,7 +204,7 @@ export default async function CoveragePage({
                   )}
                 </h3>
                 <div className="mt-3">
-                  <Items items={u.assessedBy} />
+                  <Items items={u.assessedBy} statistics={statistics} />
                 </div>
               </li>
             ))}
@@ -187,6 +214,7 @@ export default async function CoveragePage({
 
       <footer className="border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
         Verdicts are computed by the hub at read time from the placements and items as they stand; nothing is stored (ADR-0056).
+        Item statistics are imported measurements, one per administration, newest first (ADR-0058).
         {publicHub && (
           <>
             {' '}Raw data:{' '}
