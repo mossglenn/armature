@@ -151,7 +151,7 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 
 Every `ArmatureDocument` may carry `externalRefs` (identifiers in other systems: `{ "@type": "ExternalRef", system, identifier, label? }`) and `attachments`; every fragment may carry `attachments` (`{ "@type": "Attachment", store, storeUri, contentHash, hashAlgorithm, revision?, path?, container?, mediaType?, byteSize?, role?, label? }`). Both are embedded subdocuments: send them inline, never store their nested `@id`, and expect the field to be absent on read when the set is empty. The hub checks their shape and rules 18 and 19; it does not fetch bytes or verify a hash in this phase (ADR-0030).
 
-There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5; ADR-0062, proposed, describes that operator surface: a delete as a commit, a whole-branch rule check, and a replace that can skip the hub's rules, none of it on `/api/v1`).
+There is no route that deletes a document. Lifecycle changes are status changes (`ItemStatus.Retired`, `FindingStatus.Dismissed`, `ObjectiveState.Archived`), which keep every reference and every line of history; deletion is an administrative operation outside the API (ADR-0024 decision 5; ADR-0062 built that operator surface on 2026-10-22: a delete as a commit, a whole-branch rule check, and a replace that can skip the hub's rules, run in the hub's container and none of it on `/api/v1`; `docs/deployment.md` § Repair). A deleted document reads as 404 `not_found`, and its id may be written again.
 
 ---
 

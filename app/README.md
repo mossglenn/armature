@@ -31,6 +31,8 @@ The hub reads `.env.local` from its working directory as Next.js does (a variabl
 |---|---|
 | `npm run build:hub` | Bundle the hub: esbuild over `server.ts` into `dist/server.mjs`, the API and its packages in one file (runs in CI) |
 | `npm run start:hub` | Run that bundle: the API on port 3100 |
+| `npm run build:operator` | Bundle the operator tools (ADR-0062): esbuild over `operator.ts` into `dist/operator.mjs` (runs in CI; the hub's image carries it) |
+| `npm run operator -- <command>` | Build and run them against the store in `.env.local`: `check`, `delete`, `put`; `-- --help` lists the options, `docs/deployment.md` § Repair says when to use each |
 | `npm run dev` | Start the viewer's development server on <http://localhost:3000>, reading the hub at `ARMATURE_HUB_URL` |
 | `npm run build`, `npm start` | The viewer's production build and server |
 | `npm run lint` | ESLint (runs in CI, continuous integration) |
@@ -42,7 +44,8 @@ The hub reads `.env.local` from its working directory as Next.js does (a variabl
 
 ```
 server.ts                     The hub's entry: reads the environment, starts lib/hub.ts, stops on SIGTERM
-dist/                         Its bundle (npm run build:hub); generated, not committed
+operator.ts                   The operator tools' command line (ADR-0062): check, delete, put
+dist/                         The bundles (npm run build:hub, npm run build:operator); generated, not committed
 app/                          The viewer (Next.js); no route files, it hosts no API
   page.tsx                    The module index
   coverage/[moduleId]/page.tsx  The Coverage View over GET /api/v1/intelligence/coverage/:moduleId
@@ -51,6 +54,8 @@ lib/
   viewer.ts                   The viewer's hub: hubUrl() from ARMATURE_HUB_URL and viewerHub(), a read-only @armature/client
   hub.ts                      The API served by Node's HTTP server (@hono/node-server): startHub({ port }) for server.ts and the test
   hub.test.ts                 The standalone host over a real socket: the same answers as app.request(), headers included
+  envLocal.ts                 Reads .env.local into the environment, for server.ts and operator.ts
+  operator/                   The operator tools: check.ts (every rule over a whole branch), repair.ts (delete, put), their test
   api/                        The Armature API (Hono; never imports from next)
     app.ts                    The app: base path /api/v1, route groups, error mapping
     store.ts                  The only module that talks to TerminusDB (ADR-0055)

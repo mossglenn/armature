@@ -801,6 +801,15 @@ Work:
       the image. The alias had already gone: nothing under `app/lib/api/` imports with `@/`,
       and the bundle step exists because the workspace packages are TypeScript source with
       extensionless imports.)
+- [x] The operator tools of ADR-0062, with the toolkit as that ADR's decision 5 planned. (Done
+      2026-10-22: `check`, `delete` and `put` in `app/lib/operator/`, a command line in
+      `app/operator.ts` bundled by `npm run build:operator` into `dist/operator.mjs` and carried in
+      the hub's image, so a server repairs with `docker compose exec hub node operator.mjs …`.
+      Bundled rather than run as a plain script, since Node cannot import the API's modules as
+      they are. `check` runs the invariants engine over a whole branch with the two write-only
+      rules skipped by code, and found nothing in the seed; `put --unchecked` passes the
+      pipeline's `invariants: 'skip'`, which no route may pass. Building `delete` corrected the
+      AC4 fact in §9. CI bundles the tools and runs them inside the hub's image.)
 - [ ] Deploy one hosted instance for the public demo so CoQui's recorded hub is a fallback
       rather than the source. What runs is settled and documented (`docs/deployment.md`,
       2026-10-21): the compose file's three containers on one server, the viewer public, the hub
@@ -870,7 +879,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0060 | Items may exist unaligned | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | Amends 0013: no minimum on `AssessmentItem.assesses`; rule 1 retired; the alignment read lists `itemsWithoutObjective`; rule 2 stands until a client shows the activity case; encouraging alignment is a §6 question |
 | 0061 | Formative use of items inside activities | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | `ActivityItemLink` junction with optional `sequence` (constraint 17); counts toward no coverage; trace follows it; the module-content view nests it when built; annotates 0003, 0005, 0029 |
 | 0063 | Outcome records name their source | 6 | Accepted and implemented 2026-10-20 | Constraint 20: a dataset has `producedBy` or an `externalRef`, a metric `derivedFrom` or an `externalRef`; closes the rule deferred since Phase 1; the seed gains one administration so Narrative 1 walks on `main` |
-| 0062 | Operator repair is a commit outside the plugin API | 7 (the toolkit), or on the first repair that needs it | Proposed 2026-10-20 | Gives 0024 decision 5 its meaning; 0025 decision 6 holds for operators; three tools (`check`, `delete`, `put --unchecked`) reusing the adapter and the invariants engine in-process; no superuser mode and no raw query route on `/api/v1` (§8) |
+| 0062 | Operator repair is a commit outside the plugin API | 7 (the toolkit), or on the first repair that needs it | Accepted and implemented 2026-10-22 (proposed 2026-10-20) | Gives 0024 decision 5 its meaning; 0025 decision 6 holds for operators; three tools (`check`, `delete`, `put --unchecked`) reusing the adapter and the invariants engine in-process; no superuser mode and no raw query route on `/api/v1` (§8) |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -1115,7 +1124,7 @@ Recorded so the decisions are inherited rather than rediscovered.
   profiles, and the exporter is the first consumer of the Phase 7 client package. What it loses
   on the way out (`fragmentId`, `assesses`, `purpose`, item identity across re-exports) is the
   evidence ADR-0031 needs about what an export profile must carry beside the format.*
-- No raw query route and no superuser mode on `/api/v1` (ADR-0062, proposed 2026-10-20). A
+- No raw query route and no superuser mode on `/api/v1` (ADR-0062, proposed 2026-10-20, accepted 2026-10-22). A
   `POST /api/v1/query` taking the store's query language would couple every client to TerminusDB
   (ADR-0055) and make ADR-0021's non-aggregation guard unenforceable; a bypass header would make
   every constraint conditional. Ad-hoc questions are the intelligence reads, the list filters and
@@ -1219,6 +1228,9 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   204 and is a commit carrying the given author and message, after which the document is gone
   from the branch and still readable at the commit before. A `GET` of a missing document answers
   HTTP 200 with a 404 envelope in the body (`api:DocumentNotFound`); the adapter reads the body.
+  (*Corrected 2026-10-22:* it did not. The text body passed through as the document until
+  building ADR-0062's `delete` showed a write reusing the deleted id refused as `type_conflict`;
+  the adapter's `request()` now raises the embedded status.)
 - *Corrected:* the JavaScript client sets `author` from its connection user and provides no
   override on any write method. The HTTP document API accepts `author` and `message` query
   parameters on `POST`, `PUT` and `DELETE`. All store calls from the API layer go over HTTP
