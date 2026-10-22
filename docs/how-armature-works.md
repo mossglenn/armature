@@ -996,20 +996,21 @@ This narrative demonstrates Armature as design-time intelligence.
 
 > **[Brevity candidate]** Details of the demonstration data could move to an appendix.
 
-The repository includes a demonstration graph (`scripts/seed_data.js`), a realistic but fictional course about artificial intelligence (AI): **"Introduction to AI for Instructional Designers."** It holds 48 documents (plus their embedded parts), written in one commit; one attestation written in a second commit so that it can name the first as the state it judged; and, since 20 October 2026 (ADR-0063), one dataset and three metrics written in a third commit that also names the first: one administration of the Module 3 capstone to a spring pilot cohort, with the difficulty of two items and the cohort's mean score. One objective carries a CASE competency reference and the dataset an xAPI activity reference (ADR-0030). The first commit holds:
+The repository includes a demonstration graph (`scripts/seed_data.js`), a realistic but fictional course about artificial intelligence (AI): **"Introduction to AI for Instructional Designers."** It holds 61 documents (plus their embedded parts), written in one commit; one attestation written in a second commit so that it can name the first as the state it judged; and, since 20 October 2026 (ADR-0063), one dataset and three metrics written in a third commit that also names the first: one administration of the Module 3 capstone to a spring pilot cohort, with the difficulty of two items and the cohort's mean score. One objective carries a CASE competency reference and the dataset an xAPI activity reference (ADR-0030). The first commit holds:
 
 - 1 course, 3 modules, 3 assessments;
 - 2 learning needs, each grounded in descriptive evidence through a need-evidence link;
 - 7 learning objectives, with 4 prerequisite records;
-- 6 assessment items, each with a stem and four options carrying real answer text and fragment identifiers (one item with general incorrect feedback, two options with a stated `purpose`), placed 7 times (one item is reused in two assessments);
-- item statuses deliberately varied: 4 `Approved`, 1 `InReview`, 1 `Draft`, with matching placement statuses;
-- 7 module-objective declarations;
+- 8 assessment items, each with a stem and four options carrying real answer text and fragment identifiers (one item with general incorrect feedback, four options with a stated `purpose`), placed 8 times (one item is reused in two assessments);
+- item statuses deliberately varied: 5 `Approved`, 1 `InReview`, 2 `Draft`, with matching placement statuses; one draft item assesses no objective yet and is placed in no assessment (ADR-0060);
+- 7 module-objective declarations, whose coverage covers the range: one `FullyAssessed` (Write Effective Prompts in Module 2, with two approved items), the rest `PartiallyAssessed` or `Uncovered`;
+- Module 1's activities: a practice activity and an activity group of two (a video and a worked example), placed in one sequence (ADR-0005), with the unaligned draft item used as a check inside the worked example (ADR-0061);
 - 2 design notes (one about an item, one about a module's declaration of an objective, demonstrating that relationships can be annotated);
-- 1 design finding, open, on the draft item;
-- 1 user, the demo designer;
-- 1 attestation: the demo designer affirms that the bias item's first option is its only correct answer, a claim about one part of an approved item (ADR-0028).
+- 1 design finding, open, on the draft item, raised by the reviewer;
+- 2 users: the demo designer, and a subject-matter reviewer from a partner college. Every record whose type carries a creator names one of them (the reviewer the finding, the designer the rest), so an export's pseudonymous and institutional profiles have two people to rewrite;
+- 1 attestation: the reviewer affirms that the bias item's first option is its only correct answer, a claim about one part of an approved item (ADR-0028).
 
-The seed currently has **no learning activities, activity groups, datasets or metrics**. The alignment read therefore reports every objective as lacking an activity, and Narrative 1 is demonstrated in tests that add a dataset and metric on a scratch branch (a temporary branch the test creates and deletes). Seeding an outcome dataset is planned for Phase 6, and the session log notes that no declaration in the seed is currently `FullyAssessed`, which a second approved item would fix.
+Since 22 October 2026 the seed shows each mechanism on `main` rather than only in tests: coverage across its range, an item no one has aligned, activities in a module's sequence with a group and a formative use, and two people in every export. Five objectives still lack an activity, and the alignment read says so. Every rule the hub enforces holds over the seed: CI checks it with the operator's `check` after loading it (ADR-0062).
 
 ## 21. Supporting tools
 

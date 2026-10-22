@@ -123,6 +123,11 @@ when it is built.
 **Neutral**
 
 - The seed has no activities, so formative use is shown only in tests until the seed gains some.
+  *Note 2026-10-22: it has. Module 1 holds a practice activity and a group of two, and the draft
+  item `training-loop-mc` is a check inside the group's worked example. Building it showed the
+  trace finding an activity's module only through `ModuleActivityLink`; it now follows a group's
+  link too. The alignment read's module scope still lists unaligned items placed in the module's
+  assessments, not those used only in its activities.*
 - No client writes `ActivityItemLink` yet; QuiQui's and Tessera's mappings name it as the target
   for their formative uses when adapters are written.
 
