@@ -41,8 +41,11 @@ import { createStore, type TerminusDocument } from '../store';
  *   GET /item-statistics?module=&unit=         the item statistics in the bank or a module:
  *       &branch=|ref=                          each item with every metric about it and the
  *                                              administration it came from (ADR-0058)
+ *   GET /module-content/:moduleId              a module's activities and groups in teaching
+ *       ?branch=|ref=                          order, each group's members in theirs, each
+ *                                              activity's formative items in theirs (ADR-0005)
  *
- * All six are reads at a ref with the commit in ETag, the entity tag
+ * All seven are reads at a ref with the commit in ETag, the entity tag
  * (architecture decision record ADR-0025, decision 7). They derive
  * everything from structure (plan principle P4): no text similarity, no model.
  * Redundancy detection ("a new item duplicates one in the bank") needs text
@@ -343,6 +346,113 @@ intelligence.get('/item-statistics', async (c) => {
       .filter((i) => bySubject.has(i['@id']))
       .map((i) => ({ item: summarize(i), statistics: bySubject.get(i['@id'])!.sort(newestFirst) })),
     itemsWithoutStatistics: items.filter((i) => !bySubject.has(i['@id'])).map(summarize),
+  });
+});
+
+// ── Module content ────────────────────────────────────────────────────────────
+
+/**
+ * A module's content in teaching order, the composed view ADR-0005 assigns
+ * the API: its ModuleActivityLinks and ModuleActivityGroupLinks merged by
+ * `sequence` (one namespace, constraint 3), each group's members by theirs
+ * (constraint 4), each activity's formative items by theirs (ADR-0061,
+ * constraint 17). The three integers are never combined. Every one is
+ * Optional: an entry without one follows those with one, by link id, and the
+ * entry carries no `sequence`.
+ *
+ * A tree of placements, not a set of activities (decided 2026-10-22): the
+ * keys allow one activity standalone and in a group of the same module, or in
+ * two of its groups, and it appears at each place with the link that put it
+ * there; `repeated` names it, and nothing calls it wrong. A module's
+ * assessments are not content in ADR-0005's sense; coverage reads them.
+ */
+const bySequence = (x: TerminusDocument, y: TerminusDocument): number =>
+  Number(x.sequence ?? Infinity) - Number(y.sequence ?? Infinity) || x['@id'].localeCompare(y['@id']);
+
+const sequenceOf = (link: TerminusDocument) => (typeof link.sequence === 'number' ? { sequence: link.sequence } : {});
+
+/** A document the ref lacks is still shown by id, as coverage shows an objective. */
+const summaryOr = (docs: Map<string, TerminusDocument>, id: string, type: string): Summary => {
+  const doc = docs.get(id);
+  return doc ? summarize(doc) : { id, type };
+};
+
+intelligence.get('/module-content/:moduleId', async (c) => {
+  const graph = await graphAt(c);
+  const mod = await requireDocument(graph, 'Module', c.req.param('moduleId'));
+  const moduleId = mod['@id'];
+
+  const links = [
+    ...(await graph.list('ModuleActivityLink', { module: moduleId })),
+    ...(await graph.list('ModuleActivityGroupLink', { module: moduleId })),
+  ].sort(bySequence);
+  const groupIds = links.filter((l) => l['@type'] === 'ModuleActivityGroupLink').map((l) => String(l.group));
+  const members = new Map(
+    await Promise.all(groupIds.map(async (g) => [g, (await graph.where('ActivityGroupMember', 'group', g)).sort(bySequence)] as const))
+  );
+  const activityIds = [
+    ...links.filter((l) => l['@type'] === 'ModuleActivityLink').map((l) => String(l.activity)),
+    ...[...members.values()].flat().map((m) => String(m.activity)),
+  ];
+  const uses = new Map(
+    await Promise.all(
+      [...new Set(activityIds)].map(async (a) => [a, (await graph.where('ActivityItemLink', 'activity', a)).sort(bySequence)] as const)
+    )
+  );
+  const docs = new Map(
+    (await graph.getMany([...groupIds, ...activityIds, ...[...uses.values()].flat().map((u) => String(u.item))])).map((d) => [d['@id'], d])
+  );
+
+  const placements = new Map<string, string[]>();
+  const placed = (link: TerminusDocument) => {
+    const activityId = String(link.activity);
+    placements.set(activityId, [...(placements.get(activityId) ?? []), link['@id']]);
+    const activity = docs.get(activityId);
+    return {
+      ...sequenceOf(link),
+      link: link['@id'],
+      activity: {
+        ...summaryOr(docs, activityId, 'LearningActivity'),
+        ...(typeof activity?.activityType === 'string' ? { activityType: activity.activityType } : {}),
+        targets: idsIn(activity?.targets),
+      },
+      items: (uses.get(activityId) ?? []).map((u) => ({
+        ...sequenceOf(u),
+        link: u['@id'],
+        item: summaryOr(docs, String(u.item), 'AssessmentItem'),
+      })),
+    };
+  };
+  const content = links.map((l) =>
+    l['@type'] === 'ModuleActivityLink'
+      ? { kind: 'activity' as const, ...placed(l) }
+      : {
+          kind: 'group' as const,
+          ...sequenceOf(l),
+          link: l['@id'],
+          group: summaryOr(docs, String(l.group), 'ActivityGroup'),
+          members: (members.get(String(l.group)) ?? []).map(placed),
+        }
+  );
+
+  const memberLinks = [...members.values()].flat();
+  const useLinks = [...uses.values()].flat();
+  setEtag(c, graph.commit);
+  return c.json({
+    module: summarize(mod),
+    summary: {
+      entries: content.length,
+      groups: groupIds.length,
+      activities: placements.size,
+      placements: activityIds.length,
+      formativeUses: useLinks.length,
+      unsequenced: [...links, ...memberLinks, ...useLinks].filter((l) => typeof l.sequence !== 'number').length,
+    },
+    content,
+    repeated: [...placements]
+      .filter(([, at]) => at.length > 1)
+      .map(([id, at]) => ({ activity: summaryOr(docs, id, 'LearningActivity'), placements: at }))
+      .sort((x, y) => x.activity.id.localeCompare(y.activity.id)),
   });
 });
 
