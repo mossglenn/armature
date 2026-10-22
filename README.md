@@ -175,6 +175,7 @@ docs/
   armature-asks-from-Coqui.md What the first plugin asked for and learned (a dated handoff)
   research-path.md            How a learning scientist stands up a constrained Armature for one study
   deployment.md               Running an instance: the terms, the containers, who can do what, the steps, a hosted instance
+  graph-view-plan.md          The Design Graph: the plan for the viewer's graph pages (Phase 8), the visual language and Narrative 1 as a walk
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
   research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings

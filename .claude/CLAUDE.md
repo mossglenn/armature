@@ -122,6 +122,7 @@ docs/
   armature-asks-from-Coqui.md  # CoQui's dated handoff (2026-10-05): its asks and lessons; a status banner says what landed
   client-changes.md        # What client tools (CoQui first) must act on, newest first: what changed, what a client does, CoQui's mappings. Add an entry for every change to /api/v1 or the schema a client would act on
   research-path.md         # How a learning scientist stands up a constrained Armature for one study: instance, what the tools write, slice, profile, export at a pinned commit, reproduction, process questions only (Phase 6)
+  graph-view-plan.md       # The Design Graph (Phase 8, planned 2026-10-22): the viewer's graph pages (/graph, the Focus page, the Walkthrough, figure mode) on React Flow with dagre; the visual language (stages, hues, glyphs); Narrative 1 as ten steps; five PRs; §14 records the decisions
   deployment.md            # The administrator's guide to an instance: the terms, the containers and what each publishes, who can do what and why, the steps, a hosted instance (machine size, domain and DNS, firewall, reboots and updates, backups, the tunnel, the DigitalOcean run with a scoped token from the Keychain; measured on the VM and the Droplet), several projects, what is not built (authentication, an admin page, a running hosted instance, published images)
   demo-api.md              # RETIRED demo-era API spec, kept for history
   positionpaper/           # The position paper (March 2026); not edited
