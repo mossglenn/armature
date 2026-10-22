@@ -11,7 +11,9 @@
     "sync:terminusdb-docs": "node ../scripts/sync-terminusdb-docs.js",
     "test": "vitest run",
     "build:hub": "esbuild server.ts --bundle --platform=node --format=esm --target=node22 --sourcemap --outfile=dist/server.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
-    "start:hub": "node dist/server.mjs"
+    "start:hub": "node dist/server.mjs",
+    "build:operator": "esbuild operator.ts --bundle --platform=node --format=esm --target=node22 --sourcemap --outfile=dist/operator.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "operator": "npm run build:operator --silent && node --enable-source-maps dist/operator.mjs"
   },
   "dependencies": {
     "@armature/types": "0.1.0",
