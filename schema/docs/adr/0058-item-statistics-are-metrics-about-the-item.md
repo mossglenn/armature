@@ -19,6 +19,17 @@ stored or computed?".
 `derivedFrom` the spring pilot dataset with its `asOf`; ADR-0063 requires every metric to name its
 dataset or an external source (constraint 20).
 
+**Note 2026-10-22, decision 3's bank-wide read.** The first client to need one is the viewer's
+Coverage View, which shows each item's statistics beside the coverage it counts toward, so
+Narrative 1's starting point (an approved, attested item that 38% of a cohort answered correctly)
+sits on the same page as its objective's verdict. The form it needs is the one this ADR left open
+deliberately unchosen: `GET /api/v1/intelligence/item-statistics` (`?module=`, `?unit=`, at any
+ref) returns each item with every metric about it and the administration each came from, newest
+first, and summarizes nothing. Which figure is "the" difficulty stays the client's choice; the
+order only spares a client that wants the latest administration from sorting. Items with no
+statistic are listed apart. Capability `armature/intelligence.item-statistics`, revision
+2026-10-22.
+
 ## Context
 
 ADR-0009 added `difficultyIndex` and `discriminationIndex` to `AssessmentItem` as classical item

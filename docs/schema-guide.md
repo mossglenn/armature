@@ -319,7 +319,7 @@ The database does **not** check that a reference points at the right *class* of 
 
 **History and difference.** `documents.history(type, id, { branch, start, count, diff })` lists the commits on a branch that touched one document, newest first, each with who, why, when, and the structural difference it made. `documents.diff(type, id, { from, to })` is the difference between two commits. Lists inside a document (an item's options) are compared by position, so reordering reads as several changes.
 
-**What a module or course looks like now.** The five intelligence reads answer design questions from the graph's structure alone, at any ref, storing nothing (ADR-0056):
+**What a module or course looks like now.** The six intelligence reads answer design questions from the graph's structure alone, at any ref, storing nothing (ADR-0056):
 
 | Read | Answers | Returns |
 |---|---|---|
@@ -329,6 +329,7 @@ The database does **not** check that a reference points at the right *class* of 
 | `intelligence.trace(type, id)` | Everything one record connects to, both directions, from evidence through needs, objectives, items, placements and assessments to datasets and metrics, with every note, finding and attestation along the way | Nodes, edges with the field or junction followed, annotations |
 | `intelligence.impact(type, id)` | Everything that references this record, before it is changed | References by type, each with the field and the container it sits in |
 | `intelligence.attestations(type, id)` | Which verdicts on this record still hold | Each attestation with `Current`, `Stale`, `FragmentRemoved` or `Unanchored` |
+| `intelligence.itemStatistics({ module, unit })` | How the items performed, per administration | Each item with every metric about it, newest administration first, its cohort and date; the units in scope; items with none. Which figure is "the" difficulty is the tool's choice |
 
 The coverage thresholds are the hub's provisional cut; a tool passes its own and reads the hub's defaults from `discover()`. Formative uses of items (`ActivityItemLink`) and unaligned items count toward nothing.
 

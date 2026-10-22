@@ -751,6 +751,9 @@ Work:
       generic write route, with an invariant for `producedBy` when the assessment is Armature's.
       Seed one dataset so Narrative 1 is live end to end. A bank-wide summary read ("items by
       latest difficulty") is built when the importer or a reviewing client names the summary it needs.
+      (*Built 2026-10-22 with the viewer's Coverage View as that client:*
+      `GET /api/v1/intelligence/item-statistics` groups every metric about each item, newest
+      administration first, and picks no "latest"; ADR-0058 carries a dated note.)
 - [x] (2026-10-20) A short `docs/research-path.md` describing how a scientist would stand up a constrained
       Armature for one study: which slice, which profile, what the collection instrument writes.
 

@@ -45,7 +45,7 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 - a version-controlled API: reads at any branch or commit, history and differences per document, branches, three-way merges with conflict reports
 - one write path for every document type, enforcing every rule the database cannot (the invariants engine), with the author and reason recorded on every change
 - identity resolution for people and AI agents
-- the five design-intelligence reads (coverage, alignment, trace, impact, and attestation staleness) and a read-only Coverage View page
+- the six design-intelligence reads (coverage, alignment, trace, impact, attestation staleness and item statistics) and a read-only Coverage View page that shows each item's statistics beside the coverage it counts toward
 - external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
 - 175 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
 
