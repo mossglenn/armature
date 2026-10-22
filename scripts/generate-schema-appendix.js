@@ -113,7 +113,7 @@ const DOMAINS = [
   {
     label: 'Learning Activities & Course Structure',
     description: 'Instructional activities and the hierarchical containers that organize them into deliverable courses.',
-    ids: ['LearningActivity', 'ActivityGroup', 'ActivityGroupMember', 'ActivityItemLink', 'ModuleObjective', 'Module', 'ModuleActivityLink', 'ModuleActivityGroupLink', 'Course'],
+    ids: ['LearningActivity', 'Lesson', 'LessonActivityLink', 'ActivityItemLink', 'ModuleObjective', 'Module', 'ModuleActivityLink', 'ModuleLessonLink', 'Course'],
   },
   {
     label: 'Design Rationale',

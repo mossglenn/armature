@@ -123,7 +123,7 @@ are not yet written; see [Numbering](#numbering).
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
-### 0054–0063: Later decisions (October 2026)
+### 0054–0064: Later decisions (October 2026)
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -137,6 +137,7 @@ are not yet written; see [Numbering](#numbering).
 | [0061](0061-formative-use-of-items-in-activities.md) | Formative Use of Items Inside Activities | Accepted and implemented (2026-10-20); annotates ADR-0003, ADR-0005 and ADR-0029 | A question asked during an activity (a poll, a practice question) is recorded by a small link record naming the activity, the question and the order. It carries no score and counts toward no coverage; the trace and impact reads reach it. |
 | [0062](0062-operator-repair-outside-the-plugin-api.md) | Operator Repair Is a Commit Outside the Plugin API | Accepted and implemented (2026-10-22; proposed 2026-10-20); gives ADR-0024 decision 5 its meaning; ADR-0025 decision 6 holds for operators | When the API's rules will not let a tool fix a broken state, an operator with the database's credentials repairs it from outside the API, always by a new commit with an author and a reason, never by rewriting history. Three tools: a check that lists every rule the data breaks, a delete, and a replace that can skip the hub's rules. No raw query route and no superuser mode on the API. |
 | [0063](0063-outcome-records-name-their-source.md) | Outcome Records Name Their Source | Accepted and implemented (2026-10-20); annotates ADR-0057 and ADR-0058 | Results that enter Armature must say where they came from: the assessment inside Armature that produced them, or a reference to the outside system they were imported from. The demonstration course now carries one administration's results, so the outcomes-to-design walk runs on the seed. |
+| [0064](0064-lesson.md) | Lesson, an Ordered Set of Activities | Accepted and implemented (2026-10-22); annotates ADR-0005 and ADR-0003 | The class that holds an ordered set of activities a module schedules is `Lesson`, the peer of an assessment (an ordered set of items); it was `ActivityGroup`, a name for its shape. Its two links are `LessonActivityLink` and `ModuleLessonLink`. A rename only: the sequencing of ADR-0005 and the rules around it are unchanged. |
 
 ## How to add an ADR
 
