@@ -849,6 +849,38 @@ Work:
 Exit: a developer with the repo, Docker and the client package can write a new plugin without
 reading TerminusDB documentation.
 
+### Phase 8: The Design Graph (5 pull requests) — planned 2026-10-22
+
+**Goal.** Draw the graph: every record on a branch at a commit in lifecycle columns, every
+relationship as an edge, the intelligence reads laid over the same drawing, and Narrative 1 as a
+guided walk from a cohort's result back to the evidence. The pages are the face of Armature and
+the source of the figures in papers and slides, so every drawing is at a named commit and an
+exported figure carries that commit. No change to the API or the schema: the viewer derives the
+drawing from the schema as data and the existing reads.
+**Serves:** both demo narratives in PROJECT_CONTEXT, the ICICLE audience, the reproducibility
+claim of `docs/research-path.md`.
+
+The plan is `docs/graph-view-plan.md`: the pages (the Design Graph at `/graph`, the Focus page,
+the Walkthrough, figure mode), the visual language (stages, hues, glyphs, node and edge
+anatomy), navigation and the relations from a selected node, the detail panel, Narrative 1's ten
+steps, the lenses, the architecture (React Flow with dagre; everything read by the server, the
+browser never calling the hub; every view a URL), the limits, and the five pull requests with
+their acceptance criteria. Its §14 records the decisions taken on 2026-10-22, including a
+Playwright smoke test in CI from the first pull request.
+
+Work:
+- [ ] PR 1: the Design Graph page, the derivation and layout modules with their tests, the
+      visual language documented, the browser smoke test in CI
+- [ ] PR 2: the Focus page from the trace read, the trace relation, attestation state and
+      history in the panel, links from the Coverage View
+- [ ] PR 3: the Walkthrough and time travel (coverage at `asOf`, then and now)
+- [ ] PR 4: the lenses, figure mode with PNG export and the commit stamp, the branch picker
+- [ ] PR 5 (when a paper or a larger store asks): vector figures, scoping, virtualization,
+      and the hub-side graph read if a second client wants the derivation
+
+Exit: Narrative 1 runs from the Coverage View's item statistic to the evidence in one walk, and
+the explainer's figure for it is exported from the page with its commit.
+
 ---
 
 ## 5. ADR queue
