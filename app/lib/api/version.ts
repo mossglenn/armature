@@ -18,7 +18,7 @@ import { ApiError } from './errors';
  * list against that file's headings. Revisions under /api/v1 are additive, so
  * a hub at the newest serves every earlier one.
  */
-export const REVISIONS = ['2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
+export const REVISIONS = ['2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
 
 export const CURRENT_REVISION = REVISIONS[0];
 const OLDEST_REVISION = REVISIONS[REVISIONS.length - 1];
@@ -53,6 +53,7 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/intelligence.trace': { fallback: 'reject', routes: ['/api/v1/intelligence/trace'], settings: {} },
   'armature/intelligence.impact': { fallback: 'reject', routes: ['/api/v1/intelligence/impact'], settings: {} },
   'armature/intelligence.attestations': { fallback: 'reject', routes: ['/api/v1/intelligence/attestations'], settings: {} },
+  'armature/intelligence.item-statistics': { fallback: 'reject', routes: ['/api/v1/intelligence/item-statistics'], settings: {} },
   'armature/export': { fallback: 'reject', routes: ['/api/v1/export'], settings: { profiles: ['full', 'pseudonymous', 'institutional'] } },
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema'], settings: {} },
 };

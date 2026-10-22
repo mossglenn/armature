@@ -15,6 +15,26 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-22 · Item statistics in one read
+
+**What changed.** `GET /api/v1/intelligence/item-statistics` returns the item statistics in the
+bank, or with `?module=` in a module's assessments: each item with every `LearningMetric` whose
+`subject` is that item, newest administration first, each with its value, unit, `asOf` and the
+dataset it came from (cohort, administration date). `?unit=` keeps one unit; `units` lists those
+in scope; items with no statistic are listed apart. It summarizes nothing: which figure counts as
+an item's difficulty (latest, one cohort, across cohorts) is the client's choice (ADR-0058,
+decision 3, whose form the viewer's Coverage View decided). Capability
+`armature/intelligence.item-statistics`; `@armature/client` adds `intelligence.itemStatistics()`
+and sends this revision.
+
+**What a client does.** Nothing unless it shows item performance. One that does reads this
+instead of listing `LearningMetric?subject=` once per item, and takes the first statistic for "the
+latest administration" or filters by `dataset` for one cohort.
+
+**CoQui.** An item's performance beside its findings is
+`itemStatistics({ module })` filtered to the item under review, or the per-item list route as
+before.
+
 ## 2026-10-21 · The hub runs as its own process and container
 
 **What changed.** Nothing in the contract. The API is served by a standalone Node process

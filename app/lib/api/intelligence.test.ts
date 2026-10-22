@@ -644,3 +644,90 @@ describe('Narrative 1 on the seed (Phase 6, ADR-0063)', () => {
     expect(dataset.externalRefs[0]).toMatchObject({ system: 'xAPI' });
   });
 });
+
+describe('GET /api/v1/intelligence/item-statistics (ADR-0058 decision 3)', () => {
+  const STATS = `test-stats-${stamp}`;
+
+  afterAll(async () => {
+    await createStore({ branch: 'main' }).deleteBranch(STATS).catch(() => undefined);
+  });
+
+  it("groups the seed's item statistics by item, with the administration each came from", async () => {
+    const res = await get('/api/v1/intelligence/item-statistics');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('etag')).toMatch(/^"[a-z0-9]+"$/);
+    const body = await res.json();
+    // The cohort's mean score names no subject, so it is no item's statistic.
+    expect(body.scope).toEqual({ items: 8, metrics: 2 });
+    expect(body.units).toEqual(['proportion correct']);
+    expect(body.items.map((x: { item: { id: string } }) => x.item.id)).toEqual([
+      'AssessmentItem/bias-type-mc',
+      'AssessmentItem/effective-prompt-mc',
+    ]);
+    const [bias] = body.items;
+    expect(bias.item).toMatchObject({ label: 'Identifying training data bias', status: 'Approved' });
+    expect(bias.statistics).toEqual([
+      {
+        metric: expect.objectContaining({ id: 'LearningMetric/mod3-bias-type-difficulty', value: 0.38, unit: 'proportion correct', asOf: expect.any(String) }),
+        collectedAt: '2026-05-15T09:00:00Z',
+        dataset: expect.objectContaining({ id: 'LearningDataset/mod3-spring-pilot', cohort: 'Spring 2026 pilot', administrationDate: '2026-05-14' }),
+      },
+    ]);
+    expect(bias.statistics[0].metric.asOf).toBe(bias.statistics[0].dataset.asOf);
+    expect(ids(body.itemsWithoutStatistics)).toHaveLength(6);
+  });
+
+  it('scopes to the items placed in a module, and filters by unit without hiding the units there are', async () => {
+    const mod3 = await json('/api/v1/intelligence/item-statistics?module=Module/risks-and-ethics');
+    expect(mod3.scope).toMatchObject({ module: { id: 'Module/risks-and-ethics' }, items: 3, metrics: 2 });
+    expect(ids(mod3.itemsWithoutStatistics)).toEqual(['AssessmentItem/appropriate-use-mc']);
+    const mod1 = await json('/api/v1/intelligence/item-statistics?module=how-ai-works');
+    expect(mod1.items).toEqual([]);
+    expect(mod1.units).toEqual([]);
+    const other = await json(`/api/v1/intelligence/item-statistics?unit=${encodeURIComponent('point-biserial')}`);
+    expect(other.items).toEqual([]);
+    expect(other.scope.metrics).toBe(0);
+    expect(other.units).toEqual(['proportion correct']);
+    expect((await get('/api/v1/intelligence/item-statistics?module=nowhere')).status).toBe(404);
+  });
+
+  it('lists a later administration first, and reads as the graph stood at an earlier ref', async () => {
+    expect((await post('/api/v1/branches', { name: STATS, from: { branch: 'main' } })).status).toBe(201);
+    const before = await get(`/api/v1/intelligence/item-statistics?branch=${STATS}`);
+    const beforeCommit = String(before.headers.get('etag')).replace(/"/g, '');
+    const write = await post(`/api/v1/documents?branch=${STATS}`, {
+      message: 'The fall cohort took the Module 3 capstone',
+      documents: [
+        {
+          '@type': 'LearningDataset',
+          '@id': `LearningDataset/fall-${stamp}`,
+          label: 'Module 3 capstone, fall 2026',
+          cohort: 'Fall 2026',
+          administrationDate: '2026-11-12',
+          producedBy: 'Assessment/mod3-assessment',
+        },
+        {
+          '@type': 'LearningMetric',
+          '@id': `LearningMetric/fall-bias-${stamp}`,
+          label: 'Item difficulty: bias type item, fall',
+          collectedAt: '2026-11-13T09:00:00Z',
+          source: 'LMS item analysis export',
+          value: 0.61,
+          unit: 'proportion correct',
+          derivedFrom: `LearningDataset/fall-${stamp}`,
+          subject: 'AssessmentItem/bias-type-mc',
+        },
+      ],
+    });
+    expect(write.status).toBe(200);
+
+    const now = await json(`/api/v1/intelligence/item-statistics?branch=${STATS}&module=risks-and-ethics`);
+    const bias = now.items.find((x: { item: { id: string } }) => x.item.id === 'AssessmentItem/bias-type-mc');
+    expect(bias.statistics.map((s: { metric: { value: number } }) => s.metric.value)).toEqual([0.61, 0.38]);
+    expect(bias.statistics[0].dataset).toMatchObject({ cohort: 'Fall 2026', administrationDate: '2026-11-12' });
+
+    const then = await json(`/api/v1/intelligence/item-statistics?ref=${beforeCommit}&module=risks-and-ethics`);
+    const biasThen = then.items.find((x: { item: { id: string } }) => x.item.id === 'AssessmentItem/bias-type-mc');
+    expect(biasThen.statistics.map((s: { metric: { value: number } }) => s.metric.value)).toEqual([0.38]);
+  });
+});

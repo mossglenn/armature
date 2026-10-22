@@ -38,8 +38,11 @@ import { createStore, type TerminusDocument } from '../store';
  *   GET /attestations/:type/:id?branch=|ref=   the attestations about this record, each with
  *                                              whether the part it judged has changed since
  *                                              its asOf (ADR-0028 decision 7)
+ *   GET /item-statistics?module=&unit=         the item statistics in the bank or a module:
+ *       &branch=|ref=                          each item with every metric about it and the
+ *                                              administration it came from (ADR-0058)
  *
- * All five are reads at a ref with the commit in ETag, the entity tag
+ * All six are reads at a ref with the commit in ETag, the entity tag
  * (architecture decision record ADR-0025, decision 7). They derive
  * everything from structure (plan principle P4): no text similarity, no model.
  * Redundancy detection ("a new item duplicates one in the bank") needs text
@@ -259,6 +262,87 @@ intelligence.get('/alignment', async (c) => {
       objectives: objectives.filter((o) => bloomsRank(o.bloomsLevel) < 0).map(summarize),
       items: items.filter((i) => bloomsRank(i.bloomsLevel) < 0).map(summarize),
     },
+  });
+});
+
+// ── Item statistics ───────────────────────────────────────────────────────────
+
+/**
+ * An item statistic is a `LearningMetric` whose `subject` is the item
+ * (ADR-0058). This read groups them by item, each with the administration it
+ * came from, and summarizes nothing: which figure is "the" difficulty (the
+ * latest administration, one cohort, the mean across cohorts, the one at a
+ * given design state) is the client's choice, so every observation is
+ * returned, newest administration first, with what a client needs to choose.
+ * The viewer's Coverage View is the first client (ADR-0058 decision 3).
+ *
+ * Scope: the whole bank, or with `?module=` the items placed in the module's
+ * assessments. `?unit=` keeps the metrics in one unit (free text, ADR-0058
+ * decision 1); `units` lists every unit in scope before that filter.
+ */
+interface ItemStatistic {
+  metric: Summary;
+  collectedAt?: string;
+  dataset?: Summary & { cohort?: string; administrationDate?: string };
+}
+
+/** Newest administration first, then newest collection, then id; a metric with no dataset sorts by collection. */
+function newestFirst(a: ItemStatistic, b: ItemStatistic): number {
+  const when = (s: ItemStatistic) => s.dataset?.administrationDate ?? '';
+  return when(b).localeCompare(when(a)) || (b.collectedAt ?? '').localeCompare(a.collectedAt ?? '') || a.metric.id.localeCompare(b.metric.id);
+}
+
+intelligence.get('/item-statistics', async (c) => {
+  const graph = await graphAt(c);
+  const moduleQuery = c.req.query('module');
+  const unit = c.req.query('unit');
+  let scopeModule: TerminusDocument | undefined;
+  let items: TerminusDocument[];
+  if (moduleQuery) {
+    scopeModule = await requireDocument(graph, 'Module', moduleQuery.replace(/^Module\//, ''));
+    items = [...(await assessmentOf(graph, scopeModule['@id'])).items.values()];
+  } else {
+    items = await graph.list('AssessmentItem');
+  }
+  items = items.slice().sort((x, y) => x['@id'].localeCompare(y['@id']));
+  const inScope = new Set(items.map((i) => i['@id']));
+
+  const metrics = (await graph.list('LearningMetric')).filter((m) => typeof m.subject === 'string' && inScope.has(m.subject));
+  const units = [...new Set(metrics.map((m) => m.unit).filter((u): u is string => typeof u === 'string'))].sort();
+  const kept = unit === undefined ? metrics : metrics.filter((m) => m.unit === unit);
+  const datasets = new Map(
+    (await graph.getMany(kept.map((m) => m.derivedFrom).filter((d): d is string => typeof d === 'string'))).map((d) => [d['@id'], d])
+  );
+
+  const bySubject = new Map<string, ItemStatistic[]>();
+  for (const m of kept) {
+    const dataset = typeof m.derivedFrom === 'string' ? datasets.get(m.derivedFrom) : undefined;
+    const statistic: ItemStatistic = {
+      metric: summarize(m),
+      ...(typeof m.collectedAt === 'string' ? { collectedAt: m.collectedAt } : {}),
+      ...(dataset
+        ? {
+            dataset: {
+              ...summarize(dataset),
+              ...(typeof dataset.cohort === 'string' ? { cohort: dataset.cohort } : {}),
+              ...(typeof dataset.administrationDate === 'string' ? { administrationDate: dataset.administrationDate } : {}),
+            },
+          }
+        : {}),
+    };
+    const list = bySubject.get(String(m.subject)) ?? [];
+    list.push(statistic);
+    bySubject.set(String(m.subject), list);
+  }
+
+  setEtag(c, graph.commit);
+  return c.json({
+    scope: { ...(scopeModule ? { module: summarize(scopeModule) } : {}), items: items.length, metrics: kept.length },
+    units,
+    items: items
+      .filter((i) => bySubject.has(i['@id']))
+      .map((i) => ({ item: summarize(i), statistics: bySubject.get(i['@id'])!.sort(newestFirst) })),
+    itemsWithoutStatistics: items.filter((i) => !bySubject.has(i['@id'])).map(summarize),
   });
 });
 
