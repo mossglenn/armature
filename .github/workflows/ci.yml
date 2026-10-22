@@ -1,6 +1,6 @@
 # Armature CI (continuous integration)
 #
-# Three jobs, run in parallel on every push to main and every pull request:
+# Four jobs, run in parallel on every push to main and every pull request:
 #
 #   app       Guards the contracts that need no store: `schema/schema.json` and the
 #             generated `packages/types` agree (check:types), the app lints clean,
@@ -25,6 +25,12 @@
 #             /api/v1 route and every invariant, and serves it once over a socket
 #             (lib/hub.test.ts). The Vitest global setup waits again for the seeded
 #             database before the first test file starts.
+#
+#   viewer    The browser smoke test (app/e2e, Playwright; docs/graph-view-plan.md
+#             §13, 2026-10-22): the same seeded store as the contract job, the
+#             bundled hub started on 3100, the viewer built and started on 3000,
+#             and the Design Graph driven in Chromium: the seed drawn, a record
+#             selected, a view reproduced from its URL, no console error.
 #
 #   images    Builds the hub's container image (docker/hub.Dockerfile) and checks
 #             that it starts and answers GET /api/v1/discover, the one read that
@@ -109,6 +115,63 @@ jobs:
         run: npm run operator --workspace app -- check
       - name: Run the contract suite
         run: npm test
+
+  viewer:
+    name: Viewer smoke test in a browser
+    # The Design Graph and the other pages driven by Playwright (app/e2e,
+    # docs/graph-view-plan.md §13) against the built viewer, the bundled hub
+    # and the same seeded store the contract job uses.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      terminusdb:
+        image: terminusdb/terminusdb-server:v12.0.7
+        ports:
+          - 6363:6363
+        env:
+          TERMINUSDB_ADMIN_PASS: admin
+          TERMINUSDB_SERVER_NAME: localhost
+    env:
+      TERMINUS_URL: http://localhost:6363
+      TERMINUS_USER: admin
+      TERMINUS_PASS: admin
+      TERMINUS_DB: armature
+      ARMATURE_HUB_URL: http://localhost:3100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            scripts/package-lock.json
+      - name: Install the scripts' dependencies (the TerminusDB client)
+        run: npm ci
+        working-directory: scripts
+      - name: Install the workspace (the app and the packages)
+        run: npm ci
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+        working-directory: app
+      - name: Wait for TerminusDB
+        run: node scripts/wait_for_store.js
+      - name: Load the schema
+        run: node scripts/load_schema.js
+      - name: Seed the demonstration course
+        run: node scripts/seed_data.js
+      - name: Bundle the hub
+        run: npm run build:hub --workspace app
+      - name: Build the viewer
+        run: npm run build --workspace app
+      - name: Run the smoke test
+        run: npm run test:e2e --workspace app
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: app/playwright-report
+          retention-days: 7
 
   images:
     name: Hub and viewer container images
