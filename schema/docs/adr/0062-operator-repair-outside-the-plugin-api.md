@@ -7,16 +7,47 @@
 > through it. The answer is an operator's surface that sits outside the plugin API, runs with the
 > database's own credentials, and repairs by making new commits, each with an author and a reason,
 > never by rewriting history. Its first three tools are a check that reports every rule the data
-> currently breaks, a delete, and a replace that can be told to skip the hub's rules. It is proposed,
-> not yet built.
+> currently breaks, a delete, and a replace that can be told to skip the hub's rules. It was
+> accepted and built on 22 October 2026.
 
 ## Status
 
-Proposed (2026-10-20). Nothing here is built. When accepted it gives ADR-0024 decision 5 ("deletion
+Accepted and implemented (2026-10-22); proposed 2026-10-20. It gives ADR-0024 decision 5 ("deletion
 is an administrative operation outside the plugin API") its concrete meaning and leaves ADR-0025
 decision 6 (shared history is never rewritten) intact, including for operators. Both ADRs carry a
 dated note pointing here. Platform check AC (added 2026-10-20 on the `phase-6/external-references`
 branch, results in §Verification) confirms the store behaviors this relies on.
+
+**Note 2026-10-22, built.** The three tools of decision 5 are `check`, `delete` and `put` in
+`app/lib/operator/`, with a command-line entry in `app/operator.ts`, tested in
+`app/lib/operator/operator.test.ts`. Three things differ from the text below, which is left as
+written:
+
+- **Where they live and how they run (decision 2).** Not `scripts/`: Node cannot import the API's
+  modules as they are, since their relative imports carry no extension and `errors.ts` uses a
+  parameter property, which Node's type stripping refuses. The tools are bundled with esbuild into
+  one `app/dist/operator.mjs` exactly as `build:hub` bundles the hub, from the same source, so they
+  still reuse the adapter, the engine and the pipeline rather than reimplement them. The hub's image
+  carries the bundle beside `server.mjs`, so on a server the tools run in the hub's container, where
+  the store's credentials already are: `docker compose exec hub node operator.mjs check`. Locally,
+  `npm run operator --workspace app -- <command>` builds and runs it with `.env.local`.
+- **How `put --unchecked` skips the rules (decision 5.3).** The pipeline takes
+  `invariants: 'skip'`, which leaves out its fourth step and nothing else (shape, identity,
+  `createdBy`, `asOf` and the store's checks all apply). No route passes it; a test reads every
+  module under `app/lib/api/` to keep it so. The commit message ends with
+  `[operator: the hub's rules were skipped]` (decision 4).
+- **A deleted document reads as absent (check AC4).** Building `delete` showed that the adapter took
+  the store's answer to a GET of a deleted document, HTTP 200 with the 404 as text in the body, for
+  the document itself, so a write reusing the deleted id was refused as a `type_conflict`. The
+  adapter's `request()` now reads the embedded status and raises the 404, and the test writes a
+  deleted id again.
+
+`check` skips the two write-only rules by their codes (`attester_not_caller`,
+`subject_in_same_write`) after the engine reports them, so no rule carries a mode. Run over the seed
+on `main` the day it was built, it found no violation in 53 documents. `delete` refuses an operator
+who is not a registered `User` and a repair without a reason; branch deletion takes
+`--scratch-branch` and a name starting `test-`, `warmup-`, `anon-` or `future-` (decision 7).
+The open items below remain open.
 
 ## Context
 
