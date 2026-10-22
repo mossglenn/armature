@@ -54,6 +54,7 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/intelligence.impact': { fallback: 'reject', routes: ['/api/v1/intelligence/impact'], settings: {} },
   'armature/intelligence.attestations': { fallback: 'reject', routes: ['/api/v1/intelligence/attestations'], settings: {} },
   'armature/intelligence.item-statistics': { fallback: 'reject', routes: ['/api/v1/intelligence/item-statistics'], settings: {} },
+  'armature/intelligence.module-content': { fallback: 'reject', routes: ['/api/v1/intelligence/module-content'], settings: {} },
   'armature/export': { fallback: 'reject', routes: ['/api/v1/export'], settings: { profiles: ['full', 'pseudonymous', 'institutional'] } },
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema'], settings: {} },
 };
