@@ -192,6 +192,23 @@ describe('@armature/client over the app in-process', () => {
     expect(stats.data.itemsWithoutStatistics.map((i) => i.id)).toEqual(['AssessmentItem/appropriate-use-mc']);
   });
 
+  it('reads a module\'s content in teaching order through the typed fields', async () => {
+    const content = await hub.intelligence.moduleContent('Module/how-ai-works');
+    expect(content.commit).toMatch(/^[a-z0-9]+$/);
+    expect(content.data.module.id).toBe('Module/how-ai-works');
+    const [first, second] = content.data.content;
+    expect(first.kind === 'activity' && first.activity.activityType).toBe('Practice');
+    if (second.kind !== 'group') throw new Error('expected the group second');
+    expect(second.group.id).toBe('ActivityGroup/how-a-model-learns');
+    expect(second.members.map((m) => m.activity.id)).toEqual([
+      'LearningActivity/training-loop-video',
+      'LearningActivity/training-loop-worked-example',
+    ]);
+    expect(second.members[1].items[0].item.id).toBe('AssessmentItem/training-loop-mc');
+    expect(content.data.summary.placements).toBe(3);
+    expect(content.data.repeated).toEqual([]);
+  });
+
   it('names its revision on every call and reads the one that served it (ADR-0059)', async () => {
     const res = await hub.documents.list('Course');
     expect(res.version).toBe(CLIENT_REVISION);

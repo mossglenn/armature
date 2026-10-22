@@ -262,6 +262,44 @@ export interface ItemStatisticsReport {
   itemsWithoutStatistics: Summary[];
 }
 
+/** An item an activity uses formatively (ADR-0061), with the `ActivityItemLink` that says so. */
+export interface FormativeUse {
+  /** Absent when the link has none; such uses follow the sequenced ones. */
+  sequence?: number;
+  link: string;
+  item: Summary;
+}
+
+/** One placement of an activity: the link that put it there (a `ModuleActivityLink` or an `ActivityGroupMember`). */
+export interface PlacedActivity {
+  sequence?: number;
+  link: string;
+  activity: Summary & { activityType?: string; targets: string[] };
+  items: FormativeUse[];
+}
+
+/** One entry of a module's content in teaching order (ADR-0005): a standalone activity or a group of them. */
+export type ModuleContentEntry =
+  | ({ kind: 'activity' } & PlacedActivity)
+  | { kind: 'group'; sequence?: number; link: string; group: Summary; members: PlacedActivity[] };
+
+export interface ModuleContentReport {
+  module: Summary;
+  summary: {
+    entries: number;
+    groups: number;
+    /** Distinct activities; `placements` counts each place one appears. */
+    activities: number;
+    placements: number;
+    formativeUses: number;
+    /** Links at any level with no `sequence`. */
+    unsequenced: number;
+  };
+  content: ModuleContentEntry[];
+  /** Activities placed more than once in the module, with each placement's link. */
+  repeated: Array<{ activity: Summary; placements: string[] }>;
+}
+
 export interface TraceReport {
   root: Summary;
   nodes: Summary[];
@@ -515,6 +553,12 @@ export function createClient(options: ClientOptions) {
         const { module, unit, ...ref } = opts;
         return call<ItemStatisticsReport>('/intelligence/item-statistics', {
           query: { ...at(ref), module: module && localPart('Module', module), unit },
+        });
+      },
+      /** `GET /intelligence/module-content/:moduleId`: a module's activities and groups in teaching order. */
+      moduleContent(moduleId: string, opts: AtRef = {}) {
+        return call<ModuleContentReport>(`/intelligence/module-content/${encodeURIComponent(localPart('Module', moduleId))}`, {
+          query: at(opts),
         });
       },
       /** `GET /intelligence/trace/:type/:id`: the lifecycle walk from one document, both ways. */
