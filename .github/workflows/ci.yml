@@ -27,6 +27,14 @@
 #             needs no store; then builds the viewer's image (docker/viewer.Dockerfile)
 #             and checks that it starts. What the hub answers over a socket is the
 #             contract job's hub test; this job guards the images themselves.
+#
+# Each job has a timeout, so a stalled install fails within minutes rather than
+# after GitHub's six-hour default. Healthy runs take 20 to 95 seconds a job. On
+# 2026-10-22, during npm's "Degraded Package Install and Publishing" incident, one
+# run passed slowly (app 7 minutes, images 5, contract 11) and the next stalled in
+# the contract job's `npm ci` until it was cancelled by hand. The limits let the
+# slow run pass and stop the stalled one: 10 minutes for app and images, 15 for
+# contract.
 name: CI
 
 on:
@@ -38,6 +46,7 @@ jobs:
   app:
     name: Lint, type-check, generated-types drift check and hub bundle
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,6 +63,7 @@ jobs:
   contract:
     name: Contract suite against TerminusDB
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       terminusdb:
         # The same image and tag docker/docker-compose.yml pins.
@@ -95,6 +105,7 @@ jobs:
   images:
     name: Hub and viewer container images
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Build the hub image
