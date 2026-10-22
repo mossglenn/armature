@@ -380,7 +380,7 @@
       {
         "@language": "en",
         "@label": "ArmatureDocument",
-        "@comment": "Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Six of the seven junction documents (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. The seventh, PrerequisiteRecord, is a relationship that also carries a name and so inherits it. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, an agent User for records an AI or other tool wrote. The API sets it on every document it creates (ADR-0032); it is optional because records written outside the API may lack it. Every artifact may also carry externalRefs (identifiers in other systems: CASE, QTI, xAPI, LTI) and attachments (verifiable references to bytes or to a revision of a tree of bytes in a store outside the graph); both are optional subdocument sets that point outward and copy nothing in (ADR-0030). See ADR-0014, ADR-0015, ADR-0030, ADR-0032. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).",
+        "@comment": "Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Six of the seven junction documents (ItemInstance, ModuleObjective, NeedEvidenceLink, LessonActivityLink, ModuleActivityLink, ModuleLessonLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. The seventh, PrerequisiteRecord, is a relationship that also carries a name and so inherits it. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, an agent User for records an AI or other tool wrote. The API sets it on every document it creates (ADR-0032); it is optional because records written outside the API may lack it. Every artifact may also carry externalRefs (identifiers in other systems: CASE, QTI, xAPI, LTI) and attachments (verifiable references to bytes or to a revision of a tree of bytes in a store outside the graph); both are optional subdocument sets that point outward and copy nothing in (ADR-0030). See ADR-0014, ADR-0015, ADR-0030, ADR-0032. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).",
         "@properties": {
           "createdBy": "The User responsible for this record entering the graph. Set by the API at document creation from the resolved identity of the request (ADR-0032) — not authored directly; a value in a request body is ignored. Optional because documents written outside the API (the seed, administrative scripts, imports) may lack it; a replace preserves its absence. Never updated after creation — change history is tracked at the TerminusDB commit level, not via schema fields. See ADR-0015.",
           "externalRefs": "Identifiers in other systems this artifact aligns with or was imported from, each naming its system (ADR-0030). Optional and unordered; absent when there are none (the store returns no field for an empty set).",
@@ -1029,7 +1029,7 @@
       {
         "@language": "en",
         "@label": "LearningActivity",
-        "@comment": "A reusable instructional activity that targets one or more LearningObjectives. Inherits label, description from ArmatureDocument. Can appear in multiple Modules (via ModuleActivityLink) and ActivityGroups (via ActivityGroupMember) without duplication. targets must contain at least one LearningObjective — enforced at schema level via @min_cardinality (ADR-0013). activityType makes instructional strategy queryable in the graph. See ADR-0009, ADR-0013.",
+        "@comment": "A reusable instructional activity that targets one or more LearningObjectives. Inherits label, description from ArmatureDocument. Can appear in multiple Modules (via ModuleActivityLink) and Lessons (via LessonActivityLink) without duplication. targets must contain at least one LearningObjective — enforced at schema level via @min_cardinality (ADR-0013). activityType makes instructional strategy queryable in the graph. See ADR-0009, ADR-0013.",
         "@properties": {
           "activityType": "The instructional strategy type. Optional to allow activity creation before strategy is finalized. When set, enables queries like 'which objectives have no simulation or practice activity targeting them?'",
           "targets": "The LearningObjectives this activity addresses. Minimum 1 enforced at the schema level. An activity that targets no objective has no place in the artifact graph. See ADR-0013."
@@ -1053,7 +1053,7 @@
   },
   {
     "@type": "Class",
-    "@id": "ActivityGroup",
+    "@id": "Lesson",
     "@inherits": "ArmatureDocument",
     "@key": {
       "@type": "Random"
@@ -1061,8 +1061,8 @@
     "@documentation": [
       {
         "@language": "en",
-        "@label": "ActivityGroup",
-        "@comment": "A reusable, named collection of LearningActivities with a defined pedagogical sequence. Inherits label, description from ArmatureDocument. Can appear in multiple Modules via ModuleActivityGroupLink. Intentionally flat — ActivityGroups do not contain other ActivityGroups; the API enforces this because ActivityGroupMember.activity must be a LearningActivity (constraints 0 and 6). Membership and sequence are managed through ActivityGroupMember junction documents. See ADR-0003."
+        "@label": "Lesson",
+        "@comment": "A reusable, named, ordered set of LearningActivities: what a Module schedules, as it schedules an Assessment (an ordered set of items). A designed sequence, not a timetable slot: the graph carries no time. Called ActivityGroup until ADR-0064 (2026-10-22). Inherits label, description from ArmatureDocument. Can appear in multiple Modules via ModuleLessonLink. Intentionally flat — Lessons do not contain other Lessons; the API enforces this because LessonActivityLink.activity must be a LearningActivity (constraints 0 and 6). Membership and sequence are managed through LessonActivityLink junction documents. See ADR-0003."
       }
     ],
     "@metadata": {
@@ -1073,25 +1073,25 @@
   },
   {
     "@type": "Class",
-    "@id": "ActivityGroupMember",
+    "@id": "LessonActivityLink",
     "@key": {
       "@type": "Hash",
       "@fields": [
-        "group",
+        "lesson",
         "activity"
       ]
     },
     "@documentation": [
       {
         "@language": "en",
-        "@label": "ActivityGroupMember",
-        "@comment": "Places a LearningActivity into an ActivityGroup with a sub-sequence position. sequence is the activity's position within the group only — it is independent of the module-level sequence on ModuleActivityGroupLink and must never be combined with it. See ADR-0005.",
+        "@label": "LessonActivityLink",
+        "@comment": "Places a LearningActivity into a Lesson with a position within the lesson. sequence is the activity's position within the lesson only — it is independent of the module-level sequence on ModuleLessonLink and must never be combined with it. See ADR-0005.",
         "@properties": {
-          "sequence": "Position of this activity within the ActivityGroup. Sub-sequence only — independent of the module-level sequence. API CONSTRAINT: values must be unique within a group (constraint 4). Gaps are permitted to allow insertion without renumbering."
+          "sequence": "Position of this activity within the Lesson. Sub-sequence only — independent of the module-level sequence. API CONSTRAINT: values must be unique within a lesson (constraint 4). Gaps are permitted to allow insertion without renumbering."
         }
       }
     ],
-    "group": "ActivityGroup",
+    "lesson": "Lesson",
     "activity": "LearningActivity",
     "sequence": {
       "@type": "Optional",
@@ -1122,7 +1122,7 @@
         "@properties": {
           "activity": "The LearningActivity that uses the item.",
           "item": "The reusable AssessmentItem used.",
-          "sequence": "Position of this item within the activity, when the activity presents its items in order. Independent of every module-level and group-level sequence. API CONSTRAINT: values must be unique within an activity (constraint 17). Gaps are permitted."
+          "sequence": "Position of this item within the activity, when the activity presents its items in order. Independent of every module-level and lesson-level sequence. API CONSTRAINT: values must be unique within an activity (constraint 17). Gaps are permitted."
         }
       }
     ],
@@ -1189,7 +1189,7 @@
       {
         "@language": "en",
         "@label": "Module",
-        "@comment": "A named instructional unit within a Course. Inherits label, description from ArmatureDocument. Contains LearningActivities (via ModuleActivityLink), ActivityGroups (via ModuleActivityGroupLink), and Assessments (back-reference on Assessment.module). Declares the LearningObjectives it intends to cover via ModuleObjective. Contained by exactly one Course (back-reference pattern — see ADR-0004).",
+        "@comment": "A named instructional unit within a Course. Inherits label, description from ArmatureDocument. Contains LearningActivities (via ModuleActivityLink), Lessons (via ModuleLessonLink), and Assessments (back-reference on Assessment.module). Declares the LearningObjectives it intends to cover via ModuleObjective. Contained by exactly one Course (back-reference pattern — see ADR-0004).",
         "@properties": {
           "sequence": "The position of this module within its Course. Optional — not all courses require explicit module ordering."
         }
@@ -1220,9 +1220,9 @@
       {
         "@language": "en",
         "@label": "ModuleActivityLink",
-        "@comment": "Places a standalone LearningActivity into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityGroupLink.sequence — both are sorted together to produce the module's ordered content list. API CONSTRAINT: sequence values must be unique across both ModuleActivityLink and ModuleActivityGroupLink for a given Module. See ADR-0005.",
+        "@comment": "Places a standalone LearningActivity into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleLessonLink.sequence — both are sorted together to produce the module's ordered content list. API CONSTRAINT: sequence values must be unique across both ModuleActivityLink and ModuleLessonLink for a given Module. See ADR-0005.",
         "@properties": {
-          "sequence": "Module-level position. Shares the same integer space as ModuleActivityGroupLink.sequence for this module. Gaps are permitted to allow insertion without renumbering."
+          "sequence": "Module-level position. Shares the same integer space as ModuleLessonLink.sequence for this module. Gaps are permitted to allow insertion without renumbering."
         }
       }
     ],
@@ -1241,26 +1241,26 @@
   },
   {
     "@type": "Class",
-    "@id": "ModuleActivityGroupLink",
+    "@id": "ModuleLessonLink",
     "@key": {
       "@type": "Hash",
       "@fields": [
         "module",
-        "group"
+        "lesson"
       ]
     },
     "@documentation": [
       {
         "@language": "en",
-        "@label": "ModuleActivityGroupLink",
-        "@comment": "Places an ActivityGroup into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityLink.sequence — both are sorted together to produce the module's ordered content list. The activities within the group are sub-sequenced via ActivityGroupMember.sequence, which is independent of this module-level sequence. See ADR-0005.",
+        "@label": "ModuleLessonLink",
+        "@comment": "Places a Lesson into a Module with a module-level sequence position (ADR-0064). sequence shares the same integer namespace as ModuleActivityLink.sequence — both are sorted together to produce the module's ordered content list. The activities within the lesson are sub-sequenced via LessonActivityLink.sequence, which is independent of this module-level sequence. See ADR-0005.",
         "@properties": {
           "sequence": "Module-level position. Shares the same integer space as ModuleActivityLink.sequence for this module. Gaps are permitted to allow insertion without renumbering."
         }
       }
     ],
     "module": "Module",
-    "group": "ActivityGroup",
+    "lesson": "Lesson",
     "sequence": {
       "@type": "Optional",
       "@class": "xsd:integer"

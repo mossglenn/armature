@@ -307,7 +307,7 @@ export interface LearningActivity extends ArmatureDocument {
   targets: string[];  // LearningObjective @id[]
 }
 
-export type ActivityGroup = ArmatureDocument;  // no additional fields
+export type Lesson = ArmatureDocument;  // no additional fields
 
 export interface Module extends ArmatureDocument {
   sequence?: number;
@@ -361,8 +361,8 @@ export interface ItemInstance extends DesignRecord {
   implements: string;  // AssessmentItem @id
 }
 
-export interface ActivityGroupMember extends DesignRecord {
-  group: string;  // ActivityGroup @id
+export interface LessonActivityLink extends DesignRecord {
+  lesson: string;  // Lesson @id
   activity: string;  // LearningActivity @id
   sequence?: number;
 }
@@ -387,9 +387,9 @@ export interface ModuleActivityLink extends DesignRecord {
   sequence?: number;
 }
 
-export interface ModuleActivityGroupLink extends DesignRecord {
+export interface ModuleLessonLink extends DesignRecord {
   module: string;  // Module @id
-  group: string;  // ActivityGroup @id
+  lesson: string;  // Lesson @id
   sequence?: number;
 }
 
@@ -430,13 +430,13 @@ export const CLASS_CATEGORY = {
   ItemInstance: "relationship",
   Assessment: "artifact",
   LearningActivity: "artifact",
-  ActivityGroup: "artifact",
-  ActivityGroupMember: "relationship",
+  Lesson: "artifact",
+  LessonActivityLink: "relationship",
   ActivityItemLink: "relationship",
   ModuleObjective: "relationship",
   Module: "artifact",
   ModuleActivityLink: "relationship",
-  ModuleActivityGroupLink: "relationship",
+  ModuleLessonLink: "relationship",
   DesignNote: "artifact",
   DesignFinding: "artifact",
   Attestation: "relationship",
@@ -468,13 +468,13 @@ export interface ClassMap {
   ItemInstance: ItemInstance;
   Assessment: Assessment;
   LearningActivity: LearningActivity;
-  ActivityGroup: ActivityGroup;
-  ActivityGroupMember: ActivityGroupMember;
+  Lesson: Lesson;
+  LessonActivityLink: LessonActivityLink;
   ActivityItemLink: ActivityItemLink;
   ModuleObjective: ModuleObjective;
   Module: Module;
   ModuleActivityLink: ModuleActivityLink;
-  ModuleActivityGroupLink: ModuleActivityGroupLink;
+  ModuleLessonLink: ModuleLessonLink;
   DesignNote: DesignNote;
   DesignFinding: DesignFinding;
   Attestation: Attestation;
@@ -512,13 +512,13 @@ export const CLASS_ANCESTORS = {
   ItemInstance: ["DesignRecord"],
   Assessment: ["ArmatureDocument", "DesignRecord"],
   LearningActivity: ["ArmatureDocument", "DesignRecord"],
-  ActivityGroup: ["ArmatureDocument", "DesignRecord"],
-  ActivityGroupMember: ["DesignRecord"],
+  Lesson: ["ArmatureDocument", "DesignRecord"],
+  LessonActivityLink: ["DesignRecord"],
   ActivityItemLink: ["DesignRecord"],
   ModuleObjective: ["DesignRecord"],
   Module: ["ArmatureDocument", "DesignRecord"],
   ModuleActivityLink: ["DesignRecord"],
-  ModuleActivityGroupLink: ["DesignRecord"],
+  ModuleLessonLink: ["DesignRecord"],
   DesignNote: ["ArmatureDocument", "DesignRecord"],
   DesignFinding: ["ArmatureDocument", "DesignRecord"],
   Attestation: ["DesignRecord"],
@@ -544,13 +544,13 @@ export const CLASS_KEY = {
   ItemInstance: {"type":"Hash","fields":["assessment","implements"]},
   Assessment: {"type":"Random"},
   LearningActivity: {"type":"Random"},
-  ActivityGroup: {"type":"Random"},
-  ActivityGroupMember: {"type":"Hash","fields":["group","activity"]},
+  Lesson: {"type":"Random"},
+  LessonActivityLink: {"type":"Hash","fields":["lesson","activity"]},
   ActivityItemLink: {"type":"Hash","fields":["activity","item"]},
   ModuleObjective: {"type":"Hash","fields":["module","references"]},
   Module: {"type":"Random"},
   ModuleActivityLink: {"type":"Hash","fields":["module","activity"]},
-  ModuleActivityGroupLink: {"type":"Hash","fields":["module","group"]},
+  ModuleLessonLink: {"type":"Hash","fields":["module","lesson"]},
   DesignNote: {"type":"Random"},
   DesignFinding: {"type":"Random"},
   Attestation: {"type":"Hash","fields":["subject","fragmentId","claimRef","attestedBy"]},
@@ -743,15 +743,15 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     activityType: {"type":"ActivityType","kind":"enum","optional":true,"many":false},
     targets: {"type":"LearningObjective","kind":"reference","optional":false,"many":true,"min":1},
   },
-  ActivityGroup: {
+  Lesson: {
     label: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     description: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     createdBy: {"type":"User","kind":"reference","optional":true,"many":false},
     externalRefs: {"type":"ExternalRef","kind":"subdocument","optional":true,"many":true},
     attachments: {"type":"Attachment","kind":"subdocument","optional":true,"many":true},
   },
-  ActivityGroupMember: {
-    group: {"type":"ActivityGroup","kind":"reference","optional":false,"many":false},
+  LessonActivityLink: {
+    lesson: {"type":"Lesson","kind":"reference","optional":false,"many":false},
     activity: {"type":"LearningActivity","kind":"reference","optional":false,"many":false},
     sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
   },
@@ -781,9 +781,9 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     activity: {"type":"LearningActivity","kind":"reference","optional":false,"many":false},
     sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
   },
-  ModuleActivityGroupLink: {
+  ModuleLessonLink: {
     module: {"type":"Module","kind":"reference","optional":false,"many":false},
-    group: {"type":"ActivityGroup","kind":"reference","optional":false,"many":false},
+    lesson: {"type":"Lesson","kind":"reference","optional":false,"many":false},
     sequence: {"type":"xsd:integer","kind":"primitive","optional":true,"many":false},
   },
   DesignNote: {

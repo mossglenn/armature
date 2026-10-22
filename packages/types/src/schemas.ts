@@ -233,9 +233,9 @@ export const LearningActivitySchema = z.strictObject({
   targets: z.array(ReferenceSchema).min(1),
 });
 
-export const ActivityGroupSchema = z.strictObject({
+export const LessonSchema = z.strictObject({
   '@id': z.string().min(1).optional(),
-  '@type': z.literal('ActivityGroup').optional(),
+  '@type': z.literal('Lesson').optional(),
   '@capture': z.string().min(1).optional(),
   label: z.string().min(1).max(10_000),
   description: z.string().min(1).max(10_000).optional(),
@@ -244,11 +244,11 @@ export const ActivityGroupSchema = z.strictObject({
   attachments: z.array(AttachmentSchema).optional(),
 });
 
-export const ActivityGroupMemberSchema = z.strictObject({
+export const LessonActivityLinkSchema = z.strictObject({
   '@id': z.string().min(1).optional(),
-  '@type': z.literal('ActivityGroupMember').optional(),
+  '@type': z.literal('LessonActivityLink').optional(),
   '@capture': z.string().min(1).optional(),
-  group: ReferenceSchema,
+  lesson: ReferenceSchema,
   activity: ReferenceSchema,
   sequence: z.number().int().optional(),
 });
@@ -295,12 +295,12 @@ export const ModuleActivityLinkSchema = z.strictObject({
   sequence: z.number().int().optional(),
 });
 
-export const ModuleActivityGroupLinkSchema = z.strictObject({
+export const ModuleLessonLinkSchema = z.strictObject({
   '@id': z.string().min(1).optional(),
-  '@type': z.literal('ModuleActivityGroupLink').optional(),
+  '@type': z.literal('ModuleLessonLink').optional(),
   '@capture': z.string().min(1).optional(),
   module: ReferenceSchema,
-  group: ReferenceSchema,
+  lesson: ReferenceSchema,
   sequence: z.number().int().optional(),
 });
 
@@ -378,13 +378,13 @@ export const DOCUMENT_SCHEMAS = {
   ItemInstance: ItemInstanceSchema,
   Assessment: AssessmentSchema,
   LearningActivity: LearningActivitySchema,
-  ActivityGroup: ActivityGroupSchema,
-  ActivityGroupMember: ActivityGroupMemberSchema,
+  Lesson: LessonSchema,
+  LessonActivityLink: LessonActivityLinkSchema,
   ActivityItemLink: ActivityItemLinkSchema,
   ModuleObjective: ModuleObjectiveSchema,
   Module: ModuleSchema,
   ModuleActivityLink: ModuleActivityLinkSchema,
-  ModuleActivityGroupLink: ModuleActivityGroupLinkSchema,
+  ModuleLessonLink: ModuleLessonLinkSchema,
   DesignNote: DesignNoteSchema,
   DesignFinding: DesignFindingSchema,
   Attestation: AttestationSchema,

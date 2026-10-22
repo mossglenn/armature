@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-10-21_
+_Schema snapshot · Generated 2026-10-22_
 
 ---
 
@@ -170,11 +170,11 @@ classDiagram
     +Set<LearningObjective> targets
   }
 
-  class ActivityGroup
+  class Lesson
 
-  class ActivityGroupMember {
+  class LessonActivityLink {
     <<relationship>>
-    +ActivityGroup group
+    +Lesson lesson
     +LearningActivity activity
     +integer? sequence
   }
@@ -207,10 +207,10 @@ classDiagram
     +integer? sequence
   }
 
-  class ModuleActivityGroupLink {
+  class ModuleLessonLink {
     <<relationship>>
     +Module module
-    +ActivityGroup group
+    +Lesson lesson
     +integer? sequence
   }
 
@@ -263,13 +263,13 @@ classDiagram
   DesignRecord <|-- ItemInstance : inherits
   ArmatureDocument <|-- Assessment : inherits
   ArmatureDocument <|-- LearningActivity : inherits
-  ArmatureDocument <|-- ActivityGroup : inherits
-  DesignRecord <|-- ActivityGroupMember : inherits
+  ArmatureDocument <|-- Lesson : inherits
+  DesignRecord <|-- LessonActivityLink : inherits
   DesignRecord <|-- ActivityItemLink : inherits
   DesignRecord <|-- ModuleObjective : inherits
   ArmatureDocument <|-- Module : inherits
   DesignRecord <|-- ModuleActivityLink : inherits
-  DesignRecord <|-- ModuleActivityGroupLink : inherits
+  DesignRecord <|-- ModuleLessonLink : inherits
   ArmatureDocument <|-- DesignNote : inherits
   ArmatureDocument <|-- DesignFinding : inherits
   DesignRecord <|-- Attestation : inherits
@@ -297,8 +297,8 @@ classDiagram
   ItemInstance --> AssessmentItem : implements
   Assessment --> Module : module
   LearningActivity "0..*" --> LearningObjective : targets
-  ActivityGroupMember --> ActivityGroup : group
-  ActivityGroupMember --> LearningActivity : activity
+  LessonActivityLink --> Lesson : lesson
+  LessonActivityLink --> LearningActivity : activity
   ActivityItemLink --> LearningActivity : activity
   ActivityItemLink --> AssessmentItem : item
   ModuleObjective --> Module : module
@@ -306,8 +306,8 @@ classDiagram
   Module --> Course : course
   ModuleActivityLink --> Module : module
   ModuleActivityLink --> LearningActivity : activity
-  ModuleActivityGroupLink --> Module : module
-  ModuleActivityGroupLink --> ActivityGroup : group
+  ModuleLessonLink --> Module : module
+  ModuleLessonLink --> Lesson : lesson
   DesignNote "0..*" --> DesignRecord : subject
   DesignFinding "0..*" --> DesignRecord : subject
   DesignFinding ..> DesignRecord : regarding
@@ -347,7 +347,7 @@ _No additional fields._
 ### `ArmatureDocument`
 _category: infrastructure · **abstract** · extends `DesignRecord`_
 
-> Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Six of the seven junction documents (ItemInstance, ModuleObjective, NeedEvidenceLink, ActivityGroupMember, ModuleActivityLink, ModuleActivityGroupLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. The seventh, PrerequisiteRecord, is a relationship that also carries a name and so inherits it. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, an agent User for records an AI or other tool wrote. The API sets it on every document it creates (ADR-0032); it is optional because records written outside the API may lack it. Every artifact may also carry externalRefs (identifiers in other systems: CASE, QTI, xAPI, LTI) and attachments (verifiable references to bytes or to a revision of a tree of bytes in a store outside the graph); both are optional subdocument sets that point outward and copy nothing in (ADR-0030). See ADR-0014, ADR-0015, ADR-0030, ADR-0032. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).
+> Abstract base class for all primary artifact types in the Armature graph. Carries the fields shared by every named artifact: label, description, and createdBy. Six of the seven junction documents (ItemInstance, ModuleObjective, NeedEvidenceLink, LessonActivityLink, ModuleActivityLink, ModuleLessonLink) do not inherit from ArmatureDocument — they are addressed by their relationship fields. The seventh, PrerequisiteRecord, is a relationship that also carries a name and so inherits it. createdBy records who or what is responsible for this record existing in the graph: a designer for authored artifacts, a person who entered or imported evidence or dataset records, an agent User for records an AI or other tool wrote. The API sets it on every document it creates (ADR-0032); it is optional because records written outside the API may lack it. Every artifact may also carry externalRefs (identifiers in other systems: CASE, QTI, xAPI, LTI) and attachments (verifiable references to bytes or to a revision of a tree of bytes in a store outside the graph); both are optional subdocument sets that point outward and copy nothing in (ADR-0030). See ADR-0014, ADR-0015, ADR-0030, ADR-0032. Inherits DesignRecord, the abstract root that makes any artifact or relationship a valid subject for rationale (ADR-0017).
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -570,28 +570,28 @@ _Instructional activities and the hierarchical containers that organize them int
 ### `LearningActivity`
 _category: artifact · extends `ArmatureDocument` · key: Random_
 
-> A reusable instructional activity that targets one or more LearningObjectives. Inherits label, description from ArmatureDocument. Can appear in multiple Modules (via ModuleActivityLink) and ActivityGroups (via ActivityGroupMember) without duplication. targets must contain at least one LearningObjective — enforced at schema level via @min_cardinality (ADR-0013). activityType makes instructional strategy queryable in the graph. See ADR-0009, ADR-0013.
+> A reusable instructional activity that targets one or more LearningObjectives. Inherits label, description from ArmatureDocument. Can appear in multiple Modules (via ModuleActivityLink) and Lessons (via LessonActivityLink) without duplication. targets must contain at least one LearningObjective — enforced at schema level via @min_cardinality (ADR-0013). activityType makes instructional strategy queryable in the graph. See ADR-0009, ADR-0013.
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `activityType` | `ActivityType?` | optional |
 | `targets` | `Set<LearningObjective>` | required, min 1 |
 
-### `ActivityGroup`
+### `Lesson`
 _category: artifact · extends `ArmatureDocument` · key: Random_
 
-> A reusable, named collection of LearningActivities with a defined pedagogical sequence. Inherits label, description from ArmatureDocument. Can appear in multiple Modules via ModuleActivityGroupLink. Intentionally flat — ActivityGroups do not contain other ActivityGroups; the API enforces this because ActivityGroupMember.activity must be a LearningActivity (constraints 0 and 6). Membership and sequence are managed through ActivityGroupMember junction documents. See ADR-0003.
+> A reusable, named, ordered set of LearningActivities: what a Module schedules, as it schedules an Assessment (an ordered set of items). A designed sequence, not a timetable slot: the graph carries no time. Called ActivityGroup until ADR-0064 (2026-10-22). Inherits label, description from ArmatureDocument. Can appear in multiple Modules via ModuleLessonLink. Intentionally flat — Lessons do not contain other Lessons; the API enforces this because LessonActivityLink.activity must be a LearningActivity (constraints 0 and 6). Membership and sequence are managed through LessonActivityLink junction documents. See ADR-0003.
 
 _No additional fields._
 
-### `ActivityGroupMember`
-_category: relationship · extends `DesignRecord` · key: Hash(group, activity)_
+### `LessonActivityLink`
+_category: relationship · extends `DesignRecord` · key: Hash(lesson, activity)_
 
-> Places a LearningActivity into an ActivityGroup with a sub-sequence position. sequence is the activity's position within the group only — it is independent of the module-level sequence on ModuleActivityGroupLink and must never be combined with it. See ADR-0005.
+> Places a LearningActivity into a Lesson with a position within the lesson. sequence is the activity's position within the lesson only — it is independent of the module-level sequence on ModuleLessonLink and must never be combined with it. See ADR-0005.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `group` | `ActivityGroup` | required |
+| `lesson` | `Lesson` | required |
 | `activity` | `LearningActivity` | required |
 | `sequence` | `integer?` | optional |
 
@@ -622,7 +622,7 @@ _category: relationship · extends `DesignRecord` · key: Hash(module, reference
 ### `Module`
 _category: artifact · extends `ArmatureDocument` · key: Random_
 
-> A named instructional unit within a Course. Inherits label, description from ArmatureDocument. Contains LearningActivities (via ModuleActivityLink), ActivityGroups (via ModuleActivityGroupLink), and Assessments (back-reference on Assessment.module). Declares the LearningObjectives it intends to cover via ModuleObjective. Contained by exactly one Course (back-reference pattern — see ADR-0004).
+> A named instructional unit within a Course. Inherits label, description from ArmatureDocument. Contains LearningActivities (via ModuleActivityLink), Lessons (via ModuleLessonLink), and Assessments (back-reference on Assessment.module). Declares the LearningObjectives it intends to cover via ModuleObjective. Contained by exactly one Course (back-reference pattern — see ADR-0004).
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -632,7 +632,7 @@ _category: artifact · extends `ArmatureDocument` · key: Random_
 ### `ModuleActivityLink`
 _category: relationship · extends `DesignRecord` · key: Hash(module, activity)_
 
-> Places a standalone LearningActivity into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityGroupLink.sequence — both are sorted together to produce the module's ordered content list. API CONSTRAINT: sequence values must be unique across both ModuleActivityLink and ModuleActivityGroupLink for a given Module. See ADR-0005.
+> Places a standalone LearningActivity into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleLessonLink.sequence — both are sorted together to produce the module's ordered content list. API CONSTRAINT: sequence values must be unique across both ModuleActivityLink and ModuleLessonLink for a given Module. See ADR-0005.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -640,15 +640,15 @@ _category: relationship · extends `DesignRecord` · key: Hash(module, activity)
 | `activity` | `LearningActivity` | required |
 | `sequence` | `integer?` | optional |
 
-### `ModuleActivityGroupLink`
-_category: relationship · extends `DesignRecord` · key: Hash(module, group)_
+### `ModuleLessonLink`
+_category: relationship · extends `DesignRecord` · key: Hash(module, lesson)_
 
-> Places an ActivityGroup into a Module with a module-level sequence position. sequence shares the same integer namespace as ModuleActivityLink.sequence — both are sorted together to produce the module's ordered content list. The activities within the group are sub-sequenced via ActivityGroupMember.sequence, which is independent of this module-level sequence. See ADR-0005.
+> Places a Lesson into a Module with a module-level sequence position (ADR-0064). sequence shares the same integer namespace as ModuleActivityLink.sequence — both are sorted together to produce the module's ordered content list. The activities within the lesson are sub-sequenced via LessonActivityLink.sequence, which is independent of this module-level sequence. See ADR-0005.
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `module` | `Module` | required |
-| `group` | `ActivityGroup` | required |
+| `lesson` | `Lesson` | required |
 | `sequence` | `integer?` | optional |
 
 ### `Course`

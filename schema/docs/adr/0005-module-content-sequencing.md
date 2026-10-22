@@ -6,6 +6,12 @@
 > programming interface (API) now rejects a write that gives two items in one module, or two
 > activities in one group, the same position.
 
+> **Annotation (2026-10-22, ADR-0064).** The classes this record names were renamed: `ActivityGroup`
+> is `Lesson`, `ActivityGroupMember` is `LessonActivityLink` (its `group` field is `lesson`), and
+> `ModuleActivityGroupLink` is `ModuleLessonLink` (its `group` field is `lesson`). The two
+> sequence namespaces, the constraints and the composed view decided here are unchanged; the
+> text below keeps the names it was written with.
+
 ## Status
 Accepted
 
