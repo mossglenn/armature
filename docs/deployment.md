@@ -118,6 +118,38 @@ How the Droplet of 2026-10-21 was made, for whoever stands one up again. It was 
 - **Then** steps 1 to 3 over SSH, as root for the packages and the user, as `armature` for the rest; "The address" for the record; the checks from outside as listed above. Ubuntu's DigitalOcean image already refuses password logins and runs unattended security upgrades.
 - **Removal:** `doctl compute droplet delete <id>`, `doctl compute firewall delete <id>`, the `A` record at the registrar, and the address's entry in `~/.ssh/known_hosts` (`ssh-keygen -R <address>`), since the address goes to someone else.
 
+## Testing a deployment: a virtual machine and a Droplet
+
+Decided 2026-10-22. Continuous integration (CI) already tests the code on every push: lint and type checks, the contract suite against a fresh TerminusDB on a clean Linux runner, and both images built and started. A virtual machine (VM) or a Droplet adds nothing for a change to a route, a rule or the seed. What they test is what CI never sees: Compose, the network, the host, and the internet.
+
+**A VM on the laptop (Lima): before merging any change to how an instance runs.** A pull request that changes `docker/docker-compose.yml`, either Dockerfile, the `Caddyfile`, `docker/operator-entrypoint.sh`, or the steps in this guide gets a rehearsal on a fresh VM before it merges: steps 1 to 3 from a clean clone of the branch, the checks under "A hosted instance", and the operator's `check`. Also rehearse there:
+
+- **Upgrading an instance that holds data:** pull a newer `main`, rebuild, load the schema, against a volume that already holds documents. CI always starts empty, so it cannot catch a schema change that existing data does not survive. Do this before the first such change reaches a kept instance.
+- **Restart and reboot behavior,** including the store stalls that follow a cold start; a VM can be power-cycled on purpose.
+- **A backup and its restore,** before anyone depends on one.
+
+The VM matters because a laptop hides problems with what is already on it: an installed `node_modules`, a `.env.local`, cached images, old volumes. The rehearsal of 2026-10-21 found three gaps that way, and a read-only mount that worked only because a folder already existed on the laptop. A VM that matches the rehearsal's (Ubuntu 24.04, 2 virtual CPUs, 4 GB, no shared folders, no port forwarding, reached at its own address):
+
+```
+limactl start --name=armature-rehearsal --tty=false --cpus=2 --memory=4 --disk=40 --mount-none \
+  --containerd=none --network=vzNAT \
+  --set '.portForwards=[{"guestPortRange":[1,65535],"guestIP":"0.0.0.0","ignore":true},{"guestPortRange":[1,65535],"ignore":true}]' \
+  template:ubuntu-24.04
+```
+
+Lima on an Apple Silicon laptop runs arm64, while the Droplet and CI's runners are x86-64: a VM proves a clean Linux machine, not the Droplet's processor.
+
+**A Droplet: for what only a public machine shows, at the moments it matters.** It costs money by the hour and faces the internet, so it is used:
+
+- **Before keeping an instance:** the domain's DNS, Let's Encrypt issuance, the provider's firewall (Docker's published ports bypass `ufw`), a reboot, and memory (building the images peaked at 1.65 GB, so a 2 GB machine needs published images to pull).
+- **Before the first remote writing client, and again whenever authentication changes:** from outside, a write without credentials is refused, the hub's and store's ports stay closed, and `Armature-User` comes from the authenticating proxy, never from the caller.
+- **When the hub goes behind the proxy:** the `ETag` and `If-Match` round trip end to end. A proxy that compresses or rewrites responses can alter the `ETag`, and the 412 concurrency check depends on it arriving unchanged; check, do not assume.
+- **When plugins write concurrently:** the store's contention between writers (one commit graph for every branch) is measured on the real machine.
+
+Follow "The DigitalOcean run" above, and delete the Droplet afterward unless it is the kept instance.
+
+**Never run the contract suite against a store that holds real data.** It creates and deletes branches and registers and removes users on `main`, and a run that crashes leaves them behind. On a server, run the suite against a scratch database on the same TerminusDB (a different `TERMINUS_DB`), or use the operator's `check` (`docker compose exec hub node operator.mjs check`), which writes nothing and is the health check for a live instance.
+
 ## Several projects
 
 Decide what a project must keep separate (`docs/schema-guide.md` Part I says the same from a tool's side):

@@ -306,6 +306,7 @@ Say "update session" and follow the prompt in `.claude/prompts/update-session.md
 2. Before committing, show the proposed commit sequence (one logical change per commit, Conventional Commits per `.claude/prompts/commit-message-guide.md`) and wait for approval.
 3. Commit, push and open a pull request only when asked; merge only when asked, with a rebase merge (`--rebase --delete-branch`) so each commit stays visible on `main`, then confirm CI on `main`.
 4. Platform assumptions get a lettered check in `scripts/platform_checks.js` before an ADR relies on them; cite the letter in the ADR.
+5. A pull request that changes how an instance runs (`docker/docker-compose.yml`, either Dockerfile, the `Caddyfile`, `docker/operator-entrypoint.sh`, or the steps in `docs/deployment.md`) gets a rehearsal on a fresh Lima VM before it merges; CI covers the code, not the deployment. A Droplet is for keeping an instance, before the first remote writing client, and whenever authentication changes. Never run the contract suite against a store with real data; the operator's `check` is the health check there. `docs/deployment.md` § "Testing a deployment" (decided 2026-10-22)
 
 ### After schema changes
 1. Write or update the ADR in `schema/docs/adr/`
