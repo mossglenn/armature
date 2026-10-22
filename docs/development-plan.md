@@ -869,8 +869,12 @@ their acceptance criteria. Its §14 records the decisions taken on 2026-10-22, i
 Playwright smoke test in CI from the first pull request.
 
 Work:
-- [ ] PR 1: the Design Graph page, the derivation and layout modules with their tests, the
-      visual language documented, the browser smoke test in CI
+- [x] PR 1: the Design Graph page, the derivation and layout modules with their tests, the
+      visual language documented, the browser smoke test in CI (built 2026-10-22: `app/lib/graph/`
+      with 28 unit tests, the seed deriving to 37 records and 26 junction edges; `/graph` with
+      the filter rail, search, the panel's Fields, About it and Referenced by, the neighbors,
+      upstream and downstream relations, the URL state; `docs/visual-language.md` with the hues
+      validated by the dataviz skill's checks; five Playwright tests as CI's `viewer` job)
 - [ ] PR 2: the Focus page from the trace read, the trace relation, attestation state and
       history in the panel, links from the Coverage View
 - [ ] PR 3: the Walkthrough and time travel (coverage at `asOf`, then and now)

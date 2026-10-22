@@ -90,22 +90,25 @@ Annotation records (`DesignNote`, `DesignFinding`) use the same card with a dash
 
 The lifecycle order is the one encoding the schema does not carry; it is a table in `app/lib/graph/stages.ts`, the only place it lives, and a test fails when a class in `CLASS_CATEGORY` has no entry (as the generator fails on a class with no category).
 
+*(The table below is the order as built and revised on 2026-10-22; §14 items 13 and 14 record the revision. The first draft of this plan had items and activities in one column with the group first, and Tailwind's 600 steps as hues, which the validator rejected.)*
+
 | Stage | Column header | Classes | Hue | Glyph |
 |---|---|---|---|---|
-| 0 | Evidence | `DescriptiveEvidence` (and any `LearningEvidence`) | slate | document |
-| 1 | Needs | `LearningNeed` | violet | target |
+| 0 | Evidence | `DescriptiveEvidence` (and any `LearningEvidence`) | aqua | file-text |
+| 1 | Needs | `LearningNeed` | orange | target |
 | 2 | Objectives | `LearningObjective` | blue | flag |
-| 3 | Items and activities | `ActivityGroup`, `LearningActivity`, `AssessmentItem` (three sub-columns in that order, so a group precedes its activities and an activity its formative items) | teal (items), green (activities and groups) | question mark, play, layers |
-| 4 | Assessments | `Assessment` | amber | clipboard |
-| 5 | Modules | `Module` | orange | box |
-| 6 | Course | `Course` | rose | book |
-| 7 | Datasets | `LearningDataset` | cyan | table |
-| 8 | Metrics | `LearningMetric` | sky | gauge |
-| 9 | Notes and findings | `DesignNote`, `DesignFinding` | stone, brown | pencil, alert |
+| 3 | Items | `AssessmentItem` | plum | circle-help |
+| 4 | Activities | `LearningActivity` | leaf (light green) | play |
+| 5 | Assessments and lessons | `Assessment`, `ActivityGroup` (to be renamed `Lesson`) | violet, forest (dark green) | clipboard-check, layers |
+| 6 | Modules | `Module` | magenta | box |
+| 7 | Course | `Course` | yellow | book-open |
+| 8 | Datasets | `LearningDataset` | cyan | table |
+| 9 | Metrics | `LearningMetric` | brown | gauge |
+| 10 | Notes and findings | `DesignNote`, `DesignFinding` | gray | pencil, triangle-alert |
 
-Outcome records sit in their own two columns after the course rather than beside the modules, so the header reads as the loop the project describes: design on the left, delivery in the middle, measurement on the right, and a metric's `subject` edge reaching back across to the item it measures. Notes and findings trail everything: they are about the design, not in it.
+The order is backward design's: items (the evidence that an objective is met) before activities (the experiences that produce it), then the two containers a module holds in one column, so that every edge in that part of the drawing spans at most one column. Outcome records sit in their own two columns after the course rather than beside the modules, so the header reads as the loop the project describes: design on the left, delivery in the middle, measurement on the right, and a metric's `subject` edge reaching back across to the item it measures. Notes and findings trail everything: they are about the design, not in it.
 
-Hues are the viewer's existing Tailwind scale: the 600 step for stripes and glyphs on the light theme, the 400 step on the dark theme, so the same class reads the same on both. The palette will be checked for color-vision deficiency with the dataviz skill's validator before PR 1 merges, and adjusted; the glyph and the eyebrow make the hue redundant in any case. Semantic tones (green, amber, red for status, verdict and coverage) are separate from the class hues and never used for a class.
+Hues were chosen by enumeration with the dataviz skill's validator (`docs/visual-language.md` says how): a container and what it holds are one family (two purples, two greens), objective is blue, and every adjacent pair passes in both themes. No green passes beside orange for a reader with a color-vision deficiency, which is why modules are magenta. The glyph and the eyebrow make the hue redundant in any case. Semantic tones (green, amber, red for status, verdict and coverage) are separate from the class hues and never used for a class.
 
 Glyphs are a dozen inline SVG paths (taken from Lucide, ISC-licensed, copied rather than depended on), 12 pixels, `currentColor`, shown in the eyebrow, the legend and the panel. They are the reason a black-and-white print still tells an item from an activity.
 
@@ -116,7 +119,7 @@ The schema's relationship category (`CLASS_CATEGORY[cls] === 'relationship'`) de
 - A **junction** (a relationship document with two references to non-person records: `ModuleObjective`, `ItemInstance`, `PrerequisiteRecord`, `NeedEvidenceLink`, `ModuleActivityLink`, `ModuleActivityGroupLink`, `ActivityGroupMember`, `ActivityItemLink`) is a **labeled edge** between the two. The label is the junction's data: `role` and `sequence` for a declaration ("Primary · #2"), `status` for a placement, `prerequisiteType`, `confidence`. The edge carries the document; clicking it opens the junction in the panel with its rationale. The edge's id is the junction's id, which is also what the trace read's `through` names, so a trace highlights these edges by id. "Draw relationships as edges" is on by default; off, the junctions are nodes with their own reference edges, the store's own view, for the reader who wants to see that a relationship is a document (ADR-0003).
 - A relationship with **one** non-person reference (an `Attestation`: `subject` plus `attestedBy`) is a **chip** on its subject, never a node or an edge, because its other end is a person (ADR-0021: nothing is drawn per person).
 - A **reference field** on an artifact (`AssessmentItem.assesses`, `LearningActivity.targets`, `Module.course`, `LearningMetric.subject`, `LearningDataset.producedBy`, `DesignNote.subject`) is a plain edge, thinner, labeled with the field name on hover and when either end is selected, unlabeled otherwise. Edges from a note or finding are dashed.
-- A **same-stage** edge (a prerequisite between objectives, a group's member, an activity's formative item) is drawn but not given to the layout engine, so it never pushes a node out of its column (§9.2).
+- A **same-stage** edge (a prerequisite between objectives) is drawn but not given to the layout engine, so it never pushes a node out of its column (§9.2).
 - Every edge points **along the lifecycle**, from the earlier stage to the later one, whichever document holds the reference. ADR-0004 puts the reference on the child (`ModuleObjective.module`, `ItemInstance.assessment`); the drawing reads evidence → need → objective → item → assessment → module → course → dataset → metric regardless. Arrowheads are small and the same muted gray as the edge; the direction is the reading order, not a claim about causation.
 
 Edge weight: junction edges 1.5 pixels, reference edges 1.25, both in a muted gray that works on both themes; the selected node's edges in the accent color.
@@ -355,3 +358,9 @@ Asked and answered 2026-10-22 (Amos); the plan above is written to these answers
 10. **Branch picker and the Changes lens** in PR 4.
 11. **A browser smoke test in CI**, from PR 1. The general rule: include a test unless it is very unlikely to show a real problem or is very costly in time or resources.
 12. **This file is the plan**, with a Phase 8 entry in `development-plan.md` pointing at it; it is rewritten as the pages' description when they exist.
+
+Decided on reviewing PR 1 (2026-10-22):
+
+13. **The column order follows backward design**: evidence · needs · objectives · items · activities · assessments and lessons · modules · course · datasets · metrics · notes and findings. Items before activities (the evidence before the experiences), and both containers a module holds in one column after them, so every edge in that part of the drawing spans at most one column (a placement skips the activities, an activity's `targets` skips the items). The first build had items and activities in one column with the group first, which drew the two containment chains in opposite directions.
+14. **Paired hues for a container and what it holds**: items and assessments are two purples, activities and lessons two greens, each pair checked against the palette's adjacent-pair rules since activities and lessons are neighboring columns.
+15. **`ActivityGroup` is renamed `Lesson`** in a follow-up pull request with its own ADR: an ordered set of activities a module schedules, the peer of an assessment (an ordered set of items). Until then the class keeps its name and the column header already says "lessons".
