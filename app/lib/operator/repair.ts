@@ -1,5 +1,5 @@
 import { findUserByExternalId, registry, REGISTRY_BRANCH, type ResolvedUser } from '../api/identity';
-import { createStore, type Commit } from '../api/store';
+import { createStore, type Commit, type Store } from '../api/store';
 import { parseDocuments, writeDocuments, type WriteResult } from '../api/write';
 
 /**
@@ -8,6 +8,18 @@ import { parseDocuments, writeDocuments, type WriteResult } from '../api/write';
  * operator's own `User` with the reason as the message. History is never
  * rewritten (ADR-0025 decision 6); the store's own checks are the floor
  * (decision 3), so a delete of a referenced document is refused by the store.
+ *
+ * Every repair commit is marked in its metadata, so a reader of the log can
+ * tell an operator's commit from a plugin's without parsing its message:
+ *
+ *   { "armature": { "operator": { "tool": "put", "rulesSkipped": false } } }
+ *
+ * beside the merge route's `mergeSource`. The document API ignores commit
+ * metadata (check V4) and `apply` stores it (V2), so a repair is made on a
+ * transient branch cut at the target's head and applied onto the target as
+ * one commit (check AF). The transient commit stays readable by id on no
+ * branch (AF3); `/api/history` entries carry no metadata (V3c), so the marker
+ * is read from the log or a branch's head.
  */
 
 export class OperatorError extends Error {
@@ -17,8 +29,61 @@ export class OperatorError extends Error {
   }
 }
 
-/** Branch name prefixes the tests and the global setup use for scratch branches. */
-export const SCRATCH_PREFIXES: readonly string[] = ['test-', 'warmup-', 'anon-', 'future-'];
+/**
+ * Branch name prefixes the tests and the global setup use for scratch
+ * branches, and the operator's own transient branches, which a repair deletes
+ * when it ends and a crashed one may leave behind.
+ */
+export const SCRATCH_PREFIXES: readonly string[] = ['test-', 'warmup-', 'anon-', 'future-', 'operator-'];
+
+export interface OperatorMarker {
+  tool: 'delete' | 'put';
+  rulesSkipped: boolean;
+}
+
+/** The metadata an operator commit carries. */
+export const operatorMetadata = (marker: OperatorMarker) => ({ armature: { operator: marker } });
+
+/**
+ * One repair as one marked commit on `branch`. `change` makes it on a
+ * transient branch cut at the head; the difference is applied onto `branch`
+ * with the marker. A branch that moved meanwhile is refused rather than
+ * merged, since a checked write was checked against the head it started from.
+ */
+async function asOperatorCommit<T>(
+  branch: string,
+  who: ResolvedUser,
+  message: string,
+  marker: OperatorMarker,
+  change: (transient: Store) => Promise<T>
+): Promise<{ commit: string; base: Commit; result: T }> {
+  const target = createStore({ branch });
+  const base = await target.head();
+  if (!base) throw new OperatorError(`Branch ${branch} has no commits`);
+  const name = `operator-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
+  await target.createBranch(name, { commit: base.id });
+  try {
+    const transient = createStore({ branch: name });
+    const result = await change(transient);
+    const source = await transient.head();
+    if (!source || source.id === base.id) throw new OperatorError('The repair changed nothing');
+    const now = await target.head();
+    if (now?.id !== base.id) {
+      throw new OperatorError(`${branch} moved during the repair (from ${base.id} to ${now?.id}); run it again`);
+    }
+    const applied = await target.apply(branch, {
+      base: base.id,
+      source: source.id,
+      author: who.id,
+      message,
+      metadata: operatorMetadata(marker),
+    });
+    if (!applied.ok) throw new OperatorError(`The repair conflicts with ${branch}: ${JSON.stringify(applied.witnesses)}`);
+    return { commit: applied.commit, base, result };
+  } finally {
+    await target.deleteBranch(name).catch(() => undefined);
+  }
+}
 
 /**
  * The operator as a registered `User` on `main` (decision 4). An operator
@@ -49,10 +114,10 @@ export interface DeleteResult {
 export async function deleteDocument(opts: { branch: string; id: string; as: string; reason: string }): Promise<DeleteResult> {
   const message = needReason(opts.reason);
   const who = await operatorIdentity(opts.as);
-  const store = createStore({ branch: opts.branch });
-  const before = await store.head();
-  const { commit } = await store.deleteDocument(opts.id, { author: who.id, message });
-  return { commit, before };
+  const { commit, base } = await asOperatorCommit(opts.branch, who, message, { tool: 'delete', rulesSkipped: false }, (transient) =>
+    transient.deleteDocument(opts.id, { author: who.id, message })
+  );
+  return { commit, before: base };
 }
 
 /**
@@ -91,10 +156,14 @@ export async function putDocuments(opts: {
   if (!opts.documents.length) throw new OperatorError('Nothing to write: the input holds no documents');
   const who = await operatorIdentity(opts.as);
   const documents = parseDocuments(opts.documents);
-  return writeDocuments(documents, {
-    branch: createStore({ branch: opts.branch }),
+  const message = opts.unchecked ? `${reason} ${UNCHECKED_NOTE}` : reason;
+  const { commit, result } = await asOperatorCommit(
+    opts.branch,
     who,
-    message: opts.unchecked ? `${reason} ${UNCHECKED_NOTE}` : reason,
-    invariants: opts.unchecked ? 'skip' : 'check',
-  });
+    message,
+    { tool: 'put', rulesSkipped: opts.unchecked === true },
+    (transient) => writeDocuments(documents, { branch: transient, who, message, invariants: opts.unchecked ? 'skip' : 'check' })
+  );
+  // The ids as the transient write minted them; the commit is the target's.
+  return { commit, ids: result.ids };
 }

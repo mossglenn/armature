@@ -33,8 +33,9 @@ const USAGE = `Usage: node operator.mjs <command> [options]
       refuses a document another document references.
 
   delete --scratch-branch <name>
-      Deletes a branch whose name starts with test-, warmup-, anon- or
-      future-. Its commits stay readable by id; the head is printed.
+      Deletes a branch whose name starts with test-, warmup-, anon-, future-
+      or operator- (a repair's own, left by a crash). Its commits stay
+      readable by id; the head is printed.
 
   put <file.json | -> --branch <name> --as <externalId> --reason <text> [--unchecked]
       Writes one document or an array of them through the API's pipeline.
