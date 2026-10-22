@@ -13,7 +13,7 @@ import { app } from '../api/app';
 import { InvariantError } from '../api/invariants';
 import { createStore, StoreError } from '../api/store';
 import { checkBranch, WRITE_ONLY_RULES } from './check';
-import { deleteDocument, deleteScratchBranch, OperatorError, putDocuments, UNCHECKED_NOTE } from './repair';
+import { deleteDocument, deleteScratchBranch, OperatorError, operatorMetadata, putDocuments, UNCHECKED_NOTE } from './repair';
 
 const stamp = Date.now().toString(36);
 const BRANCH = `test-operator-${stamp}`;
@@ -86,6 +86,7 @@ describe('a repair on a scratch branch', () => {
     expect(head?.id).toBe(commit);
     expect(head?.message).toBe(`Reproduce an imported dismissal ${UNCHECKED_NOTE}`);
     expect(head?.author).toMatch(/^User\//);
+    expect(head?.metadata).toEqual(operatorMetadata({ tool: 'put', rulesSkipped: true }));
     // Provenance still applied: createdBy and asOf are filled as on /api/v1.
     const { document } = await branch.getDocument(FINDING);
     expect(document.createdBy).toBe(head?.author);
@@ -104,6 +105,7 @@ describe('a repair on a scratch branch', () => {
       as: OPERATOR,
       reason: 'Give the dismissal its rationale',
     });
+    expect((await branch.head())?.metadata).toEqual(operatorMetadata({ tool: 'put', rulesSkipped: false }));
     expect((await checkBranch(branch)).violations).toEqual([]);
   });
 
@@ -113,6 +115,8 @@ describe('a repair on a scratch branch', () => {
     expect(head?.id).toBe(commit);
     expect(head?.message).toBe('Remove the test finding');
     expect(head?.author).toMatch(/^User\//);
+    expect(head?.metadata).toEqual(operatorMetadata({ tool: 'delete', rulesSkipped: false }));
+    expect(head?.parent).toBe(before!.id);
     await expect(branch.getDocument(FINDING)).rejects.toMatchObject({ type: 'api:DocumentNotFound' });
     const atBefore = await createStore({ commit: before!.id }).getDocument(FINDING);
     expect(atBefore.document['@id']).toBe(FINDING);
@@ -139,6 +143,11 @@ describe('a repair on a scratch branch', () => {
     const refused = deleteDocument({ branch: BRANCH, id: OBJECTIVE, as: OPERATOR, reason: 'Try to delete a referenced objective' });
     await expect(refused).rejects.toBeInstanceOf(StoreError);
     expect((await branch.head())?.id).toBe(head?.id);
+  });
+
+  it('leaves no transient branch behind, whether a repair lands or is refused', async () => {
+    const names = await createStore({ branch: 'main' }).listBranches();
+    expect(names.filter((n) => n.startsWith('operator-'))).toEqual([]);
   });
 });
 
