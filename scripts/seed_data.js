@@ -14,7 +14,7 @@
  *     architecture decision record ADR-0056). Write Effective Prompts in
  *     Module 2 has two Approved items, so it reads FullyAssessed; every other
  *     declaration is Uncovered or PartiallyAssessed
- *   Module 1's activities: a Practice activity and an ActivityGroup of two
+ *   Module 1's activities: a Practice activity and a Lesson of two
  *     sharing the module's sequence (ADR-0005), and the Draft item used
  *     formatively inside one of them (ActivityItemLink, ADR-0061)
  *   2 DesignNotes (one on an AssessmentItem, one on a ModuleObjective junction)
@@ -609,9 +609,9 @@ const documents = [
   // Module 1 activities
   // -------------------------------------------------------------------------
 
-  // A practice activity and a group of two, in one sequence space for the
-  // module (ADR-0005: ModuleActivityLink and ModuleActivityGroupLink share it).
-  // A group holds activities only (constraint 6). The group is the
+  // A practice activity and a lesson of two, in one sequence space for the
+  // module (ADR-0005: ModuleActivityLink and ModuleLessonLink share it).
+  // A lesson holds activities only (constraint 6). The lesson is the
   // training-loop activity the note on Describe Model Training waits for.
   {
     "@type": "LearningActivity",
@@ -622,8 +622,8 @@ const documents = [
     "targets": [id("LearningObjective", "distinguish-ai-approaches")],
   },
   {
-    "@type": "ActivityGroup",
-    "@id": id("ActivityGroup", "how-a-model-learns"),
+    "@type": "Lesson",
+    "@id": id("Lesson", "how-a-model-learns"),
     "label": "How a model learns",
     "description": "The training loop in two steps: watch one model learn, then trace a single training step by hand.",
   },
@@ -644,9 +644,9 @@ const documents = [
     "targets": [id("LearningObjective", "describe-model-training")],
   },
   { "@type": "ModuleActivityLink", "sequence": 1, "module": id("Module", "how-ai-works"), "activity": id("LearningActivity", "sort-ai-systems") },
-  { "@type": "ModuleActivityGroupLink", "sequence": 2, "module": id("Module", "how-ai-works"), "group": id("ActivityGroup", "how-a-model-learns") },
-  { "@type": "ActivityGroupMember", "sequence": 1, "group": id("ActivityGroup", "how-a-model-learns"), "activity": id("LearningActivity", "training-loop-video") },
-  { "@type": "ActivityGroupMember", "sequence": 2, "group": id("ActivityGroup", "how-a-model-learns"), "activity": id("LearningActivity", "training-loop-worked-example") },
+  { "@type": "ModuleLessonLink", "sequence": 2, "module": id("Module", "how-ai-works"), "lesson": id("Lesson", "how-a-model-learns") },
+  { "@type": "LessonActivityLink", "sequence": 1, "lesson": id("Lesson", "how-a-model-learns"), "activity": id("LearningActivity", "training-loop-video") },
+  { "@type": "LessonActivityLink", "sequence": 2, "lesson": id("Lesson", "how-a-model-learns"), "activity": id("LearningActivity", "training-loop-worked-example") },
   // The Draft item as a check inside the worked example (ADR-0061): formative
   // use carries no points and no clearance, and counts toward no coverage.
   { "@type": "ActivityItemLink", "sequence": 1, "activity": id("LearningActivity", "training-loop-worked-example"), "item": id("AssessmentItem", "training-loop-mc") },
