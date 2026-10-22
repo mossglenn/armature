@@ -41,8 +41,8 @@ import { createStore, type TerminusDocument } from '../store';
  *   GET /item-statistics?module=&unit=         the item statistics in the bank or a module:
  *       &branch=|ref=                          each item with every metric about it and the
  *                                              administration it came from (ADR-0058)
- *   GET /module-content/:moduleId              a module's activities and groups in teaching
- *       ?branch=|ref=                          order, each group's members in theirs, each
+ *   GET /module-content/:moduleId              a module's activities and lessons in teaching
+ *       ?branch=|ref=                          order, each lesson's activities in theirs, each
  *                                              activity's formative items in theirs (ADR-0005)
  *
  * All seven are reads at a ref with the commit in ETag, the entity tag
@@ -353,16 +353,16 @@ intelligence.get('/item-statistics', async (c) => {
 
 /**
  * A module's content in teaching order, the composed view ADR-0005 assigns
- * the API: its ModuleActivityLinks and ModuleActivityGroupLinks merged by
- * `sequence` (one namespace, constraint 3), each group's members by theirs
+ * the API: its ModuleActivityLinks and ModuleLessonLinks merged by
+ * `sequence` (one namespace, constraint 3), each lesson's activities by theirs
  * (constraint 4), each activity's formative items by theirs (ADR-0061,
  * constraint 17). The three integers are never combined. Every one is
  * Optional: an entry without one follows those with one, by link id, and the
  * entry carries no `sequence`.
  *
  * A tree of placements, not a set of activities (decided 2026-10-22): the
- * keys allow one activity standalone and in a group of the same module, or in
- * two of its groups, and it appears at each place with the link that put it
+ * keys allow one activity standalone and in a lesson of the same module, or in
+ * two of its lessons, and it appears at each place with the link that put it
  * there; `repeated` names it, and nothing calls it wrong. A module's
  * assessments are not content in ADR-0005's sense; coverage reads them.
  */
@@ -384,11 +384,11 @@ intelligence.get('/module-content/:moduleId', async (c) => {
 
   const links = [
     ...(await graph.list('ModuleActivityLink', { module: moduleId })),
-    ...(await graph.list('ModuleActivityGroupLink', { module: moduleId })),
+    ...(await graph.list('ModuleLessonLink', { module: moduleId })),
   ].sort(bySequence);
-  const groupIds = links.filter((l) => l['@type'] === 'ModuleActivityGroupLink').map((l) => String(l.group));
+  const lessonIds = links.filter((l) => l['@type'] === 'ModuleLessonLink').map((l) => String(l.lesson));
   const members = new Map(
-    await Promise.all(groupIds.map(async (g) => [g, (await graph.where('ActivityGroupMember', 'group', g)).sort(bySequence)] as const))
+    await Promise.all(lessonIds.map(async (g) => [g, (await graph.where('LessonActivityLink', 'lesson', g)).sort(bySequence)] as const))
   );
   const activityIds = [
     ...links.filter((l) => l['@type'] === 'ModuleActivityLink').map((l) => String(l.activity)),
@@ -400,7 +400,7 @@ intelligence.get('/module-content/:moduleId', async (c) => {
     )
   );
   const docs = new Map(
-    (await graph.getMany([...groupIds, ...activityIds, ...[...uses.values()].flat().map((u) => String(u.item))])).map((d) => [d['@id'], d])
+    (await graph.getMany([...lessonIds, ...activityIds, ...[...uses.values()].flat().map((u) => String(u.item))])).map((d) => [d['@id'], d])
   );
 
   const placements = new Map<string, string[]>();
@@ -427,11 +427,11 @@ intelligence.get('/module-content/:moduleId', async (c) => {
     l['@type'] === 'ModuleActivityLink'
       ? { kind: 'activity' as const, ...placed(l) }
       : {
-          kind: 'group' as const,
+          kind: 'lesson' as const,
           ...sequenceOf(l),
           link: l['@id'],
-          group: summaryOr(docs, String(l.group), 'ActivityGroup'),
-          members: (members.get(String(l.group)) ?? []).map(placed),
+          lesson: summaryOr(docs, String(l.lesson), 'Lesson'),
+          members: (members.get(String(l.lesson)) ?? []).map(placed),
         }
   );
 
@@ -442,7 +442,7 @@ intelligence.get('/module-content/:moduleId', async (c) => {
     module: summarize(mod),
     summary: {
       entries: content.length,
-      groups: groupIds.length,
+      lessons: lessonIds.length,
       activities: placements.size,
       placements: activityIds.length,
       formativeUses: useLinks.length,
@@ -591,10 +591,10 @@ async function moduleContext(graph: Graph, doc: TerminusDocument): Promise<Array
       const next = await graph.get(String(link.module));
       if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'module', through: link['@id'] } });
     }
-    // Placed through a group, which is placement all the same (ADR-0005); the
-    // edge names the group's link into the module.
-    for (const member of await graph.where('ActivityGroupMember', 'activity', from)) {
-      for (const link of await graph.where('ModuleActivityGroupLink', 'group', String(member.group))) {
+    // Placed through a lesson, which is placement all the same (ADR-0005); the
+    // edge names the lesson's link into the module.
+    for (const member of await graph.where('LessonActivityLink', 'activity', from)) {
+      for (const link of await graph.where('ModuleLessonLink', 'lesson', String(member.lesson))) {
         const next = await graph.get(String(link.module));
         if (next) hops.push({ next, edge: { from, to: next['@id'], via: 'module', through: link['@id'] } });
       }

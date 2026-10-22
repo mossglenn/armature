@@ -270,7 +270,7 @@ export interface FormativeUse {
   item: Summary;
 }
 
-/** One placement of an activity: the link that put it there (a `ModuleActivityLink` or an `ActivityGroupMember`). */
+/** One placement of an activity: the link that put it there (a `ModuleActivityLink` or a `LessonActivityLink`). */
 export interface PlacedActivity {
   sequence?: number;
   link: string;
@@ -278,16 +278,16 @@ export interface PlacedActivity {
   items: FormativeUse[];
 }
 
-/** One entry of a module's content in teaching order (ADR-0005): a standalone activity or a group of them. */
+/** One entry of a module's content in teaching order (ADR-0005): a standalone activity or a lesson. */
 export type ModuleContentEntry =
   | ({ kind: 'activity' } & PlacedActivity)
-  | { kind: 'group'; sequence?: number; link: string; group: Summary; members: PlacedActivity[] };
+  | { kind: 'lesson'; sequence?: number; link: string; lesson: Summary; members: PlacedActivity[] };
 
 export interface ModuleContentReport {
   module: Summary;
   summary: {
     entries: number;
-    groups: number;
+    lessons: number;
     /** Distinct activities; `placements` counts each place one appears. */
     activities: number;
     placements: number;
@@ -555,7 +555,7 @@ export function createClient(options: ClientOptions) {
           query: { ...at(ref), module: module && localPart('Module', module), unit },
         });
       },
-      /** `GET /intelligence/module-content/:moduleId`: a module's activities and groups in teaching order. */
+      /** `GET /intelligence/module-content/:moduleId`: a module's activities and lessons in teaching order. */
       moduleContent(moduleId: string, opts: AtRef = {}) {
         return call<ModuleContentReport>(`/intelligence/module-content/${encodeURIComponent(localPart('Module', moduleId))}`, {
           query: at(opts),

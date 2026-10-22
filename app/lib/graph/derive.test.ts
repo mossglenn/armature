@@ -113,7 +113,7 @@ describe('deriving the drawing', () => {
       { text: 'as of abcdefabcd', tone: 'mono', title: 'Read the design at this commit', ref: 'abcdefabcdefabcdef' },
     ]);
     expect(chipsFor({ '@id': 'AssessmentItem/x', '@type': 'AssessmentItem', status: 'Draft' })).toEqual([{ text: 'Draft', tone: 'warn' }]);
-    expect(junctionLabel({ '@id': 'ActivityGroupMember/x', '@type': 'ActivityGroupMember' })).toBe('ActivityGroupMember');
+    expect(junctionLabel({ '@id': 'LessonActivityLink/x', '@type': 'LessonActivityLink' })).toBe('LessonActivityLink');
   });
 
   it('lists the classes present in lifecycle order, people left out', () => {

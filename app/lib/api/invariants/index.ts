@@ -8,7 +8,7 @@ import { validateAttestation } from './attestation';
 import { validateDesignFinding } from './designFinding';
 import { checkFragmentRef } from './fragmentRef';
 import { validateItemInstance } from './itemInstance';
-import { validateActivityGroupMember, validateActivityItemLink, validateModuleContentLink } from './moduleContent';
+import { validateLessonActivityLink, validateActivityItemLink, validateModuleContentLink } from './moduleContent';
 import { validateLearningDataset, validateLearningMetric } from './observations';
 import { checkReferences } from './references';
 
@@ -25,9 +25,9 @@ import { checkReferences } from './references';
  *   1  (retired by ADR-0060)      an item may assess nothing; the alignment read lists it
  *   2  LearningActivity.targets   Zod .min(1)
  *   3  module content sequence    moduleContent.ts (one namespace for both link types)
- *   4  group member sequence      moduleContent.ts
+ *   4  lesson activity sequence      moduleContent.ts
  *   5  ItemInstance sequence      itemInstance.ts
- *   6  ActivityGroup flatness     constraint 0: a member's activity is typed LearningActivity
+ *   6  Lesson flatness     constraint 0: a member's activity is typed LearningActivity
  *   7  coverage                   nothing to check: computed on read by the intelligence
  *                                routes, never stored (ADR-0056)
  *   8  fragmentId unique          assessmentItem.ts
@@ -110,8 +110,8 @@ const VALIDATORS: Record<string, Validator> = {
   AssessmentItem: validateAssessmentItem,
   ItemInstance: validateItemInstance,
   ModuleActivityLink: validateModuleContentLink,
-  ModuleActivityGroupLink: validateModuleContentLink,
-  ActivityGroupMember: validateActivityGroupMember,
+  ModuleLessonLink: validateModuleContentLink,
+  LessonActivityLink: validateLessonActivityLink,
   ActivityItemLink: validateActivityItemLink,
   DesignFinding: validateDesignFinding,
   Attestation: validateAttestation,

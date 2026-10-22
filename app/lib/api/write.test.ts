@@ -300,20 +300,20 @@ describe('generic write path and invariants (Phase 3)', () => {
   describe('module content sequencing (constraints 3, 4 and 6)', () => {
     const A = `LearningActivity/act-a-${stamp}`;
     const B = `LearningActivity/act-b-${stamp}`;
-    const G = `ActivityGroup/group-${stamp}`;
+    const G = `Lesson/lesson-${stamp}`;
     const scaffold = [
       { '@type': 'LearningActivity', '@id': A, label: 'Activity A', targets: [OBJECTIVE] },
       { '@type': 'LearningActivity', '@id': B, label: 'Activity B', targets: [OBJECTIVE] },
-      { '@type': 'ActivityGroup', '@id': G, label: 'Group' },
+      { '@type': 'Lesson', '@id': G, label: 'Lesson' },
     ];
 
-    it('rejects one sequence used by an activity link and a group link of the same module', async () => {
+    it('rejects one sequence used by an activity link and a lesson link of the same module', async () => {
       const res = await post(`/api/v1/documents${q}`, {
         message: 'x',
         documents: [
           ...scaffold,
           { '@type': 'ModuleActivityLink', module: MODULE, activity: A, sequence: 1 },
-          { '@type': 'ModuleActivityGroupLink', module: MODULE, group: G, sequence: 1 },
+          { '@type': 'ModuleLessonLink', module: MODULE, lesson: G, sequence: 1 },
         ],
       });
       expect(res.status).toBe(422);
@@ -327,26 +327,26 @@ describe('generic write path and invariants (Phase 3)', () => {
           ...scaffold,
           // 11 and 12: the seed's own Module 1 content holds 1 and 2
           { '@type': 'ModuleActivityLink', module: MODULE, activity: A, sequence: 11 },
-          { '@type': 'ModuleActivityGroupLink', module: MODULE, group: G, sequence: 12 },
+          { '@type': 'ModuleLessonLink', module: MODULE, lesson: G, sequence: 12 },
         ],
       });
       expect(res.status).toBe(200);
       expect((await res.json()).ids).toHaveLength(5);
     });
 
-    it('rejects a sequence reused within a group, and a group nested in a group', async () => {
+    it('rejects a sequence reused within a lesson, and a lesson nested in a lesson', async () => {
       const dup = await post(`/api/v1/documents${q}`, {
         message: 'x',
         documents: [
-          { '@type': 'ActivityGroupMember', group: G, activity: A, sequence: 1 },
-          { '@type': 'ActivityGroupMember', group: G, activity: B, sequence: 1 },
+          { '@type': 'LessonActivityLink', lesson: G, activity: A, sequence: 1 },
+          { '@type': 'LessonActivityLink', lesson: G, activity: B, sequence: 1 },
         ],
       });
       expect(await codes(dup)).toEqual(['duplicate_sequence', 'duplicate_sequence']);
 
       const nested = await post(`/api/v1/documents${q}`, {
         message: 'x',
-        documents: [{ '@type': 'ActivityGroupMember', group: G, activity: G, sequence: 3 }],
+        documents: [{ '@type': 'LessonActivityLink', lesson: G, activity: G, sequence: 3 }],
       });
       expect(nested.status).toBe(422);
       expect(await codes(nested)).toEqual(['reference_class']);
@@ -354,10 +354,10 @@ describe('generic write path and invariants (Phase 3)', () => {
 
     it('accepts members with distinct sequences', async () => {
       const res = await post(`/api/v1/documents${q}`, {
-        message: 'Fill the group',
+        message: 'Fill the lesson',
         documents: [
-          { '@type': 'ActivityGroupMember', group: G, activity: A, sequence: 1 },
-          { '@type': 'ActivityGroupMember', group: G, activity: B, sequence: 2 },
+          { '@type': 'LessonActivityLink', lesson: G, activity: A, sequence: 1 },
+          { '@type': 'LessonActivityLink', lesson: G, activity: B, sequence: 2 },
         ],
       });
       expect(res.status).toBe(200);

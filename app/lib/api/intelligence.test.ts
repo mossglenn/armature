@@ -161,13 +161,13 @@ describe('GET /api/v1/intelligence/trace/:type/:id', () => {
     expect(finding.regarding).toBe('LearningObjective/identify-ai-limitations');
   });
 
-  it("reaches the module of an activity placed through its group, from an item used in it (ADR-0005, ADR-0061)", async () => {
+  it("reaches the module of an activity placed through its lesson, from an item used in it (ADR-0005, ADR-0061)", async () => {
     const body = await json('/api/v1/intelligence/trace/AssessmentItem/training-loop-mc');
     const use = body.edges.find((e: { via: string }) => e.via === 'activity');
     expect(use).toMatchObject({ from: 'AssessmentItem/training-loop-mc', to: 'LearningActivity/training-loop-worked-example' });
     const placed = body.edges.find((e: { from: string; via: string }) => e.from === 'LearningActivity/training-loop-worked-example' && e.via === 'module');
     expect(placed).toMatchObject({ to: 'Module/how-ai-works' });
-    expect(placed.through).toMatch(/^ModuleActivityGroupLink\//);
+    expect(placed.through).toMatch(/^ModuleLessonLink\//);
   });
 
   it('walks evidence down to the items that rest on it', async () => {
@@ -740,13 +740,13 @@ describe('GET /api/v1/intelligence/module-content/:moduleId (ADR-0005)', () => {
     await createStore({ branch: 'main' }).deleteBranch(CONTENT).catch(() => undefined);
   });
 
-  it("composes the seed's Module 1 in teaching order: an activity, then a group with its members and their formative items", async () => {
+  it("composes the seed's Module 1 in teaching order: an activity, then a lesson with its activities and their formative items", async () => {
     const res = await get('/api/v1/intelligence/module-content/how-ai-works');
     expect(res.status).toBe(200);
     expect(res.headers.get('etag')).toMatch(/^"[a-z0-9]+"$/);
     const body = await res.json();
     expect(body.module).toMatchObject({ id: 'Module/how-ai-works' });
-    expect(body.summary).toEqual({ entries: 2, groups: 1, activities: 3, placements: 3, formativeUses: 1, unsequenced: 0 });
+    expect(body.summary).toEqual({ entries: 2, lessons: 1, activities: 3, placements: 3, formativeUses: 1, unsequenced: 0 });
     expect(body.repeated).toEqual([]);
 
     const [first, second] = body.content;
@@ -757,12 +757,12 @@ describe('GET /api/v1/intelligence/module-content/:moduleId (ADR-0005)', () => {
       activity: { id: 'LearningActivity/sort-ai-systems', label: 'Sort the systems', activityType: 'Practice', targets: ['LearningObjective/distinguish-ai-approaches'] },
       items: [],
     });
-    expect(second).toMatchObject({ kind: 'group', sequence: 2, link: expect.stringMatching(/^ModuleActivityGroupLink\//), group: { id: 'ActivityGroup/how-a-model-learns' } });
+    expect(second).toMatchObject({ kind: 'lesson', sequence: 2, link: expect.stringMatching(/^ModuleLessonLink\//), lesson: { id: 'Lesson/how-a-model-learns' } });
     expect(second.members.map((m: Placed) => [m.sequence, m.activity.id])).toEqual([
       [1, 'LearningActivity/training-loop-video'],
       [2, 'LearningActivity/training-loop-worked-example'],
     ]);
-    expect(second.members[0].link).toMatch(/^ActivityGroupMember\//);
+    expect(second.members[0].link).toMatch(/^LessonActivityLink\//);
     expect(second.members[1].items).toEqual([
       { sequence: 1, link: expect.stringMatching(/^ActivityItemLink\//), item: expect.objectContaining({ id: 'AssessmentItem/training-loop-mc', status: 'Draft' }) },
     ]);
@@ -781,7 +781,7 @@ describe('GET /api/v1/intelligence/module-content/:moduleId (ADR-0005)', () => {
     const beforeCommit = String(before.headers.get('etag')).replace(/"/g, '');
     const EXTRA = `LearningActivity/reflection-${stamp}`;
     const write = await post(`/api/v1/documents?branch=${CONTENT}`, {
-      message: 'Replay the video after the group, and add an unordered reflection',
+      message: 'Replay the video after the lesson, and add an unordered reflection',
       documents: [
         // 5: the seed's Module 1 content holds 1 and 2 (constraint 3)
         { '@type': 'ModuleActivityLink', module: 'Module/how-ai-works', activity: 'LearningActivity/training-loop-video', sequence: 5 },
@@ -795,13 +795,13 @@ describe('GET /api/v1/intelligence/module-content/:moduleId (ADR-0005)', () => {
     const now = await json(`/api/v1/intelligence/module-content/how-ai-works?branch=${CONTENT}`);
     expect(now.content.map((e: { kind: string; sequence?: number }) => [e.kind, e.sequence])).toEqual([
       ['activity', 1],
-      ['group', 2],
+      ['lesson', 2],
       ['activity', 5],
       ['activity', undefined],
     ]);
     expect(now.content[2].link).toBe(replayLink);
     expect(now.content[3].activity.id).toBe(EXTRA);
-    expect(now.summary).toEqual({ entries: 4, groups: 1, activities: 4, placements: 5, formativeUses: 1, unsequenced: 1 });
+    expect(now.summary).toEqual({ entries: 4, lessons: 1, activities: 4, placements: 5, formativeUses: 1, unsequenced: 1 });
     expect(now.repeated).toEqual([
       { activity: expect.objectContaining({ id: 'LearningActivity/training-loop-video' }), placements: [now.content[1].members[0].link, replayLink] },
     ]);
