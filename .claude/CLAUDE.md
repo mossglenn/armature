@@ -72,7 +72,7 @@ scripts/
   sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill); also npm run sync:terminusdb-docs
 app/
   app/page.tsx             # The viewer's index: a branch's modules, each linking to its Coverage View; reads the hub through lib/viewer.ts, never the store
-  app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4), with each item's statistics from /intelligence/item-statistics at the same commit (ADR-0058's first client), read from the hub
+  app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4), with each item's statistics from /intelligence/item-statistics and the module's content in teaching order from /intelligence/module-content, both at the same commit (ADR-0058's first client; ADR-0005's composed view), read from the hub
                            # (No route file: since 2026-10-21 Next.js hosts no API; the catch-all route and @hono/vercel are gone)
   app/layout.tsx           # Page shell (titled Armature)
   server.ts                # The standalone hub's entry: .env.local, PORT (3100) and HOST (loopback by default; the header resolver trusts the caller), startHub, SIGTERM; what build:hub bundles and the container runs
@@ -89,7 +89,7 @@ app/
       app.test.ts          # In-process Vitest tests via app.request(): reads, the Phase 2 walkthrough, users and identity; need the container running (users tests write to and clean up main)
       client.test.ts       # The contract test for @armature/client: every route through the client's fetch option over app.request (refs, commit from ETag, If-Match → 412, identity, envelopes, HubError codes)
       write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
-      intelligence.test.ts # The six intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion); attestations made on a round branch, merged, then reported Stale after a fragment changes (Phase 5 exit criterion)
+      intelligence.test.ts # The seven intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion); attestations made on a round branch, merged, then reported Stale after a fragment changes (Phase 5 exit criterion)
       store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
       identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
@@ -106,7 +106,7 @@ app/
         documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history, diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
-        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028), item-statistics?module=&unit= (every metric about each item, ADR-0058): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
+        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028), item-statistics?module=&unit= (every metric about each item, ADR-0058), module-content/:moduleId (activities and groups in teaching order, a tree of placements, ADR-0005): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
         export.ts          # GET /export?profile=&slice= (the graph at a ref as one JSON-LD document with its reloadable schema) and /export/slices (ADR-0031)
         discover.ts        # GET /discover (the revisions served, the capabilities with their settings, where the schema is; no ref, no identity) and GET /schema?branch=|ref= (the schema graph at a ref in the reloadable form, commit in ETag; ADR-0027 decision 4, built with ADR-0059)
       export/
@@ -262,7 +262,7 @@ All architecture decisions are documented in `schema/docs/adr/`. The filenames a
 - **ADR-0002** — References, not ownership (affects all relationship queries)
 - **ADR-0003** — Set vs. junction document (affects all write operations)
 - **ADR-0004** — Back-references on children (affects all list queries)
-- **ADR-0005** — Module content sequencing (affects activity ordering logic)
+- **ADR-0005** — Module content sequencing (affects activity ordering logic); its composed view is `GET /api/v1/intelligence/module-content/:moduleId` (2026-10-22): merged by `sequence`, unsequenced entries last, an activity placed twice shown at each placement and listed in `repeated`
 - **ADR-0013** — Minimum cardinality at schema level (supersedes ADR-0006, whose "the API enforces what the store cannot" principle the invariants engine now carries); amended by ADR-0060, which removed the minimum on `AssessmentItem.assesses`
 - **ADR-0060** — Items may exist unaligned: `assesses` is zero or more, rule 1 retired, the alignment read lists `itemsWithoutObjective`; `LearningActivity.targets` keeps its minimum until a client shows the case; how to encourage alignment without requiring it is open (plan §6)
 - **ADR-0061** — Formative use of items inside activities: `ActivityItemLink` (activity, item, optional `sequence`; constraint 17); counts toward no coverage; the trace follows it downstream and shows an activity with its modules

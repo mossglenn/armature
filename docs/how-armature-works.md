@@ -548,7 +548,7 @@ Module
     ActivityItemLink       sequence 1  → a question the activity asks in passing (ADR-0061)
 ```
 
-The two kinds of module link share one numbering space (no activity and group may both be at position 2), and group membership has its own numbering. Gaps are allowed (1, 2, 10) so a designer can insert without renumbering. The API enforces the uniqueness rules (Section 13, rules 3 and 4). ADR-0005 also assigned the API the job of merging the two kinds of link into one ordered view of a module's content; that view has not been built, so a client currently sorts the link documents itself.
+The two kinds of module link share one numbering space (no activity and group may both be at position 2), and group membership has its own numbering. Gaps are allowed (1, 2, 10) so a designer can insert without renumbering. The API enforces the uniqueness rules (Section 13, rules 3 and 4). ADR-0005 also assigned the API the job of merging the two kinds of link into one ordered view of a module's content; since 22 October 2026 the module-content read does it (Section 17.8), so a client no longer sorts the link documents itself.
 
 **Alternative rejected:** a composite value such as "2.1" (group 2, activity 1). It is compact but ambiguous: as a decimal, "2.10" equals "2.1."
 
@@ -969,12 +969,20 @@ This is one of the most instructive decisions in the project's history, and it p
 **The answer.** `GET /api/v1/intelligence/item-statistics` lists each item with every measurement about it (a `LearningMetric` whose `subject` is the item, Section 12.14), newest administration first, each with its value and unit, the cohort and date of the administration, and the design state it describes (`asOf`). Items with no measurement are listed apart, and a `unit` filter keeps one kind of figure.
 
 **What it leaves to the reader.** It does not pick a difficulty for an item. The latest administration, one cohort's figure and the spread across cohorts answer different questions, and the decision record left that choice to the tools that ask. The Coverage View, the first such tool, shows every administration beside each item, so a reader sees an approved and attested item that only 38% of the pilot cohort answered correctly next to the coverage verdict it counts toward.
+
+### 17.8 Module content: what does a module teach, in what order? (ADR-0005, built 22 October 2026)
+
+**The question.** In what order does a module present its activities, which of them are grouped, and which questions does each activity ask along the way?
+
+**The answer.** `GET /api/v1/intelligence/module-content/<module>` merges the module's two kinds of link by their shared sequence, nests each group's members in the group's own order, and nests under each activity the items it uses formatively, in their order (Section 12.6). Each activity comes with its type (practice, video, worked example) and the objectives it targets. Entries without a sequence come last. Two tools on the reference list need this read: a course builder, which turns a module into a deliverable course in this order, and an activity designer, which plans a module's activities around its objectives.
+
+**What it shows rather than judges.** The schema allows the same activity to appear twice in one module, standalone and inside a group, or in two groups. The read shows it at every place it appears, each time with the link that put it there, and lists it as repeated without calling that an error. Revisiting an activity later in a module may be deliberate. The Coverage View shows this read below the coverage verdicts. In the seed, Module 1's objective *Describe Model Training* is uncovered by any assessment, yet two activities in the module's group target it: the gap is in assessment, not in teaching.
 ## 18. Armature's own pages: the Coverage View
 
 The viewer, a Next.js application (Next.js is a web framework), is two read-only pages, Armature's first visual interface and a client of a hub like any plugin:
 
 - **The index** (`/`) lists the modules on a branch, each linking to its Coverage View.
-- **The Coverage View** (`/coverage/<module>`) shows the coverage read for one module: each declared objective with its role, both verdicts with their counts, the items behind each and how they count, the objectives the module assesses without declaring, the thresholds in force, and the commit the data came from. Query parameters switch the branch (`?branch=`) or change the thresholds.
+- **The Coverage View** (`/coverage/<module>`) shows the coverage read for one module: each declared objective with its role, both verdicts with their counts, the items behind each and how they count, the objectives the module assesses without declaring, the thresholds in force, and the commit the data came from. Beside each item are its statistics (Section 17.7), and below the verdicts is the module's content in teaching order (Section 17.8), both read at the same commit. Query parameters switch the branch (`?branch=`) or change the thresholds.
 
 Both pages read a hub over the network through the same client library a plugin would use, and they are configured by nothing but the hub's address. (Until 21 October 2026 they called the API in-process, inside the same running program, which also hosted it; see Section 10.1.) They never read the database directly, so they are a client of the API like any plugin. This is the "Coverage View" the March 2026 demo plan called "the demo payoff."
 
@@ -1230,9 +1238,8 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 - **The coverage thresholds are unevidenced**, and coverage inherits the reliability of the alignments it counts (Section 17.1).
 - **Capture burden is the historical killer of rationale tools.** Armature's answer (capture as a byproduct of useful tools; the commit message as the primary rationale) is a strategy, not yet a demonstrated result.
 - **One real client.** Every generalization so far rests on CoQui plus imagined reference clients.
-- **The seed lacks activities and outcome data**, so some reads are demonstrated only in tests.
 - **Some list filters read a whole type.** The database cannot filter on an optional or multi-valued reference or an optional enumerated field (platform check Y), so the hub lists the type and filters it (for example, all items that assess a given objective). The answer is correct; the cost grows with the type, and a query in TerminusDB's own query language will replace it when a type outgrows a list.
-- **Some decided capabilities are unbuilt.** The schema-discovery route promised by ADR-0027 (an Architecture Decision Record) and the ordered module-content view assigned by ADR-0005 do not exist yet; neither is currently assigned to a phase.
+- **The module-content view covers one module.** The course builder also needs the whole course tree at one commit (every module in order with its content); it is the module-content read once per module until a tool asks for one read.
 - **Lossless writes are unsolved.** A tool built against an older schema can erase newer fields by replacing a document (research lesson 1).
 - **Item statistics are read, not summarized** (Sections 12.14 and 17.7). Since 22 October 2026 one read returns every figure about each item with its cohort and design version, but it deliberately names no "latest" difficulty: which figure counts is each tool's choice, and a shared summary waits for a second tool to want the same one.
 - **The non-aggregation commitment is policy, not structure.** Anyone with bulk access can compute what ADR-0021 forbids; the hub only declines to make it easy.
