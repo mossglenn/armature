@@ -1,7 +1,7 @@
 /**
  * The Design Graph's view state and its URL form (docs/graph-view-plan.md
  * §9.3): what a reader chose (a selection, the relation and its depth, hidden
- * classes, edges or nodes, a lens and its parameters), parsed
+ * classes, edges or nodes, a lens and its parameters, figure mode), parsed
  * from the query by the server page and written back by the client view.
  * Pure, so both sides share it and it is tested without a browser. `branch`
  * and `ref` are not view state: the page reads them itself and they are kept
@@ -33,15 +33,20 @@ export interface GraphState {
   unit?: string;
   /** The changes lens: the commit changes are counted from. */
   since?: string;
+  /** Figure mode (plan §3.4): light, no chrome, the stamp; and its legend tile. */
+  figure: boolean;
+  legend: boolean;
 }
 
 export const RELATIONS: readonly RelationKind[] = ['both', 'upstream', 'downstream', 'trace'];
 
-export const DEFAULT_STATE: Readonly<Pick<GraphState, 'junctionsAsEdges' | 'direction' | 'depth' | 'projected'>> = {
+export const DEFAULT_STATE: Readonly<Pick<GraphState, 'junctionsAsEdges' | 'direction' | 'depth' | 'projected' | 'figure' | 'legend'>> = {
   junctionsAsEdges: true,
   direction: 'both',
   depth: 1,
   projected: false,
+  figure: false,
+  legend: false,
 };
 
 const positiveInt = (value: string | undefined): number | undefined => {
@@ -66,6 +71,8 @@ export function stateFromQuery(q: Record<string, string | undefined>): GraphStat
     overAssessedAbove: positiveInt(q.overAssessedAbove),
     unit: q.unit || undefined,
     since: q.since || undefined,
+    figure: q.figure === '1',
+    legend: q.legend === '1',
   };
 }
 
@@ -84,6 +91,8 @@ export function queryFromState(s: GraphState, current: URLSearchParams): URLSear
   set('overAssessedAbove', s.lens === 'coverage' && s.overAssessedAbove ? String(s.overAssessedAbove) : undefined);
   set('unit', s.lens === 'outcomes' ? s.unit : undefined);
   set('since', s.lens === 'changes' ? s.since : undefined);
+  set('figure', s.figure ? '1' : undefined);
+  set('legend', s.figure && s.legend ? '1' : undefined);
   return p;
 }
 
