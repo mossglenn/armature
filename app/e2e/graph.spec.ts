@@ -138,3 +138,69 @@ test('the Walkthrough walks Narrative 1 from the result to the evidence', async 
   await expect(page).not.toHaveURL(/walk=/);
   expect(errors).toEqual([]);
 });
+
+test('the coverage lens tints each objective by its verdict and its legend carries the read\'s counts', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph?lens=coverage');
+  const legend = page.getByLabel('Legend');
+  await expect(legend).toContainText('Uncovered3');
+  await expect(legend).toContainText('Partially assessed3');
+  await expect(legend).toContainText('Fully assessed1');
+  await expect(page.locator('.gnode-lens-fill')).toHaveCount(7);
+  await expect(page.getByRole('button', { name: /^LearningObjective, Distinguish Bias Types, Partially assessed/ })).toBeVisible();
+  await page.getByLabel('Projected', { exact: true }).check();
+  await expect(page).toHaveURL(/projected=1/);
+  await expect(legend).toContainText('Uncovered1');
+  expect(errors).toEqual([]);
+});
+
+test('the other lenses answer from their reads: alignment, attestations, outcomes, changes since a commit', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph?lens=alignment');
+  await expect(page.getByLabel('Legend')).toContainText('Item assessing no objective1');
+  await expect(page.getByRole('button', { name: /^AssessmentItem, The step after a prediction, No objective/ })).toBeVisible();
+  expect(await page.locator('.gnode-dim').count()).toBeGreaterThan(10);
+
+  await page.getByLabel('Attestations', { exact: true }).check();
+  await expect(page).toHaveURL(/lens=attestations/);
+  await expect(page.getByLabel('Legend')).toContainText('Current1');
+  await expect(page.getByRole('button', { name: /^AssessmentItem, Identifying training data bias, Current/ })).toBeVisible();
+
+  await page.getByLabel('Outcomes', { exact: true }).check();
+  await expect(page.getByLabel('Legend')).toContainText('Well below the median1');
+  await expect(page.getByRole('button', { name: /^AssessmentItem, Identifying training data bias, 0.38 proportion correct/ })).toBeVisible();
+
+  await page.getByLabel('Changes since', { exact: true }).check();
+  await page.getByLabel('Since a commit the graph names').selectOption({ index: 1 });
+  await expect(page).toHaveURL(/lens=changes&since=/);
+  await expect(page.getByLabel('Legend')).toContainText('Added since5');
+  await expect(page.getByRole('button', { name: /^LearningDataset, Module 3 capstone, spring 2026 pilot, Added since/ })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('figure mode stamps the view and exports it as a PNG', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph?lens=coverage&figure=1&legend=1');
+  await expect(page.getByLabel('Figure stamp')).toHaveText(/^Armature · main @ [a-z0-9]{8} · \/graph\?lens=coverage · \d{4}-\d{2}-\d{2}$/);
+  await expect(page.getByLabel('Figure legend')).toContainText('Lens · coverage');
+  await expect(page.locator('.react-flow__minimap')).toHaveCount(0);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download PNG' }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^armature-graph-main-[a-z0-9]{8}\.png$/);
+  const path = await download.path();
+  const { readFileSync } = await import('node:fs');
+  const bytes = readFileSync(path!);
+  expect(bytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  expect(bytes.length).toBeGreaterThan(50_000);
+  await page.getByRole('button', { name: 'Exit figure mode' }).click();
+  await expect(page).not.toHaveURL(/figure=/);
+  expect(errors).toEqual([]);
+});
+
+test('the branch picker names the branch on every page, with its head', async ({ page }) => {
+  await page.goto('/graph?lens=coverage');
+  const picker = page.getByLabel('Branch');
+  await expect(picker).toHaveValue('main');
+  await expect(picker.locator('option').first()).toHaveText(/^main · [a-z0-9]{8}$/);
+  await page.goto('/coverage/risks-and-ethics');
+  await expect(page.getByLabel('Branch')).toHaveValue('main');
+});
