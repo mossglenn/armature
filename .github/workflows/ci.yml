@@ -151,8 +151,20 @@ jobs:
         working-directory: scripts
       - name: Install the workspace (the app and the packages)
         run: npm ci
+      # The browser binaries, cached on the lockfile (Playwright's version pins
+      # the build). Without --with-deps: that flag apt-installs 26 MB of
+      # libraries the ubuntu-latest image already carries, and on 2026-10-23
+      # the mirror served them at 52 kB/s, nine minutes of a ten-minute job.
+      # If Chromium ever fails to launch for a missing library, the step to add
+      # is `npx playwright install-deps chromium`.
+      - uses: actions/cache@v4
+        id: playwright
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install the browser
-        run: npx playwright install --with-deps chromium
+        if: steps.playwright.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
         working-directory: app
       - name: Wait for TerminusDB
         run: node scripts/wait_for_store.js
