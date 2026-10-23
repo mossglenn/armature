@@ -1,6 +1,8 @@
 'use client';
 
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
+import { useEffect, useRef } from 'react';
+import { portOffset, sourceHandle, targetHandle, type NodePorts } from '@/lib/graph/ports';
 import type { CSSProperties } from 'react';
 import type { Chip } from '@/lib/graph/derive';
 import { GLYPHS } from '@/lib/graph/glyphs';
@@ -32,6 +34,8 @@ export type ArmatureNodeData = {
   mark?: 'added' | 'changed';
   /** The lens's mark on this record. */
   lens?: LensMark;
+  /** How many edges attach on each side (lib/graph/ports); one handle a side when absent. */
+  ports?: NodePorts;
 };
 
 export type ArmatureNodeType = Node<ArmatureNodeData, 'armature'>;
@@ -63,8 +67,26 @@ export function Glyph({ cls, className = 'h-3 w-3' }: { cls: string; className?:
   );
 }
 
-export function ArmatureNode({ data, selected }: NodeProps<ArmatureNodeType>) {
+export function ArmatureNode({ id, data, selected }: NodeProps<ArmatureNodeType>) {
   const hue = hueOf(data.cls);
+  // One handle per edge on each side (lib/graph/ports). React Flow measures
+  // a node's handles when it measures the node, so only a later change in
+  // their number is announced, by comparing with the counts last announced,
+  // and a tick later: the flow's store outlives the keyed flow, so after a
+  // hide the new flow first shows the old nodes and then syncs the new ones,
+  // and an announcement made during that sync fires the queued fit on init
+  // off one node and lands the view at zoom 1 (2026-10-23). A mount flag is
+  // not enough, since strict mode runs a mount effect twice.
+  const sources = data.ports?.sources || 1;
+  const targets = data.ports?.targets || 1;
+  const updateNodeInternals = useUpdateNodeInternals();
+  const announced = useRef({ sources, targets });
+  useEffect(() => {
+    if (announced.current.sources === sources && announced.current.targets === targets) return;
+    announced.current = { sources, targets };
+    const tick = window.setTimeout(() => updateNodeInternals(id), 0);
+    return () => window.clearTimeout(tick);
+  }, [id, sources, targets, updateNodeInternals]);
   const lens = data.lens;
   const chipText = [lens?.text, ...data.chips.map((c) => c.text)].filter(Boolean).join(', ');
   const style: Record<string, string> = { '--c-light': hue.light, '--c-dark': hue.dark };
@@ -86,7 +108,9 @@ export function ArmatureNode({ data, selected }: NodeProps<ArmatureNodeType>) {
       aria-label={`${data.cls}, ${data.label}${chipText ? `, ${chipText}` : ''}`}
       title={data.label}
     >
-      <Handle type="target" position={Position.Left} className="gnode-handle" isConnectable={false} />
+      {Array.from({ length: targets }, (_, i) => (
+        <Handle key={i} id={targetHandle(i)} type="target" position={Position.Left} className="gnode-handle" style={{ top: `${portOffset(i, targets) * 100}%` }} isConnectable={false} />
+      ))}
       <div className="gnode-eyebrow flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
         <Glyph cls={data.cls} />
         <span className="truncate">{data.cls}</span>
@@ -105,7 +129,9 @@ export function ArmatureNode({ data, selected }: NodeProps<ArmatureNodeType>) {
           })}
         </div>
       )}
-      <Handle type="source" position={Position.Right} className="gnode-handle" isConnectable={false} />
+      {Array.from({ length: sources }, (_, i) => (
+        <Handle key={i} id={sourceHandle(i)} type="source" position={Position.Right} className="gnode-handle" style={{ top: `${portOffset(i, sources) * 100}%` }} isConnectable={false} />
+      ))}
     </div>
   );
 }

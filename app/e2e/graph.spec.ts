@@ -25,6 +25,8 @@ test('draws the seed in lifecycle columns', async ({ page }) => {
   // The header in full, or in its short form with the name as its title when the fit is narrow.
   await expect(page.getByText('Assessments and lessons').or(page.getByTitle('Assessments and lessons'))).toBeVisible();
   await expect(page.getByLabel('AssessmentItem', { exact: false }).first()).toBeVisible();
+  // Edges attach at ports: an objective with several items and activities has a source handle for each.
+  expect(await page.locator('.react-flow__node', { hasText: 'Identify AI Limitations' }).locator('.react-flow__handle.source').count()).toBeGreaterThan(1);
   expect(errors).toEqual([]);
 });
 
