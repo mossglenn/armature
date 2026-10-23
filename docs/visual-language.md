@@ -96,7 +96,7 @@ All edges are a muted gray (`#a1a1aa` light, `#52525b` dark) with a small closed
 
 ## Type and surfaces
 
-The viewer's faces: Geist for text, Geist Mono for ids, commits, sequences and values (tabular numerals). The light surface is white on `#fafafa` (zinc-50), the dark `#18181b` on `#0a0a0a`; the zinc neutrals throughout. The canvas is a shade off the card so a card has an edge at every zoom, with a dot grid on it (zinc-400 light, zinc-700 dark) that scales with the view. Light is the theme figures are exported in, on a white canvas without the grid.
+The viewer's faces: Geist for text, Geist Mono for ids, commits, sequences and values (tabular numerals). The light surface is white on `#fafafa` (zinc-50), the dark `#18181b` on `#0a0a0a`; the zinc neutrals throughout. The canvas is a shade off the card so a card has an edge at every zoom, with a dot grid on it (zinc-300 light, zinc-800 dark) at three scales: gaps of 24, 96 and 384 canvas units, a layer fully drawn while its spacing on screen is between 18 and 72 pixels, fading in over the 4 pixels below and out over the 16 above, so exactly one layer reads fully at every zoom from 0.15 to 2 and the handover is quick; a coarser layer's dots fall on the finer one's as major marks, and the two coarser layers are a tone lighter, zinc-200 (dark: zinc-900), since they stand on an emptier canvas (`app/lib/graph/grid.ts`). A dot keeps its size on screen whatever the zoom, about a pixel, a little larger on the coarser layers. Light is the theme figures are exported in, on a white canvas without the grid.
 
 ## Using the language elsewhere
 
