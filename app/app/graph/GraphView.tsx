@@ -103,6 +103,9 @@ function usePrefersDark(): boolean {
   return dark;
 }
 
+/** Padding for a fit of the whole graph: the column headers' band at the top, 8% elsewhere. */
+const FIT_ALL = { top: '52px', right: '8%', bottom: '8%', left: '8%' } as const;
+
 /** The dot grid at three scales (lib/graph/grid): each layer fades by its spacing on screen, so one reads at every zoom. */
 function GraphGrid() {
   const { zoom } = useViewport();
@@ -119,22 +122,25 @@ function GraphGrid() {
 function ColumnHeaders({ columns }: { columns: Column[] }) {
   const { x, zoom } = useViewport();
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 overflow-hidden" aria-hidden="true">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-11 overflow-hidden" aria-hidden="true">
       {columns.map((c) => {
-        // The rule spans the column; the text is centered on it and keeps a
-        // legible width when the column is narrower than its name.
+        // The rule spans the column; the text is centered on it, keeps a
+        // legible width when the column is narrower than its name, and wraps
+        // to a second line above the first rather than truncating, since a
+        // column is one card wide and a name like "Assessments and lessons"
+        // is two cards wide at the fit zoom.
         const left = c.x * zoom + x;
         const width = c.width * zoom;
-        const textWidth = Math.max(width, 96);
+        const textWidth = Math.max(width, 112);
         return (
-          <div key={c.stage} className="absolute top-1.5" style={{ left, width }}>
+          <div key={c.stage} className="absolute top-0 h-11" style={{ left, width }}>
             <div
-              className="absolute truncate px-1 text-center text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+              className="absolute bottom-[9px] line-clamp-2 px-1 text-center text-[11px] leading-[13px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
               style={{ left: (width - textWidth) / 2, width: textWidth }}
             >
               {c.header}
             </div>
-            <div className="absolute top-5 h-px w-full bg-zinc-300 dark:bg-zinc-700" />
+            <div className="absolute bottom-[6px] h-px w-full bg-zinc-300 dark:bg-zinc-700" />
           </div>
         );
       })}
@@ -278,7 +284,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
     setStep(Math.max(1, Math.min(n, walk.steps.length)));
   }, [walk]);
 
-  const fit = useCallback(() => flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 }), [flow]);
+  const fit = useCallback(() => flow.fitView({ padding: FIT_ALL, maxZoom: 1, duration: 300 }), [flow]);
 
   // Zoom to selection (§5.2): the lit relation's records (the selected record among them), or the walk so far.
   const frame = useCallback(() => {
@@ -323,7 +329,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
     const nodes = currentStep.nodes.filter((id) => graph.nodes.some((n) => n.id === id));
     const timer = window.setTimeout(() => {
       if (nodes.length) flow.fitView({ nodes: nodes.map((id) => ({ id })), padding: 0.45, maxZoom: 1.1, duration });
-      else flow.fitView({ padding: 0.08, maxZoom: 1, duration });
+      else flow.fitView({ padding: FIT_ALL, maxZoom: 1, duration });
     }, 30);
     return () => window.clearTimeout(timer);
   }, [walking, currentStep, flowReady, flow, graph]);
@@ -514,7 +520,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
             onEdgeMouseEnter={(_, e) => setHoveredEdge(e.id)}
             onEdgeMouseLeave={() => setHoveredEdge(undefined)}
             fitView
-            fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
+            fitViewOptions={{ padding: FIT_ALL, maxZoom: 1 }}
             minZoom={0.15}
             maxZoom={2}
             nodesDraggable={false}
