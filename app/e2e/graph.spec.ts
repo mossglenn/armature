@@ -204,3 +204,29 @@ test('the branch picker names the branch on every page, with its head', async ({
   await page.goto('/coverage/risks-and-ethics');
   await expect(page.getByLabel('Branch')).toHaveValue('main');
 });
+
+test('moving around (§5.2): hover keeps a neighborhood and recedes the rest, a hovered edge shows its label, arrows pan, z frames the selection', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph');
+  const transform = () => page.locator('.react-flow__viewport').evaluate((el) => el.style.transform);
+  const item = page.getByRole('button', { name: /^AssessmentItem, Identifying training data bias/ });
+  await item.hover();
+  await expect(page.locator('.gnode-hover-dim')).not.toHaveCount(0);
+  await expect(page.locator('.gedge-hover-lit')).not.toHaveCount(0);
+  await expect(page.locator('.gedge-hover-lit .react-flow__edge-text').first()).toHaveText(/assesses|subject/);
+  await page.getByRole('heading', { name: 'Design Graph' }).hover();
+  await expect(page.locator('.gnode-hover-dim')).toHaveCount(0);
+  // React Flow's edge hover is a mouseenter on the edge's group; a bezier's bounding-box center is rarely on its stroke, so the event is sent.
+  await page.locator('.react-flow__edge.gedge-reference').first().locator('path').first().dispatchEvent('mouseover');
+  await expect(page.locator('.gedge-hover')).toHaveCount(1);
+  await expect(page.locator('.gedge-hover .react-flow__edge-text')).toBeVisible();
+  const before = await transform();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(transform).not.toBe(before);
+  await item.click();
+  const selected = await transform();
+  await page.keyboard.press('z');
+  await expect.poll(transform).not.toBe(selected);
+  await page.getByRole('button', { name: 'Frame' }).click();
+  expect(errors).toEqual([]);
+});
