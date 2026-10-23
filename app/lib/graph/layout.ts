@@ -57,6 +57,8 @@ export interface LayoutOptions {
 }
 
 const ANCHOR = '__stage__';
+/** The anchor edges' weight in dagre's ordering: enough to place a node with no other edge, too little to outvote one that has. */
+const ANCHOR_WEIGHT = 0.01;
 
 export function layout(
   nodes: ReadonlyArray<{ id: string; stage: number }>,
@@ -75,11 +77,14 @@ export function layout(
     g.setNode(anchorId(i), { width: 1, height: 1 });
     if (i > 0) g.setEdge(anchorId(i - 1), anchorId(i), { minlen: 2 }, `${ANCHOR}chain-${i}`);
   }
+  // The anchor edges pin the column (their minlen is a hard constraint) but
+  // weigh almost nothing, so dagre orders the nodes within a column by their
+  // real edges rather than pulling every node toward the anchor (2026-10-23).
   for (const n of nodes) {
     g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
     const i = anchorOf.get(n.stage)!;
-    g.setEdge(anchorId(i), n.id, {}, `${ANCHOR}from-${n.id}`);
-    g.setEdge(n.id, anchorId(i + 1), {}, `${ANCHOR}to-${n.id}`);
+    g.setEdge(anchorId(i), n.id, { weight: ANCHOR_WEIGHT }, `${ANCHOR}from-${n.id}`);
+    g.setEdge(n.id, anchorId(i + 1), { weight: ANCHOR_WEIGHT }, `${ANCHOR}to-${n.id}`);
   }
   const ids = new Set(nodes.map((n) => n.id));
   edges.forEach((e, i) => {
