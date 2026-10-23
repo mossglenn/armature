@@ -107,7 +107,34 @@ test('the Coverage View links its module, objectives, items and results to their
   await page.goto('/coverage/risks-and-ethics');
   await expect(page.getByRole('link', { name: 'Distinguish Bias Types' })).toHaveAttribute('href', '/graph/LearningObjective/distinguish-bias-types');
   const result = page.getByRole('link', { name: 'trace this result' }).first();
-  await expect(result).toHaveAttribute('href', /^\/graph\/LearningMetric\//);
+  await expect(result).toHaveAttribute('href', /^\/graph\/LearningMetric\/.*walk=1$/);
   await page.goto((await result.getAttribute('href'))!);
   await expect(page.locator('.gnode-root')).toHaveCount(1);
+  await expect(page.getByRole('complementary', { name: 'Walkthrough' })).toContainText('step 1 of');
+});
+
+test('the Walkthrough walks Narrative 1 from the result to the evidence', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph/LearningMetric/mod3-bias-type-difficulty?walk=1');
+  const walk = page.getByRole('complementary', { name: 'Walkthrough' });
+  await expect(walk).toContainText('step 1 of 10');
+  await expect(walk).toContainText('0.38 proportion correct on Identifying training data bias');
+  for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowRight');
+  await expect(walk).toContainText('step 7 of 10');
+  await expect(walk).toContainText('Adequate when?');
+  await expect(walk).toContainText(/was partially assessed in Risks and Ethical Use: 1 eligible item/);
+  await expect(walk.getByRole('link', { name: /Coverage View as of/ })).toHaveAttribute('href', /^\/coverage\/risks-and-ethics\?ref=/);
+  await expect(page).toHaveURL(/walk=7/);
+  await page.getByRole('button', { name: 'Next →' }).click();
+  await expect(walk).toContainText('Then and now');
+  await expect(walk).toContainText(/records added \(/);
+  await expect(page.locator('.gnode-added')).not.toHaveCount(0);
+  await walk.getByRole('button', { name: '10', exact: true }).click();
+  await expect(walk).toContainText('The loop closes');
+  await expect(walk).toContainText('ID Conference Survey');
+  expect(await page.locator('.gnode:not(.gnode-dim)').count()).toBeGreaterThanOrEqual(7);
+  await page.keyboard.press('Escape');
+  await expect(walk).toHaveCount(0);
+  await expect(page).not.toHaveURL(/walk=/);
+  expect(errors).toEqual([]);
 });
