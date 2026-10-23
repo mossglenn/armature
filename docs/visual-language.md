@@ -54,7 +54,7 @@ A fixed-size card, 232 by 72 pixels at zoom 1:
 
 Below zoom 0.6 the card shows its label alone, large, two lines at most, with a 6-pixel stripe, so the overview of a whole store stays legible; edge labels hide at the same point.
 
-States: **selected**, a 2-pixel ring in the accent (blue); **root** of a Focus page, a ring in the class hue; **dimmed**, 30% opacity, for everything outside the lit relation; **annotation** (a note or finding), a dashed border.
+States: **selected**, a 2-pixel ring in the accent (blue); **root** of a Focus page, a ring in the class hue; **dimmed**, 30% opacity, for everything outside the lit relation; **annotation** (a note or finding), a dashed border; on the Walkthrough's "then and now" step, **added** since the commit the cohort met, a green ring, and **changed**, an amber ring (status tones used for a status, as the rule allows).
 
 ## Chips
 
