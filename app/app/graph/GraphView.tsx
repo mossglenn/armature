@@ -229,11 +229,15 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
     else next.delete('walk');
     const query = next.toString();
     const url = `${window.location.pathname}${query ? `?${query}` : ''}`;
+    // The first run is the server's own URL (at most rewritten into canonical
+    // form); only a later change is routed. Noted here because this flag was
+    // once set after the early return below, so a click never routed (2026-10-23).
+    const isFirst = first.current;
+    first.current = false;
     if (url === `${window.location.pathname}${window.location.search}`) return;
     const serverChanged = [...SERVER_KEYS].some((k) => current.get(k) !== next.get(k));
-    if (serverChanged && !first.current) router.replace(url, { scroll: false });
+    if (serverChanged && !isFirst) router.replace(url, { scroll: false });
     else window.history.replaceState(window.history.state, '', url);
-    first.current = false;
   }, [state, router, walking, step]);
 
   // The figure's stamp: the view as a URL, from the same state the URL carries.
