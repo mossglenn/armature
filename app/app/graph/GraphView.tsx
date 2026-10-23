@@ -1,38 +1,65 @@
 'use client';
 
+import type { AttestationsReport, HistoryResult, TraceReport } from '@armature/client';
 import {
   Background, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, useViewport,
   type Edge, type NodeChange, type NodeTypes,
 } from '@xyflow/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArmatureNode, type ArmatureNodeType } from './ArmatureNode';
 import { FilterRail } from './FilterRail';
 import { GraphPanel, type PanelSelection, type Relation } from './GraphPanel';
 import { Search } from './Search';
-import { classesIn, derive, type Doc } from '@/lib/graph/derive';
+import { classesIn, derive, localPart, type Chip, type Doc } from '@/lib/graph/derive';
+import { focusPath, isTraceable, restrict } from '@/lib/graph/focus';
 import { NODE_HEIGHT, NODE_WIDTH, layout, type Column } from '@/lib/graph/layout';
-import { reach } from '@/lib/graph/relations';
-import { hueOf } from '@/lib/graph/stages';
-import { queryFromState, type GraphState } from '@/lib/graph/state';
+import { reach, traceSelection, type Selection } from '@/lib/graph/relations';
+import { hueOf, toneOf } from '@/lib/graph/stages';
+import { SERVER_KEYS, queryFromState, type GraphState } from '@/lib/graph/state';
 
 /**
- * The Design Graph (docs/graph-view-plan.md §3.1): the documents the server
- * read from the hub, derived and laid out here so a filter change is
- * immediate, drawn by React Flow read-only. Every choice a reader makes
- * (selection, relation and depth, hidden classes, edges or nodes) is written
- * to the URL with replaceState (lib/graph/state.ts), so a view can be sent as
- * a link and a figure's caption can cite it; the server page reads the same
- * parameters on a fresh load. The browser never calls the hub: everything the
- * panel shows is in `docs`.
+ * The Design Graph and the Focus page (docs/graph-view-plan.md §3.1, §3.2):
+ * the documents the server read from the hub, derived and laid out here so a
+ * filter change is immediate, drawn by React Flow read-only. Every choice a
+ * reader makes is in the URL (lib/graph/state.ts): a view-only change
+ * (hidden classes, edges or nodes, depth) is written with replaceState; a
+ * change that needs a hub read for the selected record (the selection, the
+ * Trace relation) goes through the router, and the server page answers with
+ * `reads`. In focus mode the drawing is restricted to the record's
+ * neighborhood, the walk is lit until something is selected, and the root is
+ * outlined. The browser never calls the hub.
  */
+export interface SelectedReads {
+  id: string;
+  attestations?: AttestationsReport;
+  history?: HistoryResult;
+  trace?: TraceReport;
+}
+
+export interface FocusProps {
+  root: string;
+  ids: string[];
+  litNodes: string[];
+  litEdges: string[];
+  /** The trace read drew it; false for a type the read does not walk from. */
+  traced: boolean;
+}
+
 export interface GraphViewProps {
   docs: Doc[];
   initial: GraphState;
+  reads?: SelectedReads;
+  focus?: FocusProps;
+  /** Attestation states by attestation id, from the trace's annotations. */
+  states?: Record<string, string>;
   branch: string;
+  atRef?: string;
   commit?: string;
   /** The hub's public origin for raw-data links, when a browser can reach it. */
   publicHub?: string;
-  /** The branch query to carry on links, "" or "?branch=x". */
+  /** The branch or ref query to carry on links, "" or "?branch=x". */
   branchQuery: string;
 }
 
@@ -83,7 +110,7 @@ function ColumnHeaders({ columns }: { columns: Column[] }) {
   );
 }
 
-function GraphBody({ docs, initial, branch, commit, publicHub, branchQuery }: GraphViewProps) {
+function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit, publicHub, branchQuery }: GraphViewProps) {
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(initial.hide));
   const [junctionsAsEdges, setJunctionsAsEdges] = useState(initial.junctionsAsEdges);
   const [selected, setSelected] = useState<string | undefined>(initial.select);
@@ -93,9 +120,17 @@ function GraphBody({ docs, initial, branch, commit, publicHub, branchQuery }: Gr
   const [compact, setCompact] = useState(false);
   const dark = usePrefersDark();
   const flow = useReactFlow();
+  const router = useRouter();
+  // The page's path, for links built during render (which runs on the server
+  // too, where there is no window): the design at a commit, a record selected.
+  const pathname = usePathname();
 
   const byId = useMemo(() => new Map(docs.map((d) => [d['@id'], d])), [docs]);
-  const graph = useMemo(() => derive(docs, { hidden, junctionsAsEdges }), [docs, hidden, junctionsAsEdges]);
+  const focusIds = useMemo(() => (focus ? new Set(focus.ids) : undefined), [focus]);
+  const graph = useMemo(() => {
+    const whole = derive(docs, { hidden, junctionsAsEdges });
+    return focusIds ? restrict(whole, focusIds) : whole;
+  }, [docs, hidden, junctionsAsEdges, focusIds]);
   const laid = useMemo(() => layout(graph.nodes, graph.edges), [graph]);
   const classes = useMemo(() => classesIn(graph.counts), [graph]);
 
@@ -107,22 +142,41 @@ function GraphBody({ docs, initial, branch, commit, publicHub, branchQuery }: Gr
     return edge ? { kind: 'edge', edge } : undefined;
   }, [graph, selected]);
 
-  const lit = useMemo(() => {
-    if (!selection) return undefined;
+  // The reads belong to the selected record only once the server has answered for it.
+  const readsFor = reads && reads.id === selected ? reads : undefined;
+
+  const lit = useMemo<Selection | undefined>(() => {
+    if (!selection) return focus ? { nodes: new Set(focus.litNodes), edges: new Set(focus.litEdges) } : undefined;
     if (selection.kind === 'edge') {
       return { nodes: new Set([selection.edge.source, selection.edge.target]), edges: new Set([selection.edge.id]) };
     }
+    if (relation.direction === 'trace') return readsFor?.trace ? traceSelection(graph, readsFor.trace) : { nodes: new Set([selection.node.id]), edges: new Set() };
     return reach(graph, selection.node.id, relation.direction, relation.depth);
-  }, [graph, selection, relation]);
+  }, [graph, selection, relation, readsFor, focus]);
 
-  // The URL mirrors the state (replaceState: no navigation, no scroll, no refetch).
+  // Attestation states: the trace's annotations (focus) and the selected record's read.
+  const allStates = useMemo(() => {
+    const map = new Map(Object.entries(states ?? {}));
+    for (const a of readsFor?.attestations?.attestations ?? []) map.set(a.id, a.state);
+    return map;
+  }, [states, readsFor]);
+
+  // The URL mirrors the state. A view-only change is replaceState; a change
+  // the server must answer (the selection, the Trace relation) is routed.
+  const first = useRef(true);
   useEffect(() => {
-    const state: GraphState = { select: selected, hide: [...hidden], junctionsAsEdges, direction: relation.direction, depth: relation.depth };
-    const next = queryFromState(state, new URLSearchParams(window.location.search));
+    const urlSelect = focus && selected === focus.root ? undefined : selected;
+    const state: GraphState = { select: urlSelect, hide: [...hidden], junctionsAsEdges, direction: relation.direction, depth: relation.depth };
+    const current = new URLSearchParams(window.location.search);
+    const next = queryFromState(state, current);
     const query = next.toString();
     const url = `${window.location.pathname}${query ? `?${query}` : ''}`;
-    if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, '', url);
-  }, [selected, hidden, junctionsAsEdges, relation]);
+    if (url === `${window.location.pathname}${window.location.search}`) return;
+    const serverChanged = [...SERVER_KEYS].some((k) => current.get(k) !== next.get(k));
+    if (serverChanged && !first.current) router.replace(url, { scroll: false });
+    else window.history.replaceState(window.history.state, '', url);
+    first.current = false;
+  }, [selected, hidden, junctionsAsEdges, relation, focus, router]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -133,15 +187,31 @@ function GraphBody({ docs, initial, branch, commit, publicHub, branchQuery }: Gr
     return () => window.removeEventListener('keydown', onKey);
   }, [flow]);
 
-  const rfNodes = useMemo<ArmatureNodeType[]>(() => graph.nodes.map((n) => ({
-    id: n.id,
-    type: 'armature',
-    position: laid.positions.get(n.id)!,
-    width: NODE_WIDTH,
-    height: NODE_HEIGHT,
-    selected: n.id === selected,
-    data: { cls: n.cls, label: n.label, chips: n.chips, annotation: n.annotation, dim: lit ? !lit.nodes.has(n.id) : false, root: false },
-  })), [graph, laid, selected, lit]);
+  const refHref = useCallback((ref: string, select?: string) => {
+    const p = new URLSearchParams({ ref });
+    if (select) p.set('select', select);
+    return `${pathname}?${p}`;
+  }, [pathname]);
+
+  const rfNodes = useMemo<ArmatureNodeType[]>(() => graph.nodes.map((n) => {
+    const chips: Chip[] = n.chips.map((c) => {
+      if (c.source && allStates.has(c.source)) {
+        const state = allStates.get(c.source)!;
+        return { ...c, text: `${c.text.replace(' · one part', '')} · ${state}`, tone: toneOf(state), title: `${c.title ?? ''}${c.text.includes('one part') ? ' (one part)' : ''}`.trim() };
+      }
+      if (c.ref) return { ...c, href: refHref(c.ref, n.id) };
+      return c;
+    });
+    return {
+      id: n.id,
+      type: 'armature',
+      position: laid.positions.get(n.id)!,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+      selected: n.id === selected,
+      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim: lit ? !lit.nodes.has(n.id) : false, root: focus?.root === n.id },
+    };
+  }), [graph, laid, selected, lit, focus, allStates, refHref]);
 
   const rfEdges = useMemo<Edge[]>(() => graph.edges.map((e) => {
     const isLit = lit?.edges.has(e.id) ?? false;
@@ -175,18 +245,37 @@ function GraphBody({ docs, initial, branch, commit, publicHub, branchQuery }: Gr
     for (const c of changes) if (c.type === 'select' && c.selected) setSelected(c.id);
   }, []);
 
-  const layoutKey = `${[...hidden].sort().join(',')}|${junctionsAsEdges}`;
+  const layoutKey = `${[...hidden].sort().join(',')}|${junctionsAsEdges}|${focus?.root ?? ''}`;
   const rawUrl = publicHub ? (id: string) => `${publicHub}/api/v1/documents/${id}${branchQuery}` : undefined;
+  const rootNode = focus ? graph.nodes.find((n) => n.id === focus.root) : undefined;
+  const where = (
+    <>
+      {atRef ? <>at commit <span className="font-mono">{atRef.slice(0, 12)}</span></> : <>on branch <span className="font-mono">{branch}</span>{commit && <> at commit <span className="font-mono">{commit.slice(0, 12)}</span></>}</>}
+    </>
+  );
 
   return (
     <div className="flex h-[calc(100dvh-3rem)] flex-col">
       <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
-        <div>
-          <h1 className="text-[15px] font-semibold tracking-tight">Design Graph</h1>
-          <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">
-            Everything on branch <span className="font-mono">{branch}</span>
-            {commit && <> at commit <span className="font-mono">{commit.slice(0, 12)}</span></>} · {docs.length} records
-          </p>
+        <div className="min-w-0">
+          {focus ? (
+            <>
+              <nav className="text-[12px] text-zinc-500 dark:text-zinc-400" aria-label="Breadcrumb">
+                <Link href={`/graph${branchQuery}`} className="hover:underline">Design Graph</Link>
+                <span className="mx-1.5">/</span>
+                <span>{rootNode?.cls ?? focus.root}</span>
+              </nav>
+              <h1 className="truncate text-[15px] font-semibold tracking-tight">{rootNode?.label ?? localPart(focus.root)}</h1>
+              <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">
+                {focus.traced ? 'The lifecycle walk from this record' : 'What this record references and what references it'} {where} · {graph.nodes.length} of {docs.length} records
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-[15px] font-semibold tracking-tight">Design Graph</h1>
+              <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Everything {where} · {docs.length} records</p>
+            </>
+          )}
         </div>
         <div className="ml-auto">
           <Search nodes={graph.nodes} onPick={focusOn} />
@@ -207,7 +296,7 @@ function GraphBody({ docs, initial, branch, commit, publicHub, branchQuery }: Gr
             onNodesChange={onNodesChange}
             onViewportChange={(vp) => setCompact(vp.zoom < COMPACT_BELOW)}
             onNodeClick={(_, n) => setSelected(n.id)}
-            onNodeDoubleClick={(_, n) => focusOn(n.id)}
+            onNodeDoubleClick={(_, n) => { const node = graph.nodes.find((x) => x.id === n.id); if (node) router.push(`${focusPath(node)}${branchQuery}`); }}
             onEdgeClick={(_, e) => setSelected(e.id)}
             onPaneClick={() => setSelected(undefined)}
             fitView
@@ -240,6 +329,14 @@ function GraphBody({ docs, initial, branch, commit, publicHub, branchQuery }: Gr
               onSelect={focusOn}
               onClose={() => setSelected(undefined)}
               rawUrl={rawUrl}
+              states={allStates}
+              history={readsFor?.history}
+              historyPending={reads === undefined || reads.id !== selected}
+              traceable={selection.kind === 'node' && isTraceable(selection.node.cls)}
+              isRoot={selection.kind === 'node' && focus?.root === selection.node.id}
+              branchQuery={branchQuery}
+              atRef={atRef}
+              refHref={refHref}
             />
           </div>
         )}
