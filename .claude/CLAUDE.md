@@ -107,9 +107,10 @@ app/
         coverage.ts        # The coverage algorithm (ADR-0029 decisions 1 to 3) and its vocabulary; computed on read, never stored (ADR-0056)
         graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
       errors.ts            # ApiError: status + stable code + message, rendered by onError
+      memo.ts              # CommitMemo: a bounded in-process memo for reads at a commit, keyed by the commit and the read's parameters (ADR-0025: a read at a commit is immutable); the history route's answers first (2026-10-23)
       version.ts           # The per-request version contract (ADR-0059): REVISIONS (the dated entries of docs/client-changes.md, newest first; a test checks they agree), CAPABILITIES (each mapped to its route prefix; a route under none fails a test), discovery(), and `negotiate`, the middleware on every request: Armature-Version (a newer revision is served on a read, refused on a write), Armature-Capabilities, and the Armature-Version response header
       routes/
-        documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history, diff
+        documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history (kept by the head it was read at in memo.ts, since the store walks the whole log for a document touched rarely; ETag the head; 2026-10-23), diff
         branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
         users.ts           # list at ref, /me, register on main (ADR-0032)
         intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028), item-statistics?module=&unit= (every metric about each item, ADR-0058), module-content/:moduleId (activities and lessons in teaching order, a tree of placements, ADR-0005): design intelligence from structure alone, at any ref (plan P4, ADR-0056)

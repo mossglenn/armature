@@ -1395,6 +1395,13 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   a template filters on a required enum field (Y4) and is a 500 on an `Optional` enum field (Y5).
   A template on an `Optional` string field filters (Y6). The list route filters `Optional` enum
   and reference fields and every `Set` in the hub.
+- *Measured (2026-10-23, no lettered check, since it is a cost and not a behavior):* `/api/history`
+  walks the branch's log until it has `count` commits that touched the document, so a document
+  touched rarely costs a walk of the whole log per page: on a `main` of 439 commits, 4.7 s for 20
+  entries, 1.8 s for 5, 0.28 s for 1, while the log itself lists 500 commits in 0.7 s. The hub
+  keeps a history answer by the head it was read at (`app/lib/api/memo.ts`), and the viewer
+  streams a selected record's reads after the page rather than waiting for them. A WOQL query
+  over the commit graph is the candidate when a store's history outgrows the memo.
 - *Verified (2026-10-18, check AA):* a Hash key may include `Optional` fields (AA1). Absent fields
   are not confused with each other (`fragmentId: "b"` alone and `claimRef: "b"` alone hash apart,
   AA2, AA3); a second insert of the same key fields is `DocumentIdAlreadyExists` (AA4); `PUT
