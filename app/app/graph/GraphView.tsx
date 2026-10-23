@@ -12,7 +12,9 @@ import { ArmatureNode, type ArmatureNodeType } from './ArmatureNode';
 import { FilterRail } from './FilterRail';
 import { GraphPanel, type PanelSelection, type Relation } from './GraphPanel';
 import { Search } from './Search';
+import { WalkPanel } from './WalkPanel';
 import { classesIn, derive, localPart, type Chip, type Doc } from '@/lib/graph/derive';
+import type { Walk } from '@/lib/graph/walk';
 import { focusPath, isTraceable, restrict } from '@/lib/graph/focus';
 import { NODE_HEIGHT, NODE_WIDTH, layout, type Column } from '@/lib/graph/layout';
 import { reach, traceSelection, type Selection } from '@/lib/graph/relations';
@@ -52,6 +54,10 @@ export interface GraphViewProps {
   initial: GraphState;
   reads?: SelectedReads;
   focus?: FocusProps;
+  /** The Walkthrough for a traceable root (plan §7), its read-filled steps included. */
+  walk?: Walk;
+  /** The step the page opens on (`?walk=`), 1-based. */
+  walkStep?: number;
   /** Attestation states by attestation id, from the trace's annotations. */
   states?: Record<string, string>;
   branch: string;
@@ -110,11 +116,15 @@ function ColumnHeaders({ columns }: { columns: Column[] }) {
   );
 }
 
-function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit, publicHub, branchQuery }: GraphViewProps) {
+function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch, atRef, commit, publicHub, branchQuery }: GraphViewProps) {
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(initial.hide));
   const [junctionsAsEdges, setJunctionsAsEdges] = useState(initial.junctionsAsEdges);
   const [selected, setSelected] = useState<string | undefined>(initial.select);
   const [relation, setRelation] = useState<Relation>({ direction: initial.direction, depth: initial.depth });
+  // The Walkthrough's current step, 1-based; undefined when not walking.
+  const [step, setStep] = useState<number | undefined>(walk && walkStep ? walkStep : undefined);
+  const walking = walk !== undefined && step !== undefined;
+  const currentStep = walking ? walk.steps[Math.min(step, walk.steps.length) - 1] : undefined;
   // Semantic zoom: below this zoom a card shows its label large and nothing
   // else, so the overview of a whole store stays legible (§5.2).
   const [compact, setCompact] = useState(false);
@@ -146,13 +156,19 @@ function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit,
   const readsFor = reads && reads.id === selected ? reads : undefined;
 
   const lit = useMemo<Selection | undefined>(() => {
+    if (walking && walk) {
+      // The walk so far: every step up to this one.
+      const nodes = new Set<string>(), edges = new Set<string>();
+      for (const s of walk.steps.slice(0, step)) { s.nodes.forEach((n) => nodes.add(n)); s.edges.forEach((e) => edges.add(e)); }
+      return { nodes, edges };
+    }
     if (!selection) return focus ? { nodes: new Set(focus.litNodes), edges: new Set(focus.litEdges) } : undefined;
     if (selection.kind === 'edge') {
       return { nodes: new Set([selection.edge.source, selection.edge.target]), edges: new Set([selection.edge.id]) };
     }
     if (relation.direction === 'trace') return readsFor?.trace ? traceSelection(graph, readsFor.trace) : { nodes: new Set([selection.node.id]), edges: new Set() };
     return reach(graph, selection.node.id, relation.direction, relation.depth);
-  }, [graph, selection, relation, readsFor, focus]);
+  }, [graph, selection, relation, readsFor, focus, walking, walk, step]);
 
   // Attestation states: the trace's annotations (focus) and the selected record's read.
   const allStates = useMemo(() => {
@@ -166,9 +182,11 @@ function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit,
   const first = useRef(true);
   useEffect(() => {
     const urlSelect = focus && selected === focus.root ? undefined : selected;
-    const state: GraphState = { select: urlSelect, hide: [...hidden], junctionsAsEdges, direction: relation.direction, depth: relation.depth };
+    const state: GraphState = { select: walking ? undefined : urlSelect, hide: [...hidden], junctionsAsEdges, direction: relation.direction, depth: relation.depth };
     const current = new URLSearchParams(window.location.search);
     const next = queryFromState(state, current);
+    if (walking) next.set('walk', String(step));
+    else next.delete('walk');
     const query = next.toString();
     const url = `${window.location.pathname}${query ? `?${query}` : ''}`;
     if (url === `${window.location.pathname}${window.location.search}`) return;
@@ -176,16 +194,41 @@ function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit,
     if (serverChanged && !first.current) router.replace(url, { scroll: false });
     else window.history.replaceState(window.history.state, '', url);
     first.current = false;
-  }, [selected, hidden, junctionsAsEdges, relation, focus, router]);
+  }, [selected, hidden, junctionsAsEdges, relation, focus, router, walking, step]);
+
+  const stepTo = useCallback((n: number) => {
+    if (!walk) return;
+    setSelected(undefined);
+    setStep(Math.max(1, Math.min(n, walk.steps.length)));
+  }, [walk]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelected(undefined);
-      if (e.key === 'f' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement)) flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 });
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Escape') { if (walking) setStep(undefined); else setSelected(undefined); }
+      if (e.key === 'f') flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 });
+      if (walking && step !== undefined) {
+        if (e.key === 'ArrowRight') { e.preventDefault(); stepTo(step + 1); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); stepTo(step - 1); }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [flow]);
+  }, [flow, walking, step, stepTo]);
+
+  // The camera frames the current step (a cut under prefers-reduced-motion).
+  const [flowReady, setFlowReady] = useState(false);
+  useEffect(() => {
+    if (!walking || !currentStep || !flowReady) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const duration = reduced ? 0 : 450;
+    const nodes = currentStep.nodes.filter((id) => graph.nodes.some((n) => n.id === id));
+    const timer = window.setTimeout(() => {
+      if (nodes.length) flow.fitView({ nodes: nodes.map((id) => ({ id })), padding: 0.45, maxZoom: 1.1, duration });
+      else flow.fitView({ padding: 0.08, maxZoom: 1, duration });
+    }, 30);
+    return () => window.clearTimeout(timer);
+  }, [walking, currentStep, flowReady, flow, graph]);
 
   const refHref = useCallback((ref: string, select?: string) => {
     const p = new URLSearchParams({ ref });
@@ -202,16 +245,19 @@ function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit,
       if (c.ref) return { ...c, href: refHref(c.ref, n.id) };
       return c;
     });
+    const mark = currentStep?.kind === 'changes'
+      ? currentStep.added?.includes(n.id) ? 'added' as const : currentStep.changed?.includes(n.id) ? 'changed' as const : undefined
+      : undefined;
     return {
       id: n.id,
       type: 'armature',
       position: laid.positions.get(n.id)!,
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
-      selected: n.id === selected,
-      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim: lit ? !lit.nodes.has(n.id) : false, root: focus?.root === n.id },
+      selected: walking ? (currentStep?.nodes.includes(n.id) ?? false) : n.id === selected,
+      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim: lit ? !lit.nodes.has(n.id) : false, root: focus?.root === n.id, mark },
     };
-  }), [graph, laid, selected, lit, focus, allStates, refHref]);
+  }), [graph, laid, selected, lit, focus, allStates, refHref, walking, currentStep]);
 
   const rfEdges = useMemo<Edge[]>(() => graph.edges.map((e) => {
     const isLit = lit?.edges.has(e.id) ?? false;
@@ -268,6 +314,14 @@ function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit,
               <h1 className="truncate text-[15px] font-semibold tracking-tight">{rootNode?.label ?? localPart(focus.root)}</h1>
               <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">
                 {focus.traced ? 'The lifecycle walk from this record' : 'What this record references and what references it'} {where} · {graph.nodes.length} of {docs.length} records
+                {walk && !walking && (
+                  <>
+                    {' · '}
+                    <button type="button" onClick={() => stepTo(1)} className="text-blue-700 hover:underline dark:text-blue-300" title="Narrative 1, step by step: from this record back to the evidence">
+                      Walk it step by step →
+                    </button>
+                  </>
+                )}
               </p>
             </>
           ) : (
@@ -282,7 +336,7 @@ function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit,
         </div>
       </header>
 
-      <div className={`grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[232px_minmax(0,1fr)] ${selection ? 'md:grid-cols-[232px_minmax(0,1fr)_340px]' : ''}`}>
+      <div className={`grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[232px_minmax(0,1fr)] ${selection || walking ? 'md:grid-cols-[232px_minmax(0,1fr)_340px]' : ''}`}>
         <aside className="order-2 overflow-auto border-t border-zinc-200 p-3 md:order-0 md:border-t-0 md:border-r dark:border-zinc-800">
           <FilterRail classes={classes} hidden={hidden} junctionsAsEdges={junctionsAsEdges} onToggle={toggle} onJunctions={setJunctionsAsEdges} />
         </aside>
@@ -294,8 +348,9 @@ function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit,
             edges={rfEdges}
             nodeTypes={NODE_TYPES}
             onNodesChange={onNodesChange}
+            onInit={() => setFlowReady(true)}
             onViewportChange={(vp) => setCompact(vp.zoom < COMPACT_BELOW)}
-            onNodeClick={(_, n) => setSelected(n.id)}
+            onNodeClick={(_, n) => { setStep(undefined); setSelected(n.id); }}
             onNodeDoubleClick={(_, n) => { const node = graph.nodes.find((x) => x.id === n.id); if (node) router.push(`${focusPath(node)}${branchQuery}`); }}
             onEdgeClick={(_, e) => setSelected(e.id)}
             onPaneClick={() => setSelected(undefined)}
@@ -317,7 +372,21 @@ function GraphBody({ docs, initial, reads, focus, states, branch, atRef, commit,
           </ReactFlow>
         </div>
 
-        {selection && (
+        {walking && walk && step !== undefined && (
+          <div className="order-3 overflow-auto border-t border-zinc-200 p-4 md:order-0 md:border-t-0 md:border-l dark:border-zinc-800">
+            <WalkPanel
+              steps={walk.steps}
+              step={Math.min(step, walk.steps.length)}
+              onStep={stepTo}
+              onExit={() => setStep(undefined)}
+              asOf={walk.asOf}
+              module={walk.module}
+              branchQuery={branchQuery}
+              graphThenHref={walk.asOf && walk.module ? `/graph?ref=${encodeURIComponent(walk.asOf)}&select=${encodeURIComponent(walk.module)}` : undefined}
+            />
+          </div>
+        )}
+        {!walking && selection && (
           <div className="order-3 overflow-auto border-t border-zinc-200 p-4 md:order-0 md:border-t-0 md:border-l dark:border-zinc-800">
             <GraphPanel
               selection={selection}
