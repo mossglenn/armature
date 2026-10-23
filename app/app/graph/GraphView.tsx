@@ -21,6 +21,7 @@ import { gridLayers } from '@/lib/graph/grid';
 import { headerFor } from '@/lib/graph/headers';
 import { NODE_HEIGHT, NODE_WIDTH, layout, type Column } from '@/lib/graph/layout';
 import { applyLens, namedCommits, type LensReads, type LensView } from '@/lib/graph/lenses';
+import { assignPorts } from '@/lib/graph/ports';
 import { neighbors, reach, traceSelection, type Selection } from '@/lib/graph/relations';
 import { hueOf, toneOf } from '@/lib/graph/stages';
 import { SERVER_KEYS, queryFromState, type GraphState, type LensName } from '@/lib/graph/state';
@@ -198,6 +199,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
     return focusIds ? restrict(whole, focusIds) : whole;
   }, [docs, hidden, junctionsAsEdges, focusIds]);
   const laid = useMemo(() => layout(graph.nodes, graph.edges), [graph]);
+  const ports = useMemo(() => assignPorts(graph.edges, laid.positions), [graph, laid]);
   const classes = useMemo(() => classesIn(graph.counts), [graph]);
   const sinceChoices = useMemo(() => namedCommits(docs), [docs]);
 
@@ -377,9 +379,9 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
       selected: walking ? (currentStep?.nodes.includes(n.id) ?? false) : n.id === selected,
-      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim, hoverDim: hoverLit ? !hoverLit.nodes.has(n.id) : false, root: focus?.root === n.id, mark, lens: lensMark },
+      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim, hoverDim: hoverLit ? !hoverLit.nodes.has(n.id) : false, root: focus?.root === n.id, mark, lens: lensMark, ports: ports.node.get(n.id) },
     };
-  }), [graph, laid, selected, lit, focus, allStates, refHref, walking, currentStep, lensView, hoverLit]);
+  }), [graph, laid, ports, selected, lit, focus, allStates, refHref, walking, currentStep, lensView, hoverLit]);
 
   const rfEdges = useMemo<Edge[]>(() => graph.edges.map((e) => {
     const isLit = lit?.edges.has(e.id) ?? false;
@@ -395,6 +397,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
       id: e.id,
       source: e.source,
       target: e.target,
+      ...ports.edge.get(e.id),
       type: 'default',
       label: e.kind === 'junction' || isLit || hoverLitEdge || e.id === hoveredEdge ? e.label : undefined,
       className,
@@ -402,7 +405,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
       markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: markColor },
       interactionWidth: 14,
     };
-  }), [graph, lit, selected, lensView, ghosts, hoverLit, hoveredEdge]);
+  }), [graph, ports, lit, selected, lensView, ghosts, hoverLit, hoveredEdge]);
 
   const toggle = useCallback((cls: string) => setHidden((prev) => {
     const next = new Set(prev);
