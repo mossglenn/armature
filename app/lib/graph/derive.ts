@@ -37,6 +37,10 @@ export interface Chip {
   title?: string;
   /** The commit a `asOf` chip names, for the page to turn into a link. */
   ref?: string;
+  /** The annotation the chip stands for (an attestation's id), so a read can add its state. */
+  source?: string;
+  /** Set by the page: where the chip leads (a `ref` chip to the design at that commit). */
+  href?: string;
 }
 
 export interface GraphNode {
@@ -166,7 +170,7 @@ export function annotationChip(doc: Doc): Chip {
   const cls = doc['@type'];
   if (typeof doc.verdict === 'string') {
     const part = typeof doc.fragmentId === 'string' ? ' · one part' : '';
-    return { text: `${doc.verdict}${part}`, tone: toneOf(doc.verdict), title: `${cls} ${localPart(doc['@id'])}` };
+    return { text: `${doc.verdict}${part}`, tone: toneOf(doc.verdict), title: `${cls} ${localPart(doc['@id'])}`, source: doc['@id'] };
   }
   if (cls === 'DesignFinding') {
     const status = typeof doc.status === 'string' ? ` · ${doc.status}` : '';

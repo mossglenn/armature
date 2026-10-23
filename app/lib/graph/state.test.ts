@@ -15,6 +15,7 @@ describe('the view state in the URL', () => {
     expect(stateFromQuery({ select: 'AssessmentItem/x', hide: 'DesignNote,,DesignFinding', edges: 'nodes', related: 'upstream', depth: 'all' }))
       .toEqual({ select: 'AssessmentItem/x', hide: ['DesignNote', 'DesignFinding'], junctionsAsEdges: false, direction: 'upstream', depth: Infinity });
     expect(stateFromQuery({ related: 'sideways', depth: '0', edges: 'edges' })).toMatchObject({ direction: 'both', depth: 1, junctionsAsEdges: true });
+    expect(stateFromQuery({ related: 'trace' }).direction).toBe('trace');
     expect(stateFromQuery({ depth: '2.7' }).depth).toBe(2);
   });
 
