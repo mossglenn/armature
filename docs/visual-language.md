@@ -96,7 +96,7 @@ All edges are a muted gray (`#a1a1aa` light, `#52525b` dark) with a small closed
 
 ## Type and surfaces
 
-The viewer's faces: Geist for text, Geist Mono for ids, commits, sequences and values (tabular numerals). The light surface is white on `#fafaf9`, the dark `#18181b` on `#0a0a0a`; the zinc neutrals throughout. Light is the theme figures are exported in.
+The viewer's faces: Geist for text, Geist Mono for ids, commits, sequences and values (tabular numerals). The light surface is white on `#fafafa` (zinc-50), the dark `#18181b` on `#0a0a0a`; the zinc neutrals throughout. The canvas is a shade off the card so a card has an edge at every zoom, with a dot grid on it (zinc-400 light, zinc-700 dark) that scales with the view. Light is the theme figures are exported in, on a white canvas without the grid.
 
 ## Using the language elsewhere
 

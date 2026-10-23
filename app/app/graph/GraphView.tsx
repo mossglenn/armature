@@ -511,7 +511,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
             colorMode={figure ? 'light' : dark ? 'dark' : 'light'}
             proOptions={{ hideAttribution: false }}
           >
-            {!figure && <Background gap={24} size={1} />}
+            {!figure && <Background gap={24} size={1} color="var(--graph-grid)" />}
             {!figure && <Controls showInteractive={false} position="bottom-left" />}
             {!figure && <MiniMap nodeColor={(n) => hueOf((n.data as { cls: string }).cls).light} nodeStrokeWidth={0} pannable zoomable position="bottom-right" />}
             <ColumnHeaders columns={laid.columns} />
