@@ -158,7 +158,18 @@ body {
 }
 
 .react-flow { background: var(--graph-canvas); }
-.react-flow__edge-path { stroke: var(--graph-edge); stroke-width: 1.25; }
+/* An edge at rest is translucent, so where edges overlap the ink adds up and a
+   bundle reads as several; a lit, selected, hovered or marked edge is solid. */
+.react-flow__edge-path { stroke: var(--graph-edge); stroke-width: 1.25; stroke-opacity: 0.6; }
+.react-flow__arrowhead polyline { fill-opacity: 0.6; stroke-opacity: 0.6; }
+.gedge-lit .react-flow__edge-path,
+.gedge-selected .react-flow__edge-path,
+.react-flow__edge.selected .react-flow__edge-path,
+.gedge-hover-lit .react-flow__edge-path,
+.gedge-hover .react-flow__edge-path,
+.gedge-marked .react-flow__edge-path { stroke-opacity: 1; }
+.gedge-lit .react-flow__arrowhead polyline,
+.gedge-marked .react-flow__arrowhead polyline { fill-opacity: 1; stroke-opacity: 1; }
 .gedge-junction .react-flow__edge-path { stroke-width: 1.5; }
 .gedge-annotation .react-flow__edge-path { stroke-dasharray: 4 3; }
 .gedge-dim { opacity: 0.25; }
