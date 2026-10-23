@@ -881,7 +881,12 @@ Work:
       gains Focus, Coverage View, "View as of" and Raw JSON actions, a History tab and attestation
       states, read by the server for the selected record; the Trace relation on the Graph; every
       record on the Coverage View linked, a result as "trace this result"; four more browser tests)
-- [ ] PR 3: the Walkthrough and time travel (coverage at `asOf`, then and now)
+- [x] PR 3: the Walkthrough and time travel (coverage at `asOf`, then and now) (built 2026-10-22:
+      `lib/graph/walk.ts` orders a trace's records one stage per step with text templated from
+      the classes crossed, the seed's metric walking to its ten steps in a test; the Focus page
+      fills "adequate when?" from the coverage read at the dataset's `asOf` beside today's and
+      "then and now" from the changes read, outlining what the branch gained since; the camera
+      follows, ← → step, `?walk=n` is the URL; "trace this result" on the Coverage View opens it)
 - [ ] PR 4: the lenses, figure mode with PNG export and the commit stamp, the branch picker
 - [ ] PR 5 (when a paper or a larger store asks): vector figures, scoping, virtualization,
       and the hub-side graph read if a second client wants the derivation
