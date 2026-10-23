@@ -49,7 +49,8 @@ operator.ts                   The operator tools' command line (ADR-0062): check
 dist/                         The bundles (npm run build:hub, npm run build:operator); generated, not committed
 app/                          The viewer (Next.js); no route files, it hosts no API
   page.tsx                    The module index
-  graph/page.tsx              The Design Graph over GET /api/v1/export: the documents at the ref, people left out, handed to GraphView.tsx ('use client': derive, lay out and draw with React Flow; ArmatureNode, FilterRail, GraphPanel, Search beside it)
+  graph/page.tsx              The Design Graph over GET /api/v1/export: the documents at the ref, people left out, handed to GraphView.tsx ('use client': derive, lay out and draw with React Flow; ArmatureNode, FilterRail, GraphPanel, Search beside it); reads.ts reads attestation state, history and the trace for a selected record
+  graph/[type]/[id]/page.tsx  The Focus page: one record's trace (GET /intelligence/trace) drawn by the same GraphView, restricted to the walk, the root outlined
   coverage/[moduleId]/page.tsx  The Coverage View over GET /api/v1/intelligence/coverage/:moduleId, with each item's statistics from /intelligence/item-statistics and the module's content from /intelligence/module-content at the same commit
   layout.tsx, globals.css     Page shell with the navigation, and styles (Tailwind CSS; the Design Graph's node and edge rules)
 e2e/graph.spec.ts             The browser smoke test (Playwright); playwright.config.ts starts the bundled hub and the built viewer
