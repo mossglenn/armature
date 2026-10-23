@@ -88,6 +88,8 @@ describe('@armature/client over the app in-process', () => {
     const history = await hub.documents.history('DesignNote', id, { branch: BRANCH, diff: false });
     expect(history.data.entries.map((e) => e.message)).toEqual(['Second version', 'First version']);
     expect(history.data.entries[0].diff).toBeUndefined();
+    // Seconds since the epoch, a number (the client's type said string until 2026-10-22).
+    expect(history.data.entries.every((e) => typeof e.timestamp === 'number' && e.timestamp > 1_700_000_000)).toBe(true);
 
     const diff = await hub.documents.diff('DesignNote', id, { from: first.commit!, to: second.commit! });
     expect(diff.data).toMatchObject({ id: `DesignNote/${id}`, from: first.commit, to: second.commit });
