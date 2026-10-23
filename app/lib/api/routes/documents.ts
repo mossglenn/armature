@@ -12,7 +12,8 @@ import {
   setEtag,
 } from '../http';
 import { resolveUser } from '../identity';
-import { createStore, isRecord, type Ref, type TerminusDocument } from '../store';
+import { createStore, isRecord, type HistoryEntry, type Ref, type TerminusDocument } from '../store';
+import { CommitMemo } from '../memo';
 import { parseDocuments, writeDocuments } from '../write';
 
 /**
@@ -32,6 +33,9 @@ import { parseDocuments, writeDocuments } from '../write';
  * @capture and { "@ref" } to reference a document it creates, which is how
  * a note attaches to a Hash-keyed junction written in the same request.
  */
+/** History answers by the commit they were read at (docs/api.md § history). */
+export const historyMemo = new CommitMemo<HistoryEntry[]>();
+
 export const documents = new Hono();
 
 const fieldsOf = (type: string): Record<string, FieldShape> =>
@@ -184,8 +188,21 @@ documents.get('/:type/:id/history', async (c) => {
   const count = intQuery(c, 'count', 20);
   const diff = c.req.query('diff') !== 'false';
   const docId = `${type}/${id}`;
-  const { entries, commit } = await createStore({ branch }).history(docId, { start, count, diff });
-  setEtag(c, commit);
+  // The store walks the branch's whole log for a document touched rarely
+  // (seconds on a few hundred commits), and a read at a commit is immutable,
+  // so an answer is kept by the head it was read at and served again while
+  // the head stands still. The store's history answer names no commit, so
+  // the head is read around it and the answer kept only when it did not move.
+  const store = createStore({ branch });
+  const head = await store.head();
+  const keyAt = (at: string) => CommitMemo.key(at, docId, start, count, diff);
+  let entries = head ? historyMemo.get(keyAt(head.id)) : undefined;
+  if (!entries) {
+    entries = (await store.history(docId, { start, count, diff })).entries;
+    const after = await store.head();
+    if (head && after?.id === head.id) historyMemo.set(keyAt(head.id), entries);
+  }
+  setEtag(c, head?.id);
   return c.json({
     id: docId,
     branch,
