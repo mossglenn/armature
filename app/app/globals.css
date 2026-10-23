@@ -51,6 +51,7 @@ body {
   --graph-accent: #2563eb;
   --graph-card: #ffffff;
   --graph-card-border: #e4e4e7;
+  --graph-edge-hover: #52525b;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -58,6 +59,7 @@ body {
     --graph-accent: #60a5fa;
     --graph-card: #18181b;
     --graph-card-border: #27272a;
+    --graph-edge-hover: #d4d4d8;
   }
 }
 .light {
@@ -67,6 +69,7 @@ body {
   --graph-accent: #2563eb;
   --graph-card: #ffffff;
   --graph-card-border: #e4e4e7;
+  --graph-edge-hover: #52525b;
   color: var(--foreground);
 }
 
@@ -132,6 +135,11 @@ body {
 .gnode-added { box-shadow: 0 0 0 2px #16a34a; }
 .gnode-changed { box-shadow: 0 0 0 2px #d97706; }
 .gnode-dim { opacity: 0.3; }
+/* Hover (plan §5.2): the hovered node's neighborhood keeps its ink, the rest
+   recedes a little; its edges darken and show their labels. A hovered edge
+   shows its label at any zoom, large enough to read when the cards are compact. */
+.gnode-hover-dim { opacity: 0.5; }
+.gnode-dim.gnode-hover-dim { opacity: 0.2; }
 .gnode-handle { opacity: 0; width: 6px; height: 6px; min-width: 0; min-height: 0; border: 0; }
 @media (prefers-reduced-motion: reduce) {
   .gnode { transition: none; }
@@ -142,6 +150,15 @@ body {
 .gedge-junction .react-flow__edge-path { stroke-width: 1.5; }
 .gedge-annotation .react-flow__edge-path { stroke-dasharray: 4 3; }
 .gedge-dim { opacity: 0.25; }
+.gedge-hover-dim { opacity: 0.35; }
+.gedge-hover-lit .react-flow__edge-path { stroke: var(--graph-edge-hover); stroke-width: 2; }
+.gedge-hover-lit.gedge-dim { opacity: 1; }
+.graph-compact .gedge-hover .react-flow__edge-text,
+.graph-compact .gedge-hover .react-flow__edge-textbg,
+.graph-compact .gedge-hover-lit .react-flow__edge-text,
+.graph-compact .gedge-hover-lit .react-flow__edge-textbg { display: block; }
+.graph-compact .gedge-hover .react-flow__edge-text,
+.graph-compact .gedge-hover-lit .react-flow__edge-text { font-size: 16px; }
 .gedge-lit .react-flow__edge-path,
 .gedge-selected .react-flow__edge-path,
 .react-flow__edge.selected .react-flow__edge-path { stroke: var(--graph-accent) !important; stroke-width: 1.75; }
