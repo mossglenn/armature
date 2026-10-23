@@ -71,9 +71,12 @@ export default async function FocusPage({ params, searchParams }: { params: Prom
   const select = walkStep ? undefined : (initial.select ?? rootId);
   // The Walkthrough (plan §7): built for every traceable root, so "Walk" needs
   // no reload; its two hub-read steps are filled here.
-  const [walk, reads, lens] = await Promise.all([
+  // The root's reads are not awaited: they stream to the view when they land
+  // (its history over a long log takes seconds); the walk and the lens shape
+  // the drawing, so they wait.
+  const reads = readsFor(hub, select, { branch, ref, trace: initial.direction === 'trace' });
+  const [walk, lens] = await Promise.all([
     walkFor(hub, graph, traced, byId, { branch, ref }),
-    readsFor(hub, select, { branch, ref, trace: initial.direction === 'trace' }),
     lensReadsFor(hub, initial.lens, exported, { branch, ref, since: initial.since, fullyAssessedAt: initial.fullyAssessedAt, overAssessedAbove: initial.overAssessedAbove }),
   ]);
   const ghosts = lens.reads?.lens === 'changes' ? lens.reads.ghosts : [];
