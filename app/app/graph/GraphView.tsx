@@ -18,6 +18,7 @@ import { WalkPanel } from './WalkPanel';
 import { classesIn, derive, localPart, type Chip, type Doc } from '@/lib/graph/derive';
 import { focusPath, isTraceable, restrict } from '@/lib/graph/focus';
 import { gridLayers } from '@/lib/graph/grid';
+import { headerFor } from '@/lib/graph/headers';
 import { NODE_HEIGHT, NODE_WIDTH, layout, type Column } from '@/lib/graph/layout';
 import { applyLens, namedCommits, type LensReads, type LensView } from '@/lib/graph/lenses';
 import { neighbors, reach, traceSelection, type Selection } from '@/lib/graph/relations';
@@ -123,22 +124,28 @@ function ColumnHeaders({ columns }: { columns: Column[] }) {
   const { x, zoom } = useViewport();
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-11 overflow-hidden" aria-hidden="true">
-      {columns.map((c) => {
-        // The rule spans the column; the text is centered on it, keeps a
-        // legible width when the column is narrower than its name, and wraps
-        // to a second line above the first rather than truncating, since a
-        // column is one card wide and a name like "Assessments and lessons"
-        // is two cards wide at the fit zoom.
+      {columns.map((c, i) => {
+        // The rule spans the column; the text is centered on it and may use
+        // the column's pitch (its width and the gap to the next column, less
+        // a gutter), wrapping to a second line above the first rather than
+        // truncating, since a column is one card wide and a name like
+        // "Assessments and lessons" is two cards wide at the fit zoom. When
+        // even two lines do not fit, the short form is drawn (lib/graph/headers).
         const left = c.x * zoom + x;
         const width = c.width * zoom;
-        const textWidth = Math.max(width, 112);
+        const next = columns[i + 1] ?? columns[i - 1];
+        const pitch = next ? Math.abs(next.x - c.x) * zoom : width + 32 * zoom;
+        const textWidth = Math.max(pitch - 4, width);
+        const { text, short } = headerFor(c, textWidth);
         return (
           <div key={c.stage} className="absolute top-0 h-11" style={{ left, width }}>
             <div
-              className="absolute bottom-[9px] line-clamp-2 px-1 text-center text-[11px] leading-[13px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+              className="absolute bottom-[9px] line-clamp-2 text-center text-[11px] leading-[13px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
               style={{ left: (width - textWidth) / 2, width: textWidth }}
+              title={short ? c.header : undefined}
+              data-short={short || undefined}
             >
-              {c.header}
+              {text}
             </div>
             <div className="absolute bottom-[6px] h-px w-full bg-zinc-300 dark:bg-zinc-700" />
           </div>

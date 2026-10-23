@@ -22,7 +22,8 @@ test('draws the seed in lifecycle columns', async ({ page }) => {
   await expect(page.getByText('64 records')).toBeVisible();
   await expect(page.locator('.react-flow__node')).toHaveCount(37);
   await expect(page.locator('.react-flow__edge.gedge-junction')).toHaveCount(26);
-  await expect(page.getByText('Assessments and lessons')).toBeVisible();
+  // The header in full, or in its short form with the name as its title when the fit is narrow.
+  await expect(page.getByText('Assessments and lessons').or(page.getByTitle('Assessments and lessons'))).toBeVisible();
   await expect(page.getByLabel('AssessmentItem', { exact: false }).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -231,6 +232,25 @@ test('the dot grid changes scale with the zoom: the finest layer at the maximum,
   await page.goto('/graph?figure=1');
   await expect(page.getByLabel('Figure stamp')).toBeVisible();
   await expect(layers).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('column headers shorten as the columns narrow, and return in full', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph');
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
+  const zoomIn = page.getByRole('button', { name: 'Zoom In' });
+  const zoomOut = page.getByRole('button', { name: 'Zoom Out' });
+  for (let i = 0; i < 5; i++) await zoomIn.click();
+  await expect(page.getByText('Assessments and lessons')).toBeVisible();
+  await expect(page.getByText('Notes and findings')).toBeVisible();
+  for (let i = 0; i < 40 && (await zoomOut.isEnabled()); i++) await zoomOut.click();
+  await expect(page.getByText('Assess. lessons', { exact: true })).toBeVisible();
+  await expect(page.getByText('Notes', { exact: true })).toBeVisible();
+  await expect(page.getByText('Assessments and lessons')).toHaveCount(0);
+  await expect(page.getByTitle('Assessments and lessons')).toBeVisible();
+  for (let i = 0; i < 12; i++) await zoomIn.click();
+  await expect(page.getByText('Assessments and lessons')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
