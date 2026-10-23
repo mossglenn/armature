@@ -107,7 +107,7 @@ The commits on a branch that touched one document, newest first.
 | `start`, `count` | Paging | 0, 20 |
 | `diff` | Include the structural difference each commit made; `diff=false` omits it | true |
 
-Response: `{ id, branch, start, count, entries: [ { commit, author, message, timestamp, diff } ] }`. `timestamp` is seconds since the epoch as a number, as the store records a commit (here and on a branch head). Lists inside a document (such as an item's options) are compared by position, so reordering reads as several changes.
+Response: `{ id, branch, start, count, entries: [ { commit, author, message, timestamp, diff } ] }`, with `ETag` the branch head the history was read at (since 2026-10-23; the store's own history answer names no commit). The hub keeps an answer by that head and serves it again while the head stands still, since the store walks the branch's whole log for a document touched rarely (seconds on a few hundred commits) and a read at a commit is immutable. `timestamp` is seconds since the epoch as a number, as the store records a commit (here and on a branch head). Lists inside a document (such as an item's options) are compared by position, so reordering reads as several changes.
 
 ### `GET /documents/:type/:id/diff?from=<commit>&to=<commit>`
 
