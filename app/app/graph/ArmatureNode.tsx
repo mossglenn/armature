@@ -78,11 +78,14 @@ export function ArmatureNode({ data, selected }: NodeProps<ArmatureNodeType>) {
       <div className="gnode-label truncate text-[13px] font-medium leading-tight">{data.label}</div>
       {data.chips.length > 0 && (
         <div className="gnode-chips flex gap-1 overflow-hidden whitespace-nowrap">
-          {data.chips.slice(0, 3).map((c, i) => (
-            <span key={i} className={`shrink-0 rounded px-1.5 text-[10.5px] ${TONE_CLASS[c.tone ?? 'neutral']}`} title={c.title}>
-              {c.text}
-            </span>
-          ))}
+          {data.chips.slice(0, 3).map((c, i) => {
+            const className = `shrink-0 rounded px-1.5 text-[10.5px] ${TONE_CLASS[c.tone ?? 'neutral']}`;
+            return c.href ? (
+              <a key={i} href={c.href} className={`${className} underline decoration-dotted underline-offset-2`} title={c.title}>{c.text}</a>
+            ) : (
+              <span key={i} className={className} title={c.title}>{c.text}</span>
+            );
+          })}
         </div>
       )}
       <Handle type="source" position={Position.Right} className="gnode-handle" isConnectable={false} />
