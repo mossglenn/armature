@@ -67,3 +67,47 @@ test('relationships can be drawn as nodes', async ({ page }) => {
   await expect(page.locator('.react-flow__node')).toHaveCount(64);
   await expect(page.locator('.react-flow__edge.gedge-junction')).toHaveCount(0);
 });
+
+test('the Focus page draws the trace from a metric: the walk lit, the root outlined, states and history read', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph/LearningMetric/mod3-bias-type-difficulty');
+  await expect(page.getByRole('heading', { level: 1, name: /Item difficulty: bias type item/ })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('Design Graph');
+  await expect(page.getByText('The lifecycle walk from this record')).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(15);
+  await expect(page.locator('.gnode-root')).toHaveCount(1);
+  await expect(page.locator('.gedge-lit')).not.toHaveCount(0);
+  const panel = page.getByRole('complementary', { name: 'Record details' });
+  await expect(panel).toContainText('LearningMetric/mod3-bias-type-difficulty');
+  await expect(panel.getByRole('link', { name: /View as of/ })).toBeVisible();
+  await page.getByRole('tab', { name: 'History' }).click();
+  await expect(panel.locator('ol li')).not.toHaveCount(0);
+  await page.getByRole('button', { name: /^AssessmentItem, Identifying training data bias/ }).click();
+  await page.getByRole('tab', { name: /About it/ }).click();
+  await expect(panel).toContainText('Current');
+  expect(errors).toEqual([]);
+});
+
+test('a record the trace read does not walk from gets its neighborhood', async ({ page }) => {
+  await page.goto('/graph/DesignNote/item6-authoring-rationale');
+  await expect(page.getByText('What this record references and what references it')).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(2);
+});
+
+test('the Trace relation on the Graph lights the walk from a selected record', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph?select=AssessmentItem%2Fbias-type-mc&related=trace');
+  await expect(page.getByRole('button', { name: 'Trace', exact: true })).toHaveAttribute('class', /bg-zinc-800|bg-zinc-200/);
+  await expect(page.locator('.gnode-dim')).not.toHaveCount(0);
+  expect(await page.locator('.gnode:not(.gnode-dim)').count()).toBeGreaterThan(3);
+  expect(errors).toEqual([]);
+});
+
+test('the Coverage View links its module, objectives, items and results to their Focus pages', async ({ page }) => {
+  await page.goto('/coverage/risks-and-ethics');
+  await expect(page.getByRole('link', { name: 'Distinguish Bias Types' })).toHaveAttribute('href', '/graph/LearningObjective/distinguish-bias-types');
+  const result = page.getByRole('link', { name: 'trace this result' }).first();
+  await expect(result).toHaveAttribute('href', /^\/graph\/LearningMetric\//);
+  await page.goto((await result.getAttribute('href'))!);
+  await expect(page.locator('.gnode-root')).toHaveCount(1);
+});
