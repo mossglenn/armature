@@ -45,10 +45,17 @@ body {
    set per node as --c-light and --c-dark by the stage table; the theme picks
    one. React Flow's own stylesheet is imported above; what follows restyles
    its edges, markers and chrome in the viewer's palette. The canvas's colors
-   are variables so that `.light` can set them all at once. */
+   are variables so that `.light` can set them all at once. The canvas is a
+   shade off the card (zinc-50 under white cards) so a card has an edge at
+   every zoom, and the dot grid is zinc-400 on it; in the dark theme the card
+   is already lighter than the page. A figure's canvas is white, set under
+   .graph-figure and not under .light: React Flow puts its colorMode on the
+   container as a class, so the live canvas is `.react-flow.light` too. */
 :root {
   --graph-edge: #a1a1aa;
   --graph-accent: #2563eb;
+  --graph-canvas: #fafafa;
+  --graph-grid: #a1a1aa;
   --graph-card: #ffffff;
   --graph-card-border: #e4e4e7;
   --graph-edge-hover: #52525b;
@@ -57,6 +64,8 @@ body {
   :root {
     --graph-edge: #52525b;
     --graph-accent: #60a5fa;
+    --graph-canvas: #0a0a0a;
+    --graph-grid: #3f3f46;
     --graph-card: #18181b;
     --graph-card-border: #27272a;
     --graph-edge-hover: #d4d4d8;
@@ -145,7 +154,7 @@ body {
   .gnode { transition: none; }
 }
 
-.react-flow { background: var(--background); }
+.react-flow { background: var(--graph-canvas); }
 .react-flow__edge-path { stroke: var(--graph-edge); stroke-width: 1.25; }
 .gedge-junction .react-flow__edge-path { stroke-width: 1.5; }
 .gedge-annotation .react-flow__edge-path { stroke-dasharray: 4 3; }
@@ -168,7 +177,7 @@ body {
 .react-flow__arrowhead polyline { stroke: var(--graph-edge); fill: var(--graph-edge); }
 .gedge-lit .react-flow__arrowhead polyline { stroke: var(--graph-accent); fill: var(--graph-accent); }
 .react-flow__edge-text { fill: #71717a; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; }
-.react-flow__edge-textbg { fill: var(--background); fill-opacity: 0.92; }
+.react-flow__edge-textbg { fill: var(--graph-canvas); fill-opacity: 0.92; }
 .react-flow__minimap { border: 1px solid #e4e4e7; border-radius: 4px; background-color: #ffffff; }
 .react-flow.dark .react-flow__minimap { border-color: #27272a; background-color: #18181b; }
 .react-flow__attribution { background: transparent; color: #a1a1aa; }
@@ -177,7 +186,8 @@ body {
 
 /* Figure mode (plan §3.4): white ground, no grid (the Background is not
    drawn), labels one size larger, the stamp in a corner. */
-.graph-figure .react-flow { background: #ffffff; }
+.graph-figure { --graph-canvas: #ffffff; }
+.graph-figure .react-flow { background: var(--graph-canvas); }
 .graph-figure .gnode-label { font-size: 14px; }
 .graph-figure .gnode-eyebrow { font-size: 11px; }
 .graph-figure .gnode-chips > * { font-size: 11.5px; }
