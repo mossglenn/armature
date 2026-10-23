@@ -11,27 +11,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArmatureNode, type ArmatureNodeType } from './ArmatureNode';
 import { FilterRail } from './FilterRail';
 import { GraphPanel, type PanelSelection, type Relation } from './GraphPanel';
+import { LensRail, type Thresholds } from './LensRail';
 import { Search } from './Search';
 import { WalkPanel } from './WalkPanel';
 import { classesIn, derive, localPart, type Chip, type Doc } from '@/lib/graph/derive';
-import type { Walk } from '@/lib/graph/walk';
 import { focusPath, isTraceable, restrict } from '@/lib/graph/focus';
 import { NODE_HEIGHT, NODE_WIDTH, layout, type Column } from '@/lib/graph/layout';
+import { applyLens, namedCommits, type LensReads, type LensView } from '@/lib/graph/lenses';
 import { reach, traceSelection, type Selection } from '@/lib/graph/relations';
 import { hueOf, toneOf } from '@/lib/graph/stages';
-import { SERVER_KEYS, queryFromState, type GraphState } from '@/lib/graph/state';
+import { SERVER_KEYS, queryFromState, type GraphState, type LensName } from '@/lib/graph/state';
+import type { Walk } from '@/lib/graph/walk';
 
 /**
  * The Design Graph and the Focus page (docs/graph-view-plan.md §3.1, §3.2):
  * the documents the server read from the hub, derived and laid out here so a
  * filter change is immediate, drawn by React Flow read-only. Every choice a
  * reader makes is in the URL (lib/graph/state.ts): a view-only change
- * (hidden classes, edges or nodes, depth) is written with replaceState; a
- * change that needs a hub read for the selected record (the selection, the
- * Trace relation) goes through the router, and the server page answers with
- * `reads`. In focus mode the drawing is restricted to the record's
- * neighborhood, the walk is lit until something is selected, and the root is
- * outlined. The browser never calls the hub.
+ * (hidden classes, edges or nodes, depth, the coverage figure)
+ * is written with replaceState; a change that needs a hub read (the
+ * selection, the Trace relation, a lens and its read parameters) goes through
+ * the router, and the server page answers with `reads` and `lensReads`. In
+ * focus mode the drawing is restricted to the record's neighborhood, the
+ * walk is lit until something is selected, and the root is outlined. A lens
+ * (§8) marks the nodes and dims the rest. The browser never calls the hub.
  */
 export interface SelectedReads {
   id: string;
@@ -51,8 +54,13 @@ export interface FocusProps {
 
 export interface GraphViewProps {
   docs: Doc[];
+  /** Records deleted since the changes lens's commit, appended to `docs` to be drawn as ghosts. */
+  ghostIds?: string[];
   initial: GraphState;
   reads?: SelectedReads;
+  /** The server's reads for the lens in `initial`, when it needed any. */
+  lensReads?: LensReads;
+  lensError?: string;
   focus?: FocusProps;
   /** The Walkthrough for a traceable root (plan §7), its read-filled steps included. */
   walk?: Walk;
@@ -116,11 +124,17 @@ function ColumnHeaders({ columns }: { columns: Column[] }) {
   );
 }
 
-function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch, atRef, commit, publicHub, branchQuery }: GraphViewProps) {
+function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus, walk, walkStep, states, branch, atRef, commit, publicHub, branchQuery }: GraphViewProps) {
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(initial.hide));
   const [junctionsAsEdges, setJunctionsAsEdges] = useState(initial.junctionsAsEdges);
   const [selected, setSelected] = useState<string | undefined>(initial.select);
   const [relation, setRelation] = useState<Relation>({ direction: initial.direction, depth: initial.depth });
+  // The lens and its parameters (plan §8).
+  const [lens, setLens] = useState<LensName | undefined>(initial.lens);
+  const [projected, setProjected] = useState(initial.projected);
+  const [thresholds, setThresholds] = useState<Thresholds>({ fullyAssessedAt: initial.fullyAssessedAt, overAssessedAbove: initial.overAssessedAbove });
+  const [unit, setUnit] = useState<string | undefined>(initial.unit);
+  const [since, setSince] = useState<string | undefined>(initial.since);
   // The Walkthrough's current step, 1-based; undefined when not walking.
   const [step, setStep] = useState<number | undefined>(walk && walkStep ? walkStep : undefined);
   const walking = walk !== undefined && step !== undefined;
@@ -136,6 +150,8 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
   const pathname = usePathname();
 
   const byId = useMemo(() => new Map(docs.map((d) => [d['@id'], d])), [docs]);
+  const ghosts = useMemo(() => new Set(ghostIds ?? []), [ghostIds]);
+  const recordCount = docs.length - ghosts.size;
   const focusIds = useMemo(() => (focus ? new Set(focus.ids) : undefined), [focus]);
   const graph = useMemo(() => {
     const whole = derive(docs, { hidden, junctionsAsEdges });
@@ -143,6 +159,7 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
   }, [docs, hidden, junctionsAsEdges, focusIds]);
   const laid = useMemo(() => layout(graph.nodes, graph.edges), [graph]);
   const classes = useMemo(() => classesIn(graph.counts), [graph]);
+  const sinceChoices = useMemo(() => namedCommits(docs), [docs]);
 
   const selection = useMemo<PanelSelection | undefined>(() => {
     if (!selected) return undefined;
@@ -154,6 +171,14 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
 
   // The reads belong to the selected record only once the server has answered for it.
   const readsFor = reads && reads.id === selected ? reads : undefined;
+
+  // The lens's view, once the server has answered for this lens (and, for the changes lens, this commit).
+  const lensAnswered = lensReads !== undefined && lensReads.lens === lens && (lensReads.lens !== 'changes' || lensReads.since === since);
+  const lensView = useMemo<LensView | undefined>(
+    () => (lensAnswered && lensReads ? applyLens(graph, lensReads, { projected, unit, docs, branch }) : undefined),
+    [lensAnswered, lensReads, graph, projected, unit, docs, branch],
+  );
+  const lensPending = lens !== undefined && !lensView && !(lens === 'changes' && !since) && !(lens === 'changes' && atRef);
 
   const lit = useMemo<Selection | undefined>(() => {
     if (walking && walk) {
@@ -170,19 +195,24 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
     return reach(graph, selection.node.id, relation.direction, relation.depth);
   }, [graph, selection, relation, readsFor, focus, walking, walk, step]);
 
-  // Attestation states: the trace's annotations (focus) and the selected record's read.
+  // Attestation states: the trace's annotations (focus), the selected record's read, and the attestations lens's reads.
   const allStates = useMemo(() => {
     const map = new Map(Object.entries(states ?? {}));
+    if (lensReads?.lens === 'attestations') for (const [id, s] of Object.entries(lensReads.states)) map.set(id, s);
     for (const a of readsFor?.attestations?.attestations ?? []) map.set(a.id, a.state);
     return map;
-  }, [states, readsFor]);
+  }, [states, readsFor, lensReads]);
+
+  const state = useMemo<GraphState>(() => ({
+    select: walking ? undefined : focus && selected === focus.root ? undefined : selected,
+    hide: [...hidden], junctionsAsEdges, direction: relation.direction, depth: relation.depth,
+    lens, projected, fullyAssessedAt: thresholds.fullyAssessedAt, overAssessedAbove: thresholds.overAssessedAbove, unit, since,
+  }), [walking, focus, selected, hidden, junctionsAsEdges, relation, lens, projected, thresholds, unit, since]);
 
   // The URL mirrors the state. A view-only change is replaceState; a change
-  // the server must answer (the selection, the Trace relation) is routed.
+  // the server must answer (the selection, the Trace relation, a lens) is routed.
   const first = useRef(true);
   useEffect(() => {
-    const urlSelect = focus && selected === focus.root ? undefined : selected;
-    const state: GraphState = { select: walking ? undefined : urlSelect, hide: [...hidden], junctionsAsEdges, direction: relation.direction, depth: relation.depth };
     const current = new URLSearchParams(window.location.search);
     const next = queryFromState(state, current);
     if (walking) next.set('walk', String(step));
@@ -194,7 +224,7 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
     if (serverChanged && !first.current) router.replace(url, { scroll: false });
     else window.history.replaceState(window.history.state, '', url);
     first.current = false;
-  }, [selected, hidden, junctionsAsEdges, relation, focus, router, walking, step]);
+  }, [state, router, walking, step]);
 
   const stepTo = useCallback((n: number) => {
     if (!walk) return;
@@ -202,11 +232,13 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
     setStep(Math.max(1, Math.min(n, walk.steps.length)));
   }, [walk]);
 
+  const fit = useCallback(() => flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 }), [flow]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Escape') { if (walking) setStep(undefined); else setSelected(undefined); }
-      if (e.key === 'f') flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 });
+      if (e.key === 'f') fit();
       if (walking && step !== undefined) {
         if (e.key === 'ArrowRight') { e.preventDefault(); stepTo(step + 1); }
         if (e.key === 'ArrowLeft') { e.preventDefault(); stepTo(step - 1); }
@@ -214,7 +246,7 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [flow, walking, step, stepTo]);
+  }, [fit, walking, step, stepTo]);
 
   // The camera frames the current step (a cut under prefers-reduced-motion).
   const [flowReady, setFlowReady] = useState(false);
@@ -236,6 +268,15 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
     return `${pathname}?${p}`;
   }, [pathname]);
 
+  const changesHref = useCallback((sinceCommit: string, select?: string) => {
+    const p = new URLSearchParams(branchQuery.replace(/^\?/, ''));
+    p.delete('ref');
+    p.set('lens', 'changes');
+    p.set('since', sinceCommit);
+    if (select) p.set('select', select);
+    return `${pathname}?${p}`;
+  }, [pathname, branchQuery]);
+
   const rfNodes = useMemo<ArmatureNodeType[]>(() => graph.nodes.map((n) => {
     const chips: Chip[] = n.chips.map((c) => {
       if (c.source && allStates.has(c.source)) {
@@ -248,6 +289,8 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
     const mark = currentStep?.kind === 'changes'
       ? currentStep.added?.includes(n.id) ? 'added' as const : currentStep.changed?.includes(n.id) ? 'changed' as const : undefined
       : undefined;
+    const lensMark = lensView?.marks.get(n.id);
+    const dim = (lit ? !lit.nodes.has(n.id) : false) || (lensView?.dim?.has(n.id) ?? false);
     return {
       id: n.id,
       type: 'armature',
@@ -255,13 +298,16 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
       selected: walking ? (currentStep?.nodes.includes(n.id) ?? false) : n.id === selected,
-      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim: lit ? !lit.nodes.has(n.id) : false, root: focus?.root === n.id, mark },
+      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim, root: focus?.root === n.id, mark, lens: lensMark },
     };
-  }), [graph, laid, selected, lit, focus, allStates, refHref, walking, currentStep]);
+  }), [graph, laid, selected, lit, focus, allStates, refHref, walking, currentStep, lensView]);
 
   const rfEdges = useMemo<Edge[]>(() => graph.edges.map((e) => {
     const isLit = lit?.edges.has(e.id) ?? false;
-    const className = ['gedge', `gedge-${e.kind}`, lit && !isLit ? 'gedge-dim' : '', isLit ? 'gedge-lit' : '', e.id === selected ? 'gedge-selected' : ''].join(' ');
+    const markColor = lensView?.edgeMarks.get(e.id);
+    const ghostEnd = ghosts.has(e.source) || ghosts.has(e.target);
+    const dimmed = (lit && !isLit) || (lensView?.dim && !markColor && lensView.dim.has(e.source) && lensView.dim.has(e.target));
+    const className = ['gedge', `gedge-${e.kind}`, dimmed || ghostEnd ? 'gedge-dim' : '', isLit ? 'gedge-lit' : '', e.id === selected ? 'gedge-selected' : '', markColor ? 'gedge-marked' : ''].join(' ');
     return {
       id: e.id,
       source: e.source,
@@ -269,10 +315,11 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
       type: 'default',
       label: e.kind === 'junction' || isLit ? e.label : undefined,
       className,
-      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+      style: markColor ? ({ '--edge-mark': markColor } as React.CSSProperties) : undefined,
+      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: markColor },
       interactionWidth: 14,
     };
-  }), [graph, lit, selected]);
+  }), [graph, lit, selected, lensView, ghosts]);
 
   const toggle = useCallback((cls: string) => setHidden((prev) => {
     const next = new Set(prev);
@@ -291,7 +338,7 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
     for (const c of changes) if (c.type === 'select' && c.selected) setSelected(c.id);
   }, []);
 
-  const layoutKey = `${[...hidden].sort().join(',')}|${junctionsAsEdges}|${focus?.root ?? ''}`;
+  const layoutKey = `${[...hidden].sort().join(',')}|${junctionsAsEdges}|${focus?.root ?? ''}|${ghosts.size}`;
   const rawUrl = publicHub ? (id: string) => `${publicHub}/api/v1/documents/${id}${branchQuery}` : undefined;
   const rootNode = focus ? graph.nodes.find((n) => n.id === focus.root) : undefined;
   const where = (
@@ -313,7 +360,7 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
               </nav>
               <h1 className="truncate text-[15px] font-semibold tracking-tight">{rootNode?.label ?? localPart(focus.root)}</h1>
               <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">
-                {focus.traced ? 'The lifecycle walk from this record' : 'What this record references and what references it'} {where} · {graph.nodes.length} of {docs.length} records
+                {focus.traced ? 'The lifecycle walk from this record' : 'What this record references and what references it'} {where} · {graph.nodes.length - [...ghosts].filter((g) => graph.nodes.some((n) => n.id === g)).length} of {recordCount} records
                 {walk && !walking && (
                   <>
                     {' · '}
@@ -327,7 +374,7 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
           ) : (
             <>
               <h1 className="text-[15px] font-semibold tracking-tight">Design Graph</h1>
-              <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Everything {where} · {docs.length} records</p>
+              <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400">Everything {where} · {recordCount} records</p>
             </>
           )}
         </div>
@@ -338,6 +385,24 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
 
       <div className={`grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[232px_minmax(0,1fr)] ${selection || walking ? 'md:grid-cols-[232px_minmax(0,1fr)_340px]' : ''}`}>
         <aside className="order-2 overflow-auto border-t border-zinc-200 p-3 md:order-0 md:border-t-0 md:border-r dark:border-zinc-800">
+          <div className="mb-4 border-b border-zinc-200 pb-4 dark:border-zinc-800">
+            <LensRail
+              lens={lens}
+              onLens={setLens}
+              view={lensView}
+              pending={lensPending}
+              error={lensError}
+              projected={projected}
+              onProjected={setProjected}
+              thresholds={thresholds}
+              onThresholds={setThresholds}
+              onUnit={setUnit}
+              since={since}
+              onSince={setSince}
+              sinceChoices={sinceChoices}
+              atRef={atRef}
+            />
+          </div>
           <FilterRail classes={classes} hidden={hidden} junctionsAsEdges={junctionsAsEdges} onToggle={toggle} onJunctions={setJunctionsAsEdges} />
         </aside>
 
@@ -351,7 +416,7 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
             onInit={() => setFlowReady(true)}
             onViewportChange={(vp) => setCompact(vp.zoom < COMPACT_BELOW)}
             onNodeClick={(_, n) => { setStep(undefined); setSelected(n.id); }}
-            onNodeDoubleClick={(_, n) => { const node = graph.nodes.find((x) => x.id === n.id); if (node) router.push(`${focusPath(node)}${branchQuery}`); }}
+            onNodeDoubleClick={(_, n) => { const node = graph.nodes.find((x) => x.id === n.id); if (node && !ghosts.has(node.id)) router.push(`${focusPath(node)}${branchQuery}`); }}
             onEdgeClick={(_, e) => setSelected(e.id)}
             onPaneClick={() => setSelected(undefined)}
             fitView
@@ -403,9 +468,11 @@ function GraphBody({ docs, initial, reads, focus, walk, walkStep, states, branch
               historyPending={reads === undefined || reads.id !== selected}
               traceable={selection.kind === 'node' && isTraceable(selection.node.cls)}
               isRoot={selection.kind === 'node' && focus?.root === selection.node.id}
+              ghost={selection.kind === 'node' && ghosts.has(selection.node.id)}
               branchQuery={branchQuery}
               atRef={atRef}
               refHref={refHref}
+              changesHref={changesHref}
             />
           </div>
         )}

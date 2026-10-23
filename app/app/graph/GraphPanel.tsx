@@ -119,7 +119,7 @@ function when(timestamp: unknown): string {
   return new Date(seconds * 1000).toISOString().slice(0, 16).replace('T', ' ');
 }
 
-function History({ history, pending, atRef, refHref, id }: { history?: HistoryResult; pending: boolean; atRef?: string; refHref: (ref: string, select?: string) => string; id: string }) {
+function History({ history, pending, atRef, refHref, changesHref, id }: { history?: HistoryResult; pending: boolean; atRef?: string; refHref: (ref: string, select?: string) => string; changesHref: (since: string, select?: string) => string; id: string }) {
   if (atRef) return <p className="text-[12px] text-zinc-500 dark:text-zinc-400">History is read on a branch; this view is at commit <span className="font-mono">{atRef.slice(0, 12)}</span>.</p>;
   if (pending) return <p className="text-[12px] text-zinc-500 dark:text-zinc-400">Reading the history…</p>;
   if (!history) return <p className="text-[12px] text-zinc-500 dark:text-zinc-400">The history could not be read.</p>;
@@ -133,6 +133,7 @@ function History({ history, pending, atRef, refHref, id }: { history?: HistoryRe
             <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{when(e.timestamp)} · {localPart(e.author)}</span>
           </div>
           <div>{e.message}</div>
+          <Link href={changesHref(e.commit, id)} className="text-[11px] text-zinc-500 hover:underline dark:text-zinc-400" title="The Changes lens: what the branch gained, changed and lost since this commit">changes since →</Link>
         </li>
       ))}
       {history.count === history.entries.length && history.entries.length >= 20 && (
@@ -144,7 +145,7 @@ function History({ history, pending, atRef, refHref, id }: { history?: HistoryRe
 
 export function GraphPanel({
   selection, byId, about, referencedBy, relation, onRelation, onSelect, onClose, rawUrl,
-  states, history, historyPending, traceable, isRoot, branchQuery, atRef, refHref,
+  states, history, historyPending, traceable, isRoot, ghost, branchQuery, atRef, refHref, changesHref,
 }: {
   selection: PanelSelection;
   byId: ReadonlyMap<string, Doc>;
@@ -160,9 +161,13 @@ export function GraphPanel({
   historyPending: boolean;
   traceable: boolean;
   isRoot: boolean;
+  /** A record the changes lens drew as it was at the commit: deleted since, so nothing on the branch to focus or read. */
+  ghost?: boolean;
   branchQuery: string;
   atRef?: string;
   refHref: (ref: string, select?: string) => string;
+  /** The Changes lens since a commit, this record selected. */
+  changesHref: (since: string, select?: string) => string;
 }) {
   const [tab, setTab] = useState<'fields' | 'about' | 'referencedBy' | 'history'>('fields');
   const close = (
@@ -227,10 +232,11 @@ export function GraphPanel({
       <div className="mt-1 font-mono text-[11px] text-zinc-500 dark:text-zinc-400">{n.id}</div>
 
       <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Actions">
-        {!isRoot && <Link href={`${focusPath(n)}${branchQuery}`} className={ACTION} title="This record's neighborhood on its own page">Focus</Link>}
+        {ghost && <span className="rounded bg-zinc-100 px-2 py-0.5 text-[12px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" title="Drawn as it was at the commit the Changes lens counts from">Deleted since</span>}
+        {!isRoot && !ghost && <Link href={`${focusPath(n)}${branchQuery}`} className={ACTION} title="This record's neighborhood on its own page">Focus</Link>}
         {n.cls === 'Module' && <Link href={`/coverage/${encodeURIComponent(localPart(n.id))}${branchQuery}`} className={ACTION}>Coverage View</Link>}
         {asOf && atRef !== asOf && <a href={refHref(asOf, n.id)} className={ACTION} title={`The design at commit ${asOf.slice(0, 12)}, as this record met it (ADR-0057)`}>View as of {asOf.slice(0, 8)}</a>}
-        {rawUrl && <a href={rawUrl(n.id)} className={ACTION} title="The document on the hub">Raw JSON</a>}
+        {rawUrl && !ghost && <a href={rawUrl(n.id)} className={ACTION} title="The document on the hub">Raw JSON</a>}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label="Related records">
@@ -314,7 +320,7 @@ export function GraphPanel({
             ))}
           </div>
         ))}
-        {tab === 'history' && <History history={history} pending={historyPending} atRef={atRef} refHref={refHref} id={n.id} />}
+        {tab === 'history' && <History history={history} pending={historyPending} atRef={atRef} refHref={refHref} changesHref={changesHref} id={n.id} />}
       </div>
 
       <p className="mt-4 border-t border-zinc-200 pt-3 text-[12px] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">

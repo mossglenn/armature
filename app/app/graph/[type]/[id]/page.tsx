@@ -1,6 +1,7 @@
 import { HubError } from '@armature/client';
 import { notFound } from 'next/navigation';
 import { GraphView } from '../../GraphView';
+import { lensReadsFor } from '../../lensReads';
 import { readsFor, splitId } from '../../reads';
 import { derive, type Doc } from '@/lib/graph/derive';
 import { focusOfNeighbors, focusOfTrace, isTraceable } from '@/lib/graph/focus';
@@ -16,6 +17,8 @@ import { hubPublicUrl, viewerHub } from '@/lib/viewer';
  * Graph's own, restricted to the trace's records, so the two pages read the
  * same way. For a type the trace read does not walk from, the page shows what
  * the record references and what references it. The panel opens on the root.
+ * A lens (plan §8) and figure mode apply here as on the Graph; the changes
+ * lens's ghosts are drawn only when the neighborhood held them.
  */
 export const dynamic = 'force-dynamic';
 
@@ -55,30 +58,38 @@ export default async function FocusPage({ params, searchParams }: { params: Prom
     hub.export.read(at).catch(notFoundOn404),
     isTraceable(parts.type) ? hub.intelligence.trace(parts.type, parts.local, at).then((r) => r.data).catch(notFoundOn404) : Promise.resolve(undefined),
   ]);
-  const docs = (data.documents as Doc[]).filter((d) => d['@type'] !== 'User');
-  const root = docs.find((d) => d['@id'] === rootId);
+  const exported = (data.documents as Doc[]).filter((d) => d['@type'] !== 'User');
+  const root = exported.find((d) => d['@id'] === rootId);
   if (!root) notFound();
 
   // Derived here once to name the neighborhood; the client derives again to draw it.
-  const graph = derive(docs);
-  const byId = new Map(docs.map((d) => [d['@id'], d]));
+  const graph = derive(exported);
+  const byId = new Map(exported.map((d) => [d['@id'], d]));
   const focus = traced ? focusOfTrace(graph, traced) : focusOfNeighbors(graph, rootId);
   const initial = stateFromQuery(query);
   const walkStep = Number(query.walk) >= 1 ? Math.floor(Number(query.walk)) : undefined;
+  const select = walkStep ? undefined : (initial.select ?? rootId);
   // The Walkthrough (plan §7): built for every traceable root, so "Walk" needs
   // no reload; its two hub-read steps are filled here.
-  const walk = await walkFor(hub, graph, traced, byId, { branch, ref });
-  const select = walkStep ? undefined : (initial.select ?? rootId);
-  const reads = await readsFor(hub, select, { branch, ref, trace: initial.direction === 'trace' });
+  const [walk, reads, lens] = await Promise.all([
+    walkFor(hub, graph, traced, byId, { branch, ref }),
+    readsFor(hub, select, { branch, ref, trace: initial.direction === 'trace' }),
+    lensReadsFor(hub, initial.lens, exported, { branch, ref, since: initial.since, fullyAssessedAt: initial.fullyAssessedAt, overAssessedAbove: initial.overAssessedAbove }),
+  ]);
+  const ghosts = lens.reads?.lens === 'changes' ? lens.reads.ghosts : [];
+  const docs = ghosts.length ? [...exported, ...ghosts] : exported;
   const branchQuery = branch ? `?branch=${encodeURIComponent(branch)}` : ref ? `?ref=${encodeURIComponent(ref)}` : '';
 
   return (
     <main>
       <GraphView
         docs={docs}
+        ghostIds={ghosts.map((g) => g['@id'])}
         initial={{ ...initial, select }}
         reads={reads}
-        focus={{ root: rootId, ids: [...focus.ids], litNodes: [...focus.lit.nodes], litEdges: [...focus.lit.edges], traced: Boolean(traced) }}
+        lensReads={lens.reads}
+        lensError={lens.error}
+        focus={{ root: rootId, ids: [...focus.ids, ...ghosts.map((g) => g['@id'])], litNodes: [...focus.lit.nodes], litEdges: [...focus.lit.edges], traced: Boolean(traced) }}
         walk={walk}
         walkStep={walk && walkStep ? Math.min(walkStep, walk.steps.length) : undefined}
         states={Object.fromEntries(focus.states)}
