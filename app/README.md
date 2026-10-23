@@ -49,13 +49,14 @@ operator.ts                   The operator tools' command line (ADR-0062): check
 dist/                         The bundles (npm run build:hub, npm run build:operator); generated, not committed
 app/                          The viewer (Next.js); no route files, it hosts no API
   page.tsx                    The module index
-  graph/page.tsx              The Design Graph over GET /api/v1/export: the documents at the ref, people left out, handed to GraphView.tsx ('use client': derive, lay out and draw with React Flow; ArmatureNode, FilterRail, GraphPanel, Search beside it); reads.ts reads attestation state, history and the trace for a selected record
+  graph/page.tsx              The Design Graph over GET /api/v1/export: the documents at the ref, people left out, handed to GraphView.tsx ('use client': derive, lay out and draw with React Flow; ArmatureNode, FilterRail, LensRail, GraphPanel, Search and Figure.tsx, the stamp, legend tile and PNG export, beside it); reads.ts reads attestation state, history and the trace for a selected record
+  graph/lensReads.ts          What the server reads for a lens (?lens=): every module's coverage, the alignment read, the attestations of every attested record, or the changes since a commit with the deleted records read at it
   graph/[type]/[id]/page.tsx  The Focus page: one record's trace (GET /intelligence/trace) drawn by the same GraphView, restricted to the walk, the root outlined; with ?walk=n the Walkthrough (lib/graph/walk.ts, WalkPanel.tsx), its coverage and changes steps read from the hub
   coverage/[moduleId]/page.tsx  The Coverage View over GET /api/v1/intelligence/coverage/:moduleId, with each item's statistics from /intelligence/item-statistics and the module's content from /intelligence/module-content at the same commit
-  layout.tsx, globals.css     Page shell with the navigation, and styles (Tailwind CSS; the Design Graph's node and edge rules)
+  layout.tsx, globals.css     Page shell with the navigation and the branch picker (BranchPicker.tsx, the hub's branch list read by the layout), and styles (Tailwind CSS; the Design Graph's node, edge, lens and figure-mode rules; the dark variant stops at a .light element)
 e2e/graph.spec.ts             The browser smoke test (Playwright); playwright.config.ts starts the bundled hub and the built viewer
 lib/
-  graph/                      The Design Graph's pure modules: stages (the visual language as data), glyphs, derive, layout, relations, state, with their tests on a fixture and on the seed
+  graph/                      The Design Graph's pure modules: stages (the visual language as data), glyphs, derive, layout, relations, state, lenses (each intelligence read as marks and a legend), focus, walk, with their tests on a fixture and on the seed
   viewer.ts                   The viewer's hub: hubUrl() from ARMATURE_HUB_URL and viewerHub(), a read-only @armature/client
   hub.ts                      The API served by Node's HTTP server (@hono/node-server): startHub({ port }) for server.ts and the test
   hub.test.ts                 The standalone host over a real socket: the same answers as app.request(), headers included

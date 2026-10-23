@@ -68,6 +68,22 @@ States: **selected**, a 2-pixel ring in the accent (blue); **root** of a Focus p
 
 The steps are the viewer's Tailwind scale. A tone never stands alone: the word is always on the chip.
 
+## Lenses
+
+A lens (plan §8, `app/lib/graph/lenses.ts`) marks a node with one of three styles, always with the word on a chip first among the node's chips, so the color never carries the meaning alone:
+
+| Style | Drawing | Used by |
+|---|---|---|
+| fill | the card washed 16% toward the lens color, the chip 30% | coverage verdicts, outcome values |
+| ring | a 2-pixel ring in the lens color | alignment concerns, attestation states, records added or changed since a commit |
+| ghost | a dashed, faded card | a record deleted since the commit (drawn as it was then) |
+
+The lens colors are the status tones (Uncovered and FragmentRemoved red `#dc2626`, PartiallyAssessed and Stale amber `#d97706`, FullyAssessed, Current and Added green `#059669`, OverAssessed sky `#0284c7`, undeclared and Unanchored zinc `#71717a`), never a class hue, which is why an objective's blue stripe and its red coverage wash read as two facts. The outcomes lens uses the dataviz palette's diverging pair around a neutral midpoint, two steps an arm: well below the median `#256abf`, below `#6da7ec`, at `#a1a1aa`, above `#f09a99`, well above `#e34948`; the legend says which is which, since whether a low value is bad depends on the unit. Everything outside a lens's attention is dimmed as a relation dims it. One lens at a time.
+
+## Figure mode
+
+Entered from "Export figure" (`?figure=1`): the canvas is light whatever the viewer's theme (the `.light` scope stops the theme at the canvas's edge), white, without grid, controls or minimap, labels one size larger, with a stamp in the bottom-left corner, `Armature · main @ ctwfofkr · /graph?lens=coverage · 2026-10-22` (the branch or commit, the view's URL, the date), and optionally a legend tile (`?legend=1`) listing the classes drawn and the lens's legend. The export is the canvas as framed, as PNG at 2× or 3×. A figure is a URL: the stamp's path reproduces the view, and the commit reproduces the data.
+
 ## Edges
 
 | Kind | What | Weight | Label |
