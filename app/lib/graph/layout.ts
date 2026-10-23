@@ -24,7 +24,7 @@
  * server; the client receives positions.
  */
 import dagre from '@dagrejs/dagre';
-import { columnOf } from './stages';
+import { columnOf, shortColumnOf } from './stages';
 
 export const NODE_WIDTH = 232;
 export const NODE_HEIGHT = 72;
@@ -38,6 +38,8 @@ export interface Column {
   /** The integer stage the column header names. */
   stage: number;
   header: string;
+  /** The header's short form, for a column too narrow for the name (lib/graph/headers). */
+  short: string;
   x: number;
   width: number;
 }
@@ -106,7 +108,7 @@ export function layout(
   }
   const columns: Column[] = [...byColumn]
     .sort(([a], [b]) => a - b)
-    .map(([stage, r]) => ({ stage, header: columnOf(stage), x: r.min, width: r.max - r.min }));
+    .map(([stage, r]) => ({ stage, header: columnOf(stage), short: shortColumnOf(stage), x: r.min, width: r.max - r.min }));
 
   const graph = g.graph();
   return { positions, columns, width: graph.width ?? 0, height: graph.height ?? 0 };

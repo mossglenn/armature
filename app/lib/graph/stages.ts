@@ -53,12 +53,29 @@ export const HUES = {
 
 export type HueName = keyof typeof HUES;
 
-/** Column headers by integer stage. */
-export const COLUMNS: readonly string[] = [
-  'Evidence', 'Needs', 'Objectives', 'Items', 'Activities', 'Assessments and lessons', 'Modules', 'Course', 'Datasets', 'Metrics', 'Notes and findings',
+/** A column's name and the short form drawn when the column is too narrow for it (lib/graph/headers); either may wrap to two lines at a space. */
+export interface ColumnName {
+  header: string;
+  short: string;
+}
+
+/** Column headers by integer stage, with their short forms. */
+export const COLUMNS: readonly ColumnName[] = [
+  { header: 'Evidence', short: 'Evid.' },
+  { header: 'Needs', short: 'Needs' },
+  { header: 'Objectives', short: 'Obj.' },
+  { header: 'Items', short: 'Items' },
+  { header: 'Activities', short: 'Activ.' },
+  { header: 'Assessments and lessons', short: 'Assess. lessons' },
+  { header: 'Modules', short: 'Mod.' },
+  { header: 'Course', short: 'Course' },
+  { header: 'Datasets', short: 'Data' },
+  { header: 'Metrics', short: 'Metr.' },
+  { header: 'Notes and findings', short: 'Notes' },
 ];
 
-export const columnOf = (stage: number): string => COLUMNS[Math.floor(stage)] ?? `Stage ${stage}`;
+export const columnOf = (stage: number): string => COLUMNS[Math.floor(stage)]?.header ?? `Stage ${stage}`;
+export const shortColumnOf = (stage: number): string => COLUMNS[Math.floor(stage)]?.short ?? `S${stage}`;
 
 export interface StageEntry {
   stage: number;
