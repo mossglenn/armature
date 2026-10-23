@@ -93,7 +93,7 @@ function Performance({ statistics, q }: { statistics?: ItemStatistic[]; q: strin
           {s.dataset?.administrationDate && <> ({s.dataset.administrationDate})</>}:{' '}
           <span className="font-mono tabular-nums text-zinc-900 dark:text-zinc-100">{s.metric.value}</span> {s.metric.unit}
           {' · '}
-          <Link href={focusHref(s.metric.id, q)} className="text-blue-700 hover:underline dark:text-blue-300" title="This result traced back through the design (the Focus page)">
+          <Link href={`${focusHref(s.metric.id, q)}${q ? '&' : '?'}walk=1`} className="text-blue-700 hover:underline dark:text-blue-300" title="Walk this result back through the design, step by step (the Focus page's Walkthrough)">
             trace this result
           </Link>
         </li>
