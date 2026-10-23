@@ -92,7 +92,9 @@ Entered from "Export figure" (`?figure=1`): the canvas is light whatever the vie
 | reference | a reference field on an artifact (`assesses`, `targets`, `course`, `module`, `subject`, `derivedFrom`, `producedBy`, `generatedBy`) | 1.25 px | the field name, shown when an end is selected |
 | annotation | a note's or finding's `subject` | 1.25 px, dashed | the field name, when an end is selected |
 
-All edges are a muted gray (`#a1a1aa` light, `#52525b` dark) with a small closed arrowhead of the same gray pointing along the lifecycle; the edges of a lit relation turn the accent. An edge between two records of one column (a prerequisite between objectives) is drawn but not ranked, so it never moves a record out of its column.
+All edges are a muted gray (`#a1a1aa` light, `#52525b` dark) at 60% opacity at rest, so where edges overlap the ink adds up and a bundle reads as several, with a small closed arrowhead of the same gray pointing along the lifecycle; the edges of a lit relation turn the accent and go solid, as does a selected, hovered or lens-marked edge. An edge between two records of one column (a prerequisite between objectives) is drawn but not ranked, so it never moves a record out of its column.
+
+Edges attach at ports (2026-10-23): a node has one port on its right edge per outgoing edge and one on its left per incoming, spaced evenly over its height and ordered by where the other end sits, so a fan leaving an objective opens over the card instead of from one point and a bundle arriving at an assessment lands as separate strands (`app/lib/graph/ports.ts`). Within a column, records are ordered by their real edges alone: the anchors that pin a column weigh almost nothing in the ordering, which on the seed cuts the crossings between neighboring columns from 24 to 8 and the drawing's height by a fifth.
 
 ## Type and surfaces
 
