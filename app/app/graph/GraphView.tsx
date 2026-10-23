@@ -17,6 +17,7 @@ import { Search } from './Search';
 import { WalkPanel } from './WalkPanel';
 import { classesIn, derive, localPart, type Chip, type Doc } from '@/lib/graph/derive';
 import { focusPath, isTraceable, restrict } from '@/lib/graph/focus';
+import { gridLayers } from '@/lib/graph/grid';
 import { NODE_HEIGHT, NODE_WIDTH, layout, type Column } from '@/lib/graph/layout';
 import { applyLens, namedCommits, type LensReads, type LensView } from '@/lib/graph/lenses';
 import { neighbors, reach, traceSelection, type Selection } from '@/lib/graph/relations';
@@ -100,6 +101,18 @@ function usePrefersDark(): boolean {
     return () => query.removeEventListener('change', update);
   }, []);
   return dark;
+}
+
+/** The dot grid at three scales (lib/graph/grid): each layer fades by its spacing on screen, so one reads at every zoom. */
+function GraphGrid() {
+  const { zoom } = useViewport();
+  return (
+    <>
+      {gridLayers(zoom).map((l) => (
+        <Background key={l.id} id={l.id} gap={l.gap} size={l.size} offset={l.offset} color={l.tone === 'near' ? 'var(--graph-grid)' : 'var(--graph-grid-far)'} style={{ opacity: l.opacity }} />
+      ))}
+    </>
+  );
 }
 
 /** Column headers over the canvas: pinned to the top, following horizontal pan and zoom. */
@@ -511,7 +524,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
             colorMode={figure ? 'light' : dark ? 'dark' : 'light'}
             proOptions={{ hideAttribution: false }}
           >
-            {!figure && <Background gap={24} size={1} color="var(--graph-grid)" />}
+            {!figure && <GraphGrid />}
             {!figure && <Controls showInteractive={false} position="bottom-left" />}
             {!figure && <MiniMap nodeColor={(n) => hueOf((n.data as { cls: string }).cls).light} nodeStrokeWidth={0} pannable zoomable position="bottom-right" />}
             <ColumnHeaders columns={laid.columns} />

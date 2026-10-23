@@ -47,15 +47,17 @@ body {
    its edges, markers and chrome in the viewer's palette. The canvas's colors
    are variables so that `.light` can set them all at once. The canvas is a
    shade off the card (zinc-50 under white cards) so a card has an edge at
-   every zoom, and the dot grid is zinc-400 on it; in the dark theme the card
-   is already lighter than the page. A figure's canvas is white, set under
+   every zoom, and the dot grid is zinc-300 on it, its coarser layers zinc-200
+   (lib/graph/grid); in the dark theme the card is already lighter than the
+   page. A figure's canvas is white, set under
    .graph-figure and not under .light: React Flow puts its colorMode on the
    container as a class, so the live canvas is `.react-flow.light` too. */
 :root {
   --graph-edge: #a1a1aa;
   --graph-accent: #2563eb;
   --graph-canvas: #fafafa;
-  --graph-grid: #a1a1aa;
+  --graph-grid: #d4d4d8;
+  --graph-grid-far: #e4e4e7;
   --graph-card: #ffffff;
   --graph-card-border: #e4e4e7;
   --graph-edge-hover: #52525b;
@@ -65,7 +67,8 @@ body {
     --graph-edge: #52525b;
     --graph-accent: #60a5fa;
     --graph-canvas: #0a0a0a;
-    --graph-grid: #3f3f46;
+    --graph-grid: #27272a;
+    --graph-grid-far: #18181b;
     --graph-card: #18181b;
     --graph-card-border: #27272a;
     --graph-edge-hover: #d4d4d8;
