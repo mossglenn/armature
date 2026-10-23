@@ -196,6 +196,44 @@ test('figure mode stamps the view and exports it as a PNG', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test('the dot grid changes scale with the zoom: the finest layer at the maximum, the coarsest at the minimum', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/graph');
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
+  const layers = page.locator('.react-flow__background');
+  await expect(layers).toHaveCount(3);
+  const opacities = () => layers.evaluateAll((els) => els.map((e) => Number((e as HTMLElement).style.opacity)));
+  expect(await opacities()).toContain(1);
+  // Where each layer's dots fall along x, modulo the finest layer's spacing: the
+  // tile starts at the pattern's x, is moved by its patternTransform, and holds
+  // the dot at cx. Coarser dots land on finer ones.
+  const { fine, phases } = await layers.evaluateAll((els) => {
+    const fine = Number(els[0].querySelector('pattern')!.getAttribute('width'));
+    const phases = els.map((e) => {
+      const pattern = e.querySelector('pattern')!;
+      const shift = Number(/translate\((-?[\d.]+),/.exec(pattern.getAttribute('patternTransform') ?? '')?.[1] ?? 0);
+      const cx = Number(e.querySelector('circle')!.getAttribute('cx'));
+      const x = Number(pattern.getAttribute('x')) + shift + cx;
+      return ((x % fine) + fine) % fine;
+    });
+    return { fine, phases };
+  });
+  for (const phase of phases.slice(1)) {
+    const apart = Math.abs(phase - phases[0]);
+    expect(Math.min(apart, fine - apart)).toBeLessThan(0.01);
+  }
+  const zoomIn = page.getByRole('button', { name: 'Zoom In' });
+  const zoomOut = page.getByRole('button', { name: 'Zoom Out' });
+  for (let i = 0; i < 20 && (await zoomIn.isEnabled()); i++) await zoomIn.click();
+  await expect.poll(opacities).toEqual([1, 0, 0]);
+  for (let i = 0; i < 40 && (await zoomOut.isEnabled()); i++) await zoomOut.click();
+  await expect.poll(async () => (await opacities()).map((o) => (o === 1 ? 1 : o === 0 ? 0 : 'between'))).toEqual([0, 'between', 1]);
+  await page.goto('/graph?figure=1');
+  await expect(page.getByLabel('Figure stamp')).toBeVisible();
+  await expect(layers).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('the branch picker names the branch on every page, with its head', async ({ page }) => {
   await page.goto('/graph?lens=coverage');
   const picker = page.getByLabel('Branch');
