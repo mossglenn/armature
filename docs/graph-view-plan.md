@@ -142,10 +142,10 @@ The viewer's existing faces (Geist and Geist Mono), the zinc neutrals it already
 
 - Pan by drag, zoom by wheel or pinch, fit to view, zoom to selection, a minimap for orientation. Nodes are not draggable: the layout is a statement about the graph, not a sketch, and a figure must be reproducible.
 - **Lifecycle column headers** across the top of the canvas, fixed while panning vertically, so the reader always knows which stage a node is in.
-- **Hover** a node: its edges and neighbors brighten, everything else dims slightly; the full label shows. Hover an edge: its field name or junction label shows.
+- **Hover** a node: its edges and neighbors brighten, everything else dims slightly; the full label shows. Hover an edge: its field name or junction label shows. *(Built 2026-10-22, after PR 4; PR 1 had left hover at a shadow. Otherwise a junction's label is always shown and a field name only when an end is selected, and both hide below zoom 0.6, a hovered edge's excepted.)*
 - **Select** a node (click, or Enter when focused): the panel opens; the node's edges turn the accent color; the canvas enters the *neighbors* relation (§5.3). Click the canvas or press Escape to clear.
 - **Double-click** a node, or "Focus" in the panel: the Focus page for that record.
-- **Keyboard**: nodes are DOM elements in React Flow's tab order; Tab moves between them, Enter selects, Escape clears, arrows pan, `f` fits, `/` searches. From PR 3, `←`/`→` step the Walkthrough.
+- **Keyboard**: nodes are DOM elements in React Flow's tab order; Tab moves between them, Enter selects, Escape clears, arrows pan (a screen's worth with Shift), `f` fits, `z` frames the selection with its lit relation (also the panel's Frame action), `/` searches. From PR 3, `←`/`→` step the Walkthrough, and `↑`/`↓` still pan.
 
 ### 5.3 Relations from a selected node
 
