@@ -875,8 +875,12 @@ Work:
       the filter rail, search, the panel's Fields, About it and Referenced by, the neighbors,
       upstream and downstream relations, the URL state; `docs/visual-language.md` with the hues
       validated by the dataviz skill's checks; five Playwright tests as CI's `viewer` job)
-- [ ] PR 2: the Focus page from the trace read, the trace relation, attestation state and
-      history in the panel, links from the Coverage View
+- [x] PR 2: the Focus page from the trace read, the trace relation, attestation state and
+      history in the panel, links from the Coverage View (built 2026-10-22: `/graph/<Type>/<id>`
+      draws the trace with the Graph's own rules, the walk lit and the root outlined; the panel
+      gains Focus, Coverage View, "View as of" and Raw JSON actions, a History tab and attestation
+      states, read by the server for the selected record; the Trace relation on the Graph; every
+      record on the Coverage View linked, a result as "trace this result"; four more browser tests)
 - [ ] PR 3: the Walkthrough and time travel (coverage at `asOf`, then and now)
 - [ ] PR 4: the lenses, figure mode with PNG export and the commit stamp, the branch picker
 - [ ] PR 5 (when a paper or a larger store asks): vector figures, scoping, virtualization,
