@@ -65,7 +65,13 @@ export interface GraphViewProps {
   /** Records deleted since the changes lens's commit, appended to `docs` to be drawn as ghosts. */
   ghostIds?: string[];
   initial: GraphState;
-  reads?: SelectedReads;
+  /**
+   * The server's reads for the selected record, or a promise of them: the
+   * page answers before the slow reads (a history over a long log takes
+   * seconds) and streams them after, so the selection and the panel appear at
+   * once and the history fills in when it lands.
+   */
+  reads?: SelectedReads | Promise<SelectedReads | undefined>;
   /** The server's reads for the lens in `initial`, when it needed any. */
   lensReads?: LensReads;
   lensError?: string;
@@ -156,7 +162,18 @@ function ColumnHeaders({ columns }: { columns: Column[] }) {
   );
 }
 
-function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus, walk, walkStep, states, branch, atRef, commit, publicHub, branchQuery }: GraphViewProps) {
+function GraphBody({ docs, ghostIds, initial, reads: readsProp, lensReads, lensError, focus, walk, walkStep, states, branch, atRef, commit, publicHub, branchQuery }: GraphViewProps) {
+  // The reads land when their promise settles; until then the panel says they
+  // are on their way. What landed is remembered with the promise it came from,
+  // so a new promise (a new selection) reads as pending again at once.
+  const [landed, setLanded] = useState<{ from: Promise<SelectedReads | undefined>; value: SelectedReads | undefined }>();
+  useEffect(() => {
+    if (!(readsProp instanceof Promise)) return;
+    let live = true;
+    readsProp.then((value) => { if (live) setLanded({ from: readsProp, value }); }, () => { if (live) setLanded({ from: readsProp, value: undefined }); });
+    return () => { live = false; };
+  }, [readsProp]);
+  const reads = readsProp instanceof Promise ? (landed?.from === readsProp ? landed.value : undefined) : readsProp;
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(initial.hide));
   const [junctionsAsEdges, setJunctionsAsEdges] = useState(initial.junctionsAsEdges);
   const [selected, setSelected] = useState<string | undefined>(initial.select);
