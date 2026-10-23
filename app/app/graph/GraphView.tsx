@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArmatureNode, type ArmatureNodeType } from './ArmatureNode';
+import { FigureBar, FigureLegend, FigureStamp, exportPng, figureStamp } from './Figure';
 import { FilterRail } from './FilterRail';
 import { GraphPanel, type PanelSelection, type Relation } from './GraphPanel';
 import { LensRail, type Thresholds } from './LensRail';
@@ -28,13 +29,15 @@ import type { Walk } from '@/lib/graph/walk';
  * the documents the server read from the hub, derived and laid out here so a
  * filter change is immediate, drawn by React Flow read-only. Every choice a
  * reader makes is in the URL (lib/graph/state.ts): a view-only change
- * (hidden classes, edges or nodes, depth, the coverage figure)
+ * (hidden classes, edges or nodes, depth, the coverage figure, figure mode)
  * is written with replaceState; a change that needs a hub read (the
  * selection, the Trace relation, a lens and its read parameters) goes through
  * the router, and the server page answers with `reads` and `lensReads`. In
  * focus mode the drawing is restricted to the record's neighborhood, the
  * walk is lit until something is selected, and the root is outlined. A lens
- * (§8) marks the nodes and dims the rest. The browser never calls the hub.
+ * (§8) marks the nodes and dims the rest; figure mode (§3.4) turns the canvas
+ * light, hides its chrome, stamps it and exports it. The browser never calls
+ * the hub.
  */
 export interface SelectedReads {
   id: string;
@@ -135,6 +138,11 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
   const [thresholds, setThresholds] = useState<Thresholds>({ fullyAssessedAt: initial.fullyAssessedAt, overAssessedAbove: initial.overAssessedAbove });
   const [unit, setUnit] = useState<string | undefined>(initial.unit);
   const [since, setSince] = useState<string | undefined>(initial.since);
+  // Figure mode (plan §3.4) and its export.
+  const [figure, setFigure] = useState(initial.figure);
+  const [legend, setLegend] = useState(initial.legend);
+  const [ratio, setRatio] = useState(2);
+  const [exporting, setExporting] = useState(false);
   // The Walkthrough's current step, 1-based; undefined when not walking.
   const [step, setStep] = useState<number | undefined>(walk && walkStep ? walkStep : undefined);
   const walking = walk !== undefined && step !== undefined;
@@ -148,6 +156,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
   // The page's path, for links built during render (which runs on the server
   // too, where there is no window): the design at a commit, a record selected.
   const pathname = usePathname();
+  const canvas = useRef<HTMLDivElement>(null);
 
   const byId = useMemo(() => new Map(docs.map((d) => [d['@id'], d])), [docs]);
   const ghosts = useMemo(() => new Set(ghostIds ?? []), [ghostIds]);
@@ -207,7 +216,8 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
     select: walking ? undefined : focus && selected === focus.root ? undefined : selected,
     hide: [...hidden], junctionsAsEdges, direction: relation.direction, depth: relation.depth,
     lens, projected, fullyAssessedAt: thresholds.fullyAssessedAt, overAssessedAbove: thresholds.overAssessedAbove, unit, since,
-  }), [walking, focus, selected, hidden, junctionsAsEdges, relation, lens, projected, thresholds, unit, since]);
+    figure, legend,
+  }), [walking, focus, selected, hidden, junctionsAsEdges, relation, lens, projected, thresholds, unit, since, figure, legend]);
 
   // The URL mirrors the state. A view-only change is replaceState; a change
   // the server must answer (the selection, the Trace relation, a lens) is routed.
@@ -225,6 +235,14 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
     else window.history.replaceState(window.history.state, '', url);
     first.current = false;
   }, [state, router, walking, step]);
+
+  // The figure's stamp: the view as a URL, from the same state the URL carries.
+  const stamp = useMemo(() => {
+    const base = new URLSearchParams(branchQuery.replace(/^\?/, ''));
+    const q = queryFromState(state, base);
+    if (walking) q.set('walk', String(step));
+    return figureStamp({ branch, atRef, commit, path: pathname, query: q });
+  }, [state, branchQuery, branch, atRef, commit, pathname, walking, step]);
 
   const stepTo = useCallback((n: number) => {
     if (!walk) return;
@@ -338,6 +356,18 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
     for (const c of changes) if (c.type === 'select' && c.selected) setSelected(c.id);
   }, []);
 
+  const download = useCallback(async () => {
+    const el = canvas.current?.querySelector<HTMLElement>('.react-flow');
+    if (!el) return;
+    setExporting(true);
+    try {
+      const where = atRef ? atRef.slice(0, 8) : `${branch}-${(commit ?? '').slice(0, 8)}`;
+      await exportPng(el, ratio, `armature-${focus ? localPart(focus.root) : 'graph'}-${where}.png`);
+    } finally {
+      setExporting(false);
+    }
+  }, [atRef, branch, commit, ratio, focus]);
+
   const layoutKey = `${[...hidden].sort().join(',')}|${junctionsAsEdges}|${focus?.root ?? ''}|${ghosts.size}`;
   const rawUrl = publicHub ? (id: string) => `${publicHub}/api/v1/documents/${id}${branchQuery}` : undefined;
   const rootNode = focus ? graph.nodes.find((n) => n.id === focus.root) : undefined;
@@ -346,6 +376,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
       {atRef ? <>at commit <span className="font-mono">{atRef.slice(0, 12)}</span></> : <>on branch <span className="font-mono">{branch}</span>{commit && <> at commit <span className="font-mono">{commit.slice(0, 12)}</span></>}</>}
     </>
   );
+  const ACTION = 'rounded border border-zinc-300 px-2 py-0.5 text-[12px] hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800';
 
   return (
     <div className="flex h-[calc(100dvh-3rem)] flex-col">
@@ -378,7 +409,14 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
             </>
           )}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          {figure ? (
+            <FigureBar ratio={ratio} onRatio={setRatio} legend={legend} onLegend={setLegend} onFit={fit} onExport={download} exporting={exporting} onExit={() => setFigure(false)} />
+          ) : (
+            <button type="button" className={ACTION} onClick={() => setFigure(true)} title="Light theme, no chrome, a stamp with the commit; then download as PNG (plan §3.4)">
+              Export figure
+            </button>
+          )}
           <Search nodes={graph.nodes} onPick={focusOn} />
         </div>
       </header>
@@ -406,7 +444,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
           <FilterRail classes={classes} hidden={hidden} junctionsAsEdges={junctionsAsEdges} onToggle={toggle} onJunctions={setJunctionsAsEdges} />
         </aside>
 
-        <div className={`relative order-1 h-[62dvh] min-h-0 md:order-0 md:h-auto ${compact ? 'graph-compact' : ''}`}>
+        <div ref={canvas} className={`relative order-1 h-[62dvh] min-h-0 md:order-0 md:h-auto ${compact ? 'graph-compact' : ''} ${figure ? 'light graph-figure' : ''}`}>
           <ReactFlow
             key={layoutKey}
             nodes={rfNodes}
@@ -427,13 +465,15 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
             nodesConnectable={false}
             elementsSelectable
             edgesFocusable={false}
-            colorMode={dark ? 'dark' : 'light'}
+            colorMode={figure ? 'light' : dark ? 'dark' : 'light'}
             proOptions={{ hideAttribution: false }}
           >
-            <Background gap={24} size={1} />
-            <Controls showInteractive={false} position="bottom-left" />
-            <MiniMap nodeColor={(n) => hueOf((n.data as { cls: string }).cls).light} nodeStrokeWidth={0} pannable zoomable position="bottom-right" />
+            {!figure && <Background gap={24} size={1} />}
+            {!figure && <Controls showInteractive={false} position="bottom-left" />}
+            {!figure && <MiniMap nodeColor={(n) => hueOf((n.data as { cls: string }).cls).light} nodeStrokeWidth={0} pannable zoomable position="bottom-right" />}
             <ColumnHeaders columns={laid.columns} />
+            {figure && <FigureStamp text={stamp} />}
+            {figure && legend && <FigureLegend classes={classes} view={lensView} />}
           </ReactFlow>
         </div>
 

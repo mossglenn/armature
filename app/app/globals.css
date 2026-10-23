@@ -3,6 +3,19 @@
    that they win on equal specificity (a component import would load after). */
 @import "@xyflow/react/dist/style.css";
 
+/* The theme follows the system, except inside an element marked `.light`,
+   which figure mode puts on the canvas (docs/graph-view-plan.md §3.4): a
+   figure is exported light whatever the viewer's theme. Tailwind's `dark:`
+   variant is redefined to stop at that boundary; the hand-written dark rules
+   below carry the same guard. */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:not(.light, .light *)) {
+      @slot;
+    }
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -31,7 +44,8 @@ body {
 /* The Design Graph (app/graph; docs/graph-view-plan.md §4). The node's hue is
    set per node as --c-light and --c-dark by the stage table; the theme picks
    one. React Flow's own stylesheet is imported above; what follows restyles
-   its edges, markers and chrome in the viewer's palette. */
+   its edges, markers and chrome in the viewer's palette. The canvas's colors
+   are variables so that `.light` can set them all at once. */
 :root {
   --graph-edge: #a1a1aa;
   --graph-accent: #2563eb;
@@ -45,6 +59,15 @@ body {
     --graph-card: #18181b;
     --graph-card-border: #27272a;
   }
+}
+.light {
+  --background: #ffffff;
+  --foreground: #171717;
+  --graph-edge: #a1a1aa;
+  --graph-accent: #2563eb;
+  --graph-card: #ffffff;
+  --graph-card-border: #e4e4e7;
+  color: var(--foreground);
 }
 
 .gnode {
@@ -65,7 +88,7 @@ body {
   transition: box-shadow 0.12s, opacity 0.15s;
 }
 @media (prefers-color-scheme: dark) {
-  .gnode {
+  .gnode:where(:not(.light *)) {
     --c: var(--c-dark);
   }
 }
@@ -134,3 +157,12 @@ body {
 .react-flow__attribution { background: transparent; color: #a1a1aa; }
 .react-flow__attribution a { color: inherit; }
 .react-flow__controls { box-shadow: none; }
+
+/* Figure mode (plan §3.4): white ground, no grid (the Background is not
+   drawn), labels one size larger, the stamp in a corner. */
+.graph-figure .react-flow { background: #ffffff; }
+.graph-figure .gnode-label { font-size: 14px; }
+.graph-figure .gnode-eyebrow { font-size: 11px; }
+.graph-figure .gnode-chips > * { font-size: 11.5px; }
+.graph-figure .react-flow__edge-text { font-size: 11px; }
+.graph-figure .react-flow__attribution { color: #d4d4d8; }
