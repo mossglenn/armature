@@ -98,7 +98,8 @@ export interface Commit {
   commit: string;
   author: string;
   message: string;
-  timestamp: string;
+  /** Seconds since the epoch, as the store records it (a fraction of a second kept). Typed as a string until 2026-10-22, which no reader had relied on. */
+  timestamp: number;
   metadata?: Record<string, unknown>;
 }
 

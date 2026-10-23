@@ -107,7 +107,7 @@ The commits on a branch that touched one document, newest first.
 | `start`, `count` | Paging | 0, 20 |
 | `diff` | Include the structural difference each commit made; `diff=false` omits it | true |
 
-Response: `{ id, branch, start, count, entries: [ { commit, author, message, timestamp, diff } ] }`. Lists inside a document (such as an item's options) are compared by position, so reordering reads as several changes.
+Response: `{ id, branch, start, count, entries: [ { commit, author, message, timestamp, diff } ] }`. `timestamp` is seconds since the epoch as a number, as the store records a commit (here and on a branch head). Lists inside a document (such as an item's options) are compared by position, so reordering reads as several changes.
 
 ### `GET /documents/:type/:id/diff?from=<commit>&to=<commit>`
 
