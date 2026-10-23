@@ -887,7 +887,14 @@ Work:
       fills "adequate when?" from the coverage read at the dataset's `asOf` beside today's and
       "then and now" from the changes read, outlining what the branch gained since; the camera
       follows, ← → step, `?walk=n` is the URL; "trace this result" on the Coverage View opens it)
-- [ ] PR 4: the lenses, figure mode with PNG export and the commit stamp, the branch picker
+- [x] PR 4: the lenses, figure mode with PNG export and the commit stamp, the branch picker
+      (built 2026-10-22: `lib/graph/lenses.ts` maps the coverage, alignment, attestations,
+      outcomes and changes reads onto the drawing as marks with their words and a legend whose
+      counts are the read's own, tested on the fixture and the seed; figure mode turns the
+      canvas light under any theme, hides its chrome, stamps the branch, commit, view and date
+      and exports a PNG through html-to-image; the branch picker in the navigation; the
+      explainer's Narrative 1 figure, `docs/figures/narrative-1-adequate-when.png`, exported
+      from the page; four more browser tests)
 - [ ] PR 5 (when a paper or a larger store asks): vector figures, scoping, virtualization,
       and the hub-side graph read if a second client wants the derivation
 
