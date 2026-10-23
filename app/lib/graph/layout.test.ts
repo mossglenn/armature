@@ -4,10 +4,28 @@
  * and column headers from the stage table.
  */
 import { describe, expect, it } from 'vitest';
-import { derive } from './derive';
+import { app } from '../api/app';
+import { derive, type Doc, type GraphEdge, type GraphNode } from './derive';
 import { FIXTURE } from './fixture';
-import { NODE_WIDTH, layout } from './layout';
+import { NODE_WIDTH, layout, type Layout } from './layout';
 import { columnOf } from './stages';
+
+/** Pairs of edges between the same two columns that cross, by their ends' heights (edges sharing an end excluded). */
+function crossings(nodes: GraphNode[], edges: GraphEdge[], laid: Layout): number {
+  const stage = new Map(nodes.map((n) => [n.id, Math.floor(n.stage)]));
+  const y = (id: string) => laid.positions.get(id)!.y;
+  const es = edges.filter((e) => !e.sameStage && laid.positions.has(e.source) && laid.positions.has(e.target));
+  let count = 0;
+  for (let i = 0; i < es.length; i++) {
+    for (let j = i + 1; j < es.length; j++) {
+      const a = es[i], b = es[j];
+      if (stage.get(a.source) !== stage.get(b.source) || stage.get(a.target) !== stage.get(b.target)) continue;
+      if (a.source === b.source || a.target === b.target) continue;
+      if ((y(a.source) - y(b.source)) * (y(a.target) - y(b.target)) < 0) count++;
+    }
+  }
+  return count;
+}
 
 describe('layout', () => {
   it('puts every node in its stage column, whatever its edges', () => {
@@ -57,5 +75,20 @@ describe('layout', () => {
     expect(x('LearningMetric/mt')).toBeLessThan(x('DesignNote/note'));
     expect(l.width).toBeGreaterThan(0);
     expect(l.height).toBeGreaterThan(0);
+  });
+});
+
+describe('the seed', () => {
+  it('orders each column by its real edges: few crossings between neighboring columns, a compact drawing', async () => {
+    // With the anchor edges weighing as much as real ones (before 2026-10-23)
+    // the seed laid out with 24 crossings and a height of 1776; with them
+    // weighing almost nothing, 8 and 1406. The bounds leave a little room.
+    const res = await app.request('/api/v1/export?profile=full');
+    expect(res.status).toBe(200);
+    const { documents } = (await res.json()) as { documents: Doc[] };
+    const g = derive(documents);
+    const laid = layout(g.nodes, g.edges);
+    expect(crossings(g.nodes, g.edges, laid)).toBeLessThanOrEqual(10);
+    expect(laid.height).toBeLessThan(1500);
   });
 });
