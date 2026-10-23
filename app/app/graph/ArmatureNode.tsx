@@ -24,6 +24,8 @@ export type ArmatureNodeData = {
   annotation: boolean;
   /** Not in the lit relation (or outside the lens's attention): drawn at reduced opacity. */
   dim: boolean;
+  /** Outside the hovered node's neighborhood: recedes a little while the hover lasts. */
+  hoverDim: boolean;
   /** The Focus page's root. */
   root: boolean;
   /** The Walkthrough's then-and-now step: added or changed since the commit the cohort met. */
@@ -74,6 +76,7 @@ export function ArmatureNode({ data, selected }: NodeProps<ArmatureNodeType>) {
         selected ? 'gnode-selected' : '',
         data.root ? 'gnode-root' : '',
         data.dim ? 'gnode-dim' : '',
+        data.hoverDim ? 'gnode-hover-dim' : '',
         data.annotation ? 'gnode-annotation' : '',
         data.mark ? `gnode-${data.mark}` : '',
         lens ? `gnode-lens-${lens.style}` : '',

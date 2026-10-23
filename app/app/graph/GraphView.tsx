@@ -19,7 +19,7 @@ import { classesIn, derive, localPart, type Chip, type Doc } from '@/lib/graph/d
 import { focusPath, isTraceable, restrict } from '@/lib/graph/focus';
 import { NODE_HEIGHT, NODE_WIDTH, layout, type Column } from '@/lib/graph/layout';
 import { applyLens, namedCommits, type LensReads, type LensView } from '@/lib/graph/lenses';
-import { reach, traceSelection, type Selection } from '@/lib/graph/relations';
+import { neighbors, reach, traceSelection, type Selection } from '@/lib/graph/relations';
 import { hueOf, toneOf } from '@/lib/graph/stages';
 import { SERVER_KEYS, queryFromState, type GraphState, type LensName } from '@/lib/graph/state';
 import type { Walk } from '@/lib/graph/walk';
@@ -36,8 +36,10 @@ import type { Walk } from '@/lib/graph/walk';
  * focus mode the drawing is restricted to the record's neighborhood, the
  * walk is lit until something is selected, and the root is outlined. A lens
  * (§8) marks the nodes and dims the rest; figure mode (§3.4) turns the canvas
- * light, hides its chrome, stamps it and exports it. The browser never calls
- * the hub.
+ * light, hides its chrome, stamps it and exports it. Moving around (§5.2):
+ * hovering a node keeps its neighborhood's ink and recedes the rest, hovering
+ * an edge shows its label, the arrows pan, `f` fits and `z` frames the
+ * selection. The browser never calls the hub.
  */
 export interface SelectedReads {
   id: string;
@@ -132,6 +134,9 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
   const [junctionsAsEdges, setJunctionsAsEdges] = useState(initial.junctionsAsEdges);
   const [selected, setSelected] = useState<string | undefined>(initial.select);
   const [relation, setRelation] = useState<Relation>({ direction: initial.direction, depth: initial.depth });
+  // Hover (§5.2): transient, never in the URL.
+  const [hovered, setHovered] = useState<string | undefined>();
+  const [hoveredEdge, setHoveredEdge] = useState<string | undefined>();
   // The lens and its parameters (plan §8).
   const [lens, setLens] = useState<LensName | undefined>(initial.lens);
   const [projected, setProjected] = useState(initial.projected);
@@ -204,6 +209,12 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
     return reach(graph, selection.node.id, relation.direction, relation.depth);
   }, [graph, selection, relation, readsFor, focus, walking, walk, step]);
 
+  // The hovered node's neighborhood, lit over whatever else is lit.
+  const hoverLit = useMemo<Selection | undefined>(
+    () => (hovered && graph.nodes.some((n) => n.id === hovered) ? neighbors(graph, hovered) : undefined),
+    [graph, hovered],
+  );
+
   // Attestation states: the trace's annotations (focus), the selected record's read, and the attestations lens's reads.
   const allStates = useMemo(() => {
     const map = new Map(Object.entries(states ?? {}));
@@ -256,19 +267,39 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
 
   const fit = useCallback(() => flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 }), [flow]);
 
+  // Zoom to selection (§5.2): the lit relation's records (the selected record among them), or the walk so far.
+  const frame = useCallback(() => {
+    const ids = lit && lit.nodes.size ? [...lit.nodes] : selected ? [selected] : [];
+    const nodes = ids.filter((id) => graph.nodes.some((n) => n.id === id)).map((id) => ({ id }));
+    if (nodes.length) flow.fitView({ nodes, padding: 0.3, maxZoom: 1.2, duration: 300 });
+  }, [flow, lit, selected, graph]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Escape') { if (walking) setStep(undefined); else setSelected(undefined); }
       if (e.key === 'f') fit();
+      if (e.key === 'z') frame();
+      // The arrows pan (§5.2), a screen's worth with Shift; in a walk, ← and → step instead.
+      const pan = (dx: number, dy: number) => {
+        e.preventDefault();
+        const vp = flow.getViewport();
+        flow.setViewport({ ...vp, x: vp.x + dx, y: vp.y + dy }, { duration: 120 });
+      };
+      const px = e.shiftKey ? 400 : 80;
+      if (e.key === 'ArrowUp') pan(0, px);
+      if (e.key === 'ArrowDown') pan(0, -px);
       if (walking && step !== undefined) {
         if (e.key === 'ArrowRight') { e.preventDefault(); stepTo(step + 1); }
         if (e.key === 'ArrowLeft') { e.preventDefault(); stepTo(step - 1); }
+      } else {
+        if (e.key === 'ArrowLeft') pan(px, 0);
+        if (e.key === 'ArrowRight') pan(-px, 0);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [fit, walking, step, stepTo]);
+  }, [fit, frame, flow, walking, step, stepTo]);
 
   // The camera frames the current step (a cut under prefers-reduced-motion).
   const [flowReady, setFlowReady] = useState(false);
@@ -320,28 +351,32 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
       selected: walking ? (currentStep?.nodes.includes(n.id) ?? false) : n.id === selected,
-      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim, root: focus?.root === n.id, mark, lens: lensMark },
+      data: { cls: n.cls, label: n.label, chips, annotation: n.annotation, dim, hoverDim: hoverLit ? !hoverLit.nodes.has(n.id) : false, root: focus?.root === n.id, mark, lens: lensMark },
     };
-  }), [graph, laid, selected, lit, focus, allStates, refHref, walking, currentStep, lensView]);
+  }), [graph, laid, selected, lit, focus, allStates, refHref, walking, currentStep, lensView, hoverLit]);
 
   const rfEdges = useMemo<Edge[]>(() => graph.edges.map((e) => {
     const isLit = lit?.edges.has(e.id) ?? false;
     const markColor = lensView?.edgeMarks.get(e.id);
     const ghostEnd = ghosts.has(e.source) || ghosts.has(e.target);
     const dimmed = (lit && !isLit) || (lensView?.dim && !markColor && lensView.dim.has(e.source) && lensView.dim.has(e.target));
-    const className = ['gedge', `gedge-${e.kind}`, dimmed || ghostEnd ? 'gedge-dim' : '', isLit ? 'gedge-lit' : '', e.id === selected ? 'gedge-selected' : '', markColor ? 'gedge-marked' : ''].join(' ');
+    const hoverLitEdge = hoverLit?.edges.has(e.id) ?? false;
+    const className = [
+      'gedge', `gedge-${e.kind}`, dimmed || ghostEnd ? 'gedge-dim' : '', isLit ? 'gedge-lit' : '', e.id === selected ? 'gedge-selected' : '', markColor ? 'gedge-marked' : '',
+      hoverLitEdge ? 'gedge-hover-lit' : hoverLit ? 'gedge-hover-dim' : '', e.id === hoveredEdge ? 'gedge-hover' : '',
+    ].join(' ');
     return {
       id: e.id,
       source: e.source,
       target: e.target,
       type: 'default',
-      label: e.kind === 'junction' || isLit ? e.label : undefined,
+      label: e.kind === 'junction' || isLit || hoverLitEdge || e.id === hoveredEdge ? e.label : undefined,
       className,
       style: markColor ? ({ '--edge-mark': markColor } as React.CSSProperties) : undefined,
       markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: markColor },
       interactionWidth: 14,
     };
-  }), [graph, lit, selected, lensView, ghosts]);
+  }), [graph, lit, selected, lensView, ghosts, hoverLit, hoveredEdge]);
 
   const toggle = useCallback((cls: string) => setHidden((prev) => {
     const next = new Set(prev);
@@ -461,6 +496,10 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
             onNodeDoubleClick={(_, n) => { const node = graph.nodes.find((x) => x.id === n.id); if (node && !ghosts.has(node.id)) router.push(`${focusPath(node)}${branchQuery}`); }}
             onEdgeClick={(_, e) => setSelected(e.id)}
             onPaneClick={() => setSelected(undefined)}
+            onNodeMouseEnter={(_, n) => setHovered(n.id)}
+            onNodeMouseLeave={() => setHovered(undefined)}
+            onEdgeMouseEnter={(_, e) => setHoveredEdge(e.id)}
+            onEdgeMouseLeave={() => setHoveredEdge(undefined)}
             fitView
             fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
             minZoom={0.15}
@@ -505,6 +544,7 @@ function GraphBody({ docs, ghostIds, initial, reads, lensReads, lensError, focus
               relation={relation}
               onRelation={setRelation}
               onSelect={focusOn}
+              onFrame={frame}
               onClose={() => setSelected(undefined)}
               rawUrl={rawUrl}
               states={allStates}

@@ -144,7 +144,7 @@ function History({ history, pending, atRef, refHref, changesHref, id }: { histor
 }
 
 export function GraphPanel({
-  selection, byId, about, referencedBy, relation, onRelation, onSelect, onClose, rawUrl,
+  selection, byId, about, referencedBy, relation, onRelation, onSelect, onFrame, onClose, rawUrl,
   states, history, historyPending, traceable, isRoot, ghost, branchQuery, atRef, refHref, changesHref,
 }: {
   selection: PanelSelection;
@@ -154,6 +154,8 @@ export function GraphPanel({
   relation: Relation;
   onRelation: (r: Relation) => void;
   onSelect: (id: string) => void;
+  /** Zoom to this record and the lit relation (§5.2). */
+  onFrame: () => void;
   onClose: () => void;
   rawUrl?: (id: string) => string;
   states: ReadonlyMap<string, string>;
@@ -232,6 +234,7 @@ export function GraphPanel({
       <div className="mt-1 font-mono text-[11px] text-zinc-500 dark:text-zinc-400">{n.id}</div>
 
       <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Actions">
+        <button type="button" className={ACTION} onClick={onFrame} title="Zoom to this record and what is lit (z)">Frame</button>
         {ghost && <span className="rounded bg-zinc-100 px-2 py-0.5 text-[12px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" title="Drawn as it was at the commit the Changes lens counts from">Deleted since</span>}
         {!isRoot && !ghost && <Link href={`${focusPath(n)}${branchQuery}`} className={ACTION} title="This record's neighborhood on its own page">Focus</Link>}
         {n.cls === 'Module' && <Link href={`/coverage/${encodeURIComponent(localPart(n.id))}${branchQuery}`} className={ACTION}>Coverage View</Link>}
