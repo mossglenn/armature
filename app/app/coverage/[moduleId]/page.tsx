@@ -8,7 +8,12 @@ import {
 } from '@armature/client';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { focusPath } from '@/lib/graph/focus';
 import { hubPublicUrl, viewerHub } from '@/lib/viewer';
+
+/** A record's Focus page on the Design Graph, on the same branch (docs/graph-view-plan.md §3.2). */
+const focusHref = (id: string, q: string) => `${focusPath({ id, cls: id.slice(0, id.indexOf('/')) })}${q}`;
+const FOCUS_LINK = 'hover:underline';
 
 /**
  * The Coverage View (plan §4 Phase 4; PROJECT_CONTEXT's demo payoff): a
@@ -78,7 +83,7 @@ function Counts({ title, counts }: { title: string; counts: Record<Verdict, numb
 
 type Statistics = Map<string, ItemStatistic[]>;
 
-function Performance({ statistics }: { statistics?: ItemStatistic[] }) {
+function Performance({ statistics, q }: { statistics?: ItemStatistic[]; q: string }) {
   if (!statistics?.length) return null;
   return (
     <ul className="w-full pl-4 text-xs text-zinc-600 dark:text-zinc-400">
@@ -87,19 +92,23 @@ function Performance({ statistics }: { statistics?: ItemStatistic[] }) {
           {s.dataset?.cohort ?? s.dataset?.label ?? 'Imported'}
           {s.dataset?.administrationDate && <> ({s.dataset.administrationDate})</>}:{' '}
           <span className="font-mono tabular-nums text-zinc-900 dark:text-zinc-100">{s.metric.value}</span> {s.metric.unit}
+          {' · '}
+          <Link href={focusHref(s.metric.id, q)} className="text-blue-700 hover:underline dark:text-blue-300" title="This result traced back through the design (the Focus page)">
+            trace this result
+          </Link>
         </li>
       ))}
     </ul>
   );
 }
 
-function Items({ items, statistics }: { items: CoverageItem[]; statistics: Statistics }) {
+function Items({ items, statistics, q }: { items: CoverageItem[]; statistics: Statistics; q: string }) {
   if (items.length === 0) return <p className="text-sm text-zinc-500 dark:text-zinc-400">No items placed in this module assess it.</p>;
   return (
     <ul className="space-y-1 text-sm">
       {items.map((item) => (
         <li key={item.id} className="flex flex-wrap items-baseline gap-x-2">
-          <span className="font-medium">{item.label ?? item.id}</span>
+          <Link href={focusHref(item.id, q)} className={`font-medium ${FOCUS_LINK}`}>{item.label ?? item.id}</Link>
           {item.bloomsLevel && <span className="text-zinc-500 dark:text-zinc-400">{item.bloomsLevel}</span>}
           <span className="text-zinc-500 dark:text-zinc-400">item {item.status}</span>
           <span className="text-zinc-500 dark:text-zinc-400">
@@ -108,7 +117,7 @@ function Items({ items, statistics }: { items: CoverageItem[]; statistics: Stati
           <span className={item.eligibility === 'delivered' ? 'text-emerald-700 dark:text-emerald-300' : 'text-zinc-500 dark:text-zinc-400'}>
             {ELIGIBILITY_LABEL[item.eligibility]}
           </span>
-          <Performance statistics={statistics.get(item.id)} />
+          <Performance statistics={statistics.get(item.id)} q={q} />
         </li>
       ))}
     </ul>
@@ -232,7 +241,9 @@ export default async function CoveragePage({
 
       <header className="mb-8">
         <p className="text-sm text-zinc-500 dark:text-zinc-400">Coverage View</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{data.module.label ?? data.module.id}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          <Link href={focusHref(data.module.id, branchQuery)} className={FOCUS_LINK} title="This module on the Design Graph">{data.module.label ?? data.module.id}</Link>
+        </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           {data.summary.declared} declared objective{data.summary.declared === 1 ? '' : 's'} on branch{' '}
           <span className="font-mono">{branch ?? 'main'}</span>
@@ -253,7 +264,7 @@ export default async function CoveragePage({
             <li key={d.id} className="py-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-base font-medium">
-                  {d.objective.label ?? d.objective.id}
+                  <Link href={focusHref(d.objective.id, branchQuery)} className={FOCUS_LINK}>{d.objective.label ?? d.objective.id}</Link>
                   {d.objective.bloomsLevel && (
                     <span className="ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400">{d.objective.bloomsLevel}</span>
                   )}
@@ -270,7 +281,7 @@ export default async function CoveragePage({
               </div>
               {d.roleRationale && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{d.roleRationale}</p>}
               <div className="mt-3">
-                <Items items={d.assessedBy} statistics={statistics} />
+                <Items items={d.assessedBy} statistics={statistics} q={branchQuery} />
               </div>
             </li>
           ))}
@@ -287,13 +298,13 @@ export default async function CoveragePage({
             {data.undeclared.map((u) => (
               <li key={u.objective.id} className="py-4">
                 <h3 className="text-base font-medium">
-                  {u.objective.label ?? u.objective.id}
+                  <Link href={focusHref(u.objective.id, branchQuery)} className={FOCUS_LINK}>{u.objective.label ?? u.objective.id}</Link>
                   {u.objective.bloomsLevel && (
                     <span className="ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400">{u.objective.bloomsLevel}</span>
                   )}
                 </h3>
                 <div className="mt-3">
-                  <Items items={u.assessedBy} statistics={statistics} />
+                  <Items items={u.assessedBy} statistics={statistics} q={branchQuery} />
                 </div>
               </li>
             ))}
