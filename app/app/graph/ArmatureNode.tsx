@@ -22,6 +22,8 @@ export type ArmatureNodeData = {
   dim: boolean;
   /** The Focus page's root. */
   root: boolean;
+  /** The Walkthrough's then-and-now step: added or changed since the commit the cohort met. */
+  mark?: 'added' | 'changed';
 };
 
 export type ArmatureNodeType = Node<ArmatureNodeData, 'armature'>;
@@ -64,6 +66,7 @@ export function ArmatureNode({ data, selected }: NodeProps<ArmatureNodeType>) {
         data.root ? 'gnode-root' : '',
         data.dim ? 'gnode-dim' : '',
         data.annotation ? 'gnode-annotation' : '',
+        data.mark ? `gnode-${data.mark}` : '',
       ].join(' ')}
       style={{ '--c-light': hue.light, '--c-dark': hue.dark } as CSSProperties}
       role="button"
