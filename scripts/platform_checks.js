@@ -106,8 +106,16 @@
 //      the transient commits stay readable by id once their branches are deleted; an apply of
 //      an empty diff makes no commit
 //
+// Connections (the adapter's read retry), added 2026-10-25:
+//   AG. The store answers a keep-alive request with `Connection: Keep-Alive` and no `Keep-Alive`
+//      header naming a timeout, then closes the idle connection after about two seconds; Node's
+//      fetch, given no timeout, keeps an idle connection for four, so a request can go out on a
+//      connection the store is closing (`UND_ERR_SOCKET`, "other side closed")
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
+
+import net from "node:net";
 
 const URL  = process.env.TERMINUS_URL  || "http://localhost:6363";
 const USER = process.env.TERMINUS_USER || "admin";
@@ -899,6 +907,31 @@ async function main() {
   record("AF4", r.status === 200 && afHead3 === afHead2?.identifier ? "PASS" : "INFO",
     `apply of an empty diff: ${r.status}; ${afHead3 === afHead2?.identifier ? "no commit made" : "a commit was made: " + afHead3}`);
   await api("DELETE", `/api/branch/admin/${DB}/local/branch/af-target`, {});
+
+  // AG: how long the store keeps an idle connection. Measured on a raw socket, since fetch's pool
+  // hides when a connection closes; undici's default keep-alive timeout, used when the server
+  // names none, is 4 seconds.
+  const agRes = await fetch(`${URL}/api/log/admin/${DB}/local/branch/main?count=1`, { headers: { Authorization: AUTH } });
+  await agRes.text();
+  const agConnection = agRes.headers.get("connection");
+  const agKeepAlive = agRes.headers.get("keep-alive");
+  record("AG1", /keep-alive/i.test(agConnection ?? "") && agKeepAlive === null ? "PASS" : "INFO",
+    `Connection: ${agConnection}; Keep-Alive: ${agKeepAlive ?? "absent"}`);
+  const agUrl = new globalThis.URL(URL);
+  const agClosedAfter = await new Promise((resolve) => {
+    let answered;
+    const socket = net.connect(Number(agUrl.port || 80), agUrl.hostname, () => {
+      socket.write(`GET /api/log/admin/${DB}/local/branch/main?count=1 HTTP/1.1\r\nHost: ${agUrl.host}\r\nAuthorization: ${AUTH}\r\nConnection: keep-alive\r\n\r\n`);
+    });
+    socket.on("data", () => { answered ??= Date.now(); });
+    socket.on("end", () => { socket.destroy(); resolve(answered ? Date.now() - answered : undefined); });
+    socket.on("error", () => resolve(undefined));
+    setTimeout(() => { socket.destroy(); resolve(Infinity); }, 10000);
+  });
+  record("AG2", agClosedAfter !== undefined && agClosedAfter < 4000 ? "PASS" : "INFO",
+    agClosedAfter === Infinity ? "the idle connection was still open after 10 s"
+      : agClosedAfter === undefined ? "the connection failed before an answer"
+      : `the store closed the idle connection ${agClosedAfter} ms after its answer (fetch keeps one for 4000 ms)`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
