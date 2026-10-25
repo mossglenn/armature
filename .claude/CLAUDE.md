@@ -96,7 +96,7 @@ app/
       client.test.ts       # The contract test for @armature/client: every route through the client's fetch option over app.request (refs, commit from ETag, If-Match → 412, identity, envelopes, HubError codes)
       write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
       intelligence.test.ts # The seven intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion); attestations made on a round branch, merged, then reported Stale after a fragment changes (Phase 5 exit criterion)
-      store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request
+      store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request; a read dropped by the store's closing connection is sent once more, a write never (check AG, 2026-10-25); store.test.ts over a stubbed fetch
       http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
       identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now, oidc later) → User on main, the registry; carries a User copy onto a branch when a write needs it
       classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy or attestedBy
