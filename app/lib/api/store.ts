@@ -7,7 +7,8 @@
  * commit, `author` and `message` on every write, the translation between the
  * store's `TerminusDB-Data-Version` token and the bare commit ids `/api/v1`
  * exposes (ADR-0025 decision 7), and the parsing of error bodies into a typed
- * `StoreError` that carries the server's `@type`.
+ * `StoreError` that carries the server's `@type`. A read the store's closing
+ * connection drops is sent once more; a write never is (check AG).
  *
  * A `Store` is bound to one ref and holds no other state, so one is created
  * per request from the resolved ref (`createStore`). The endpoints and
@@ -174,6 +175,31 @@ interface RequestOptions {
   query?: Record<string, string | undefined>;
   body?: unknown;
   headers?: Record<string, string>;
+  /**
+   * The request changes nothing in the store, so it is safe to send twice. A
+   * GET and a POST that overrides its method to GET are reads without saying
+   * so; a POST that computes an answer, like the diff, says it here.
+   */
+  read?: boolean;
+}
+
+/**
+ * The store closes an idle keep-alive connection after about two seconds and
+ * does not advertise it, while Node's fetch keeps an idle connection for four
+ * (platform check AG). A request written to a connection the store is closing
+ * fails with `UND_ERR_SOCKET` ("other side closed"), from `fetch` or from the
+ * body read; seen in CI and locally on 2026-10-23. A read is sent once more
+ * after a pause long enough for the pool to notice its other closed
+ * connections. A write is not: the store may have committed it before the
+ * connection went, and the caller's `If-Match` is what tells.
+ */
+const DROPPED_CONNECTION_CODES = new Set(['UND_ERR_SOCKET', 'ECONNRESET']);
+const READ_RETRY_DELAY_MS = 50;
+
+/** True when a fetch failed because the connection closed under it. */
+export function isDroppedConnection(err: unknown): boolean {
+  const cause = err instanceof Error ? err.cause : undefined;
+  return isRecord(cause) && DROPPED_CONNECTION_CODES.has(String(cause.code));
 }
 
 interface StoreResponse {
@@ -228,8 +254,20 @@ export class Store {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(options.body);
     }
-    const res = await fetch(url, init);
-    const text = await res.text();
+    const read = options.read ?? (method === 'GET' || headers['X-HTTP-Method-Override'] === 'GET');
+    const send = async (): Promise<{ res: Response; text: string }> => {
+      const res = await fetch(url, init);
+      return { res, text: await res.text() };
+    };
+    let sent: { res: Response; text: string };
+    try {
+      sent = await send();
+    } catch (err) {
+      if (!read || !isDroppedConnection(err)) throw err;
+      await new Promise((resolve) => setTimeout(resolve, READ_RETRY_DELAY_MS));
+      sent = await send();
+    }
+    const { res, text } = sent;
     let body: unknown = null;
     if (text) {
       try {
@@ -472,6 +510,7 @@ export class Store {
    */
   async diff(from: string, to: string, documentId?: string): Promise<unknown> {
     const r = await this.request('POST', `/api/diff/${this.dbPath}`, {
+      read: true,
       body: {
         before_data_version: from,
         after_data_version: to,
