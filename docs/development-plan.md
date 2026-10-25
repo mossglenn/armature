@@ -1409,3 +1409,18 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   ADR-0028's key relies on it.
 - Turtle and RDF/XML content negotiation appear under enterprise-labeled pages; treat JSON and
   JSON-LD as the guaranteed export formats until verified.
+
+**Connections** (2026-10-25)
+- *Verified (2026-10-25, check AG):* the store answers `Connection: Keep-Alive` with no `Keep-Alive`
+  header naming a timeout (AG1) and closes an idle connection about two seconds after its answer
+  (2002 ms, AG2). Node's fetch (undici), told no timeout, keeps an idle connection for four, so
+  for about two seconds a pooled connection looks reusable to the hub while the store is closing
+  it. A request written in that moment fails with `fetch failed`, `UND_ERR_SOCKET` "other side
+  closed": seen in CI and locally on 2026-10-23, and reproduced on 2026-10-25 by sending a second
+  read at idle gaps swept from 1990 to 2012 ms in steps of 0.2 ms (1 of 110 failed, at 1993.6 ms;
+  71 gaps at whole milliseconds from 2030 to 2100 all succeeded, since the pool usually sees the
+  close first). The race itself has no lettered check, as it takes minutes to show once. The
+  adapter sends a read once more after 50 ms (`app/lib/api/store.ts`); a write is never resent,
+  since the store may have committed it, and the caller's `If-Match` is what tells. Giving the
+  hub's fetch a keep-alive timeout under two seconds would close the window for writes too, at
+  the cost of `undici` as a dependency; not done while a dropped write has not been seen.
