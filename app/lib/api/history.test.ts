@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './app';
 import { historyMemo } from './routes/documents';
+import { createStore } from './store';
 
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
 const BRANCH = `test-history-${Date.now().toString(36)}`;
@@ -27,8 +28,9 @@ describe('the history memo', () => {
     const written = await put(`/api/v1/documents/${ID}${q}`, { message: 'A note for the history memo test', document: { '@type': 'DesignNote', label: 'A note whose history is read twice', subject: ['LearningObjective/identify-ai-limitations'], rationale: 'The memo test.' } });
     expect([200, 201], await written.text()).toContain(written.status);
   });
+  // Through the adapter: the route deletes only a branch whose head another branch holds.
   afterAll(async () => {
-    await app.request(`/api/v1/branches/${BRANCH}`, { method: 'DELETE', headers: HEADERS });
+    await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
   });
 
   it('serves the same answer from memory while the head stands still, and a fresh one after a write', async () => {
