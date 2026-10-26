@@ -10,6 +10,12 @@
 #   docker compose run --rm operator node <script> one of scripts/ (load_schema.js, seed_data.js)
 #                                                 against the store, from a Node container
 #
+# The private network is named `armature`, whatever the checkout's directory, so a
+# client deployed beside the instance (CoQui for a demonstration) joins it from its
+# own compose file as an external network and calls the hub as http://hub:3100; its
+# public site is a file in docker/sites/, which Caddy imports (docs/deployment.md,
+# "A client on the same server"). Whatever joins this network can write as anyone.
+#
 # What the machine publishes, and to whom:
 #   caddy   80 and 443 everywhere     the public face (profile `public`): HTTPS for
 #                                     ARMATURE_SITE, proxied to the viewer on the network
@@ -93,6 +99,8 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Other sites on this server, one file each (docker/sites/README.md).
+      - ./sites:/etc/caddy/sites:ro
       # Certificates and the account key; kept so a restart does not ask again.
       - caddy-data:/data
       - caddy-config:/config
@@ -122,6 +130,10 @@ services:
     entrypoint: ["sh", "/repo/docker/operator-entrypoint.sh"]
     depends_on:
       - terminusdb
+
+networks:
+  default:
+    name: armature
 
 volumes:
   terminusdb-data:

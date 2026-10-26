@@ -12,3 +12,9 @@
 	encode zstd gzip
 	reverse_proxy viewer:3000
 }
+
+# Other sites served from this server, one file each in docker/sites/ (mounted
+# read-only at /etc/caddy/sites): a client deployed beside the instance names its
+# own domain and container there, so this file never names a plugin. A pattern
+# that matches no file imports nothing.
+import /etc/caddy/sites/*.caddy
