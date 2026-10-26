@@ -5,11 +5,14 @@
 // Usage:
 //   node load_schema.js                     # replace the schema; instance data must conform
 //   node load_schema.js --clear-instances   # empty the instance graph first, then replace the schema
+//   node load_schema.js --recreate          # delete the database (data, branches, log), create it, load
 //
 // A breaking schema change (removing a class, changing a field's type) fails the
 // schema check against existing instance data. At demo scale the answer is a
 // reload: --clear-instances deletes every instance document in one transaction,
 // the schema loads against an empty graph, and seed_data.js repopulates it.
+// To reset a demonstration instance to the seed, --recreate deletes the whole
+// database first, its commit log included, and seed_data.js follows.
 // For a deployment holding real data, use TerminusDB's schema migration
 // endpoint (/api/migration, with dry_run) instead; see the consequences of
 // ADR-0022 (architecture decision record, in schema/docs/adr/).
@@ -72,10 +75,21 @@ async function main() {
   const databases = await client.getDatabases();
   const exists = databases.some(db => db.name === TERMINUS_DB);
 
-  if (exists) {
+  // --recreate deletes the database first: its documents, branches and commit
+  // log. It is how a demonstration instance is reset to the seed; the log is the
+  // reason, since --clear-instances empties the data in a new commit and a long
+  // log makes the store's history reads slow. Explicit flag because it destroys
+  // everything the database holds.
+  const recreate = process.argv.includes("--recreate");
+  if (exists && recreate) {
+    console.log(`  → Deleting it (--recreate)...`);
+    await client.deleteDatabase(TERMINUS_DB, "admin");
+  }
+
+  if (exists && !recreate) {
     console.log(`  → Database already exists, skipping creation`);
   } else {
-    console.log(`  → Database not found, creating...`);
+    console.log(exists ? `  → Creating it again...` : `  → Database not found, creating...`);
     await client.createDatabase(TERMINUS_DB, {
       label: "Armature",
       comment: "Graph-based infrastructure for learning engineering",
