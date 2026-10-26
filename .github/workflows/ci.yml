@@ -1,6 +1,6 @@
 # Armature CI (continuous integration)
 #
-# Four jobs, run in parallel on every push to main and every pull request:
+# Five jobs, run in parallel on every push to main and every pull request:
 #
 #   app       Guards the contracts that need no store: `schema/schema.json` and the
 #             generated `packages/types` agree (check:types), the app lints clean,
@@ -31,6 +31,14 @@
 #             bundled hub started on 3100, the viewer built and started on 3000,
 #             and the Design Graph driven in Chromium: the seed drawn, a record
 #             selected, a view reproduced from its URL, no console error.
+#
+#   client    Installs @armature/client and @armature/types the way another
+#             repository does (packages/client/install-check/run.sh, 2026-10-25):
+#             packed from this checkout, installed with pnpm outside the npm
+#             workspace, then type-checked with a Next app's options and run under
+#             Vitest, tsx and a Next build, the tools CoQui uses. Added after the
+#             README's install failed for an outside consumer: the client depended
+#             on @armature/types@0.1.0, which resolves only inside the workspace.
 #
 #   images    Builds the hub's container image (docker/hub.Dockerfile) and checks
 #             that it starts and answers GET /api/v1/discover, the one read that
@@ -71,6 +79,20 @@ jobs:
       - run: npm run check:types
       - run: npm run build:hub --workspace app
       - run: npm run build:operator --workspace app
+
+  client:
+    name: The client installed as another repository installs it
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - run: packages/client/install-check/run.sh
 
   contract:
     name: Contract suite against TerminusDB
