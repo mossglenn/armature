@@ -122,10 +122,14 @@ test('the Walkthrough walks Narrative 1 from the result to the evidence', async 
   const walk = page.getByRole('complementary', { name: 'Walkthrough' });
   await expect(walk).toContainText('step 1 of 10');
   await expect(walk).toContainText('0.38 proportion correct on Identifying training data bias');
-  for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowRight');
+  for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowRight');
+  await expect(walk).toContainText('step 3 of 10');
+  await expect(walk).toContainText(/1 was placed after the cohort's commit \([0-9a-z]{10}\), so the cohort met 3/);
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
   await expect(walk).toContainText('step 7 of 10');
   await expect(walk).toContainText('Adequate when?');
   await expect(walk).toContainText(/was partially assessed in Risks and Ethical Use: 1 eligible item/);
+  await expect(walk).toContainText('Today it is fully assessed: 2 eligible items');
   await expect(walk.getByRole('link', { name: /Coverage View as of/ })).toHaveAttribute('href', /^\/coverage\/risks-and-ethics\?ref=/);
   await expect(page).toHaveURL(/walk=7/);
   await page.getByRole('button', { name: 'Next →' }).click();
