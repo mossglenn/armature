@@ -36,7 +36,7 @@ describe('the walk', () => {
     ]);
     expect(walk).toMatchObject({ module: 'Module/risks-and-ethics', objective: 'LearningObjective/distinguish-bias-types', asOf: (trace.root as { asOf?: string }).asOf });
     expect(walk.steps[0].text[0]).toBe('0.38 proportion correct on Identifying training data bias, Spring 2026 pilot, 2026-05-14.');
-    expect(walk.steps[2].text[0]).toBe('3 items were placed in Module 3 Capstone Assessment; 2 placements were approved.');
+    expect(walk.steps[2].text[0]).toBe('4 items were placed in Module 3 Capstone Assessment; 3 placements were approved.');
     expect(walk.steps[3].text[1]).toMatch(/^Attested Affirmed on part bias-type-mc-opt-a by demo-reviewer: ".*". The verdict is Current/);
     expect(walk.steps[5].text[0]).toMatch(/^Risks and Ethical Use declares Distinguish Bias Types as Primary \(#1\)/);
     expect(walk.steps[8].continuation).toBe(true);

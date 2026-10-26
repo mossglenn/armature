@@ -19,9 +19,9 @@ test('draws the seed in lifecycle columns', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/graph');
   await expect(page.getByRole('heading', { name: 'Design Graph' })).toBeVisible();
-  await expect(page.getByText('64 records')).toBeVisible();
-  await expect(page.locator('.react-flow__node')).toHaveCount(37);
-  await expect(page.locator('.react-flow__edge.gedge-junction')).toHaveCount(26);
+  await expect(page.getByText('67 records')).toBeVisible();
+  await expect(page.locator('.react-flow__node')).toHaveCount(39);
+  await expect(page.locator('.react-flow__edge.gedge-junction')).toHaveCount(27);
   // The header in full, or in its short form with the name as its title when the fit is narrow.
   await expect(page.getByText('Assessments and lessons').or(page.getByTitle('Assessments and lessons'))).toBeVisible();
   await expect(page.getByLabel('AssessmentItem', { exact: false }).first()).toBeVisible();
@@ -57,7 +57,7 @@ test('an edge is a relationship document with its data', async ({ page }) => {
 test('a view is reproduced from its URL alone', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/graph?select=AssessmentItem%2Fbias-type-mc&hide=DesignFinding,DesignNote&related=upstream&depth=all');
-  await expect(page.locator('.react-flow__node')).toHaveCount(34);
+  await expect(page.locator('.react-flow__node')).toHaveCount(35);
   await expect(page.getByRole('complementary', { name: 'Record details' })).toContainText('Identifying training data bias');
   await expect(page.getByRole('button', { name: 'Upstream' })).toHaveAttribute('class', /bg-zinc-800|bg-zinc-200/);
   await expect(page.getByLabel('Depth')).toHaveValue('all');
@@ -67,7 +67,7 @@ test('a view is reproduced from its URL alone', async ({ page }) => {
 
 test('relationships can be drawn as nodes', async ({ page }) => {
   await page.goto('/graph?edges=nodes');
-  await expect(page.locator('.react-flow__node')).toHaveCount(64);
+  await expect(page.locator('.react-flow__node')).toHaveCount(67);
   await expect(page.locator('.react-flow__edge.gedge-junction')).toHaveCount(0);
 });
 
@@ -77,7 +77,7 @@ test('the Focus page draws the trace from a metric: the walk lit, the root outli
   await expect(page.getByRole('heading', { level: 1, name: /Item difficulty: bias type item/ })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('Design Graph');
   await expect(page.getByText('The lifecycle walk from this record')).toBeVisible();
-  await expect(page.locator('.react-flow__node')).toHaveCount(15);
+  await expect(page.locator('.react-flow__node')).toHaveCount(16);
   await expect(page.locator('.gnode-root')).toHaveCount(1);
   await expect(page.locator('.gedge-lit')).not.toHaveCount(0);
   const panel = page.getByRole('complementary', { name: 'Record details' });
@@ -147,10 +147,10 @@ test('the coverage lens tints each objective by its verdict and its legend carri
   await page.goto('/graph?lens=coverage');
   const legend = page.getByLabel('Legend');
   await expect(legend).toContainText('Uncovered3');
-  await expect(legend).toContainText('Partially assessed3');
-  await expect(legend).toContainText('Fully assessed1');
+  await expect(legend).toContainText('Partially assessed2');
+  await expect(legend).toContainText('Fully assessed2');
   await expect(page.locator('.gnode-lens-fill')).toHaveCount(7);
-  await expect(page.getByRole('button', { name: /^LearningObjective, Distinguish Bias Types, Partially assessed/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^LearningObjective, Distinguish Bias Types, Fully assessed/ })).toBeVisible();
   await page.getByLabel('Projected', { exact: true }).check();
   await expect(page).toHaveURL(/projected=1/);
   await expect(legend).toContainText('Uncovered1');
@@ -173,10 +173,16 @@ test('the other lenses answer from their reads: alignment, attestations, outcome
   await expect(page.getByLabel('Legend')).toContainText('Well below the median1');
   await expect(page.getByRole('button', { name: /^AssessmentItem, Identifying training data bias, 0.38 proportion correct/ })).toBeVisible();
 
+  // Two commits are named: the results the finding judged, and the design the pilot met.
   await page.getByLabel('Changes since', { exact: true }).check();
-  await page.getByLabel('Since a commit the graph names').selectOption({ index: 1 });
+  const since = page.getByLabel('Since a commit the graph names');
+  const option = async (text: string) => (await since.locator('option', { hasText: text }).getAttribute('value'))!;
+  await since.selectOption(await option('One item carries the bias objective'));
   await expect(page).toHaveURL(/lens=changes&since=/);
-  await expect(page.getByLabel('Legend')).toContainText('Added since5');
+  await expect(page.getByLabel('Legend')).toContainText('Added since3');
+  await expect(page.getByRole('button', { name: /^AssessmentItem, Telling output bias from training data bias, Added since/ })).toBeVisible();
+  await since.selectOption(await option('Module 3 capstone, spring 2026 pilot'));
+  await expect(page.getByLabel('Legend')).toContainText('Added since8');
   await expect(page.getByRole('button', { name: /^LearningDataset, Module 3 capstone, spring 2026 pilot, Added since/ })).toBeVisible();
   expect(errors).toEqual([]);
 });

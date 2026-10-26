@@ -217,7 +217,11 @@ describe('the seed', () => {
     const outcomes = applyLens(graph, { lens: 'outcomes' }, { docs: documents });
     expect(outcomes.unit).toBe('proportion correct');
     expect(sorted(outcomes.marks.keys())).toEqual(['AssessmentItem/bias-type-mc', 'AssessmentItem/effective-prompt-mc']);
-    const since = namedCommits(documents)[0].commit;
+    // Two commits are named: the one the pilot met, and the results the finding judged.
+    const named = namedCommits(documents);
+    expect(named).toHaveLength(2);
+    expect(named.map((c) => c.label)).toContain('One item carries the bias objective');
+    const since = named.find((c) => c.label.includes('Module 3 capstone, spring 2026 pilot'))!.commit;
     const changes = await read<{ changes: Array<{ id: string; op: string }> }>(`/api/v1/branches/main/changes?since=${since}`);
     const view = applyLens(graph, { lens: 'changes', since, changes: { branch: 'main', from: since, to: '', changes: changes.changes as never }, ghosts: [] });
     const added = changes.changes.filter((c) => c.op === 'insert' && !c.id.startsWith('User/')).length;

@@ -191,7 +191,7 @@ describe('@armature/client over the app in-process', () => {
     const bias = stats.data.items.find((x) => x.item.id === 'AssessmentItem/bias-type-mc');
     expect(bias?.statistics[0].metric.value).toBe(0.38);
     expect(bias?.statistics[0].dataset?.cohort).toBe('Spring 2026 pilot');
-    expect(stats.data.itemsWithoutStatistics.map((i) => i.id)).toEqual(['AssessmentItem/appropriate-use-mc']);
+    expect(stats.data.itemsWithoutStatistics.map((i) => i.id)).toEqual(['AssessmentItem/appropriate-use-mc', 'AssessmentItem/output-bias-mc']);
   });
 
   it('reads a module\'s content in teaching order through the typed fields', async () => {

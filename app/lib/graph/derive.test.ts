@@ -158,13 +158,13 @@ describe('options', () => {
 });
 
 describe('the seed', () => {
-  it('derives to the drawing the page shows: 37 records, 26 junction edges, every edge along the lifecycle', async () => {
+  it('derives to the drawing the page shows: 39 records, 27 junction edges, every edge along the lifecycle', async () => {
     const res = await app.request('/api/v1/export?profile=full');
     expect(res.status).toBe(200);
     const { documents } = (await res.json()) as { documents: Doc[] };
     const g = derive(documents);
-    expect(g.nodes).toHaveLength(37);
-    expect(g.edges.filter((e) => e.kind === 'junction')).toHaveLength(26);
+    expect(g.nodes).toHaveLength(39);
+    expect(g.edges.filter((e) => e.kind === 'junction')).toHaveLength(27);
     expect(g.unresolved).toEqual([]);
     expect(g.nodes.some((n) => n.cls === 'User')).toBe(false);
     const bias = g.nodes.find((n) => n.id === 'AssessmentItem/bias-type-mc')!;
