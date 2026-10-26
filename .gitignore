@@ -53,3 +53,6 @@ docs/vendor/terminusdb/_all/
 # Playwright (app/e2e)
 app/test-results/
 app/playwright-report/
+
+# Other sites on an instance's server (docker/sites/README.md): the server's, not the repository's
+docker/sites/*.caddy
