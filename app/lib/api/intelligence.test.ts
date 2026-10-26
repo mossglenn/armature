@@ -116,7 +116,7 @@ describe('GET /api/v1/intelligence/coverage/:moduleId', () => {
 describe('GET /api/v1/intelligence/alignment', () => {
   it("finds no below-level item in the seed, the objectives Module 1's activities leave out, and the Draft item no one has aligned", async () => {
     const body = await json('/api/v1/intelligence/alignment');
-    expect(body.scope).toEqual({ objectives: 7, items: 7, activities: 3 });
+    expect(body.scope).toEqual({ objectives: 7, items: 8, activities: 3 });
     expect(body.itemsBelowObjective).toEqual([]);
     expect(body.objectivesWithoutItemAtLevel.map((o: { id: string }) => o.id)).toEqual(['LearningObjective/describe-model-training']);
     expect(ids(body.objectivesWithoutActivity).sort()).toEqual([
@@ -633,6 +633,11 @@ describe('Narrative 1 on the seed (Phase 6, ADR-0063)', () => {
     const bias = coverage.objectives.find((o: { objective: { id: string } }) => o.objective.id === 'LearningObjective/distinguish-bias-types');
     expect(bias.coverage).toEqual({ status: 'PartiallyAssessed', items: 1 });
     expect(bias.assessedBy.map((i: { id: string }) => i.id)).toEqual(['AssessmentItem/bias-type-mc']);
+    // The design changed after the pilot, so "now" differs from "then".
+    const now = await json('/api/v1/intelligence/coverage/risks-and-ethics');
+    const biasNow = now.objectives.find((o: { objective: { id: string } }) => o.objective.id === 'LearningObjective/distinguish-bias-types');
+    expect(biasNow.coverage).toEqual({ status: 'FullyAssessed', items: 2 });
+    expect(biasNow.assessedBy.map((i: { id: string }) => i.id).sort()).toEqual(['AssessmentItem/bias-type-mc', 'AssessmentItem/output-bias-mc']);
 
     // The item's statistics are metrics about it (ADR-0058), listed by subject.
     const stats = await json('/api/v1/documents/LearningMetric?subject=AssessmentItem/bias-type-mc');
@@ -642,6 +647,31 @@ describe('Narrative 1 on the seed (Phase 6, ADR-0063)', () => {
     const dataset = await json('/api/v1/documents/LearningDataset/mod3-spring-pilot');
     expect(dataset.producedBy).toBe('Assessment/mod3-assessment');
     expect(dataset.externalRefs[0]).toMatchObject({ system: 'xAPI' });
+  });
+
+  it('records why the design changed: a finding with the metric as its evidence, raised on the results and then addressed', async () => {
+    const id = 'DesignFinding/bias-objective-rests-on-one-item';
+    const finding = await json(`/api/v1/documents/${id}`);
+    expect(finding).toMatchObject({
+      subject: ['AssessmentItem/bias-type-mc'],
+      regarding: 'LearningObjective/distinguish-bias-types',
+      evidence: ['LearningMetric/mod3-bias-type-difficulty'],
+      status: 'Addressed',
+      createdBy: 'User/demo-designer',
+    });
+    expect(finding.resolutionRationale).toMatch(/second item/);
+    // It judged the results commit: the pilot's metric exists there, the second item does not.
+    const results = await json(`/api/v1/documents/LearningMetric/mod3-bias-type-difficulty?ref=${finding.asOf}`);
+    expect(results['@id']).toBe('LearningMetric/mod3-bias-type-difficulty');
+    expect((await get(`/api/v1/documents/AssessmentItem/output-bias-mc?ref=${finding.asOf}`)).status).toBe(404);
+    // Its history is the design process: raised, then addressed with the revision.
+    const history = await json(`/api/v1/documents/${id}/history?diff=false`);
+    expect(history.entries.map((e: { message: string }) => e.message)).toEqual([
+      'Seed demo data: a second bias item in the capstone, addressing the pilot finding',
+      'Seed demo data: the pilot shows the bias objective rests on one item',
+    ]);
+    const raised = await json(`/api/v1/documents/${id}?ref=${history.entries[1].commit}`);
+    expect(raised.status).toBe('Open');
   });
 });
 
@@ -658,7 +688,7 @@ describe('GET /api/v1/intelligence/item-statistics (ADR-0058 decision 3)', () =>
     expect(res.headers.get('etag')).toMatch(/^"[a-z0-9]+"$/);
     const body = await res.json();
     // The cohort's mean score names no subject, so it is no item's statistic.
-    expect(body.scope).toEqual({ items: 8, metrics: 2 });
+    expect(body.scope).toEqual({ items: 9, metrics: 2 });
     expect(body.units).toEqual(['proportion correct']);
     expect(body.items.map((x: { item: { id: string } }) => x.item.id)).toEqual([
       'AssessmentItem/bias-type-mc',
@@ -674,13 +704,13 @@ describe('GET /api/v1/intelligence/item-statistics (ADR-0058 decision 3)', () =>
       },
     ]);
     expect(bias.statistics[0].metric.asOf).toBe(bias.statistics[0].dataset.asOf);
-    expect(ids(body.itemsWithoutStatistics)).toHaveLength(6);
+    expect(ids(body.itemsWithoutStatistics)).toHaveLength(7);
   });
 
   it('scopes to the items placed in a module, and filters by unit without hiding the units there are', async () => {
     const mod3 = await json('/api/v1/intelligence/item-statistics?module=Module/risks-and-ethics');
-    expect(mod3.scope).toMatchObject({ module: { id: 'Module/risks-and-ethics' }, items: 3, metrics: 2 });
-    expect(ids(mod3.itemsWithoutStatistics)).toEqual(['AssessmentItem/appropriate-use-mc']);
+    expect(mod3.scope).toMatchObject({ module: { id: 'Module/risks-and-ethics' }, items: 4, metrics: 2 });
+    expect(ids(mod3.itemsWithoutStatistics)).toEqual(['AssessmentItem/appropriate-use-mc', 'AssessmentItem/output-bias-mc']);
     const mod1 = await json('/api/v1/intelligence/item-statistics?module=how-ai-works');
     expect(mod1.items).toEqual([]);
     expect(mod1.units).toEqual([]);

@@ -13,7 +13,8 @@
  *   7 ModuleObjectives (design intent only; coverage is computed on read,
  *     architecture decision record ADR-0056). Write Effective Prompts in
  *     Module 2 has two Approved items, so it reads FullyAssessed; every other
- *     declaration is Uncovered or PartiallyAssessed
+ *     declaration is Uncovered or PartiallyAssessed in this commit (the fifth
+ *     makes Distinguish Bias Types FullyAssessed too)
  *   Module 1's activities: a Practice activity and a Lesson of two
  *     sharing the module's sequence (ADR-0005), and the Draft item used
  *     formatively inside one of them (ActivityItemLink, ADR-0061)
@@ -25,6 +26,12 @@
  *     capstone to a spring pilot cohort, in a third commit whose asOf names the
  *     first; two item difficulties and a mean score; ADR-0057, ADR-0058, ADR-0063),
  *     so Narrative 1 walks on main
+ *   the design's response to the pilot (ADR-0020): a DesignFinding by the
+ *     designer on the bias item, with its difficulty as evidence, Open, in a
+ *     fourth commit whose asOf names the third; then a second AssessmentItem for
+ *     Distinguish Bias Types, its placement in the capstone, and the finding
+ *     Addressed, in a fifth. That declaration reads PartiallyAssessed at the
+ *     dataset's asOf and FullyAssessed now: "adequate when?" has two answers
  *   external references (ADR-0030): a CASE competency on one objective, an xAPI
  *     activity on the dataset
  *   1 Course
@@ -774,6 +781,54 @@ const outcomes = (asOf) => [
   },
 ];
 
+// The designer's response to the pilot (ADR-0020): the bias item is approved
+// and attested, yet 38% of the cohort answered it, and it is the only item in
+// the capstone for its objective, so the results cannot tell a gap in learning
+// from a flaw in the item. Raised in a fourth commit, asOf naming the results
+// commit it judged; the metric is its evidence.
+const PILOT_FINDING = {
+  "@type": "DesignFinding",
+  "@id": id("DesignFinding", "bias-objective-rests-on-one-item"),
+  "label": "One item carries the bias objective",
+  "description": "Design finding on the Module 3 capstone after the spring 2026 pilot.",
+  "finding": "Only 38% of the spring pilot answered the bias item correctly, and it is the capstone's only item for Distinguish Bias Types, so the result cannot separate learners who had not met the objective from an item that measures it poorly.",
+  "subject": [id("AssessmentItem", "bias-type-mc")],
+  "regarding": id("LearningObjective", "distinguish-bias-types"),
+  "evidence": [id("LearningMetric", "mod3-bias-type-difficulty")],
+  "confidence": "Medium",
+};
+const finding = (asOf) => ({ ...PILOT_FINDING, "status": "Open", "asOf": asOf });
+
+// The revision, in a fifth commit: a second item for the objective, asking the
+// distinction from the output side, placed in the capstone after the pilot, and
+// the finding marked Addressed. Coverage of Distinguish Bias Types reads
+// PartiallyAssessed at the pilot's asOf and FullyAssessed now, which is the
+// Walkthrough's "adequate when?" (ADR-0057).
+const revision = (asOf) => [
+  {
+    "@type": "AssessmentItem",
+    "@id": id("AssessmentItem", "output-bias-mc"),
+    "label": "Telling output bias from training data bias",
+    "stem": { "@type": "TextFragment", "fragmentId": "output-bias-mc-stem", "text": "An instructional designer audits an AI writing tool before adopting it. Which observation is evidence of output bias, as distinct from training data bias?" },
+    "options": [
+      { "@type": "ItemOption", "fragmentId": "output-bias-mc-opt-a", "text": "Across 200 generated case studies, managers are written as men four times as often as women", "isCorrect": true },
+      { "@type": "ItemOption", "fragmentId": "output-bias-mc-opt-b", "text": "The vendor reports that 90% of the tool's training texts come from North American sources", "isCorrect": false, "feedback": "This describes what the model was trained on, not a measured skew in what it produces." },
+      { "@type": "ItemOption", "fragmentId": "output-bias-mc-opt-c", "text": "The designer expected formal language and noticed each time the tool used it", "isCorrect": false, "feedback": "Noticing what you expected to find is confirmation bias, a pattern in the reviewer rather than the tool." },
+      { "@type": "ItemOption", "fragmentId": "output-bias-mc-opt-d", "text": "Reviewers accept the tool's case studies without reading them closely", "isCorrect": false, "feedback": "Over-reliance on the tool is automation bias, a pattern in the people using it." },
+    ],
+    "status": "Approved",
+    "itemType": "MultipleChoice",
+    "bloomsLevel": "Analyze",
+    "assesses": [id("LearningObjective", "distinguish-bias-types")],
+  },
+  { "@type": "ItemInstance", "sequence": 4, "pointValue": 2, "randomize": true, "status": "Approved", "assessment": id("Assessment", "mod3-assessment"), "implements": id("AssessmentItem", "output-bias-mc") },
+  {
+    ...finding(asOf),
+    "status": "Addressed",
+    "resolutionRationale": "Added a second item for the objective that asks the distinction from the output side, so a learner who has the concept answers both; the capstone now carries two items for Distinguish Bias Types, and the next cohort's difficulties for the two can be compared.",
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -803,11 +858,15 @@ async function main() {
     "Seed demo data: Introduction to AI for Instructional Designers",
   );
 
-  // The head the attestation is about: the seed commit just written.
+  // The head a later commit's asOf names: the commit just written.
   const auth = "Basic " + Buffer.from(`${TERMINUS_USER}:${TERMINUS_PASS}`).toString("base64");
-  const log = await fetch(`${TERMINUS_URL}/api/log/admin/${TERMINUS_DB}?count=1`, { headers: { Authorization: auth } });
-  const seedCommit = (await log.json())?.[0]?.identifier;
-  if (!seedCommit) throw new Error("could not read the seed commit from /api/log");
+  const head = async () => {
+    const log = await fetch(`${TERMINUS_URL}/api/log/admin/${TERMINUS_DB}?count=1`, { headers: { Authorization: auth } });
+    const commit = (await log.json())?.[0]?.identifier;
+    if (!commit) throw new Error("could not read the head commit from /api/log");
+    return commit;
+  };
+  const seedCommit = await head();
   console.log("Recording the seed attestation...");
   await client.addDocument(
     [attestation(seedCommit)],
@@ -821,6 +880,26 @@ async function main() {
     {},
     null,
     "Seed demo data: results of the Module 3 capstone, spring 2026 pilot cohort",
+  );
+  const resultsCommit = await head();
+  console.log("Raising the pilot finding...");
+  await client.addDocument(
+    authored([finding(resultsCommit)]),
+    {},
+    null,
+    "Seed demo data: the pilot shows the bias objective rests on one item",
+  );
+  // A replace of the finding beside two inserts: create=true writes both kinds.
+  console.log("Revising the capstone...");
+  await client.updateDocument(
+    authored(revision(resultsCommit)),
+    {},
+    null,
+    "Seed demo data: a second bias item in the capstone, addressing the pilot finding",
+    "",
+    false,
+    false,
+    true,
   );
 
   console.log(`  → Done.\n`);
