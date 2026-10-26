@@ -993,7 +993,13 @@ what evidence would be enough.
   who may merge a branch, whether findings and attestations merge without approval (CoQui's
   O-P), which needs a per-type filtered merge the store does not offer, and where a
   fragment-by-fragment conflict view lives. Evidence: a second writer on any branch, or the
-  first real conflict report from CoQui's PR 6.
+  first real conflict report from CoQui's PR 6. *Noted 2026-10-26: the second writer is planned,
+  Quiver, a local-first item manager in its own repository (`mossglenn/quiver`, `docs/plan.md`
+  there, §3.1 and §6). Its fragment-by-fragment conflict view lives in the client; its scenarios
+  7 and 8 show that the merge route applies the store's merge without running the invariants
+  engine over the result, so a clean merge can violate a rule; whether the hub refuses such a
+  merge or reports it is the policy to decide when those scenarios run (SESSION.md What's Next
+  item 12).*
 - **Project boundaries.** One TerminusDB database per course, per program, or per institution?
   Cross-database queries do not exist, and the research path wants comparability across
   courses. Evidence: a second course in any deployment, or the first research slice.
@@ -1187,7 +1193,9 @@ Recorded so the decisions are inherited rather than rediscovered.
   Narrative 1 end to end; because its syntax, read in reverse, models a plain-text importer that
   assigns `fragmentId` on parse; and because emitting its text reaches Canvas without writing
   QTI. It lives outside this repository; the hub's part is ADR-0031's export route and
-  profiles, and the exporter is the first consumer of the Phase 7 client package. What it loses
+  profiles, and the exporter is the first consumer of the Phase 7 client package (since
+  2026-10-26 it is milestone 4 of Quiver, the local-first item manager, `mossglenn/quiver`,
+  rather than a plugin of its own). What it loses
   on the way out (`fragmentId`, `assesses`, `purpose`, item identity across re-exports) is the
   evidence ADR-0031 needs about what an export profile must carry beside the format.*
 - No raw query route and no superuser mode on `/api/v1` (ADR-0062, proposed 2026-10-20, accepted 2026-10-22). A
