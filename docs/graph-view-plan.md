@@ -198,12 +198,12 @@ The Focus page with the stepper. Each step: the camera pans and zooms to the ste
 |---|---|---|
 | 1 · The result | `LearningMetric` | "{value} {unit} on *{item}*, {cohort}, {date}." (0.38 proportion correct; spring 2026 pilot). "A metric names what it measures (`subject`) and where it came from (`derivedFrom`); it is never a field on the item (ADR-0058)." |
 | 2 · The administration | `derivedFrom` → `LearningDataset` | "The dataset records which assessment produced it and the commit the cohort met: *as of {asOf}*." The `asOf` chip is lit. "Everything after this step is read at that commit." |
-| 3 · The assessment | `producedBy` → `Assessment` | "{n} items were placed in *{assessment}*; {approved} placements were approved." The placement edges fan out. |
+| 3 · The assessment | `producedBy` → `Assessment` | "{n} items were placed in *{assessment}*; {approved} placements were approved." When the changes read shows placements made after `asOf`: "{n} items are placed in *{assessment}* today, {approved} of them approved. {k} were placed after the cohort's commit, so the cohort met {n − k}." (2026-10-25: the trace describes the assessment as it stands.) The placement edges fan out. |
 | 4 · The item | placement edge → `AssessmentItem` | "*{label}*, {status}, {bloomsLevel}. Attested {verdict} on {part} by {attester}; the verdict is {state} against the part as it stands now." Findings and notes, if any. |
 | 5 · The objective | `assesses` → `LearningObjective` | "The item assesses *{objective}*. {k} other items placed in this module assess it too." |
 | 6 · The declaration | `ModuleObjective` edge → `Module` | "*{module}* declares the objective as {role} (#{sequence}): {roleRationale}." |
 | 7 · Adequate when? | the module, with the coverage read at `?ref=<asOf>` | "When the cohort met the design, *{objective}* was **{verdict then}** ({items then} eligible items); today it is **{verdict now}** ({items now})." A link to the Coverage View at the dataset's `asOf`. "Coverage is computed at a ref, never stored (ADR-0056, ADR-0057)." |
-| 8 · Then and now | the whole focus graph, **Then / Now** toggle | The graph re-read at `asOf` beside the head: records added since are outlined (in the seed: the attestation and the outcome records themselves, which did not exist when the cohort sat the assessment). "The design history is the commit graph (ADR-0025)." |
+| 8 · Then and now | the whole focus graph, **Then / Now** toggle | The graph re-read at `asOf` beside the head: records added since are outlined (in the seed: the attestation and the outcome records themselves, which did not exist when the cohort sat the assessment, and since 2026-10-25 the designer's finding and the second bias item that addressed it). "The design history is the commit graph (ADR-0025)." |
 | 9 · Why this objective? | `generatedBy` → `LearningNeed` | "*{need}*, {priority}: {rationale}." |
 | 10 · The evidence | `NeedEvidenceLink` edge → `DescriptiveEvidence` | "*{evidence}* ({confidence} confidence): {description}. The loop closes: a measurement led back to the evidence that justified the design." |
 
@@ -247,7 +247,7 @@ Lenses compose with the class filters and the relations. Two lenses at once was 
 | Changes | `GET /branches/:name/changes?since=` | The Changes lens; step 8 |
 | Branches | `GET /branches` | The branch picker |
 
-The export is the whole graph, which is the right source at the scale the project is at (66 documents in the seed; a real course is a few hundred to a few thousand) and the wrong one past a few thousand. §12 names the ceiling and what replaces it. The export's `profile=full` includes `User` documents; the viewer drops them before serializing, so no person reaches the browser (the pseudonymous profile is not needed for that).
+The export is the whole graph, which is the right source at the scale the project is at (69 documents in the seed; a real course is a few hundred to a few thousand) and the wrong one past a few thousand. §12 names the ceiling and what replaces it. The export's `profile=full` includes `User` documents; the viewer drops them before serializing, so no person reaches the browser (the pseudonymous profile is not needed for that).
 
 ### 9.2 Modules
 
