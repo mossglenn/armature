@@ -81,6 +81,32 @@ describe('the walk', () => {
     expect(changes.nodes).toEqual(['LearningMetric/mod3-bias-type-difficulty', 'AssessmentItem/bias-type-mc']);
   });
 
+  it("tells the seed's revision from the hub's own reads: the item the cohort did not meet, then and now", async () => {
+    const { graph, byId, trace } = await seed();
+    const walk = buildWalk(graph, trace, byId);
+    const read = async <T,>(path: string) => (await (await app.request(path)).json()) as T;
+    const done = completeWalk(walk, {
+      coverageThen: await read<CoverageReport>(`/api/v1/intelligence/coverage/risks-and-ethics?ref=${walk.asOf}`),
+      coverageNow: await read<CoverageReport>('/api/v1/intelligence/coverage/risks-and-ethics'),
+      changes: await read(`/api/v1/branches/main/changes?since=${walk.asOf}`),
+      branch: 'main',
+    }, byId);
+    const assessment = done.steps.find((s) => s.kind === 'assessment')!;
+    expect(assessment.text[0]).toMatch(/^4 items are placed in Module 3 Capstone Assessment today, 3 of them approved\. 1 was placed after the cohort's commit \([0-9a-z]{10}\), so the cohort met 3\.$/);
+    const coverage = done.steps.find((s) => s.kind === 'coverage')!;
+    expect(coverage.text[0]).toMatch(/was partially assessed in Risks and Ethical Use: 1 eligible item\.$/);
+    expect(coverage.text[1]).toBe('Today it is fully assessed: 2 eligible items (Identifying training data bias, Telling output bias from training data bias).');
+    const changes = done.steps.find((s) => s.kind === 'changes')!;
+    expect(changes.added).toEqual(expect.arrayContaining(['DesignFinding/bias-objective-rests-on-one-item', 'AssessmentItem/output-bias-mc']));
+  });
+
+  it('leaves the assessment step alone when nothing was placed after the commit', async () => {
+    const { graph, byId, trace } = await seed();
+    const walk = buildWalk(graph, trace, byId);
+    const done = completeWalk(walk, { changes: { from: walk.asOf!, to: 'head', changes: [] }, branch: 'main' }, byId);
+    expect(done.steps.find((s) => s.kind === 'assessment')!.text).toEqual(walk.steps.find((s) => s.kind === 'assessment')!.text);
+  });
+
   it('says so when the reads are missing', async () => {
     const { graph, byId, trace } = await seed();
     const done = completeWalk(buildWalk(graph, trace, byId), {}, byId);

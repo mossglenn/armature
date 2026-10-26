@@ -34,6 +34,8 @@ export interface WalkStep {
   changed?: string[];
   /** Records changed since the commit that the drawing does not hold (deleted). */
   gone?: string[];
+  /** The assessment step: its placements (ItemInstance ids), so `completeWalk` can tell those made after the commit. */
+  placements?: string[];
 }
 
 export interface Walk {
@@ -147,6 +149,9 @@ export function buildWalk(graph: DerivedGraph, trace: WalkTrace, byId: ReadonlyM
     const text = stepText(kind, nodes, previous, trace, byId, edgesOf);
     const step: WalkStep = { kind, title: TITLES[kind], nodes, edges, text };
     if (kind === 'need') step.continuation = true;
+    if (kind === 'assessment') {
+      step.placements = trace.edges.filter((e) => nodes.includes(e.from) && e.via === 'implements').map((e) => str(e.through)).filter((id): id is string => !!id);
+    }
     steps.push(step);
     chosen[kind] = nodes;
     for (const n of nodes) walked.add(n);
@@ -277,9 +282,29 @@ export interface WalkReads {
   branch?: string;
 }
 
-/** Fills the coverage and changes steps from the hub's reads; the walk is unchanged otherwise. */
+/**
+ * Fills the coverage and changes steps from the hub's reads, and restates the
+ * assessment step when the changes read shows placements made after the
+ * commit, since the trace describes the assessment as it stands, not as the
+ * cohort met it; the walk is unchanged otherwise.
+ */
 export function completeWalk(walk: Walk, reads: WalkReads, byId: ReadonlyMap<string, Doc>): Walk {
   const steps = walk.steps.map((step) => {
+    if (step.kind === 'assessment' && reads.changes && walk.asOf) {
+      const inserted = new Set(reads.changes.changes.filter((x) => x.op === 'insert').map((x) => x.id));
+      const placements = step.placements ?? [];
+      const later = placements.filter((id) => inserted.has(id)).length;
+      if (later === 0) return step;
+      const approved = placements.filter((id) => str(byId.get(id)?.status) === 'Approved').length;
+      const names = step.nodes.map((id) => labelOf(byId, id)).join(' and ');
+      return {
+        ...step,
+        text: [
+          `${plural(placements.length, 'item')} ${placements.length === 1 ? 'is' : 'are'} placed in ${names} today, ${approved} of them approved. ${later} ${later === 1 ? 'was' : 'were'} placed after the cohort's commit (${short(walk.asOf)}), so the cohort met ${placements.length - later}.`,
+          ...step.text.slice(1),
+        ],
+      };
+    }
     if (step.kind === 'coverage') {
       const objective = walk.objective;
       const find = (r?: CoverageReport) => r?.objectives.find((d) => d.objective.id === objective);
