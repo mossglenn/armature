@@ -25,7 +25,7 @@ A hub is the Armature API in front of one TerminusDB database. Two ways to have 
 
 Armature's own pages (the viewer, `npm run dev` in `app/`, port 3000) are a client of whichever hub `ARMATURE_HUB_URL` names, exactly as your tool will be; they serve no API of their own.
 
-The repository README's "Getting started" covers the install and the `.env.local` file. Whichever way, load the schema and the demonstration course once from the repository root: `node scripts/load_schema.js`, then `node scripts/seed_data.js`. The seed is a small fictional course, "Introduction to AI for Instructional Designers", with 48 documents, one attestation and one administration's results; every example below reads it.
+The repository README's "Getting started" covers the install and the `.env.local` file. Whichever way, load the schema and the demonstration course once from the repository root: `node scripts/load_schema.js`, then `node scripts/seed_data.js`. The seed is a small fictional course, "Introduction to AI for Instructional Designers", with 61 documents in its first commit, then one attestation, one administration's results, and the designer's response to them (a finding and a second item); every example below reads it.
 
 Check the hub is up with the one read that needs no database:
 
@@ -39,7 +39,7 @@ The hub published by the compose file listens on the machine's loopback interfac
 
 ### 2. The client in five lines
 
-[`@armature/client`](../packages/client/README.md) is one typed function per route, grouped as the API reference groups them: `documents`, `branches`, `users`, `intelligence`, `export`, plus `discover()` and `schema()`. Types come from [`@armature/types`](../packages/types/README.md), generated from the schema. Both ship TypeScript source; a bundler compiles them with your code. Another repository installs them by git reference (pnpm: `github:mossglenn/armature#path:packages/client`).
+[`@armature/client`](../packages/client/README.md) is one typed function per route, grouped as the API reference groups them: `documents`, `branches`, `users`, `intelligence`, `export`, plus `discover()` and `schema()`. Types come from [`@armature/types`](../packages/types/README.md), generated from the schema. Both ship TypeScript source, which your tool compiles. Another repository installs them by git reference, the types first, since the client takes them as a peer dependency: `pnpm add github:mossglenn/armature#path:packages/types github:mossglenn/armature#path:packages/client`. A Next.js app adds `transpilePackages: ['@armature/client', '@armature/types']` to its `next.config`; Vitest and `tsx` need nothing. The client's README has the details, including pinning a commit.
 
 ```ts
 import { createClient, HubError } from '@armature/client';
@@ -462,7 +462,7 @@ const asOf = trace.data.nodes.find((n) => n.id === 'LearningDataset/mod3-spring-
 const then = await hub.intelligence.coverage('risks-and-ethics', { ref: asOf });
 ```
 
-The trace returns the dataset, assessment, items, objectives, needs and evidence the metric connects to, the modules that declare those objectives, and every note, finding and attestation about them. The coverage read at the dataset's `asOf` is the module's coverage as that cohort met it. See [How Armature Works](how-armature-works.md#174-trace-follow-the-chain-from-evidence-to-outcomes).
+The trace returns the dataset, assessment, items, objectives, needs and evidence the metric connects to, the modules that declare those objectives, and every note, finding and attestation about them. The coverage read at the dataset's `asOf` is the module's coverage as that cohort met it; in the seed it says *Distinguish Bias Types* was partially assessed then, and the same read without a ref says fully assessed now, since the designer added a second item after the pilot (the finding that explains why is among the annotations). See [How Armature Works](how-armature-works.md#174-trace-follow-the-chain-from-evidence-to-outcomes).
 
 ### 14. For research: what leaves the hub
 

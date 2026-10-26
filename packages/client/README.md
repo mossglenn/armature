@@ -37,6 +37,21 @@ try {
 const hub = createClient({ baseUrl: 'http://hub.test', user: '…', fetch: (input, init) => app.request(input, init) });
 ```
 
-The package ships TypeScript source and no build, like `@armature/types`; a bundler compiles it with the code that imports it. Another repository installs it by git reference (pnpm: `github:mossglenn/armature#path:packages/client`).
+**Installing it in another repository.** Neither package is published to a registry; another repository installs both by git reference, the types first, since the client takes them as a peer dependency (it uses the copy you install rather than fetching its own). With pnpm:
+
+```sh
+pnpm add github:mossglenn/armature#path:packages/types github:mossglenn/armature#path:packages/client
+```
+
+To pin a commit, put it before the path: `github:mossglenn/armature#<commit>&path:packages/client` (and the same commit for the types). npm cannot install a package from a subdirectory of a repository; use pnpm, or check the repository out beside yours and install the two directories by path.
+
+Both packages ship TypeScript source and no build, so the importing tool compiles them:
+
+- **Next.js** compiles a dependency's source only when told to, in `next.config`: `transpilePackages: ['@armature/client', '@armature/types']`. Without it the build fails with "Unknown module type" on `src/index.ts`.
+- **Vitest, `tsx` and Vite** compile them as they are.
+- **Node alone** does not: it refuses to strip types from files under `node_modules`. Run scripts through `tsx`.
+- **`tsc`** checks their source with your options (`skipLibCheck` covers declaration files only); they compile under `strict`.
+
+CI installs both packages this way on every change, with pnpm outside this repository's workspace, and runs them under `tsc`, Vitest, `tsx` and a Next build (`install-check/run.sh`).
 
 **The version contract (ADR-0059).** Every call sends `Armature-Version: <CLIENT_REVISION>`, the contract revision this client was written against, and every result carries the revision the hub served it under as `version`. A hub that does not serve the client's revision throws `HubError` with code `unsupported_version` and `details.supported`; a hub *older* than the client serves reads and refuses writes, so a client ahead of its hub can look but stops before its first commit. Pass `capabilities: ['armature/intelligence.coverage', …]` to be refused by name (`unsupported_capability`) when a hub lacks a feature, `version: null` to send no revision, and call `hub.discover()` to ask a hub about itself first. `hub.schema({ ref })` returns the schema graph at a commit, so a tool discovers types from the hub rather than from a copy of `schema.json`.
