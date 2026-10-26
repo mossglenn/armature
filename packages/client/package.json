@@ -13,10 +13,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
-  "dependencies": {
-    "@armature/types": "0.1.0"
-  },
   "devDependencies": {
+    "@armature/types": "0.1.0",
     "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@armature/types": "0.1.0"
   }
 }
