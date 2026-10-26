@@ -39,7 +39,7 @@ Four containers from one compose file, in `docker/`:
 | `hub` | `docker/hub.Dockerfile` | The API as one Node process, bundled into one file; reaches the store as `http://terminusdb:6363` | Port 3100 on loopback only |
 | `terminusdb` | `terminusdb/terminusdb-server:v12.0.7` | The store server, with a named volume for its databases | Port 6363 on loopback only |
 
-Two profiles choose how many run. `--profile hub` runs the store, the hub and the viewer, all on loopback: an instance for the machine it runs on. `--profile public` adds Caddy: a hosted instance. A fifth service, `operator` (profile `operator`), is not a running container but a way to run the operator scripts on the private network (step 3). Every service restarts with Docker (`restart: unless-stopped`), so an instance comes back after a reboot.
+The private network is named `armature` (whatever the checkout's directory is called), so a client deployed beside the instance can join it (§ "A client on the same server"). Two profiles choose how many run. `--profile hub` runs the store, the hub and the viewer, all on loopback: an instance for the machine it runs on. `--profile public` adds Caddy: a hosted instance. A fifth service, `operator` (profile `operator`), is not a running container but a way to run the operator scripts on the private network (step 3). Every service restarts with Docker (`restart: unless-stopped`), so an instance comes back after a reboot.
 
 Each publication is a compose variable: `ARMATURE_VIEWER_BIND`, `ARMATURE_HUB_BIND`, `TERMINUSDB_BIND`, with `ARMATURE_HUB_PORT` and `ARMATURE_VIEWER_PORT` for the ports.
 
@@ -47,7 +47,7 @@ Each publication is a compose variable: `ARMATURE_VIEWER_BIND`, `ARMATURE_HUB_BI
 
 - **Readers** reach the viewer through Caddy. Its pages only read, and they carry no identity, so nothing a reader does reaches a writing route. The viewer is read-only by construction, not because the hub enforces it (see below). Caddy proxies the viewer only: `/api/v1/…` at the public address is the viewer's 404, not the hub.
 - **Operators on the server** reach the hub on loopback (`curl http://127.0.0.1:3100/api/v1/discover`, a client run on the server) and the store on loopback with its password. This is where the schema and data are loaded, users registered, and repairs made (see "Repair").
-- **Nobody else** reaches the hub or the store. The hub's identity resolver, `header`, trusts whatever `Armature-User` a request claims (ADR-0032), so a hub reachable from beyond the server would let anyone write as anyone. The loopback binding is the gate until an authenticating resolver (`oidc`, named and not built) or an authenticating proxy exists. Anything else placed on the private network can write to the hub; keep that network to these containers.
+- **Nobody else** reaches the hub or the store. The hub's identity resolver, `header`, trusts whatever `Armature-User` a request claims (ADR-0032), so a hub reachable from beyond the server would let anyone write as anyone. The loopback binding is the gate until an authenticating resolver (`oidc`, named and not built) or an authenticating proxy exists. Anything else placed on the private network can write to the hub as anyone; keep that network to these containers and to a client you deploy beside them on purpose (§ "A client on the same server").
 
 Set `TERMINUSDB_ADMIN_PASS` on any server that is not a laptop, in `docker/.env` (step 1). The compose default, `admin`, is for development only, and the hub and the operator scripts take the same value for their own connections.
 
@@ -75,7 +75,7 @@ The server needs Docker with the Compose plugin and a checkout of this repositor
      -d '{"message":"Register a reviewer","user":{"displayName":"…","externalId":"…"}}'
    ```
    AI agents are users whose `externalId` begins with `agent:`. There are no routes to edit or delete a user; that is operator work too (see "Repair").
-5. **Point clients at it.** The viewer already is. A writing client such as CoQui needs the hub's address, which today means running it on the server or widening `ARMATURE_HUB_BIND` behind a proxy that authenticates and sets `Armature-User` itself.
+5. **Point clients at it.** The viewer already is. A writing client such as CoQui needs the hub's address, which today means running it on the server, on the `armature` network (§ "A client on the same server"), or widening `ARMATURE_HUB_BIND` behind a proxy that authenticates and sets `Armature-User` itself.
 
 Optional: `ARMATURE_HUB_PUBLIC_URL` gives the viewer an address a reader's browser can follow for the raw-data links in page footers; unset, the links are omitted and the hub stays private. `ARMATURE_EXPORT_KEY` makes pseudonymous exports stable across runs (ADR-0031).
 
@@ -91,6 +91,49 @@ A few states can be reached through the API and not left through it: an identifi
 Each repair is made on a short-lived branch named `operator-…` and lands on its target as one commit marked in its metadata, `{ "armature": { "operator": { "tool", "rulesSkipped" } } }`, so a reader of the log can tell a repair from a plugin's write. The short-lived branch is deleted when the repair ends; one a crash left behind is deleted like any scratch branch. A repair is refused, not merged, if its target branch moved while it ran; run it again.
 
 `--as` names the operator's own `User`, registered like anyone else (step 4); the same person may be a designer on one commit and an operator on the next, and the message says which. On a laptop, `npm run operator --workspace app -- check` builds and runs the same tools with `app/.env.local`.
+
+## A client on the same server
+
+Added 2026-10-25, for a demonstration in which CoQui writes and the viewer shows what it wrote. A writing client can run on the instance's server without an identity system: it joins the private network, calls the hub by its service name, and is reachable from outside only through Caddy. The hub's `header` resolver still trusts its caller; what makes that safe is unchanged, since nothing outside the server can reach the hub. The client becomes the one component that decides who a person is: its own sign-in, or a fixed demonstration user, chooses the `Armature-User` it sends.
+
+What the client brings, in its own repository (Armature's files never name it):
+
+- **A container,** in a compose file whose service joins `armature` as an external network and publishes no port:
+  ```yaml
+  services:
+    coqui:
+      build: .
+      restart: unless-stopped
+      environment:
+        - ARMATURE_URL=http://hub:3100
+      networks: [armature]
+  networks:
+    armature:
+      external: true
+  ```
+  Start it after the instance, which creates the network; `docker network ls` shows `armature` once the instance is up.
+- **Its site,** as a file in `docker/sites/` on the server, which Caddy imports (`docker/sites/README.md` has the form and the reload command). Its domain needs its own `A` record, as `ARMATURE_SITE` does. Git ignores the files there; they belong to the server.
+- **Its people.** A client that writes as the seed's users (`demo-reviewer@example.edu`, `demo-designer@example.edu`) needs no registration; otherwise step 4.
+
+Two rules keep it safe, and the second is the client's:
+
+1. **The hub stays unreachable from outside.** Nothing about the hub's publication changes; do not widen `ARMATURE_HUB_BIND` for the client, which reaches the hub inside the network.
+2. **`Armature-User` is chosen by the client's server, never by a browser.** Every call to the hub is made in server-side code; a route that forwarded a header, a body field or a query parameter naming the user would let any visitor write as anyone.
+
+Rehearsed on 2026-10-25 on a fresh Lima VM (Ubuntu 24.04), with a stand-in client: a Node container in its own compose project, joined to `armature`, writing a finding through the hub as the seed's reviewer, and served through Caddy from a site file. From the laptop, the client's site answered and its write appeared in the viewer on the next load. A request carrying `Armature-User: demo-designer@example.edu` was written as the reviewer, since the client ignores what the caller sends. Ports 3000, 3100 and 6363 were closed, and `/api/v1/discover` at the public address was the viewer's 404. A reset with `--recreate` removed the write and left the seed checking clean, and after a reboot all five containers came back, the client still on the network. With no site file, Caddy logs a warning ("No files matching import glob pattern") and serves the instance alone.
+
+Check from outside, before anyone else uses it: the hub's and the store's ports (3100, 6363) are closed; the client's domain answers through Caddy; the instance's domain still serves the viewer; and no request to the client lets the caller choose the person written as. The memory is small: the three Armature containers used about 375 MiB, and a Next.js client adds a few hundred.
+
+### Resetting a demonstration instance
+
+A demonstration that others write to drifts from the seed, and every write lengthens the commit log, which slows the store's history reads. `load_schema.js --recreate` deletes the database, with its documents, branches and log, creates it again and loads the schema; the seed follows. In `docker/`:
+
+```
+docker compose run --rm operator node load_schema.js --recreate
+docker compose run --rm operator node seed_data.js
+```
+
+It destroys everything the database holds: never on an instance with real data. For a nightly reset, a crontab line for the instance's user (`crontab -e`): `0 4 * * * cd ~/armature/docker && docker compose run --rm operator node load_schema.js --recreate && docker compose run --rm operator node seed_data.js`. A client that caches what it read from the hub should expect the graph to return to the seed: the seed's identifiers are the same after a reset, those the hub derives from key fields (placements, attestations, declarations) included, while every commit identifier changes.
 
 ## A hosted instance
 
