@@ -6,7 +6,7 @@
 
 An interactive version of the same matrix, with a note behind every dot, is a private claude.ai artifact: https://claude.ai/artifact/AYoCccDJUpozFWQakMasNi
 
-Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol), SME (subject-matter expert), LMS (learning management system), QTI (Question and Test Interoperability), CASE (Competencies and Academic Standards Exchange).
+Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol), SCORM (Sharable Content Object Reference Model), XLIFF (XML Localization Interchange File Format), SME (subject-matter expert), LMS (learning management system), QTI (Question and Test Interoperability), CASE (Competencies and Academic Standards Exchange).
 
 ## The tools
 
@@ -16,6 +16,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 | Viewer | Built | The Coverage View and the Design Graph |
 | Quiver | Planned | Local-first item manager, and the first client that must merge |
 | MCP server | Proposed | Any agent asks design questions through the intelligence reads |
+| Storyline bridge | Proposed | Stamps published Storyline packages and joins their results to the graph |
 | Formalizer | Proposed | Proposes structure from the free-text rationale it finds |
 | Ripple | Proposed | Edit on a branch, see everything the change touches |
 | Lint | Proposed | Soft design rules, run before and after a merge |
@@ -28,39 +29,39 @@ The viewer is counted as a tool because the Coverage View and the Design Graph a
 
 ## The matrix
 
-| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | MCP server | Formalizer | Ripple | Lint | Drift | Crosswalk | Whyfinder | Projection |
-|---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| **Version control** | | | | | | | | | | | | | | |
-| Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 7 | ● | ● | ○ | ● | ○ | ● | ○ | ● | ○ | ● | ● |
-| Branches<br>`POST /branches` | Partially 1 | Fully 2 | Fully 4 | ● | ○ | ● | ○ |  | ● | ● |  | ○ |  |  |
-| History and changes since<br>`history · changes?since=` | Partially 1 | Fully 2 | Fully 4 | ○ | ● | ● | ● | ○ | ○ |  | ● |  |  | ○ |
-| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Uncovered 0 | Partially 1 | Fully 2 | ○ |  | ● |  |  | ○ | ● |  |  |  |  |
-| **Writes** | | | | | | | | | | | | | | |
-| One write path with invariants<br>`generic writes · ADR-0024` | Partially 1 | Fully 2 | Fully 4 | ● |  | ● | ○ | ○ | ● |  |  | ● |  |  |
-| Batch writes with If-Match<br>`batch · optimistic concurrency` | Uncovered 0 | Partially 1 | Partially 1 | ○ |  | ● |  |  |  |  |  |  |  |  |
-| Identity on every write *(Partial)*<br>`Armature-User · OIDC not built` | Partially 1 | Fully 2 | Fully 2 | ● |  | ● | ○ |  |  |  |  |  |  |  |
-| **Review** | | | | | | | | | | | | | | |
-| Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 5 | ● | ○ | ○ | ○ | ● | ● | ● | ● |  | ○ |  |
-| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ○ | ○ | ● |  |  | ● | ○ | ○ |
-| **Design intelligence** | | | | | | | | | | | | | | |
-| Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 5 | ● | ● | ○ | ● |  | ○ | ● |  | ● |  | ○ |
-| Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 5 | ● | ● | ○ | ● |  | ● | ● |  |  |  |  |
-| Trace<br>`/intelligence/trace` | Partially 1 | Partially 1 | Fully 4 |  | ● |  | ● |  | ○ |  |  | ○ | ● | ● |
-| Impact<br>`/intelligence/impact` | Uncovered 0 | Uncovered 0 | Fully 2 |  | ○ |  | ● |  | ● | ○ | ○ |  |  |  |
-| Ordered module content<br>`/intelligence/module-content · ADR-0005` | Partially 1 | Partially 1 | Fully 3 |  | ● | ○ | ○ |  |  | ● |  |  | ○ | ● |
-| Item statistics<br>`/intelligence/item-statistics · ADR-0058` | Partially 1 | Partially 1 | Partially 1 |  | ● |  | ○ |  |  |  |  |  |  |  |
-| **Ecosystem** | | | | | | | | | | | | | | |
-| External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  |  |  |  |  | ● | ● | ● | ○ |
-| Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Partially 1 |  |  |  |  |  |  |  | ● |  |  |  |
-| Export profiles and slices<br>`GET /export · ADR-0031` | Partially 1 | Fully 2 | Fully 4 |  | ● | ● | ○ | ● |  |  | ○ | ○ |  | ● |
-| Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Fully 2 |  | ● |  |  |  |  |  | ● | ○ |  |  |
-| **Toolkit and guards** | | | | | | | | | | | | | | |
-| Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 2 |  | ○ |  | ● | ● |  | ○ |  |  |  |  |
-| Typed client<br>`@armature/client` | Partially 1 | Fully 2 | Over 5 | ○ | ● | ● | ● |  | ○ | ● |  |  | ● |  |
-| Agent provenance<br>`agent User · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ | ● | ● |  |  |  |  |  |  |
-| No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  |  | ● | ● |  |  |  |  |  |  |
+| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | MCP server | Storyline bridge | Formalizer | Ripple | Lint | Drift | Crosswalk | Whyfinder | Projection |
+|---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **Version control** | | | | | | | | | | | | | | | |
+| Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 8 | ● | ● | ○ | ● | ● | ○ | ● | ○ | ● | ○ | ● | ● |
+| Branches<br>`POST /branches` | Partially 1 | Fully 2 | Fully 4 | ● | ○ | ● | ○ | ○ |  | ● | ● |  | ○ |  |  |
+| History and changes since<br>`history · changes?since=` | Partially 1 | Fully 2 | Over 5 | ○ | ● | ● | ● | ● | ○ | ○ |  | ● |  |  | ○ |
+| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Uncovered 0 | Partially 1 | Fully 2 | ○ |  | ● |  |  |  | ○ | ● |  |  |  |  |
+| **Writes** | | | | | | | | | | | | | | | |
+| One write path with invariants<br>`generic writes · ADR-0024` | Partially 1 | Fully 2 | Over 5 | ● |  | ● | ○ | ● | ○ | ● |  |  | ● |  |  |
+| Batch writes with If-Match<br>`batch · optimistic concurrency` | Uncovered 0 | Partially 1 | Partially 1 | ○ |  | ● |  | ○ |  |  |  |  |  |  |  |
+| Identity on every write *(Partial)*<br>`Armature-User · OIDC not built` | Partially 1 | Fully 2 | Fully 2 | ● |  | ● | ○ | ○ |  |  |  |  |  |  |  |
+| **Review** | | | | | | | | | | | | | | | |
+| Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 6 | ● | ○ | ○ | ○ | ● | ● | ● | ● | ● |  | ○ |  |
+| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ○ | ○ | ○ | ● |  |  | ● | ○ | ○ |
+| **Design intelligence** | | | | | | | | | | | | | | | |
+| Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 5 | ● | ● | ○ | ● | ○ |  | ○ | ● |  | ● |  | ○ |
+| Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 5 | ● | ● | ○ | ● |  |  | ● | ● |  |  |  |  |
+| Trace<br>`/intelligence/trace` | Partially 1 | Partially 1 | Over 5 |  | ● |  | ● | ● |  | ○ |  |  | ○ | ● | ● |
+| Impact<br>`/intelligence/impact` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  | ● | ● |  | ● | ○ | ○ |  |  |  |
+| Ordered module content<br>`/intelligence/module-content · ADR-0005` | Partially 1 | Partially 1 | Fully 3 |  | ● | ○ | ○ | ○ |  |  | ● |  |  | ○ | ● |
+| Item statistics<br>`/intelligence/item-statistics · ADR-0058` | Partially 1 | Partially 1 | Fully 2 |  | ● |  | ○ | ● |  |  |  |  |  |  |  |
+| **Ecosystem** | | | | | | | | | | | | | | | |
+| External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Fully 4 |  |  |  |  | ● |  |  |  | ● | ● | ● | ○ |
+| Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  |  |  | ● |  |  |  | ● |  |  |  |
+| Export profiles and slices<br>`GET /export · ADR-0031` | Partially 1 | Fully 2 | Fully 4 |  | ● | ● | ○ | ○ | ● |  |  | ○ | ○ |  | ● |
+| Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Fully 3 |  | ● |  |  | ● |  |  |  | ● | ○ |  |  |
+| **Toolkit and guards** | | | | | | | | | | | | | | | |
+| Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 2 |  | ○ |  | ● |  | ● |  | ○ |  |  |  |  |
+| Typed client<br>`@armature/client` | Partially 1 | Fully 2 | Over 6 | ○ | ● | ● | ● | ● |  | ○ | ● |  |  | ● |  |
+| Agent provenance<br>`agent User · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ | ● |  | ● |  |  |  |  |  |  |
+| No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  |  | ● |  | ● |  |  |  |  |  |  |
 
-Totals over 23 capabilities: built tools, Uncovered 8, Partially 11, Fully 4, Over 0; built and planned, Uncovered 6, Partially 7, Fully 10, Over 0; everything, Uncovered 0, Partially 3, Fully 15, Over 5.
+Totals over 23 capabilities: built tools, Uncovered 8, Partially 11, Fully 4, Over 0; built and planned, Uncovered 6, Partially 7, Fully 10, Over 0; everything, Uncovered 0, Partially 1, Fully 14, Over 8.
 
 ## Gaps, and which proposed tool closes them
 
@@ -69,6 +70,7 @@ With the built and planned tools, 6 capabilities have no demo that shows them: i
 | Proposed tool | Gaps closed | Which |
 |---|:-:|---|
 | MCP server | 4 | Impact; Discovery and capabilities; Agent provenance; No per-person aggregates |
+| Storyline bridge | 3 | Impact; External references; Attachments |
 | Formalizer | 3 | Discovery and capabilities; Agent provenance; No per-person aggregates |
 | Drift | 2 | External references; Attachments |
 | Ripple | 1 | Impact |
@@ -83,7 +85,8 @@ With the built and planned tools, 6 capabilities have no demo that shows them: i
 - **Ripple is mostly interface.** Its traversal is the impact read, built in Phase 4; its demo value is pairing that read with a branch and attestation staleness.
 - **The MCP server wraps reads, not a query language.** ADR-0062 rules out a raw query route, so each MCP tool maps to an intelligence read, a list filter or a declared slice.
 - **Lint is soft rules beside the invariants engine.** Run after a merge, it also covers what the merge route skips (Quiver's scenarios 7 and 8, SESSION.md What's Next item 12), and could use the engine's pure part that Quiver and CoQui both want as a package.
-- **Outcome records have no writing client.** Only the seed writes datasets and metrics; Drift, or a Canvas importer reading results for Quiver's text2qti exports, would be the first.
+- **A Storyline bridge comes before Drift.** Drift's hard part is the publish-time mapping from interactions to items, which the bridge builds; with it, Drift is a view over the bridge's records. The bridge reads only what Storyline exports (the published SCORM or xAPI package, the translation XLIFF, the Excel question import), never the `.story` file itself: that format is undocumented and changes between versions.
+- **Outcome records have no writing client.** Only the seed writes datasets and metrics; the Storyline bridge, Drift, or a Canvas importer reading results for Quiver's text2qti exports, would be the first.
 
 ## How each tool exercises its capabilities
 
@@ -157,6 +160,27 @@ With the built and planned tools, 6 capabilities have no demo that shows them: i
 - ● **Typed client.** Built on @armature/client.
 - ● **Agent provenance.** Every write is marked as the agent's; acceptance is a person's endorsement.
 - ● **No per-person aggregates.** Ask 'which reviewer declines most?' and the hub refuses, not the prompt.
+
+### Storyline bridge (proposed)
+
+- ● **Read any record at a commit.** The design as it was at the commit stamped into the package.
+- ○ **Branches.** Item records proposed from an inventory land on a branch for review.
+- ● **History and changes since.** Each rebuild moves the attachment's revision in a commit that says why.
+- ● **One write path with invariants.** Registers the attachments and ExternalRefs, and proposes items for quiz slides with no record.
+- ○ **Batch writes with If-Match.** One publish is written as one batch.
+- ○ **Identity on every write.** Writes as the designer who published.
+- ● **Findings and notes, by fragment.** Interactions with no design record, and records with no interaction, become findings.
+- ○ **Attestations that go stale.** SME sign-off on a build's hash needs attestations on a revision, which are not built yet (ADR-0028 compares fragments).
+- ○ **Coverage at any ref.** Coverage of objectives by the items placed in the Storyline quiz.
+- ● **Trace.** A result on an interaction traces to its item, objective and module: Narrative 1 for a Storyline course.
+- ● **Impact.** An objective change reaches the Storyline Activity and flags the build as predating it.
+- ○ **Ordered module content.** Places the Storyline Activity in its module.
+- ● **Item statistics.** Item statistics from cmi.interactions or xAPI results, per mapped item.
+- ● **External references.** Storyline interaction IDs recorded as ExternalRefs on items and their parts, captured after each publish.
+- ● **Attachments.** The .story source and the published package, each hashed, with roles source and rendered.
+- ○ **Export profiles and slices.** Reads items to emit Storyline's Excel question import, one way: fragmentId, assesses and identity are lost until the next publish maps them back.
+- ● **Outcome records at asOf.** Results join through the asOf stamped into the package (ADR-0057).
+- ● **Typed client.** Built on @armature/client.
 
 ### Formalizer (proposed)
 
