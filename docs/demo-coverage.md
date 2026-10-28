@@ -17,6 +17,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 | Quiver | Planned | Local-first item manager, and the first client that must merge |
 | MCP server | Proposed | Any agent asks design questions through the intelligence reads |
 | Storyline bridge | Proposed | Stamps published Storyline packages and joins their results to the graph |
+| DataShop bridge | Proposed | Tests the design's alignment against learner data as a DataShop knowledge-component model |
 | Formalizer | Proposed | Proposes structure from the free-text rationale it finds |
 | Ripple | Proposed | Edit on a branch, see everything the change touches |
 | Lint | Proposed | Soft design rules, run before and after a merge |
@@ -29,39 +30,39 @@ The viewer is counted as a tool because the Coverage View and the Design Graph a
 
 ## The matrix
 
-| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | MCP server | Storyline bridge | Formalizer | Ripple | Lint | Drift | Crosswalk | Whyfinder | Projection |
-|---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| **Version control** | | | | | | | | | | | | | | | |
-| Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 8 | ● | ● | ○ | ● | ● | ○ | ● | ○ | ● | ○ | ● | ● |
-| Branches<br>`POST /branches` | Partially 1 | Fully 2 | Fully 4 | ● | ○ | ● | ○ | ○ |  | ● | ● |  | ○ |  |  |
-| History and changes since<br>`history · changes?since=` | Partially 1 | Fully 2 | Over 5 | ○ | ● | ● | ● | ● | ○ | ○ |  | ● |  |  | ○ |
-| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Uncovered 0 | Partially 1 | Fully 2 | ○ |  | ● |  |  |  | ○ | ● |  |  |  |  |
-| **Writes** | | | | | | | | | | | | | | | |
-| One write path with invariants<br>`generic writes · ADR-0024` | Partially 1 | Fully 2 | Over 5 | ● |  | ● | ○ | ● | ○ | ● |  |  | ● |  |  |
-| Batch writes with If-Match<br>`batch · optimistic concurrency` | Uncovered 0 | Partially 1 | Partially 1 | ○ |  | ● |  | ○ |  |  |  |  |  |  |  |
-| Identity on every write *(Partial)*<br>`Armature-User · OIDC not built` | Partially 1 | Fully 2 | Fully 2 | ● |  | ● | ○ | ○ |  |  |  |  |  |  |  |
-| **Review** | | | | | | | | | | | | | | | |
-| Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 6 | ● | ○ | ○ | ○ | ● | ● | ● | ● | ● |  | ○ |  |
-| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ○ | ○ | ○ | ● |  |  | ● | ○ | ○ |
-| **Design intelligence** | | | | | | | | | | | | | | | |
-| Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 5 | ● | ● | ○ | ● | ○ |  | ○ | ● |  | ● |  | ○ |
-| Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 5 | ● | ● | ○ | ● |  |  | ● | ● |  |  |  |  |
-| Trace<br>`/intelligence/trace` | Partially 1 | Partially 1 | Over 5 |  | ● |  | ● | ● |  | ○ |  |  | ○ | ● | ● |
-| Impact<br>`/intelligence/impact` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  | ● | ● |  | ● | ○ | ○ |  |  |  |
-| Ordered module content<br>`/intelligence/module-content · ADR-0005` | Partially 1 | Partially 1 | Fully 3 |  | ● | ○ | ○ | ○ |  |  | ● |  |  | ○ | ● |
-| Item statistics<br>`/intelligence/item-statistics · ADR-0058` | Partially 1 | Partially 1 | Fully 2 |  | ● |  | ○ | ● |  |  |  |  |  |  |  |
-| **Ecosystem** | | | | | | | | | | | | | | | |
-| External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Fully 4 |  |  |  |  | ● |  |  |  | ● | ● | ● | ○ |
-| Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  |  |  | ● |  |  |  | ● |  |  |  |
-| Export profiles and slices<br>`GET /export · ADR-0031` | Partially 1 | Fully 2 | Fully 4 |  | ● | ● | ○ | ○ | ● |  |  | ○ | ○ |  | ● |
-| Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Fully 3 |  | ● |  |  | ● |  |  |  | ● | ○ |  |  |
-| **Toolkit and guards** | | | | | | | | | | | | | | | |
-| Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 2 |  | ○ |  | ● |  | ● |  | ○ |  |  |  |  |
-| Typed client<br>`@armature/client` | Partially 1 | Fully 2 | Over 6 | ○ | ● | ● | ● | ● |  | ○ | ● |  |  | ● |  |
-| Agent provenance<br>`agent User · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ | ● |  | ● |  |  |  |  |  |  |
-| No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  |  | ● |  | ● |  |  |  |  |  |  |
+| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | MCP server | Storyline bridge | DataShop bridge | Formalizer | Ripple | Lint | Drift | Crosswalk | Whyfinder | Projection |
+|---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **Version control** | | | | | | | | | | | | | | | | |
+| Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 9 | ● | ● | ○ | ● | ● | ● | ○ | ● | ○ | ● | ○ | ● | ● |
+| Branches<br>`POST /branches` | Partially 1 | Fully 2 | Fully 4 | ● | ○ | ● | ○ | ○ | ○ |  | ● | ● |  | ○ |  |  |
+| History and changes since<br>`history · changes?since=` | Partially 1 | Fully 2 | Over 5 | ○ | ● | ● | ● | ● | ○ | ○ | ○ |  | ● |  |  | ○ |
+| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Uncovered 0 | Partially 1 | Fully 2 | ○ |  | ● |  |  |  |  | ○ | ● |  |  |  |  |
+| **Writes** | | | | | | | | | | | | | | | | |
+| One write path with invariants<br>`generic writes · ADR-0024` | Partially 1 | Fully 2 | Over 6 | ● |  | ● | ○ | ● | ● | ○ | ● |  |  | ● |  |  |
+| Batch writes with If-Match<br>`batch · optimistic concurrency` | Uncovered 0 | Partially 1 | Partially 1 | ○ |  | ● |  | ○ | ○ |  |  |  |  |  |  |  |
+| Identity on every write *(Partial)*<br>`Armature-User · OIDC not built` | Partially 1 | Fully 2 | Fully 2 | ● |  | ● | ○ | ○ |  |  |  |  |  |  |  |  |
+| **Review** | | | | | | | | | | | | | | | | |
+| Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 7 | ● | ○ | ○ | ○ | ● | ● | ● | ● | ● | ● |  | ○ |  |
+| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ○ | ○ | ○ | ○ | ● |  |  | ● | ○ | ○ |
+| **Design intelligence** | | | | | | | | | | | | | | | | |
+| Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 6 | ● | ● | ○ | ● | ○ | ● |  | ○ | ● |  | ● |  | ○ |
+| Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 5 | ● | ● | ○ | ● |  | ○ |  | ● | ● |  |  |  |  |
+| Trace<br>`/intelligence/trace` | Partially 1 | Partially 1 | Over 6 |  | ● |  | ● | ● | ● |  | ○ |  |  | ○ | ● | ● |
+| Impact<br>`/intelligence/impact` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  | ● | ● |  |  | ● | ○ | ○ |  |  |  |
+| Ordered module content<br>`/intelligence/module-content · ADR-0005` | Partially 1 | Partially 1 | Fully 3 |  | ● | ○ | ○ | ○ |  |  |  | ● |  |  | ○ | ● |
+| Item statistics<br>`/intelligence/item-statistics · ADR-0058` | Partially 1 | Partially 1 | Fully 3 |  | ● |  | ○ | ● | ● |  |  |  |  |  |  |  |
+| **Ecosystem** | | | | | | | | | | | | | | | | |
+| External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Over 5 |  |  |  |  | ● | ● |  |  |  | ● | ● | ● | ○ |
+| Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  |  | ● | ● |  |  |  | ● |  |  |  |
+| Export profiles and slices<br>`GET /export · ADR-0031` | Partially 1 | Fully 2 | Over 5 |  | ● | ● | ○ | ○ | ● | ● |  |  | ○ | ○ |  | ● |
+| Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Fully 4 |  | ● |  |  | ● | ● |  |  |  | ● | ○ |  |  |
+| **Toolkit and guards** | | | | | | | | | | | | | | | | |
+| Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 2 |  | ○ |  | ● |  |  | ● |  | ○ |  |  |  |  |
+| Typed client<br>`@armature/client` | Partially 1 | Fully 2 | Over 7 | ○ | ● | ● | ● | ● | ● |  | ○ | ● |  |  | ● |  |
+| Agent provenance<br>`agent User · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ | ● |  |  | ● |  |  |  |  |  |  |
+| No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  |  | ● |  |  | ● |  |  |  |  |  |  |
 
-Totals over 23 capabilities: built tools, Uncovered 8, Partially 11, Fully 4, Over 0; built and planned, Uncovered 6, Partially 7, Fully 10, Over 0; everything, Uncovered 0, Partially 1, Fully 14, Over 8.
+Totals over 23 capabilities: built tools, Uncovered 8, Partially 11, Fully 4, Over 0; built and planned, Uncovered 6, Partially 7, Fully 10, Over 0; everything, Uncovered 0, Partially 1, Fully 12, Over 10.
 
 ## Gaps, and which proposed tool closes them
 
@@ -72,6 +73,7 @@ With the built and planned tools, 6 capabilities have no demo that shows them: i
 | MCP server | 4 | Impact; Discovery and capabilities; Agent provenance; No per-person aggregates |
 | Storyline bridge | 3 | Impact; External references; Attachments |
 | Formalizer | 3 | Discovery and capabilities; Agent provenance; No per-person aggregates |
+| DataShop bridge | 2 | External references; Attachments |
 | Drift | 2 | External references; Attachments |
 | Ripple | 1 | Impact |
 | Crosswalk | 1 | External references |
@@ -86,7 +88,8 @@ With the built and planned tools, 6 capabilities have no demo that shows them: i
 - **The MCP server wraps reads, not a query language.** ADR-0062 rules out a raw query route, so each MCP tool maps to an intelligence read, a list filter or a declared slice.
 - **Lint is soft rules beside the invariants engine.** Run after a merge, it also covers what the merge route skips (Quiver's scenarios 7 and 8, SESSION.md What's Next item 12), and could use the engine's pure part that Quiver and CoQui both want as a package.
 - **A Storyline bridge comes before Drift.** Drift's hard part is the publish-time mapping from interactions to items, which the bridge builds; with it, Drift is a view over the bridge's records. The bridge reads only what Storyline exports (the published SCORM or xAPI package, the translation XLIFF, the Excel question import), never the `.story` file itself: that format is undocumented and changes between versions.
-- **Outcome records have no writing client.** Only the seed writes datasets and metrics; the Storyline bridge, Drift, or a Canvas importer reading results for Quiver's text2qti exports, would be the first.
+- **The DataShop bridge makes alignment testable.** DataShop fits competing knowledge-component models against learner data; exporting the design's `assesses` links as one turns the alignment into a hypothesis with a score. It is the evidence ADR-0043's candidate (alignment models scored against datasets) needs. Only aggregates cross into the graph: curves and fit, never student-step records (ADR-0058).
+- **Outcome records have no writing client.** Only the seed writes datasets and metrics; the Storyline bridge, the DataShop bridge, Drift, or a Canvas importer reading results for Quiver's text2qti exports, would be the first.
 
 ## How each tool exercises its capabilities
 
@@ -180,6 +183,25 @@ With the built and planned tools, 6 capabilities have no demo that shows them: i
 - ● **Attachments.** The .story source and the published package, each hashed, with roles source and rendered.
 - ○ **Export profiles and slices.** Reads items to emit Storyline's Excel question import, one way: fragmentId, assesses and identity are lost until the next publish maps them back.
 - ● **Outcome records at asOf.** Results join through the asOf stamped into the package (ADR-0057).
+- ● **Typed client.** Built on @armature/client.
+
+### DataShop bridge (proposed)
+
+- ● **Read any record at a commit.** Exports the alignment at a named commit; the knowledge-component model is named after it.
+- ○ **Branches.** Findings from a poor fit can be answered on a branch that revises the alignment.
+- ○ **History and changes since.** Compares the fit of the alignment at two commits.
+- ● **One write path with invariants.** Writes the dataset, its metrics and the ExternalRefs it reads back.
+- ○ **Batch writes with If-Match.** One import is written as one batch.
+- ● **Findings and notes, by fragment.** A learning curve that does not fall, or a fit worse than DataShop's baselines, becomes a finding on the objective.
+- ○ **Attestations that go stale.** The alignment an SME affirmed is the model DataShop fits; a poor fit questions the affirmation.
+- ● **Coverage at any ref.** Coverage counts the assesses links; this tests whether those links describe one skill per objective.
+- ○ **Alignment.** Rests on the same assesses links as the alignment read.
+- ● **Trace.** A flat curve on an objective traces back to its items and the module that declared it.
+- ● **Item statistics.** Item statistics read back from DataShop, as metrics about the item (ADR-0058).
+- ● **External references.** The DataShop dataset id and its problem names as ExternalRefs on the dataset and items.
+- ● **Attachments.** The knowledge-component model file DataShop exports, referenced by hash. Learner data is never copied.
+- ● **Export profiles and slices.** The pseudonymous slice at the delivered commit, posted to the DataShop dataset as an external analysis.
+- ● **Outcome records at asOf.** A LearningDataset that names DataShop as its source, at the delivered asOf; metrics about items, objectives and the alignment's fit.
 - ● **Typed client.** Built on @armature/client.
 
 ### Formalizer (proposed)
