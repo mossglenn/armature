@@ -2,7 +2,7 @@
 
 *Status: draft 2026-10-28, for review, with ADR-0065 (Proposed). The questions in §16 are open, each with a recommendation the plan is written to. Part of this repository if built: the workspace hub is the hub's own code in a second mode, not a separate client.*
 
-Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), HTTP (Hypertext Transfer Protocol), JSON (JavaScript Object Notation), MiB (mebibyte), OIDC (OpenID Connect), UI (user interface).
+Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), HTTP (Hypertext Transfer Protocol), JSON (JavaScript Object Notation), MiB (mebibyte), OIDC (OpenID Connect), UI (user interface), VM (virtual machine), WSL (Windows Subsystem for Linux).
 
 ---
 
@@ -121,10 +121,31 @@ ADR-0065 decision 8 leaves the store open. What it must do is limited by decisio
 
 | Option | For | Against |
 |---|---|---|
-| **TerminusDB beside the hub** | The adapter as written; history, diff and template queries exactly as on the remote; measured footprint 292 MiB for the store and 38 MiB for the hub with the seed (`docs/deployment.md`) | On macOS and Windows today, Docker Desktop: a virtual machine, gigabytes of disk, a paid license at larger organizations, and a background service nobody administers. Whether a native build exists that a desktop program can ship beside itself is not checked (platform check AH, if chosen). The local store's version must track the remote's pinned v12.0.7 |
+| **TerminusDB beside the hub** | The adapter as written; history, diff and template queries exactly as on the remote; measured footprint 292 MiB for the store and 38 MiB for the hub with the seed (`docs/deployment.md`) | A container runtime to install and keep running, or a native build not yet proven to ship (below); none on Windows outside WSL (Windows Subsystem for Linux) or a container. Its version need not match the remote's pinned v12.0.7, since a push goes through the remote's API and never reaches the remote's store; it must be a version the platform checks pass on |
 | **A file-backed store** (recommended to try first) | One process and nothing else to install; a folder the person owns, readable with any editor, diffable in git, Quiver's decision 4 kept; a few MiB of memory at this scale | A second adapter to write and keep faithful: template queries, history and diff over a commit log; tested against the TerminusDB adapter on the seed, and wrong where they differ |
 
 **The seam.** The adapter (`app/lib/api/store.ts`) is a concrete class, imported by 23 modules. The invariants engine and the intelligence reads use six of its methods (`getDocument`, `getDocuments`, `queryDocuments`, `allDocuments`, `getCommit`, `at`); the routes use more (`history`, `diff`, `log`, `head`, `listBranches`, `createBranch`, `apply`, the operator methods). The first piece of work is an interface extracted from the class, with the TerminusDB adapter its one implementation and every module typed against the interface: no behavior change, and the separation Quiver's `@armature/rules` ask also needs. The file-backed store then implements the subset a workspace hub uses, and a contract test runs the engine and the reads over both stores on the seed and requires the same answers.
+
+**What TerminusDB ships** (checked 2026-10-28). The documented routes are Docker, Kubernetes and a build from source on Linux or macOS; Windows only through WSL or Docker (`docs/vendor/terminusdb/_all/terminusdb-install-options.md`, `install-terminusdb-from-source-code.md`). The GitHub releases v12.0.6 to v12.1.0-rc1 carry no binaries. Linux has a Snap package, v12.0.8 on 12 October 2026; there is no Homebrew formula. The build already makes one executable (`src/bootstrap.pl` calls SWI-Prolog's `qsave_program` with `stand_alone(true)` and `foreign(save)`, saving the program and the Rust storage library into it), which on macOS probably still links the Homebrew copies of SWI-Prolog and GMP (the GNU arithmetic library). That is read from the build files, not tested; platform check AH would build it on macOS, list what it links, run it on a clean machine and measure it.
+
+**Three ways onto a person's machine:**
+
+| Path | For | Cost |
+|---|---|---|
+| **A `workspace` compose profile**: the store and the hub in workspace mode, on loopback, beside the existing `hub` profile | Developers and researchers, any operating system, from step 2 | A container runtime (below); little new work, since the `hub` profile does most of it; a rehearsal on a fresh VM before it is documented (CLAUDE.md, Branches item 5) |
+| **A desktop program with sidecars**: a Tauri program that starts and stops TerminusDB's executable and the hub as programs beside it | Designers on macOS and Linux | Bundling SWI-Prolog's and GMP's libraries, signing and notarizing on macOS, and Node for the hub (Node's single-executable feature, or a bundled runtime); check AH first |
+| **A desktop program over the file-backed store**: the hub alone, no TerminusDB | Everyone, Windows included | The second adapter (above) and its contract test |
+
+**Container runtimes for the compose profile.** Each is a Linux virtual machine and a container engine; they differ in license and weight, not in kind. Licenses as of 2026-10-28:
+
+| Runtime | Operating systems | License | Notes |
+|---|---|---|---|
+| Docker Desktop | macOS, Windows, Linux | Paid at organizations of 250 or more employees or $10 million or more revenue; the August 2026 terms exclude use connected to a university or research institution from the free personal tier ([license](https://docs.docker.com/subscription/desktop-license/)) | Fixed VM memory, 2 GB by default on Windows, several times the 375 MiB the store, hub and viewer used on the Droplet |
+| OrbStack | macOS | Free for personal, non-commercial use only; business, nonprofit and freelance use paid; educational licenses on request ([FAQ](https://orbstack.dev/docs/faq)) | The lightest on a Mac: memory grows and shrinks with use |
+| **Colima** | macOS, Linux | Open source, free for everyone | The Docker Engine itself, so the compose file works unchanged; command line only |
+| **Podman Desktop** | macOS, Windows, Linux | Open source, free for everyone | The one free graphical choice on all three; compose through a compatibility layer, and containers do not come back after a reboot without further setup, where the compose file assumes every service restarts; to be rehearsed |
+
+None of them changes the shape: a second install before Armature's, a background service, WSL2 on Windows whichever is chosen, and nothing the workspace hub can start on its own across all four. The free defaults to document are Colima on macOS and Podman Desktop on Windows, with OrbStack for those who hold a license. A designer's install is the third path: the file-backed store is the only one in which installing Armature is the whole install, and the only one at all on Windows without WSL.
 
 ## 11. Quiver
 
@@ -158,12 +179,12 @@ Each tested against a second client before it enters the remote (Development Pri
 ## 14. Implementation plan
 
 1. **The adapter interface** (§10): a refactor with no behavior change; its own pull request.
-2. **Workspace mode** with TerminusDB as the local store, because the adapter exists: the role in `/discover`, the refusals, the mirror of `main`, the workspace routes for create and clone. Tested in one process against a remote.
+2. **Workspace mode** with TerminusDB as the local store, because the adapter exists: the role in `/discover`, the refusals, the mirror of `main`, the workspace routes for create and clone. Tested in one process against a remote. The `workspace` compose profile for developers and researchers (§10), rehearsed with Colima and Podman Desktop before it is documented.
 3. **Push** with the commit table and the trailers; the failures of §5.
 4. **Bring in, review and deliver** (§6), with the engine over the merged state.
 5. **The clone's subject snapshots and forwarding** (§8).
 6. **The file-backed store** behind the interface, held to the same answers as the TerminusDB adapter; the workspace hub's default from here.
-7. **Packaging:** the workspace hub as one program a person installs (§16, question 1), and Quiver moved onto it.
+7. **Packaging:** the workspace hub over the file-backed store as one desktop program a person installs, on macOS, Windows and Linux (§16, question 1), and Quiver moved onto it.
 
 Steps 1 to 4 need nothing from the remote except what exists; step 7's pushes from another machine wait for OIDC.
 
@@ -177,8 +198,8 @@ Steps 1 to 4 need nothing from the remote except what exists; step 7's pushes fr
 
 ## 16. Questions to settle
 
-1. **One program, or inside the first tool?** A workspace hub installed on its own, which tools find on a known port, or one bundled inside Quiver and shared from there. *Recommendation:* its own program from step 7, built as a package from step 2 so either packaging is a build choice; Quiver bundles it until a second local tool exists.
-2. **Which store first?** *Recommendation:* TerminusDB for steps 2 to 5, since the adapter exists and the tests run against it; the file-backed store at step 6 as the default for people who are not developers, if the contract test holds it to the same answers.
+1. **How it reaches a person's machine** (§10's three paths). A workspace hub installed on its own, which tools find on a known port, or one bundled inside Quiver and shared from there; and a compose profile, a desktop program with TerminusDB beside it, or a desktop program over files. *Recommendation:* built as a package from step 2 so the packaging is a build choice. For developers and researchers, the `workspace` compose profile from step 2, with Colima on macOS and Podman Desktop on Windows documented as the free runtimes after a rehearsal. For designers, from step 7, one desktop program carrying the hub over the file-backed store; Quiver bundles it until a second local tool exists, then it is installed on its own.
+2. **Which store first?** *Recommendation:* TerminusDB for steps 2 to 5, since the adapter exists, the tests run against it and developers run it in the compose profile; the file-backed store at step 6, required rather than optional for a designer release, because TerminusDB has no native Windows build and every macOS path to it needs either a container runtime or an unproven bundle. The desktop program with TerminusDB beside it (check AH) is pursued only if offline history at every commit proves to matter more than Windows.
 3. **What a clone holds** (§8). *Recommendation:* the subjects at each referenced `asOf`, and forwarding when online.
 4. **The clone's slice.** *Recommendation:* `full` until an authoring slice exists; then the slice a tool asks for when creating the workspace, with references leaving it kept as `unresolved` (ADR-0031) and writes that need them refused locally with a clear message.
 5. **Several remotes on one workspace hub.** *Recommendation:* one remote per workspace hub; a person with two instances runs two, on two ports.
