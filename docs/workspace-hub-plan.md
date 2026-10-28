@@ -119,12 +119,41 @@ With the recommended option, a read at a ref the workspace hub does not hold is 
 
 ADR-0065 decision 8 leaves the store open. What it must do is limited by decisions 3 and 6: documents at a head, a log of local commits, reads at those commits, at the base and at the subject snapshots of §8. It never merges, never creates a branch from another's history, and never deletes.
 
+**What the hub asks of a store** (checked 2026-10-28). Nothing under `app/lib/api/` sends a graph query: no WOQL (TerminusDB's query language) is used, and coverage, trace, alignment, impact and module content are TypeScript in the hub, walking the graph by reading documents by id and by field templates (`intelligence/graph.ts`). The store serves as a **versioned document store**: get, put and match on fields at a named commit, with commits, history, diff, branches and merge. It also mints the identifiers of the nine Hash-keyed classes (every junction and `Attestation`) from their key fields. Field types, enums and required fields are checked first by the generated Zod schemas, and a reference's existence by constraint 0, which reads every target. So a graph database adds nothing the hub uses, and what any other store must supply is versioning and TerminusDB's formats.
+
 | Option | For | Against |
 |---|---|---|
 | **TerminusDB beside the hub** | The adapter as written; history, diff and template queries exactly as on the remote; measured footprint 292 MiB for the store and 38 MiB for the hub with the seed (`docs/deployment.md`) | A container runtime to install and keep running, or a native build not yet proven to ship (below); none on Windows outside WSL (Windows Subsystem for Linux) or a container. Its version need not match the remote's pinned v12.0.7, since a push goes through the remote's API and never reaches the remote's store; it must be a version the platform checks pass on |
-| **A file-backed store** (recommended to try first) | One process and nothing else to install; a folder the person owns, readable with any editor, diffable in git, Quiver's decision 4 kept; a few MiB of memory at this scale | A second adapter to write and keep faithful: template queries, history and diff over a commit log; tested against the TerminusDB adapter on the seed, and wrong where they differ |
+| **A file-backed store** (recommended to try first) | One process and nothing else to install; a folder the person owns, readable with any editor, diffable in git, Quiver's decision 4 kept; a few MiB of memory at this scale | A second adapter to write and keep faithful: template queries, history and diff over a commit log, and TerminusDB's Hash identifiers and diff format reproduced (below); tested against the TerminusDB adapter on the seed, and wrong where they differ |
+| Dolt (Git's model over SQL tables) | Commits, branches, merge, diff and reads at a commit (`AS OF`) native; one executable for Windows, macOS and Linux; Apache-2.0 | A process to ship and run; documents as JSON columns behind a third adapter; Hash identifiers and the diff format still reproduced. Worth it only if workspace hubs ever need real local branching |
+| A graph database (Neo4j) | Native on Windows (Java); fast traversals | Its traversals go unused, since the hub walks the graph itself; no versioning at all, so commits, history and reads at a commit built by hand, the file store's work again on a heavier base; a Java runtime of hundreds of MiB; the Community edition is GPLv3, to be checked before bundling. Not recommended |
 
 **The seam.** The adapter (`app/lib/api/store.ts`) is a concrete class, imported by 23 modules. The invariants engine and the intelligence reads use six of its methods (`getDocument`, `getDocuments`, `queryDocuments`, `allDocuments`, `getCommit`, `at`); the routes use more (`history`, `diff`, `log`, `head`, `listBranches`, `createBranch`, `apply`, the operator methods). The first piece of work is an interface extracted from the class, with the TerminusDB adapter its one implementation and every module typed against the interface: no behavior change, and the separation Quiver's `@armature/rules` ask also needs. The file-backed store then implements the subset a workspace hub uses, and a contract test runs the engine and the reads over both stores on the seed and requires the same answers.
+
+**The file-backed store's layout.** The remote's side is snapshots, not commits: rebuilding the remote's history would mean reading every changed document at every past commit, and a workspace needs only the base and the older states of §8. The local side is commits, one file each.
+
+```
+<workspace>/
+  workspace.json        remote URL, branch, owner, base commit, the push table
+  schema.json           GET /schema at the base
+  users.json            main's User documents, for identity resolution
+  remote/
+    base.jsonld         GET /export at the base, as the remote returned it
+    at/<commit>.json    the subjects at each older asOf a cloned record names (§8)
+  commits/
+    000001.json         { id, parent, author, message, time, documents, deleted, origin, pushedAs }
+```
+
+- **A commit file holds the full state of every document the commit wrote,** not a patch. It is then already the body of one `POST /documents`: a push sends the documents and the message with `If-Match` set to the previous commit's `pushedAs`, rewriting only the `asOf` values that name local commits (§5), and records the remote commit in `pushedAs`. The push table of §5 is these fields.
+- **The state at a commit** is the base with the commit files up to it applied in order, indexed in memory when the workspace opens; milliseconds at a few thousand documents. Reads at the base and at the snapshots of `remote/at/` are served from those files.
+- **Local commit identifiers have the remote's form.** The hub tests an `asOf` against `^[a-z0-9]+$` before it looks the commit up (`intelligence/graph.ts`); a hash of the commit file's content, as Git names commits, meets it.
+- **Bringing in `main` arrives as a commit too:** the documents `GET /branches/<ws>/changes?since=` reports, read at the merge commit, in a commit file with `origin: "remote"` and `pushedAs` set to the merge commit. `deleted` lists documents the changes report as `delete`: the API never deletes, but an operator's repair on the remote can (ADR-0062).
+- **One writer.** Only the workspace hub writes the folder; tools reach it through the API. A lock file refuses a second process, and every file is written under a temporary name and renamed into place, so a crash leaves it whole or absent (Quiver's §5.2).
+
+**What a store other than TerminusDB must reproduce.** Two of TerminusDB's formats cross the API:
+
+- **Hash identifiers.** The store mints the `@id` of the nine Hash-keyed classes from their key fields (check X1c), and a local record refers to a junction by that id (a note about a `ModuleObjective`, a finding about an `ItemInstance`). An id minted differently locally would name nothing on the remote. Either the adapter reproduces TerminusDB's Hash algorithm exactly, pinned by a lettered platform check (AI) and a contract test comparing ids on the seed, or the push table maps identifiers as it maps commits. Reproducing it is simpler and keeps every id the same on both hubs. Random-keyed records need nothing, provided a push always sends their `@id` (ADR-0024).
+- **The diff format.** `GET /documents/:type/:id/diff` and the history route's `diff` option return the store's own JSON patch (`docs/vendor/terminusdb/json-diff-and-patch.md`), and `docs/api.md` names no format beyond "the structural difference". A workspace hub on another store must produce the same patch, or the API must define its own (§16, question 11).
 
 **What TerminusDB ships** (checked 2026-10-28). The documented routes are Docker, Kubernetes and a build from source on Linux or macOS; Windows only through WSL or Docker (`docs/vendor/terminusdb/_all/terminusdb-install-options.md`, `install-terminusdb-from-source-code.md`). The GitHub releases v12.0.6 to v12.1.0-rc1 carry no binaries. Linux has a Snap package, v12.0.8 on 12 October 2026; there is no Homebrew formula. The build already makes one executable (`src/bootstrap.pl` calls SWI-Prolog's `qsave_program` with `stand_alone(true)` and `foreign(save)`, saving the program and the Rust storage library into it), which on macOS probably still links the Homebrew copies of SWI-Prolog and GMP (the GNU arithmetic library). That is read from the build files, not tested; platform check AH would build it on macOS, list what it links, run it on a clean machine and measure it.
 
@@ -153,7 +182,7 @@ None of them changes the shape: a second install before Armature's, a background
 
 What moves: Quiver's `sync/` (check out, push with `If-Match`, bring in, deliver), `workspace/` (the folder, atomic writes, the lock), `merge/` (the three-way merge by `fragmentId`, the hold, merge, resolve sequence), `rules/` and `coverage/`. What stays: the bank, the item editor, the formats, the tags and saved filters and everything else its §7 keeps out of the hub, and the Changes drawer, which becomes a view of the workspace hub's unpushed commits.
 
-Quiver's folder layout (its §5.2) is close to what a file-backed store needs. `base.jsonld` is the clone; `documents/<Type>/<id>.json` is the working state; `commits/` is the log. Two differences: the log becomes the store's history rather than a list of pending writes, and `local/` stays Quiver's, outside the workspace hub's folder.
+Quiver's folder layout (its §5.2) is close to the file-backed store's (§10). `base.jsonld` is the clone and `commits/` the log in both. Three differences: the log becomes the store's history rather than a list of pending writes; the working state is derived from the base and the commits rather than kept as `documents/<Type>/<id>.json`, so it cannot disagree with them (a readable copy of it can be written out for a person to browse, and is never read back); and `local/` stays Quiver's, outside the workspace hub's folder.
 
 Quiver's plan changes on acceptance: its §3 and §5 describe a client of a workspace hub, and its milestones that build sync and merge become this plan's milestones (§14), built here.
 
@@ -173,7 +202,7 @@ Each tested against a second client before it enters the remote (Development Pri
 ## 13. Testing
 
 - **The adapter interface:** the existing suite unchanged, typed against the interface; a test that no module under `app/lib/api/` imports the class except the factory.
-- **The two stores:** the engine and every intelligence read over both on the seed, at the head and at the seed's earlier commits, with the same answers; the file store's template queries against the TerminusDB adapter's on every class.
+- **The two stores:** the engine and every intelligence read over both on the seed, at the head and at the seed's earlier commits, with the same answers; the file store's template queries against the TerminusDB adapter's on every class; every Hash-keyed document of the seed given the same `@id` by both; the diff and history routes' patches identical for the seed's revised documents; a crash between writing a commit file and renaming it leaving the workspace as it was.
 - **The cycle:** a contract test that runs a remote hub and a workspace hub in one process (`startHub` with port 0, twice): create, clone, write, push, bring in, deliver, with two workspaces and two users meeting on `main`; Quiver's ten scenarios (its §6) are the cases. The `asOf` rewrite on a dataset, a metric and an attestation written offline; a push interrupted after one commit and resumed; a 412 from a write on the remote branch; a 422 from a rule the remote has and the local copy lacks.
 - **The refusals:** every route in §9 marked refused answers `remote_only` on a workspace hub, and `/discover` says so.
 - **CI:** the cycle test in the contract job, against the TerminusDB service container as the remote.
@@ -185,7 +214,7 @@ Each tested against a second client before it enters the remote (Development Pri
 3. **Push** with the commit table and the trailers; the failures of §5.
 4. **Bring in, review and deliver** (§6), with the engine over the merged state.
 5. **The clone's subject snapshots and forwarding** (§8).
-6. **The file-backed store** behind the interface, held to the same answers as the TerminusDB adapter; the workspace hub's default from here.
+6. **The file-backed store** behind the interface, in the layout of §10: platform check AI first (TerminusDB's Hash algorithm), then the commit files, the in-memory index, the Hash identifiers and the diff format, held to the same answers as the TerminusDB adapter; the workspace hub's default from here.
 7. **Packaging:** the workspace hub over the file-backed store as one desktop program a person installs, on macOS, Windows and Linux (§16, question 1), and Quiver moved onto it.
 
 Steps 1 to 4 need nothing from the remote except what exists; step 7's pushes from another machine wait for OIDC.
@@ -210,3 +239,4 @@ Steps 1 to 4 need nothing from the remote except what exists; step 7's pushes fr
 8. **Pseudonymous clones** (§7). *Recommendation:* not offered until a study asks; check first how the remote would resolve a pseudonymous writer.
 9. **Owned workspace branches** (§12). *Recommendation:* the convention and the 412, until a second client shows a need for the remote to refuse.
 10. **The trailers' names.** `Armature-Workspace-Commit` and `Armature-Committed-At` are proposed. *Recommendation:* settle them with the research path's reader before the first push is built, since they are a format other programs will read.
+11. **The diff format** (§10). The diff route passes TerminusDB's JSON patch through, unnamed in `docs/api.md`, so a client already depends on it. Either a file-backed store reproduces that patch, or the API defines a format of its own and both stores produce it. *Recommendation:* reproduce TerminusDB's patch, and name it in `docs/api.md` now as the route's format, so the dependency is written down; an API-defined format waits for a client that needs something the patch cannot say.

@@ -145,5 +145,8 @@ ship beside itself.
 - History offline starts at the base. Reads at older commits, and the subject states that
   constraints 13 and 16 and the attestation staleness read need for records cloned with an older
   `asOf`, need either a larger clone or the remote (plan §8).
+- A store other than TerminusDB under a workspace hub must reproduce two of TerminusDB's formats
+  that cross the API: the identifiers it mints for Hash-keyed classes, so a local record names the
+  same junction the remote holds, and the JSON patch the diff route returns (plan §10).
 - The remote needs the `oidc` resolver before a workspace hub on another machine can push.
 - Nothing changes for a client that talks to a remote hub directly.
