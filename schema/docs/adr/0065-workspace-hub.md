@@ -22,6 +22,10 @@ behind an adapter interface, with TerminusDB as the test bed while steps 2 to 5 
 `Armature-Committed-At` to `Armature-Authored-At`, following Git's author date, and gained
 `Armature-Workspace-Part` for a split commit (plan §16 question 10).
 
+**Note 2026-10-29, identity:** identity moved to two records of its own: ADR-0067 (Proposed) for authentication, agents acting for people and the
+loopback boundary, and ADR-0068 (Proposed) for authorization, which enforces decision 2's
+ownership and replaces decision 7's refusal of agent writes.
+
 On acceptance it would annotate, not amend in substance:
 
 - **ADR-0025 decision 2**, which reserves git-style trailers in the commit message and defines
@@ -79,6 +83,10 @@ Three facts constrain the answer:
    whose machine holds it; nothing else writes its branch on the remote by convention, and a push
    detects a breach of the convention (decision 5) rather than the remote preventing it.
 
+   > **Later change (2026-10-29):** ADR-0068 (Proposed) makes ownership a rule the remote
+   > enforces: the person who creates a branch owns it, and only its owner, someone the owner
+   > grants, or an agent acting for either may write to it.
+
 3. **A workspace hub refuses what makes history shared.** Branch creation, merge, branch deletion
    and user registration are refused with 400 `remote_only`, naming the remote. Branch reads,
    document reads and writes on a workspace, history, diff, every intelligence read and export
@@ -119,6 +127,13 @@ Three facts constrain the answer:
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the
    remote. Writes by an agent identity are refused until the remote can tell an agent's push from
    its registrar's, so that no agent's work is silently credited to a person.
+
+   > **Later change (2026-10-29):** ADR-0067 (Proposed) adds a `Host` check and an allow-list of
+   > web origins, empty by default, to every hub, so a web page the person never chose cannot
+   > write as them. ADR-0067 and ADR-0068 (both Proposed) replace the refusal of agent writes: an
+   > agent writes locally, and the push sends its commits as the agent acting for the owner, with
+   > the owner recorded in an `Armature-On-Behalf-Of` trailer the remote writes itself. Quiver's
+   > drafter and lint agent, already built, are the case.
 
 8. **The store under a workspace hub is a choice behind the adapter.** TerminusDB as a process
    beside the hub and a file-backed store are both admissible. Decisions 3 and 6 limit what the
