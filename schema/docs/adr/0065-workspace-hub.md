@@ -14,6 +14,9 @@
 
 Proposed (2026-10-28). Nothing is built on it.
 
+**Note 2026-10-29:** the store decision 8 leaves open is ADR-0066 (Proposed): a folder of files
+behind an adapter interface, with TerminusDB as the test bed while steps 2 to 5 are built.
+
 On acceptance it would annotate, not amend in substance:
 
 - **ADR-0025 decision 2**, which reserves git-style trailers in the commit message and defines
@@ -112,6 +115,10 @@ Three facts constrain the answer:
    store must do (no merge, no branch creation): documents at the head, a log of local commits,
    reads at those commits and at the base. The plan compares the two; this ADR does not choose.
 
+   > **Later change (2026-10-29):** ADR-0066 (Proposed) makes the choice: the file-backed store,
+   > with TerminusDB first as the test bed, and whether TerminusDB stays a second local store
+   > decided once the file-backed store exists.
+
 ## Alternatives considered
 
 - **The store's own clone and push.** Keeps commit identifiers and times, and every intelligence
@@ -148,5 +155,8 @@ ship beside itself.
 - A store other than TerminusDB under a workspace hub must reproduce two of TerminusDB's formats
   that cross the API: the identifiers it mints for Hash-keyed classes, so a local record names the
   same junction the remote holds, and the JSON patch the diff route returns (plan §10).
+  > **Later change (2026-10-29):** ADR-0066 decisions 5 and 6 settle both: the patch is named in
+  > `docs/api.md` as the route's format, and Hash identifiers are reproduced if check AI shows
+  > how, else mapped at push, since Quiver found them not reproducible from the key fields.
 - The remote needs the `oidc` resolver before a workspace hub on another machine can push.
 - Nothing changes for a client that talks to a remote hub directly.

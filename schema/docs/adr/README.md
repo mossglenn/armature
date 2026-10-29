@@ -123,7 +123,7 @@ are not yet written; see [Numbering](#numbering).
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
-### 0054–0065: Later decisions (October 2026)
+### 0054–0066: Later decisions (October 2026)
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -139,6 +139,7 @@ are not yet written; see [Numbering](#numbering).
 | [0063](0063-outcome-records-name-their-source.md) | Outcome Records Name Their Source | Accepted and implemented (2026-10-20); annotates ADR-0057 and ADR-0058 | Results that enter Armature must say where they came from: the assessment inside Armature that produced them, or a reference to the outside system they were imported from. The demonstration course now carries one administration's results, so the outcomes-to-design walk runs on the seed. |
 | [0064](0064-lesson.md) | Lesson, an Ordered Set of Activities | Accepted and implemented (2026-10-22); annotates ADR-0005 and ADR-0003 | The class that holds an ordered set of activities a module schedules is `Lesson`, the peer of an assessment (an ordered set of items); it was `ActivityGroup`, a name for its shape. Its two links are `LessonActivityLink` and `ModuleLessonLink`. A rename only: the sequencing of ADR-0005 and the rules around it are unchanged. |
 | [0065](0065-workspace-hub.md) | The Workspace Hub, a Local Hub Bound to a Remote by Workspaces | Proposed (2026-10-28); would annotate ADR-0025, ADR-0032, ADR-0055 and ADR-0059 | A person can work on the graph on their own machine, offline and with several tools at once, through a second copy of the hub that holds *workspaces*: branches created on the shared hub, copied down, and sent back by replaying each local commit through the shared hub's own interface, so every rule runs there too. Creating branches, merging and registering people stay on the shared hub. |
+| [0066](0066-workspace-hub-store.md) | The Workspace Hub's Store Is a Folder of Files, Behind an Adapter Interface | Proposed (2026-10-29); depends on ADR-0065 and answers its decision 8; would amend ADR-0055 | When the hub runs on a person's own machine, its data is a folder of plain files the hub reads and writes itself, so installing Armature is one install on any operating system, Windows included. TerminusDB is the test bed while the workspace hub is built; whether developers keep it as a second local store is decided once the folder works. |
 
 ## How to add an ADR
 
@@ -147,7 +148,7 @@ are not yet written; see [Numbering](#numbering).
    otherwise have to reverse-engineer from the code.
 2. **Pick the number.** If you are writing one of the reserved decisions (0030, 0031, 0034),
    use its reserved number. Otherwise take the next number after the highest existing ADR
-   (ADR-0063 at the time of writing). If the decision adopts a research candidate from
+   (ADR-0066 at the time of writing). If the decision adopts a research candidate from
    `docs/research/adr-candidates.md`, name the candidate in the Status section, as ADR-0025 does
    for candidate 0036 and ADR-0059 for candidate 0039.
 3. **Name the file** `NNNN-short-decision-title.md` in this directory.
