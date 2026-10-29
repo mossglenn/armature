@@ -17,6 +17,11 @@ Proposed (2026-10-28). Nothing is built on it.
 **Note 2026-10-29:** the store decision 8 leaves open is ADR-0066 (Proposed): a folder of files
 behind an adapter interface, with TerminusDB as the test bed while steps 2 to 5 are built.
 
+**Note 2026-10-29, decided before acceptance:** one remote per workspace hub, as decision 1 says
+(plan §16 question 5). Decision 5's trailers were renamed from the first draft's
+`Armature-Committed-At` to `Armature-Authored-At`, following Git's author date, and gained
+`Armature-Workspace-Part` for a split commit (plan §16 question 10).
+
 On acceptance it would annotate, not amend in substance:
 
 - **ADR-0025 decision 2**, which reserves git-style trailers in the commit message and defines
@@ -93,8 +98,13 @@ Three facts constrain the answer:
    replay starts from the base, each remote commit holds the same documents as its local
    original, so the rewrite is exact. The commit message carries two trailers in the form
    ADR-0025 decision 2 reserves: `Armature-Workspace-Commit: <local commit id>` and
-   `Armature-Committed-At: <time of the local commit>`, so the time the work was done survives
-   the push. A 412 means the branch moved on the remote and the push stops; a 422 stops it at the
+   `Armature-Authored-At: <time of the local commit>`, so the time the work was done survives
+   the push. The name follows Git's author date (when the work was done), the remote's own
+   timestamp being the committer date (when it arrived). A local commit too large for one request
+   is replayed as several, each carrying a third trailer, `Armature-Workspace-Part: <n>/<total>`.
+   These trailers are the pusher's claims: the remote records them as sent, and they are as
+   trustworthy as the authenticated workspace owner who pushed them. A 412 means the branch
+   moved on the remote and the push stops; a 422 stops it at the
    commit the remote refused.
 
 6. **Delivery is the remote's merge, driven from the workspace hub.** With nothing left to push,
