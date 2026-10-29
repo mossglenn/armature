@@ -64,10 +64,10 @@ Each local commit since the last push becomes one batch write on the remote: the
 
 ```
 Armature-Workspace-Commit: <local commit id>
-Armature-Committed-At: <ISO 8601 time of the local commit>
+Armature-Authored-At: <ISO 8601 time of the local commit>
 ```
 
-so the time the work was done survives the push; the remote's own timestamp is the time it arrived. A research reading of design process (`docs/research-path.md`) reads the trailer when present.
+so the time the work was done survives the push; the remote's own timestamp is the time it arrived. The names follow Git's two dates: the author date is when the work was done, the committer date when it was applied. A local commit split across several requests carries `Armature-Workspace-Part: <n>/<total>` on each. These are the pusher's claims, recorded as sent; the trailers the remote writes itself (`Armature-On-Behalf-Of`, ADR-0067) are the only ones it vouches for. *Renamed 2026-10-29 from the first draft's `Armature-Committed-At` (§16, question 10).* A research reading of design process (`docs/research-path.md`) reads the trailer when present.
 
 **Failures.** A local commit is replayed whole or not at all, so a push interrupted by the network resumes from the table. A **412** means the workspace's branch moved on the remote: someone else wrote it, against the convention, or the same person pushed from another machine. The push stops and the workspace hub shows what moved (`GET /branches/<ws>/changes?since=`). A **422** stops the push at the commit the remote refused and shows the remote's violations; since the local pipeline ran the same rules, this means the local engine was older than the remote's or a rule depends on state the workspace hub lacked (§8), and either is reported as such.
 
@@ -195,7 +195,7 @@ Each tested against a second client before it enters the remote (Development Pri
 | The `oidc` resolver, and a `token` option on `@armature/client` | Any writing client elsewhere (What's Next item 3; Quiver's two machines; the MCP server over HTTP) | Passes; this is a trigger |
 | The merge route runs the invariants engine over the merged state | CoQui's round merge; the outcomes importer | Passes (Quiver's first ask, unchanged) |
 | A dry-run merge returning the conflict report without a commit | CoQui | Passes; lets "bring in" preview before it writes |
-| The two trailers documented in `docs/api.md` and read by the history route | The research path's reading of process data | Passes; no code on the remote beyond returning the message as stored |
+| The workspace trailers (§5) documented in `docs/api.md` and read by the history route | The research path's reading of process data | Passes; no code on the remote beyond returning the message as stored |
 | An owned branch: the remote refuses writes to a workspace by anyone but its owner | None yet; the push already detects the breach | Fails for now; the convention and the 412 stand |
 | An authoring slice in `slices.json` | Quiver; the curriculum mapper | Passes; configuration |
 
@@ -233,10 +233,10 @@ Steps 1 to 4 need nothing from the remote except what exists; step 7's pushes fr
 2. **Which store first?** *Proposed in ADR-0066 (2026-10-29):* the file-backed store as the workspace hub's store, built at step 6 with TerminusDB as the test bed for steps 2 to 5, and whether TerminusDB stays for developers decided after step 6. *Recommendation as first written:* TerminusDB for steps 2 to 5, since the adapter exists, the tests run against it and developers run it in the compose profile; the file-backed store at step 6, required rather than optional for a designer release, because TerminusDB has no native Windows build and every macOS path to it needs either a container runtime or an unproven bundle. The desktop program with TerminusDB beside it (check AH) is pursued only if offline history at every commit proves to matter more than Windows. This reopens if a portable Windows build returns (§10, the conversation with TerminusDB's maintainers): with one, and check AH passing on macOS, the sidecar path covers all three operating systems and the file-backed store becomes a choice rather than a requirement.
 3. **What a clone holds** (§8). *Recommendation:* the subjects at each referenced `asOf`, and forwarding when online.
 4. **The clone's slice.** *Recommendation:* `full` until an authoring slice exists; then the slice a tool asks for when creating the workspace, with references leaving it kept as `unresolved` (ADR-0031) and writes that need them refused locally with a clear message.
-5. **Several remotes on one workspace hub.** *Recommendation:* one remote per workspace hub; a person with two instances runs two, on two ports.
+5. **Several remotes on one workspace hub.** *Decided 2026-10-29:* one remote per workspace hub, as recommended. *Recommendation:* one remote per workspace hub; a person with two instances runs two, on two ports.
 6. **The loopback trust** (§7). *Recommendation:* the `header` resolver limited to the owner, now; a per-session token for launched tools when a workspace hub runs on a machine with other accounts.
 7. **Agents on a workspace hub** (§7). *Recommendation:* refused until the remote can authenticate an agent pushed by its registrar; then a delegation trailer, which ADR-0025 decision 2 already anticipates.
 8. **Pseudonymous clones** (§7). *Recommendation:* not offered until a study asks; check first how the remote would resolve a pseudonymous writer.
 9. **Owned workspace branches** (§12). *Recommendation:* the convention and the 412, until a second client shows a need for the remote to refuse.
-10. **The trailers' names.** `Armature-Workspace-Commit` and `Armature-Committed-At` are proposed. *Recommendation:* settle them with the research path's reader before the first push is built, since they are a format other programs will read.
+10. **The trailers' names.** *Decided 2026-10-29:* `Armature-Workspace-Commit`, `Armature-Authored-At` (Git's author date) and `Armature-Workspace-Part` for a split commit (§5, ADR-0065 decision 5). As first written: `Armature-Workspace-Commit` and `Armature-Committed-At` were proposed. *Recommendation:* settle them with the research path's reader before the first push is built, since they are a format other programs will read.
 11. **The diff format** (§10). *Proposed in ADR-0066 decision 5 (2026-10-29):* the recommendation below. The diff route passes TerminusDB's JSON patch through, unnamed in `docs/api.md`, so a client already depends on it. Either a file-backed store reproduces that patch, or the API defines a format of its own and both stores produce it. *Recommendation:* reproduce TerminusDB's patch, and name it in `docs/api.md` now as the route's format, so the dependency is written down; an API-defined format waits for a client that needs something the patch cannot say.
