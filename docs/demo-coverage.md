@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-27, graph-native tools added 2026-10-28 · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
 
-**How to read it.** Capabilities run down the side and tools across the top. ● means the tool's demo *shows* the capability; ○ means the tool *uses* it without making it the point. Each row gets the hub's own coverage verdict (ADR-0029's default thresholds), counting only ● for the tools in scope: Uncovered is 0, Partially is 1, Fully is 2 to 4, Over is 5 or more. Three verdict columns give the three scopes: built tools only, built and planned, and everything including the proposed tools. *Partial* marks a hub capability that is not finished.
+**How to read it.** Capabilities run down the side and tools across the top, grouped by who is in the loop (interactive, agent, batch, gate; § Kinds of plugin). ● means the tool's demo *shows* the capability; ○ means the tool *uses* it without making it the point. Each row gets the hub's own coverage verdict (ADR-0029's default thresholds), counting only ● for the tools in scope: Uncovered is 0, Partially is 1, Fully is 2 to 4, Over is 5 or more. Three verdict columns give the three scopes: built tools only, built and planned, and everything including the proposed tools. *Partial* marks a hub capability that is not finished.
 
 An interactive version of the matrix as of 2026-10-27 (before the three graph-native tools), with a note behind every dot, is a private claude.ai artifact: https://claude.ai/artifact/AYoCccDJUpozFWQakMasNi
 
@@ -35,45 +35,83 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 
 The viewer is counted as a tool because the Coverage View and the Design Graph are clients of the hub like any plugin. Quiver's cells come from its plan as Armature's documents describe it (`mossglenn/quiver`, `docs/plan.md` there); check them against that plan.
 
+## Kinds of plugin (2026-10-28)
+
+No single division of plugins holds: designer against administrator, or who installs a plugin, each break on a counterexample (a designer wants a linter for their own way of working; any designer could host CoQui for their SMEs). Four separate dimensions do hold, and a plugin has a value on each:
+
+1. **Who is in the loop**, which is when it acts. *Interactive*: a person works in it. *Agent*: an AI acting as a `User`. *Batch*: run on demand or on a schedule. *Gate*: checks a change before it lands. The matrix's columns are grouped by this dimension, since a demo set is best with one of each; today no gate is built or planned.
+2. **Acts as whom.** The person using it; a service or agent `User`; or nobody, because it only reads.
+3. **Where it runs.** The designer's machine, beside the hub on its server's network, or anywhere. This mostly follows from dimension 2 and the hub's identity system rather than from the plugin: under the `header` resolver the hub trusts its caller, so it is reachable only from its own server or network (`deployment.md`, "A client on the same server"), and every client elsewhere waits for the `oidc` resolver, and for the open question of whether reads need a token too (SESSION.md What's Next item 3). The link between a plugin and a hub is a credential, not an installation: with OIDC, any designer can host CoQui on a Droplet for their SMEs.
+4. **Whose rules configure it.** Personal, team or project, or institutional. Only Lint has configuration that matters so far, and it could be any of the three; where a rule set lives (in the plugin, or as records in the graph, versioned and inspectable like everything else) is Lint's question until a second configurable tool exists.
+
+**A gate has no mechanism in the hub.** `/api/v1` has no events, no webhooks and no checks the merge route calls, so a gate today either polls (`GET /branches/:name/changes?since=`) or runs inside the client before it acts, as Quiver plans to. An administrator "installing a linter" as policy needs merge-time checks the hub runs, close to Quiver's first ask (the merge route running the invariants engine over the merged state), which already passes the two-client test. The matrix carries this as **Reacting to changes**, marked *Partial*.
+
+**Profiles.** Each tool's natural home under the first three dimensions; "beside the hub" and "the designer's machine" become "anywhere" once the hub authenticates its callers.
+
+| Tool | In the loop | Acts as | Runs where |
+|---|---|---|---|
+| CoQui | Interactive | The person: designer or SME | Beside the hub |
+| Viewer | Interactive | Nobody | Beside the hub, its pages public |
+| Quiver | Interactive | The person | The designer's machine, through a workspace hub (ADR-0065) |
+| Ripple | Interactive | The person | Beside the hub |
+| Crosswalk | Interactive | The person: mapper or SME | Beside the hub |
+| Whyfinder | Interactive | Nobody | The reader's browser |
+| MCP server | Agent | Nobody when reading; an agent `User` when writes are on | The person's machine (stdio); beside the hub over HTTP |
+| Formalizer | Agent | An agent `User` | Beside the hub |
+| Storyline bridge | Batch | The person running it | The designer's Windows machine |
+| DataShop bridge | Batch | A service `User` | Beside the hub |
+| Q-matrix exporter | Batch | Nobody | Anywhere the export reaches |
+| Experiment bridge | Batch | The person setting up conditions | Beside the hub |
+| Torus bridge | Batch | A service `User` | Beside the hub |
+| LEED importer | Batch | The person importing | The designer's machine |
+| Drift | Batch | A service `User` | Beside the hub |
+| Projection | Batch | Nobody | Anywhere the export reaches |
+| Process miner | Batch | Nobody | A study's machine, over a pseudonymous export |
+| Response tracker | Batch | Nobody | Beside the hub |
+| Structure analyzer | Batch | Nobody; a person keeps its proposals as findings | Anywhere the export reaches |
+| Lint | Gate | Nobody; a person keeps a violation as a finding | The designer's machine before a push; beside the hub as policy, once merge-time checks exist |
+
 ## The matrix
 
-| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | MCP server | Storyline bridge | DataShop bridge | Q-matrix exporter | Experiment bridge | Torus bridge | LEED importer | Formalizer | Ripple | Lint | Drift | Crosswalk | Whyfinder | Projection | Process miner | Response tracker | Structure analyzer |
+| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | Ripple | Crosswalk | Whyfinder | MCP server | Formalizer | Storyline bridge | DataShop bridge | Q-matrix exporter | Experiment bridge | Torus bridge | LEED importer | Drift | Projection | Process miner | Response tracker | Structure analyzer | Lint |
 |---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| *In the loop* |  |  |  | *Interactive* |  |  |  |  |  | *Agent* |  | *Batch* |  |  |  |  |  |  |  |  |  |  | *Gate* |
 | **Version control** | | | | | | | | | | | | | | | | | | | | | | | |
-| Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 14 | ● | ● | ○ | ● | ● | ● | ● | ● | ● | ○ | ○ | ● | ○ | ● | ○ | ● | ● | ● | ● | ○ |
-| Branches<br>`POST /branches` | Partially 1 | Fully 2 | Over 6 | ● | ○ | ● | ○ | ○ | ○ |  | ● | ○ | ● |  | ● | ● |  | ○ |  |  | ○ |  |  |
-| History and changes since<br>`history · changes?since=` | Partially 1 | Fully 2 | Over 10 | ○ | ● | ● | ● | ● | ○ | ○ | ● | ● | ● | ○ | ○ |  | ● |  |  | ○ | ● | ● |  |
-| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Uncovered 0 | Partially 1 | Fully 3 | ○ |  | ● |  |  |  |  | ● | ○ | ○ |  | ○ | ● |  |  |  |  | ○ |  |  |
+| Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 14 | ● | ● | ○ | ● | ○ | ● | ● | ○ | ● | ● | ● | ● | ● | ○ | ● | ● | ● | ● | ○ | ○ |
+| Branches<br>`POST /branches` | Partially 1 | Fully 2 | Over 6 | ● | ○ | ● | ● | ○ |  | ○ |  | ○ | ○ |  | ● | ○ | ● |  |  | ○ |  |  | ● |
+| History and changes since<br>`history · changes?since=` | Partially 1 | Fully 2 | Over 10 | ○ | ● | ● | ○ |  |  | ● | ○ | ● | ○ | ○ | ● | ● | ● | ● | ○ | ● | ● |  |  |
+| Reacting to changes *(Partial)*<br>`polling changes?since= · no events or merge-time checks` | Uncovered 0 | Uncovered 0 | Partially 1 |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  | ○ | ○ |  | ○ |  | ● |
+| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Uncovered 0 | Partially 1 | Fully 3 | ○ |  | ● | ○ |  |  |  |  |  |  |  | ● | ○ | ○ |  |  | ○ |  |  | ● |
 | **Writes** | | | | | | | | | | | | | | | | | | | | | | | |
-| One write path with invariants<br>`generic writes · ADR-0024` | Partially 1 | Fully 2 | Over 8 | ● |  | ● | ○ | ● | ● |  | ○ | ● | ● | ○ | ● |  |  | ● |  |  |  |  |  |
-| Batch writes with If-Match<br>`batch · optimistic concurrency` | Uncovered 0 | Partially 1 | Fully 3 | ○ |  | ● |  | ○ | ○ |  |  | ● | ● |  |  |  |  |  |  |  |  |  |  |
-| Identity on every write *(Partial)*<br>`Armature-User · OIDC not built` | Partially 1 | Fully 2 | Fully 2 | ● |  | ● | ○ | ○ |  |  | ○ | ○ | ○ |  |  |  |  |  |  |  | ○ |  |  |
+| One write path with invariants<br>`generic writes · ADR-0024` | Partially 1 | Fully 2 | Over 8 | ● |  | ● | ● | ● |  | ○ | ○ | ● | ● |  | ○ | ● | ● |  |  |  |  |  |  |
+| Batch writes with If-Match<br>`batch · optimistic concurrency` | Uncovered 0 | Partially 1 | Fully 3 | ○ |  | ● |  |  |  |  |  | ○ | ○ |  |  | ● | ● |  |  |  |  |  |  |
+| Identity on every write *(Partial)*<br>`Armature-User · OIDC not built` | Partially 1 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  | ○ |  |  | ○ | ○ | ○ |  |  | ○ |  |  |  |
 | **Review** | | | | | | | | | | | | | | | | | | | | | | | |
-| Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 10 | ● | ○ | ○ | ○ | ● | ● |  | ● | ● | ● | ● | ● | ● | ● |  | ○ |  | ○ | ○ | ○ |
-| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ● | ○ |  | ● | ○ | ○ | ○ |  |  |
+| Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 10 | ● | ○ | ○ | ● |  | ○ | ○ | ● | ● | ● |  | ● | ● | ● | ● |  | ○ | ○ | ○ | ● |
+| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ● | ● | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |  | ○ | ○ |  |  | ○ |
 | **Design intelligence** | | | | | | | | | | | | | | | | | | | | | | | |
-| Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 10 | ● | ● | ○ | ● | ○ | ● | ○ | ● | ● |  |  | ● | ● |  | ● |  | ○ |  | ○ | ● |
-| Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 6 | ● | ● | ○ | ● |  | ○ | ● |  | ○ |  |  | ● | ● |  |  |  |  |  |  | ○ |
-| Trace<br>`/intelligence/trace` | Partially 1 | Partially 1 | Over 8 |  | ● |  | ● | ● | ● |  | ○ | ● | ● |  | ○ |  |  | ○ | ● | ● |  | ○ | ○ |
-| Impact<br>`/intelligence/impact` | Uncovered 0 | Uncovered 0 | Over 5 |  | ○ |  | ● | ● |  |  | ○ | ● |  |  | ● | ○ | ○ |  |  |  |  |  | ● |
-| Ordered module content<br>`/intelligence/module-content · ADR-0005` | Partially 1 | Partially 1 | Fully 4 |  | ● | ○ | ○ | ○ |  |  | ○ | ● |  |  | ○ | ● |  |  | ○ | ● |  |  | ○ |
-| Item statistics<br>`/intelligence/item-statistics · ADR-0058` | Partially 1 | Partially 1 | Over 5 |  | ● |  | ○ | ● | ● |  | ● | ○ |  |  |  |  |  |  |  |  |  | ● |  |
+| Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 10 | ● | ● | ○ | ● | ● |  | ● |  | ○ | ● | ○ | ● | ● |  |  | ○ |  | ○ | ● | ● |
+| Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 6 | ● | ● | ○ | ● |  |  | ● |  |  | ○ | ● |  | ○ |  |  |  |  |  | ○ | ● |
+| Trace<br>`/intelligence/trace` | Partially 1 | Partially 1 | Over 8 |  | ● |  | ○ | ○ | ● | ● |  | ● | ● |  | ○ | ● | ● |  | ● |  | ○ | ○ |  |
+| Impact<br>`/intelligence/impact` | Uncovered 0 | Uncovered 0 | Over 5 |  | ○ |  | ● |  |  | ● |  | ● |  |  | ○ | ● |  | ○ |  |  |  | ● | ○ |
+| Ordered module content<br>`/intelligence/module-content · ADR-0005` | Partially 1 | Partially 1 | Fully 4 |  | ● | ○ | ○ |  | ○ | ○ |  | ○ |  |  | ○ | ● |  |  | ● |  |  | ○ | ● |
+| Item statistics<br>`/intelligence/item-statistics · ADR-0058` | Partially 1 | Partially 1 | Over 5 |  | ● |  |  |  |  | ○ |  | ● | ● |  | ● | ○ |  |  |  |  | ● |  |  |
 | **Ecosystem** | | | | | | | | | | | | | | | | | | | | | | | |
-| External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Over 8 |  |  |  |  | ● | ● | ○ | ● | ● | ● |  |  |  | ● | ● | ● | ○ |  |  |  |
-| Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Fully 4 |  |  |  |  | ● | ● |  |  | ○ | ● |  |  |  | ● |  |  |  |  |  |  |
-| Export profiles and slices<br>`GET /export · ADR-0031` | Partially 1 | Fully 2 | Over 8 |  | ● | ● | ○ | ○ | ● | ● | ○ | ○ |  | ● |  |  | ○ | ○ |  | ● | ● |  | ● |
-| Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Over 6 |  | ● |  |  | ● | ● |  | ● | ○ |  |  |  |  | ● | ○ |  |  |  | ● |  |
+| External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Over 8 |  |  |  |  | ● | ● |  |  | ● | ● | ○ | ● | ● | ● | ● | ○ |  |  |  |  |
+| Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Fully 4 |  |  |  |  |  |  |  |  | ● | ● |  |  | ○ | ● | ● |  |  |  |  |  |
+| Export profiles and slices<br>`GET /export · ADR-0031` | Partially 1 | Fully 2 | Over 8 |  | ● | ● |  | ○ |  | ○ | ● | ○ | ● | ● | ○ | ○ |  | ○ | ● | ● |  | ● |  |
+| Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Over 6 |  | ● |  |  | ○ |  |  |  | ● | ● |  | ● | ○ |  | ● |  |  | ● |  |  |
 | **Toolkit and guards** | | | | | | | | | | | | | | | | | | | | | | | |
-| Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  | ● |  |  | ● |  |  |  | ● |  | ○ |  |  |  |  |  |  |  |
-| Typed client<br>`@armature/client` | Partially 1 | Fully 2 | Over 11 | ○ | ● | ● | ● | ● | ● | ● | ● | ● | ● |  | ○ | ● |  |  | ● |  | ○ | ○ | ○ |
-| Agent provenance<br>`agent User · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ | ● |  |  |  |  |  |  | ● |  |  |  |  |  |  |  |  |  |
-| No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  | ● |  |  |  |  |  | ○ | ● |  | ○ |  |  |  |  | ● |  |  |
+| Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  |  |  |  | ● | ● |  |  | ● |  |  |  |  |  |  |  |  | ○ |
+| Typed client<br>`@armature/client` | Partially 1 | Fully 2 | Over 11 | ○ | ● | ● | ○ |  | ● | ● |  | ● | ● | ● | ● | ● | ● |  |  | ○ | ○ | ○ | ● |
+| Agent provenance<br>`agent User · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  | ● | ● |  |  |  |  |  |  |  |  |  |  |  |  |
+| No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  |  |  |  | ● | ● |  |  |  |  |  | ○ |  |  | ● |  |  | ○ |
 
-Totals over 23 capabilities: built tools, Uncovered 8, Partially 11, Fully 4, Over 0; built and planned, Uncovered 6, Partially 7, Fully 10, Over 0; everything, Uncovered 0, Partially 0, Fully 9, Over 14.
+Totals over 24 capabilities: built tools, Uncovered 9, Partially 11, Fully 4, Over 0; built and planned, Uncovered 7, Partially 7, Fully 10, Over 0; everything, Uncovered 0, Partially 1, Fully 9, Over 14.
 
 ## Gaps, and which proposed tool closes them
 
-With the built and planned tools, 6 capabilities have no demo that shows them: impact, external references, attachments, discovery and capabilities, agent provenance, no per-person aggregates.
+With the built and planned tools, 7 capabilities have no demo that shows them: reacting to changes, impact, external references, attachments, discovery and capabilities, agent provenance, no per-person aggregates.
 
 | Proposed tool | Gaps closed | Which |
 |---|:-:|---|
@@ -84,6 +122,7 @@ With the built and planned tools, 6 capabilities have no demo that shows them: i
 | Torus bridge | 2 | Impact; External references |
 | LEED importer | 2 | External references; Attachments |
 | Drift | 2 | External references; Attachments |
+| Lint | 1 | Reacting to changes |
 | Process miner | 1 | No per-person aggregates |
 | Structure analyzer | 1 | Impact |
 | Q-matrix exporter | 1 | Discovery and capabilities |
@@ -91,7 +130,6 @@ With the built and planned tools, 6 capabilities have no demo that shows them: i
 | Ripple | 1 | Impact |
 | Crosswalk | 1 | External references |
 | Whyfinder | 1 | External references |
-| Lint | 0 | none |
 | Projection | 0 | none |
 | Response tracker | 0 | none |
 
@@ -182,8 +220,9 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 ### Quiver (planned)
 
 - ○ **Read any record at a commit.** Refreshes records at a ref.
-- ● **Branches.** One branch per workspace, `<user>/<name>`.
+- ● **Branches.** One branch per workspace, `<user>_<name>`, since branch names allow no slash.
 - ● **History and changes since.** changes?since= refreshes a workspace.
+- ○ **Reacting to changes.** Learns that `main` moved by polling, before it offers to bring it in.
 - ● **Three-way merge with conflicts.** Pull and deliver are merges, reviewed fragment by fragment. Scenarios 7 and 8 show the route skips the invariants.
 - ● **One write path with invariants.** Local commits with reasons, pushed through the one write path.
 - ● **Batch writes with If-Match.** Push is a batch write with If-Match.
@@ -361,6 +400,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 
 - ○ **Read any record at a commit.** Checks a branch at its head.
 - ● **Branches.** Runs on a branch before it merges.
+- ● **Reacting to changes.** Runs on every change it is shown; as an administrator's policy it needs merge-time checks the hub does not have.
 - ● **Three-way merge with conflicts.** Checks the merged state, which the merge route does not.
 - ● **Findings and notes, by fragment.** A violation the person keeps becomes a finding.
 - ○ **Attestations that go stale.** Rule: an item attested only by its own author (independent review), about records, never a summary of a person.
@@ -377,6 +417,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 
 - ● **Read any record at a commit.** The design as it was at the package's asOf.
 - ● **History and changes since.** What the design changed after delivery.
+- ○ **Reacting to changes.** Re-checks when the design moves after a delivery.
 - ● **Findings and notes, by fragment.** Each divergence recorded as a finding.
 - ○ **Impact.** Which records a divergence touches.
 - ● **External references.** QTI and LMS ids join delivered items to records.
@@ -412,6 +453,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 
 - ● **Read any record at a commit.** Each document names its commit.
 - ○ **History and changes since.** Regenerated after a merge, with what changed.
+- ○ **Reacting to changes.** Regenerates after a merge, found by polling.
 - ○ **Attestations that go stale.** The SME packet lists what is affirmed and what is stale.
 - ○ **Coverage at any ref.** Coverage figures in the faculty summary.
 - ● **Trace.** The faculty summary walks need to objective to evidence.
@@ -437,6 +479,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 
 - ● **Read any record at a commit.** The design at each administration's asOf.
 - ● **History and changes since.** What changed between one administration and the next.
+- ○ **Reacting to changes.** Runs again when a new administration's results arrive.
 - ○ **Findings and notes, by fragment.** Findings Addressed as the design's response.
 - ○ **Coverage at any ref.** Coverage at each asOf and now.
 - ○ **Trace.** From a metric to its item, objective and module.
