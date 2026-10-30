@@ -15,6 +15,11 @@ Proposed (2026-10-29). Nothing is built on it.
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065), built whole before its push
 (`docs/workspace-hub-plan.md` §14), since push's failures depend on ownership.
 
+**Note 2026-10-30, decided:** the check runs on a remote hub only. A workspace hub does not
+authorize; it warns at workspace creation when the owner may not write the branch and leaves the
+refusal to the remote's push (decision 9). An agent's own work reaches a remote only through a
+workspace hub's push (decision 4's table, ADR-0067 decision 10).
+
 Written with ADR-0067 (authentication), which says how an identity is established; this record
 says what it may do. Raised by ADR-0065 (the workspace hub), whose decision 2 left branch
 ownership to convention, and by the question of who may be a commit's author (discussed
@@ -65,9 +70,10 @@ answers for, and not for another person, who never consented.
 1. **The hub authorizes; it still does not authenticate.** After a request's identity is resolved
    and before the write pipeline runs, the hub checks that the identity may perform the operation,
    and answers 403 `forbidden` with the missing permission named (`{ permission: "merge", branch:
-   "main" }`) when it may not. The check runs under every resolver; under `header` it guards
-   against mistakes rather than against an attacker, and lets the tests and the demo exercise it.
-   TerminusDB's access control stays what ADR-0015 says it is, the hub's own connection.
+   "main" }`) when it may not. The check runs under every resolver on a remote hub; under `header`
+   it guards against mistakes rather than against an attacker, and lets the tests and the demo
+   exercise it. A workspace hub does not run it (decision 9). TerminusDB's access control stays
+   what ADR-0015 says it is, the hub's own connection.
 
 2. **Grants are documents on `main`.** A new infrastructure class, `Grant` (ADR-0027 category
    `infrastructure`), holds `user` (a `User`), `role` (`Owner`, `Maintainer`, `Administrator` or
@@ -101,6 +107,8 @@ answers for, and not for another person, who never consented.
    | Grant or revoke any other role | An administrator |
    | Register an agent | Any person (ADR-0032 decision 7, unchanged) |
    | Register a person | An administrator; and first encounter under `oidc`, where the identity provider vouches |
+   | Write as an agent (the agent the author) | Only as a workspace hub's push, the agent acting for the workspace's owner (ADR-0067 decisions 3 and 10; added 2026-10-30); a service's own credential reads |
+   | Relay a person's earlier work | A service holding an active `Relay` grant (ADR-0067 decision 5); the person is the author |
    | Repair outside the rules | The operator tools, outside the API, unchanged (ADR-0062) |
 
    An agent acting for a person may do what the person may. A workspace's delivery into `main`
@@ -137,6 +145,21 @@ answers for, and not for another person, who never consented.
    test keeps both halves: a filter on `Grant.user` answers, and one on `createdBy` is still
    refused.
 
+9. **A workspace hub does not authorize; the remote warns at creation and refuses at push**
+   (added 2026-10-30). A workspace hub (ADR-0065) holds one owner and clones no `Grant`
+   documents, and the operations this record governs are either refused there outright (branch
+   creation, merge, deletion, registration: `remote_only`) or concern the owner's own workspaces.
+   The one question it could ask locally, whether the owner may write the branch a workspace was
+   cloned from, is the remote's to answer, and the remote answers it at push with 403 `forbidden`
+   (ADR-0065 decision 5). So that the answer comes before the work rather than after, the
+   workspace hub asks the remote at workspace creation, from the owner's grants (`GET /users/me`,
+   decision 7) and the branch's (`Grant` documents on `main` filtered by `branch`, decision 8),
+   and **warns** the person when they may not write it. It does not prevent the workspace: a
+   person may clone a colleague's branch to read it offline, to work on it while asking for a
+   `Maintainer` grant, or to carry its content into a workspace of their own. The warning is a
+   feature the workspace hub builds with push (plan §14 step 3); until then a person learns at
+   push.
+
 ## Alternatives considered
 
 - **Convention only** (today). No new concept. Rejected once `oidc` exists: the hub reachable by
@@ -158,6 +181,15 @@ answers for, and not for another person, who never consented.
   author.** The narrow and the wide rule, both rejected (2026-10-29): the first ties an agent's use
   to who registered it, the second lets one credential write in another person's name
   (constraint 15). Decision 5 sits between them.
+- **Authorizing on the workspace hub too** (rejected 2026-10-30; decision 9). It would need the
+  clone to mirror `Grant` documents and keep them current, and a stale mirror could refuse what
+  the remote would accept or accept what it would refuse. The check guards shared history, which
+  a workspace hub never makes; the remote is where it belongs. The warning at creation gives the
+  person the early answer the local check would have, without a second copy of authority.
+- **Preventing a workspace of a branch the owner may not write** (rejected 2026-10-30). Reading
+  is allowed to every resolved identity (decision 4), and a workspace is a way of reading offline
+  as much as of writing; preventing it would take that away for nothing, since the push is where
+  the refusal is enforced.
 
 ## Open questions
 
@@ -196,7 +228,10 @@ with grants.
 - CoQui's round coordinator owns the round's branch and grants its reviewers `Maintainer` on it;
   CoQui's outbox becomes an agent with a `Relay` grant.
 - Quiver and the workspace hub are unaffected on the person's machine, where the workspace hub
-  holds one owner; on the remote, a workspace's owner is whoever created it, and its delivery
-  needs a maintainer.
+  holds one owner and runs no permission check (decision 9); on the remote, a workspace's owner
+  is whoever created it, and its delivery needs a maintainer. A person who clones a branch they
+  may not write is warned when the workspace is created and refused only at push.
+- An agent's work enters shared history only through a person's workspace hub, so every agent
+  commit on a remote names the person it was done for (ADR-0067 decision 10).
 - The pseudonymous export profile rewrites `Grant.user` like any reference to a person
   (ADR-0031); a slice may leave grants out.
