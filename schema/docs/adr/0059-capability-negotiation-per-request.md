@@ -21,6 +21,14 @@ change has yet been needed. Resolves the deferral in ADR-0026's consequences ("w
 versions are negotiated beyond the prefix"). Builds `GET /api/v1/schema`, which ADR-0027
 decision 4 scheduled and no phase had owned.
 
+**Annotated by ADR-0065, ADR-0067 and ADR-0068** (accepted 2026-10-30, not yet built). Decision 4
+gains three capabilities when they are built: `armature/workspace` on a workspace hub, with
+settings on `armature/branches` and `armature/users` saying which of their routes that hub serves
+(ADR-0065 decision 1); `armature/authorization` (ADR-0068 decision 7). Decision 6's discovery
+document gains a top-level `identity` entry naming the resolver, the issuer, audience and native
+client id under `oidc`, and the headers a client may send (ADR-0067 decision 9), and stays open
+without a token so a client can read how to sign in. Each is a dated contract revision.
+
 ## Context
 
 ADR-0026 made `/api/v1` the whole of the version contract: every route lives under the prefix,

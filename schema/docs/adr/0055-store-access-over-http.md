@@ -30,6 +30,13 @@ number after ADR-0054.
 > **Later change (2026-10-08):** the canonical reserved block is ADR-0024 to ADR-0034
 > (`docs/development-plan.md` §5); 0024 was written before this ADR.
 
+**Annotated by ADR-0065** (accepted 2026-10-30, not yet built): the same application runs in a
+second role, a workspace hub on a person's machine, whose store is a choice behind the adapter
+(ADR-0065 decision 8). ADR-0066 (Proposed) would amend decision 1 on its acceptance: the adapter
+becomes an interface with one implementation per store, the TerminusDB adapter staying the only
+module that talks to TerminusDB, decisions 2 to 7 unchanged for it; extracting that interface is the
+plan's step 1 (`docs/workspace-hub-plan.md` §14), a refactor with no behavior change.
+
 ## Context
 
 Phase 2 replaces the module-level client singleton in `app/lib/terminusdb.ts` with something
