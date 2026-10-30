@@ -2,6 +2,7 @@
 
 **Date:** 2026-10-06 · **Status:** Candidates, not decisions. Each entry is a proposal to write an ADR; none is Accepted.
 > **Status since this snapshot (2026-10-08).** This document is a dated research snapshot and is kept as written. Since it was produced: Phases 0 to 4 of `docs/development-plan.md` are done; ADR-0024, 0025, 0027, 0029 and 0033 were written and accepted (ADR-0029 partly superseded by ADR-0056, coverage computed on read); candidate 0036's no-rewrite rule was adopted as ADR-0025 decision 6; candidates 0037 (release pointers) and 0046 (change feed) were deferred by ADR-0025, though a branch-changes route (`GET /api/v1/branches/:name/changes?since=`) covers part of 0046; the `typeVersion` on items was deferred to ADR-0034 (ADR-0033 decision 6); candidate 0043 (alignment models) was noted but not adopted by ADR-0029. **Lesson 1 / candidate 0035 (lossless writes) was not implemented in Phase 3** and is now an open question in plan §6. The seed has no learning activities, so recommendations that tag seed activities do not yet apply.
+> **2026-10-30:** candidate 0025's `On-behalf-of:` half is adopted by ADR-0067 decision 3 (Proposed) as the hub-written `Armature-On-Behalf-Of` trailer, naming the person an agent acted for; the `Plan:` half is not.
 
 **Source:** `docs/research/learning-data-standards-precedents.md` (snapshot of the Claude Doc *What Armature Can Learn from Learning-Data Standards*). Section names below refer to that document.
 

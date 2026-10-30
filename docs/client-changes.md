@@ -451,6 +451,9 @@ wrong for v12: correct it when PR 6 (`feat/armature-merge`) is picked up. Merge 
 merge and whether findings and attestations reach `main` without approval (O-P), is still open
 ([development plan §6](development-plan.md)).
 
+*2026-10-30:* who may merge is proposed in ADR-0068 decision 4 (a maintainer of `main`); what the
+merge route checks remains open.
+
 ## 2026-10-07 · Schema catch-up (ADR-0017, 0018, 0020, 0022, 0023, 0024; Phase 1)
 
 **What changed.** `DesignRecord` is the root every note and finding can point at; items carry their

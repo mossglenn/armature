@@ -1,6 +1,6 @@
 # Demo coverage
 
-**Date:** 2026-10-27, graph-native tools added 2026-10-28 · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
+**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30 · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
 
 **How to read it.** Capabilities run down the side and tools across the top, grouped by who is in the loop (interactive, agent, batch, gate; § Kinds of plugin). ● means the tool's demo *shows* the capability; ○ means the tool *uses* it without making it the point. Each row gets the hub's own coverage verdict (ADR-0029's default thresholds), counting only ● for the tools in scope: Uncovered is 0, Partially is 1, Fully is 2 to 4, Over is 5 or more. Three verdict columns give the three scopes: built tools only, built and planned, and everything including the proposed tools. *Partial* marks a hub capability that is not finished.
 
@@ -14,7 +14,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 |---|---|---|
 | CoQui | Built | SME review of assessment items in rounds |
 | Viewer | Built | The Coverage View and the Design Graph |
-| Quiver | Planned | Local-first item manager, and the first client that must merge |
+| Quiver | Built (paused 2026-10-30; the workspace hub's first real test, ADR-0065) | Local-first item manager, and the first client that must merge |
 | MCP server | Proposed | Any agent asks design questions through the intelligence reads |
 | Storyline bridge | Proposed | Stamps published Storyline packages and joins their results to the graph |
 | DataShop bridge | Proposed | Tests the design's alignment against learner data as a DataShop knowledge-component model |
@@ -33,7 +33,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 | Response tracker | Proposed | What the design changed after each administration's results, and whether the next results moved |
 | Structure analyzer | Proposed | Graph algorithms over the design: single points of failure, load-bearing objectives, hidden modules, structural duplicates |
 
-The viewer is counted as a tool because the Coverage View and the Design Graph are clients of the hub like any plugin. Quiver's cells come from its plan as Armature's documents describe it (`mossglenn/quiver`, `docs/plan.md` there); check them against that plan.
+The viewer is counted as a tool because the Coverage View and the Design Graph are clients of the hub like any plugin. Quiver's cells come from its plan and, since it was built (2026-10-26 to 28), its code as Armature's documents describe them (`mossglenn/quiver`, `docs/plan.md` there); check them against that repository.
 
 ## Kinds of plugin (2026-10-28)
 
@@ -41,7 +41,7 @@ No single division of plugins holds: designer against administrator, or who inst
 
 1. **Who is in the loop**, which is when it acts. *Interactive*: a person works in it. *Agent*: an AI acting as a `User`. *Batch*: run on demand or on a schedule. *Gate*: checks a change before it lands. The matrix's columns are grouped by this dimension, since a demo set is best with one of each; today no gate is built or planned.
 2. **Acts as whom.** The person using it; a service or agent `User`; or nobody, because it only reads.
-3. **Where it runs.** The designer's machine, beside the hub on its server's network, or anywhere. This mostly follows from dimension 2 and the hub's identity system rather than from the plugin: under the `header` resolver the hub trusts its caller, so it is reachable only from its own server or network (`deployment.md`, "A client on the same server"), and every client elsewhere waits for the `oidc` resolver, and for the open question of whether reads need a token too (SESSION.md What's Next item 3). The link between a plugin and a hub is a credential, not an installation: with OIDC, any designer can host CoQui on a Droplet for their SMEs.
+3. **Where it runs.** The designer's machine, beside the hub on its server's network, or anywhere. This mostly follows from dimension 2 and the hub's identity system rather than from the plugin: under the `header` resolver the hub trusts its caller, so it is reachable only from its own server or network (`deployment.md`, "A client on the same server"), and every client elsewhere waits for the `oidc` resolver, specified in ADR-0067 (Proposed), which also decides the reads question: under `oidc` every request needs a token, `/discover` excepted. A tool on a person's machine is planned to talk to a workspace hub there instead (ADR-0065, Proposed). The link between a plugin and a hub is a credential, not an installation: with OIDC, any designer can host CoQui on a Droplet for their SMEs.
 4. **Whose rules configure it.** Personal, team or project, or institutional. Only Lint has configuration that matters so far, and it could be any of the three; where a rule set lives (in the plugin, or as records in the graph, versioned and inspectable like everything else) is Lint's question until a second configurable tool exists.
 
 **A gate has no mechanism in the hub.** `/api/v1` has no events, no webhooks and no checks the merge route calls, so a gate today either polls (`GET /branches/:name/changes?since=`) or runs inside the client before it acts, as Quiver plans to. An administrator "installing a linter" as policy needs merge-time checks the hub runs, close to Quiver's first ask (the merge route running the invariants engine over the merged state), which already passes the two-client test. The matrix carries this as **Reacting to changes**, marked *Partial*.
@@ -56,20 +56,20 @@ No single division of plugins holds: designer against administrator, or who inst
 | Ripple | Interactive | The person | Beside the hub |
 | Crosswalk | Interactive | The person: mapper or SME | Beside the hub |
 | Whyfinder | Interactive | Nobody | The reader's browser |
-| MCP server | Agent | Nobody when reading; an agent `User` when writes are on | The person's machine (stdio); beside the hub over HTTP |
+| MCP server | Agent | Nobody when reading; an agent `User` when writes are on | The person's machine (stdio), through a workspace hub (ADR-0065, Proposed); beside the hub over HTTP |
 | Formalizer | Agent | An agent `User` | Beside the hub |
-| Storyline bridge | Batch | The person running it | The designer's Windows machine |
+| Storyline bridge | Batch | The person running it | The designer's Windows machine (through a workspace hub, ADR-0065, Proposed) |
 | DataShop bridge | Batch | A service `User` | Beside the hub |
 | Q-matrix exporter | Batch | Nobody | Anywhere the export reaches |
 | Experiment bridge | Batch | The person setting up conditions | Beside the hub |
 | Torus bridge | Batch | A service `User` | Beside the hub |
-| LEED importer | Batch | The person importing | The designer's machine |
+| LEED importer | Batch | The person importing | The designer's machine (through a workspace hub, ADR-0065, Proposed) |
 | Drift | Batch | A service `User` | Beside the hub |
 | Projection | Batch | Nobody | Anywhere the export reaches |
 | Process miner | Batch | Nobody | A study's machine, over a pseudonymous export |
 | Response tracker | Batch | Nobody | Beside the hub |
 | Structure analyzer | Batch | Nobody; a person keeps its proposals as findings | Anywhere the export reaches |
-| Lint | Gate | Nobody; a person keeps a violation as a finding | The designer's machine before a push; beside the hub as policy, once merge-time checks exist |
+| Lint | Gate | Nobody; a person keeps a violation as a finding | The designer's machine before a push (through a workspace hub, ADR-0065, Proposed); beside the hub as policy, once merge-time checks exist |
 
 ## The matrix
 
@@ -78,14 +78,14 @@ No single division of plugins holds: designer against administrator, or who inst
 | *In the loop* |  |  |  | *Interactive* |  |  |  |  |  | *Agent* |  | *Batch* |  |  |  |  |  |  |  |  |  |  | *Gate* |
 | **Version control** | | | | | | | | | | | | | | | | | | | | | | | |
 | Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 14 | ● | ● | ○ | ● | ○ | ● | ● | ○ | ● | ● | ● | ● | ● | ○ | ● | ● | ● | ● | ○ | ○ |
-| Branches<br>`POST /branches` | Partially 1 | Fully 2 | Over 6 | ● | ○ | ● | ● | ○ |  | ○ |  | ○ | ○ |  | ● | ○ | ● |  |  | ○ |  |  | ● |
-| History and changes since<br>`history · changes?since=` | Partially 1 | Fully 2 | Over 10 | ○ | ● | ● | ○ |  |  | ● | ○ | ● | ○ | ○ | ● | ● | ● | ● | ○ | ● | ● |  |  |
+| Branches<br>`POST /branches` | Fully 2 | Fully 2 | Over 6 | ● | ○ | ● | ● | ○ |  | ○ |  | ○ | ○ |  | ● | ○ | ● |  |  | ○ |  |  | ● |
+| History and changes since<br>`history · changes?since=` | Fully 2 | Fully 2 | Over 10 | ○ | ● | ● | ○ |  |  | ● | ○ | ● | ○ | ○ | ● | ● | ● | ● | ○ | ● | ● |  |  |
 | Reacting to changes *(Partial)*<br>`polling changes?since= · no events or merge-time checks` | Uncovered 0 | Uncovered 0 | Partially 1 |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  | ○ | ○ |  | ○ |  | ● |
-| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Uncovered 0 | Partially 1 | Fully 3 | ○ |  | ● | ○ |  |  |  |  |  |  |  | ● | ○ | ○ |  |  | ○ |  |  | ● |
+| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Partially 1 | Partially 1 | Fully 3 | ○ |  | ● | ○ |  |  |  |  |  |  |  | ● | ○ | ○ |  |  | ○ |  |  | ● |
 | **Writes** | | | | | | | | | | | | | | | | | | | | | | | |
-| One write path with invariants<br>`generic writes · ADR-0024` | Partially 1 | Fully 2 | Over 8 | ● |  | ● | ● | ● |  | ○ | ○ | ● | ● |  | ○ | ● | ● |  |  |  |  |  |  |
-| Batch writes with If-Match<br>`batch · optimistic concurrency` | Uncovered 0 | Partially 1 | Fully 3 | ○ |  | ● |  |  |  |  |  | ○ | ○ |  |  | ● | ● |  |  |  |  |  |  |
-| Identity on every write *(Partial)*<br>`Armature-User · OIDC not built` | Partially 1 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  | ○ |  |  | ○ | ○ | ○ |  |  | ○ |  |  |  |
+| One write path with invariants<br>`generic writes · ADR-0024` | Fully 2 | Fully 2 | Over 8 | ● |  | ● | ● | ● |  | ○ | ○ | ● | ● |  | ○ | ● | ● |  |  |  |  |  |  |
+| Batch writes with If-Match<br>`batch · optimistic concurrency` | Partially 1 | Partially 1 | Fully 3 | ○ |  | ● |  |  |  |  |  | ○ | ○ |  |  | ● | ● |  |  |  |  |  |  |
+| Identity on every write *(Partial)*<br>`Armature-User · OIDC proposed, ADR-0067` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  | ○ |  |  | ○ | ○ | ○ |  |  | ○ |  |  |  |
 | **Review** | | | | | | | | | | | | | | | | | | | | | | | |
 | Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 10 | ● | ○ | ○ | ● |  | ○ | ○ | ● | ● | ● |  | ● | ● | ● | ● |  | ○ | ○ | ○ | ● |
 | Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ● | ● | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |  | ○ | ○ |  |  | ○ |
@@ -99,19 +99,20 @@ No single division of plugins holds: designer against administrator, or who inst
 | **Ecosystem** | | | | | | | | | | | | | | | | | | | | | | | |
 | External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Over 8 |  |  |  |  | ● | ● |  |  | ● | ● | ○ | ● | ● | ● | ● | ○ |  |  |  |  |
 | Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Fully 4 |  |  |  |  |  |  |  |  | ● | ● |  |  | ○ | ● | ● |  |  |  |  |  |
-| Export profiles and slices<br>`GET /export · ADR-0031` | Partially 1 | Fully 2 | Over 8 |  | ● | ● |  | ○ |  | ○ | ● | ○ | ● | ● | ○ | ○ |  | ○ | ● | ● |  | ● |  |
+| Export profiles and slices<br>`GET /export · ADR-0031` | Fully 2 | Fully 2 | Over 8 |  | ● | ● |  | ○ |  | ○ | ● | ○ | ● | ● | ○ | ○ |  | ○ | ● | ● |  | ● |  |
 | Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Over 6 |  | ● |  |  | ○ |  |  |  | ● | ● |  | ● | ○ |  | ● |  |  | ● |  |  |
 | **Toolkit and guards** | | | | | | | | | | | | | | | | | | | | | | | |
 | Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  |  |  |  | ● | ● |  |  | ● |  |  |  |  |  |  |  |  | ○ |
-| Typed client<br>`@armature/client` | Partially 1 | Fully 2 | Over 11 | ○ | ● | ● | ○ |  | ● | ● |  | ● | ● | ● | ● | ● | ● |  |  | ○ | ○ | ○ | ● |
+| Typed client<br>`@armature/client` | Fully 2 | Fully 2 | Over 11 | ○ | ● | ● | ○ |  | ● | ● |  | ● | ● | ● | ● | ● | ● |  |  | ○ | ○ | ○ | ● |
 | Agent provenance<br>`agent User · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  | ● | ● |  |  |  |  |  |  |  |  |  |  |  |  |
 | No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  |  |  |  | ● | ● |  |  |  |  |  | ○ |  |  | ● |  |  | ○ |
+| Loopback boundary<br>`host_not_allowed · origin_not_allowed · ADR-0067 decision 7, built 2026-10-30` | Uncovered 0 | Uncovered 0 | Uncovered 0 | ○ | ○ | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 
-Totals over 24 capabilities: built tools, Uncovered 9, Partially 11, Fully 4, Over 0; built and planned, Uncovered 7, Partially 7, Fully 10, Over 0; everything, Uncovered 0, Partially 1, Fully 9, Over 14.
+Totals over 25 capabilities (Quiver counted as built since 2026-10-30, so no planned tool remains and the first two scopes agree): built tools, Uncovered 8, Partially 7, Fully 10, Over 0; built and planned, Uncovered 8, Partially 7, Fully 10, Over 0; everything, Uncovered 1, Partially 1, Fully 9, Over 14.
 
 ## Gaps, and which proposed tool closes them
 
-With the built and planned tools, 7 capabilities have no demo that shows them: reacting to changes, impact, external references, attachments, discovery and capabilities, agent provenance, no per-person aggregates.
+With the built and planned tools, 8 capabilities have no demo that shows them: reacting to changes, impact, external references, attachments, discovery and capabilities, agent provenance, no per-person aggregates, and the loopback boundary, which no proposed tool shows either (every tool that calls a hub by name only uses it).
 
 | Proposed tool | Gaps closed | Which |
 |---|:-:|---|
@@ -198,6 +199,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **Coverage at any ref.** Narrative 2: under-assessed objectives surface while authoring.
 - ● **Alignment.** Bloom gaps for the item being reviewed.
 - ○ **Typed client.** CI installs the client on CoQui's stack; its httpHub has not moved onto it yet.
+- ○ **Loopback boundary.** Beside an instance it calls the hub as `hub`, the name the compose file lists in `ARMATURE_ALLOWED_HOSTS`.
 
 ### Viewer (built)
 
@@ -216,8 +218,9 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **Outcome records at asOf.** 'Adequate when?' reads coverage at the dataset's asOf.
 - ○ **Discovery and capabilities.** Derives the drawing from the schema as data.
 - ● **Typed client.** The Next.js app reaches the hub only through @armature/client.
+- ○ **Loopback boundary.** In the compose file it reads the hub as `hub`, the name listed in `ARMATURE_ALLOWED_HOSTS`.
 
-### Quiver (planned)
+### Quiver (built, paused)
 
 - ○ **Read any record at a commit.** Refreshes records at a ref.
 - ● **Branches.** One branch per workspace, `<user>_<name>`, since branch names allow no slash.
@@ -226,14 +229,15 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **Three-way merge with conflicts.** Pull and deliver are merges, reviewed fragment by fragment. Scenarios 7 and 8 show the route skips the invariants.
 - ● **One write path with invariants.** Local commits with reasons, pushed through the one write path.
 - ● **Batch writes with If-Match.** Push is a batch write with If-Match.
-- ● **Identity on every write.** Two users in two workspaces; OIDC is milestone 8.
+- ● **Identity on every write.** Two users in two workspaces, built; a push from a second machine waits for the hub's `oidc` resolver (ADR-0067).
 - ○ **Findings and notes, by fragment.** A lint hint becomes a finding only when the person records it.
 - ○ **Coverage at any ref.** Assembles formative assessments against objectives.
 - ○ **Alignment.** Aligns items to objectives.
 - ○ **Ordered module content.** Formative use in activities; may create a Module when an assessment has none.
 - ● **Export profiles and slices.** A workspace is cloned from GET /export; asks for an authoring slice. The text2qti exporter is milestone 4.
 - ● **Typed client.** First consumer of the client package.
-- ○ **Agent provenance.** AI drafting is milestone 6.
+- ○ **Agent provenance.** AI drafting is built (`agent:quiver/drafter`, `agent:quiver/lint-1`); ADR-0067 decision 3's `Armature-Agent` form on acceptance.
+- ○ **Loopback boundary.** Its desktop shell sends `Origin: tauri://localhost`, a non-web origin the hub serves.
 
 ### MCP server (proposed)
 
@@ -359,7 +363,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ○ **Three-way merge with conflicts.** The reviewed import merges to main.
 - ● **One write path with invariants.** Writes notes, evidence and needs from the log.
 - ● **Batch writes with If-Match.** A log is imported as one atomic batch.
-- ○ **Identity on every write.** Entries written as their original authors need delegation, one of the OIDC ADR's four decisions.
+- ○ **Identity on every write.** Entries keep their original authors as `Co-Authored-By` claims the hub records as sent (ADR-0067 decision 6); writing them as the author is refused (ADR-0068 decision 5).
 - ● **Findings and notes, by fragment.** Each logged decision and its rationale as a note, and as a DesignDecision once ADR-0010's second layer exists.
 - ○ **Attestations that go stale.** A logged sign-off becomes an endorsement.
 - ● **Trace.** An objective traces back to the logged decision and the evidence it cited.
