@@ -4,9 +4,11 @@
 > run, and how do client tools address it? It decided that, for now, the API is served from inside the
 > project's Next.js web application rather than a separate server; that every new address begins with
 > the versioned prefix `/api/v1/`; that the older unversioned addresses were temporary; and that a
-> separate server remains the long-term goal. It still holds: ADR-0054 (an Architecture Decision Record,
-> or ADR) refined decision 1 so that the API is a Hono application hosted by Next.js, and the old
-> unversioned addresses were removed on 2026-10-08 as decision 3 planned.
+> separate server remains the long-term goal. Decisions 2 to 4 hold; decision 1 was superseded in fact
+> on 2026-10-21, when the separate server it named as the goal was built (`app/server.ts`, the same
+> Hono application ADR-0054, an Architecture Decision Record or ADR, had made host-neutral) and
+> Next.js stopped hosting the API; the old unversioned addresses were removed on 2026-10-08 as
+> decision 3 planned.
 
 ## Status
 
@@ -78,6 +80,10 @@ not follow is that the boundary must be a separate process today. The boundary i
    > compose file runs store and hub together under the `hub` profile. No handler changed. Next.js
    > remains a second host for development and for the pages; whether it keeps mounting the API
    > once an instance is hosted is a deployment choice, not a contract one.
+   >
+   > **Later change (2026-10-21, later the same day):** Next.js hosts no API at all. The catch-all
+   > route and `@hono/vercel` were removed, so there is one host and one meaning of "hub", and the
+   > pages are the viewer, a client of the hub over HTTP (the Status above).
 
 ## Consequences
 

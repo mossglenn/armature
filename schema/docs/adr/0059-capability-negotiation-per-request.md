@@ -55,6 +55,10 @@ handlers, and makes the Phase 7 move to a separate process a deployment change. 
 negotiated capability set would need a session, sticky routing or a token, each of which the
 architecture has avoided.
 
+> **Later change (2026-10-21):** the pages no longer call the app in-process; since the host moved
+> to `app/server.ts` they are a client over HTTP like any plugin. The statelessness holds for the
+> remaining reasons.
+
 **The precedent that does.** The Model Context Protocol (MCP) began with an `initialize`
 handshake and added a stateless HTTP transport that could not keep one. Its revision of
 2026-07-28 removed the handshake ("Versioning and Compatibility",
