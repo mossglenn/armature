@@ -8,7 +8,7 @@
  *
  * Environment:
  *   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS, TERMINUS_DB  the store (see README.md)
- *   ARMATURE_IDENTITY, ARMATURE_EXPORT_KEY                  optional, as for the Next.js host
+ *   ARMATURE_IDENTITY, ARMATURE_EXPORT_KEY                  optional (see README.md)
  *   ARMATURE_ALLOWED_HOSTS, ARMATURE_ALLOWED_ORIGINS        optional, comma-separated: host names besides
  *                                                            loopback, and web origins, the hub serves
  *                                                            (ADR-0067 decision 7; lib/api/boundary.ts)
