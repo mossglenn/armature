@@ -30,7 +30,9 @@ ownership and replaces decision 7's refusal of agent writes.
 with the need documented in Context. Quiver pauses its development until the workspace hub is
 built, is its first real-world test, and its code (`sync/`, `workspace/`, `merge/`, `rules/`,
 `coverage/`) may be the basis of the workspace hub's. ADR-0067's `oidc` resolver is a
-prerequisite of the workspace hub. The plan's §16 records the rest: a desktop program for the
+prerequisite of the workspace hub, built before its release; ADR-0068 is a prerequisite too,
+built before push with the parts of ADR-0067 that shape what a push sends (plan §14). The
+plan's §16 records the rest: a desktop program for the
 first release candidate (question 1), a clone holding as much as is reasonable (question 3), the
 clone's slice to be determined (question 4), pseudonymous clones deferred (question 8).
 
