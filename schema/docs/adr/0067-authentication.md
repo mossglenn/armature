@@ -23,6 +23,12 @@ beside each).
 decisions 3, 6 and 8, with the client's `agent` option, before the workspace hub's push; the rest
 (decisions 1, 2, 4, 5 and 9) before its release (`docs/workspace-hub-plan.md` §14).
 
+**Note 2026-10-30, decided:** an agent's own work reaches a remote only through a workspace hub's
+push, acting for the workspace's owner; a service credential alone grants reads (decision 10, with
+the reasons and what would reopen it). The MCP server's remote mode is therefore read-only
+(`docs/mcp-server-plan.md` §13, question 13). A relay (decision 5) is unaffected: it writes a
+person's own earlier work with the person as author.
+
 Written with ADR-0068 (authorization), which says what a resolved identity may do; this record
 says how the identity is established and what the hub records about it. The trigger is What's
 Next item 3 in `.claude/SESSION.md`: a writing client that runs somewhere other than the hub's
@@ -121,11 +127,22 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    what tells two people's drafters apart: one agent `User` per tool is enough, since the trailer
    names the person.
 
+   > **Later change (2026-10-30):** on a remote hub this request is made by a workspace hub's
+   > push, which holds the owner's credential and replays the agent's local commits with
+   > `Armature-Agent` (ADR-0065 decisions 5 and 7). A tool on a person's machine makes it to the
+   > workspace hub, under `header`. Decision 10 says why a remote takes an agent's own work no
+   > other way.
+
 4. **A service authenticates as itself.** A program running with no person present, such as an
    importer or the viewer, holds its own credentials from the identity provider (the OAuth client
    credentials grant). The resolver maps such a token, which names a client rather than a person,
    to the agent `User` whose `externalId` is `agent:` followed by the token's client id; that
    `User` is registered by a person as any agent is.
+
+   > **Later change (2026-10-30):** a service credential grants reads. A write under it alone,
+   > the service's own work with no person present, is refused with 403 `forbidden` (ADR-0068);
+   > a service writes a person's earlier work only under a `Relay` grant (decision 5), and an
+   > agent's own work reaches a remote only through a workspace hub (decision 10).
 
 5. **A service may relay a person's earlier work only if it holds a relay grant.** A service whose
    agent `User` holds an active `Relay` grant (ADR-0068) may send `Armature-User: <person>` with
@@ -179,6 +196,35 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    client id they sign in with, which with the issuer and audience is what the workspace hub's
    connection profile carries (`docs/workspace-hub-plan.md` §16, question 12).
 
+10. **An agent's own work reaches a remote only through a workspace hub** (added 2026-10-30). A
+    remote hub refuses a write whose author would be an agent unless it arrives as a workspace
+    hub's push acting for the workspace's owner (decision 3's form, with the owner's credential),
+    answering 403 `forbidden` otherwise; a service's own credential (decision 4) reads. Agents
+    therefore write on a person's workspace hub, in that person's workspace, and their work
+    enters shared history by that person's push and a maintainer's merge (ADR-0068 decision 4).
+
+    *Why.* Three reasons, in order of weight. First, the record: a remote can write
+    `Armature-On-Behalf-Of` only when the person's credential is on the request, and a program
+    running with no person present cannot carry one (the MCP specification forbids a server
+    passing the assistant user's token through to another service; a scheduled job has no
+    person at all), so an agent writing directly would be work with no one answerable for it.
+    Second, the boundary: the workspace hub is where a person's work is made and reviewed before
+    it is shared, and an agent's proposals belong beside the person's own drafts, visible to
+    every tool on that machine and delivered by the person's push, not by a second path into the
+    remote. Third, authority: ADR-0068 keeps `main` behind a maintainer's merge; an agent that
+    could write straight to a remote would be one grant away from writing to `main`, where an
+    agent confined to workspace hubs can never be.
+
+    *What would reopen it.* A client that demonstrates a need for an agent to write to a remote
+    with no workspace hub in its path, **and** a way for the hub to know whom the agent works for
+    that it can verify rather than take as a claim. Two forms are imaginable: a token the
+    identity provider issues to the agent that carries the person's identity as a verified claim
+    (OAuth's token exchange, RFC 8693, is the standard shape), or a grant from the person naming
+    the agent as acting for them, recorded on `main` like a `Relay` grant but with the agent as
+    author and the person in the trailer. Either would be an amendment here and a new row in
+    ADR-0068's table; the two-client test applies (Development Principle 6). A hosted assistant
+    that only reads needs none of this and is served today under decision 4.
+
 ## Alternatives considered
 
 - **An authenticating proxy in front of the hub** (for example oauth2-proxy setting
@@ -198,6 +244,11 @@ plugin, outside the browser engine, so an origin rule does not touch it.
   the trailer names the person, so one agent per tool keeps the registry small.
 - **Mutual TLS (Transport Layer Security) between tools and the hub.** Rejected for now: a
   certificate per tool is heavier than a token, and no client has asked.
+- **An agent writing to a remote directly, as the agent alone** (the MCP server plan's remote
+  mode as first drafted). Rejected 2026-10-30 (decision 10): the remote cannot record whom the
+  agent worked for, since no person's credential is on the request; the work would enter shared
+  history outside any person's workspace; and an agent with a remote write path is one grant from
+  `main`. A hosted assistant reads under decision 4 instead.
 
 ## Open questions
 
