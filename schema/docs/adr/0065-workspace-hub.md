@@ -36,6 +36,12 @@ plan's §16 records the rest: a desktop program for the
 first release candidate (question 1), a clone holding as much as is reasonable (question 3), the
 clone's slice to be determined (question 4), pseudonymous clones deferred (question 8).
 
+**Note 2026-10-30, decided before acceptance, authorization and agents:** a workspace hub does
+not authorize; the remote is the authority and refuses a push it would not allow, and the
+workspace hub warns at creation when the owner may not write the branch (decision 4's note,
+ADR-0068 decision 9). An agent's own work reaches a remote only through a workspace hub's push,
+acting for the workspace's owner (decision 7's note, ADR-0067 decision 10).
+
 On acceptance it would annotate, not amend in substance:
 
 - **ADR-0025 decision 2**, which reserves git-style trailers in the commit message and defines
@@ -119,6 +125,18 @@ Three facts constrain the answer:
    a refusal when it writes, not at the next push. The remote runs them again on push and is the
    authority; a local refusal and a remote one carry the same code.
 
+   > **Later change (2026-10-30):** the whole pipeline, but not authorization. ADR-0068's
+   > permission check (who may write a branch, who may merge into `main`) runs on the remote
+   > only; a workspace hub holds one owner and no grants, so the question it could ask locally
+   > ("may the owner write this workspace?") is answered by the remote at push, with 403
+   > `forbidden`. So that a person learns of it before a week's work rather than after, the
+   > workspace hub asks the remote at workspace creation whether the owner may write the branch
+   > (the owner's grants from `GET /users/me`, the branch's from the `Grant` documents on `main`,
+   > ADR-0068 decisions 7 and 8) and **warns** when they may not. It does not prevent the
+   > workspace: a person may clone a colleague's branch to read it, work on it and ask for a
+   > grant, or copy their work elsewhere; the refusal, if it comes, is the remote's at push.
+   > ADR-0068 decision 9 records the same from the remote's side.
+
 5. **Push is replay through the remote's API.** Each local commit since the last push becomes one
    `POST /documents` on the remote, in order, with `If-Match` naming the remote commit the
    previous replay produced (the base, for the first). The workspace hub keeps a table from each
@@ -135,6 +153,10 @@ Three facts constrain the answer:
    trustworthy as the authenticated workspace owner who pushed them. A 412 means the branch
    moved on the remote and the push stops; a 422 stops it at the
    commit the remote refused.
+
+   > **Later change (2026-10-30):** a third failure, 403 `forbidden` (ADR-0068): the owner may
+   > not write the branch on the remote, which the warning at workspace creation (decision 4's
+   > note) will usually have said already. The push stops before its first commit.
 
 6. **Delivery is the remote's merge, driven from the workspace hub.** With nothing left to push,
    the workspace hub asks the remote to merge `main` into the workspace (`POST /branches/<ws>/
@@ -155,6 +177,11 @@ Three facts constrain the answer:
    > agent writes locally, and the push sends its commits as the agent acting for the owner, with
    > the owner recorded in an `Armature-On-Behalf-Of` trailer the remote writes itself. Quiver's
    > drafter and lint agent, already built, are the case.
+   >
+   > **Later change (2026-10-30, decided):** this is the only way an agent's own work reaches a
+   > remote. An agent writes on a workspace hub, where the owner is present and recorded, and the
+   > push carries its commits as the agent acting for the owner; a remote refuses an agent's own
+   > writes made directly (ADR-0067 decision 10, with the reasons and what would reopen it).
 
 8. **The store under a workspace hub is a choice behind the adapter.** TerminusDB as a process
    beside the hub and a file-backed store are both admissible. Decisions 3 and 6 limit what the
