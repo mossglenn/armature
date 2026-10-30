@@ -22,6 +22,23 @@ Amends ADR-0015 (a `User` is created on first encounter only when the claims car
 `displayName`) and ADR-0054 decision 4 (identity is resolved by a function the routes call, not by
 middleware). Completes ADR-0025 decision 2's interim paragraph.
 
+**Annotated by ADR-0065, ADR-0067 and ADR-0068** (accepted 2026-10-30; of them only ADR-0067
+decision 7 is built). Decision 1: the `oidc` resolver it names is specified by ADR-0067 decision 1
+(a bearer token verified against the issuer's keys, `sub` as `externalId`), and the `header`
+resolver is bounded (ADR-0067 decisions 7 and 8): every hub refuses hosts and web origins it does
+not serve (built), a `header` hub refuses to start off loopback unless told the network is the gate,
+and a workspace hub's `header` resolves only its owner (ADR-0065 decision 7). Decision 2: a workspace
+hub's `main` is a read-only mirror of the remote's registry, and registration there is refused
+(ADR-0065 decision 3). Decision 3: the first `Administrator` grant arrives as the first `User`
+does, by the seed or the operator (ADR-0068 decision 6). Decision 4 is restated for agents and
+relays: the author is the caller, an agent acting for the caller, or a person whose earlier work a
+service with a `Relay` grant delivers; never another person (ADR-0068 decision 5). Decision 6:
+registering a person needs an administrator, or first encounter under `oidc`; `GET /users/me`
+returns the caller's grants (ADR-0068 decisions 4 and 7). Decision 7: acting on someone's behalf
+is modelled: an agent writes under its own name with the person's credential and `Armature-Agent`,
+and the hub writes `Armature-On-Behalf-Of` (ADR-0067 decision 3); an agent's own work reaches a
+remote only through a workspace hub (decision 10).
+
 ## Context
 
 ADR-0015 decided what a `User` is (a participant in the design process, a domain document that

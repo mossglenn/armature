@@ -18,6 +18,14 @@ creation happens only when the claims carry a `displayName`, which the header re
 supplies. Every API write requires an identity (401 `identity_required` or `unknown_user`) and sets
 `createdBy` on create, preserving it on replace. ADR-0025 confirms the "no `updatedBy`" decision.
 
+**Annotated by ADR-0067 and ADR-0068** (accepted 2026-10-30, not yet built). The three
+responsibilities below gain a fourth: the hub *authorizes*, deciding what a resolved identity may
+do from `Grant` documents on `main` (ADR-0068 decision 1); it still never authenticates. "Armature
+does not manage passwords, sessions, or tokens" is refined: the hub issues no credential and keeps
+none, but under the `oidc` resolver it verifies the signed token a person's identity provider
+issued (ADR-0067 decision 1), and an AI agent writing for a person is recorded as acting on their
+behalf (decision 3).
+
 ## Context
 With ArmatureDocument established as the abstract base for all primary artifact types (ADR-0014), the path to authorship is clear: add a `createdBy` field to `ArmatureDocument` referencing a `User` type. The design question is where the lines are between three distinct systems: the external auth system (identity), TerminusDB (database access control), and Armature (design process participation).
 

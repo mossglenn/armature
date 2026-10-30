@@ -29,6 +29,14 @@ the `pseudonymous` profile (stable keyed tokens for every `User` and every refer
 `institutional` profile (the token and `institution`) this section anticipated below. The caveats
 below stand: free text is not scrubbed and small teams are re-identifiable from context.
 
+**Annotated by ADR-0068** (accepted 2026-10-30, not yet built): the non-aggregation guard is
+restated as applying to the classes under `DesignRecord`, which hold every field naming a person
+today; the new `Grant` class, outside `DesignRecord`, may be filtered by `user`, so an administrator
+can list the authority one person holds, which is not design work (decision 8). Authentication,
+which the deferred section below leaves to a future resolver, is specified by ADR-0067 (accepted the
+same day); its consequence that no commit list is filtered by author or by the on-behalf-of trailer
+keeps this record's rule for commit messages too.
+
 ## Context
 
 Armature records who is responsible for each record entering the graph. `createdBy` is on `ArmatureDocument` and propagates to every inheriting type (ADR-0015). Proposed types that capture design activity — `DesignFinding` (ADR-0020) and extensions to `DesignNote` — will carry it too.

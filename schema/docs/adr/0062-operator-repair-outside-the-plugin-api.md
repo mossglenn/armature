@@ -18,6 +18,11 @@ decision 6 (shared history is never rewritten) intact, including for operators. 
 dated note pointing here. Platform check AC (added 2026-10-20 on the `phase-6/external-references`
 branch, results in §Verification) confirms the store behaviors this relies on.
 
+**Annotated by ADR-0065** (accepted 2026-10-30, not yet built): the operator tools are not shipped
+on a workspace hub, a desktop program rather than the hub's image; a workspace that needs repair is
+repaired on the remote, where the registry and the rules of record are, and cloned again
+(`docs/workspace-hub-plan.md` §9 and §15). ADR-0068 keeps repair outside the API under `oidc` too.
+
 **Note 2026-10-22, built.** The three tools of decision 5 are `check`, `delete` and `put` in
 `app/lib/operator/`, with a command-line entry in `app/operator.ts`, tested in
 `app/lib/operator/operator.test.ts`. Three things differ from the text below, which is left as

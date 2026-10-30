@@ -39,6 +39,17 @@ holding design work follows the rule below.
 **Note 2026-10-22:** ADR-0062 is accepted and built: the operator's `delete --scratch-branch` takes
 only a name starting `test-`, `warmup-`, `anon-` or `future-`, and every other repair is a commit.
 
+**Annotated by ADR-0065, ADR-0067 and ADR-0068** (accepted 2026-10-30, not yet built). Decision 2's
+reserved trailers gain their first definitions: a workspace hub's push carries
+`Armature-Workspace-Commit`, `Armature-Authored-At` and `Armature-Workspace-Part` as the pusher's
+claims (ADR-0065 decision 5), and the hub itself writes `Armature-On-Behalf-Of` and
+`Armature-Relayed-By`, refusing them from clients (ADR-0067 decisions 3, 5 and 6). Decision 4's
+branch creation gains a commit on `main`, the creator's `Owner` grant (ADR-0068 decision 3), and
+branch names still carry no hub meaning. Decision 5's open "who may merge" is answered: the
+branch's owner or a maintainer; only a maintainer of `main` merges into it (ADR-0068 decision 4).
+Decision 6's branch deletion is the owner's or a maintainer's, revokes the branch's grants
+(ADR-0068), and is refused on a workspace hub with 400 `remote_only` (ADR-0065 decision 3).
+
 ## Context
 
 The position paper's third principle (plan §1 P3) promises version control modeled on Git:

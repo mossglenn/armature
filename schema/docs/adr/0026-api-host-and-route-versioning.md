@@ -22,6 +22,10 @@ application; Next.js is its host). Decisions 2 to 4 are unchanged.
 `app/server.ts` is the host; the Next.js app is the viewer, a client of a hub (ADR-0054, later
 change of 2026-10-21). Every route is still under `/api/v1`, served from one address.
 
+**Annotated by ADR-0065** (accepted 2026-10-30, not yet built): decision 4's "second host needing
+the same route code" is the workspace hub, the same application in a second role on a person's own
+machine, serving the same `/api/v1` on loopback and pushing to a remote hub through its API.
+
 ## Context
 
 `PROJECT_CONTEXT.md` lists "Separate API service (not Next.js API routes in CoQui)" among the
