@@ -5,16 +5,18 @@
 > which are supporting machinery? It decided that every class in the schema carries one of four
 > category labels (`infrastructure`, `fragment`, `artifact` or `relationship`) in its metadata, that
 > the code generators read these labels instead of hand-kept lists, and that a class without a label
-> fails the build. It still holds and is implemented, except decision 4: the planned address
-> `GET /api/v1/schema`, which would let a tool read the schema from the application programming
-> interface (API), has not been built.
+> fails the build. It still holds and is implemented; decision 4, the address `GET /api/v1/schema`
+> that lets a tool read the schema from the application programming interface (API), was built on
+> 2026-10-21 by ADR-0059.
 
 ## Status
 Accepted (2026-10-07). Implements ADR-0017 §2.
 
 Amends ADR-0017 §2: adds a fourth category, `fragment`, and deletes `JUNCTION_IDS` rather than
 deriving it. **Decision 4 not yet built (2026-10-08):** `GET /api/v1/schema` was not built in
-Phase 2 or Phase 3, and no phase of `docs/development-plan.md` currently owns it.
+Phase 2 or Phase 3, and no phase of `docs/development-plan.md` currently owns it. **Decision 4
+built 2026-10-21** by ADR-0059 (Phase 7): `GET /api/v1/schema?branch=|ref=` returns the schema
+graph at a ref in the reloadable form, the commit in `ETag`.
 
 ## Context
 
@@ -70,6 +72,9 @@ metadata one level, which the `armature` namespace does.
    > **Later change (2026-10-08):** not built. Phases 2 and 3 shipped without it, and no phase
    > currently owns it. Until it exists, a tool reads categories from `schema.json` or from the
    > generated `CLASS_CATEGORY` map in `app/lib/types.ts`.
+   >
+   > **Later change (2026-10-21):** built by ADR-0059 in Phase 7, beside `GET /api/v1/discover`.
+   > The generated map now lives in `packages/types` (`@armature/types`).
 
 5. **Not adopted now.** The research survey proposes extending the metadata into a relation-type
    registry (endpoints, inverse, transitivity, coverage role, maturity, export term) and a `reserved`

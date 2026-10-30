@@ -4,9 +4,11 @@
 > programming interface (API) be written in, so that it can later move out of the Next.js web
 > application without being rewritten? It chose Hono, a small framework built on web-standard requests
 > and responses, put the whole API in `app/lib/api/`, and made a single Next.js file hand every request
-> to it. It still holds and is implemented; the old unversioned routes it left in place were removed on
-> 2026-10-08, and several framework features it planned to use (validation and identity "middleware",
-> and a `GET /api/v1/schema` address) were done differently or not built, as the notes below record.
+> to it. It still holds and is implemented; the host moved on 2026-10-21 from that Next.js file to the
+> hub's own process (`app/server.ts`), as the decision was made to allow. The old unversioned routes
+> it left in place were removed on 2026-10-08, and several framework features it planned to use
+> (validation and identity "middleware", and a `GET /api/v1/schema` address) were done differently or
+> later (the schema address by ADR-0059 on 2026-10-21), as the notes below record.
 
 ## Status
 
@@ -21,7 +23,7 @@ dependency. **Completed 2026-10-08:** decisions 3 and 5 (the legacy routes coexi
 are done; all eleven legacy routes, `app/lib/terminusdb.ts` and `app/lib/routeHelpers.ts` were
 removed in Phase 3. The open data-version question in §Consequences was closed by ADR-0025
 decision 7, and store access was decided by ADR-0055. `GET /api/v1/schema` (ADR-0027 decision 4),
-named in decision 4, is not built.
+named in decision 4, was built on 2026-10-21 by ADR-0059 (`app/lib/api/routes/discover.ts`).
 
 Numbering note: ADR-0027 to ADR-0034 are reserved by `docs/development-plan.md` §5 and ADR-0035 to
 ADR-0053 are provisional candidates in `docs/research/adr-candidates.md`. This is the first free
@@ -128,6 +130,9 @@ through an official adapter. Facts checked on 2026-10-07 against hono.dev and np
 
      > **Later change (2026-10-08):** `GET /api/v1/schema` has not been built and no phase
      > currently owns it.
+     >
+     > **Later change (2026-10-21):** built by ADR-0059, with `GET /api/v1/discover`: the schema
+     > graph at a ref in the reloadable form, the commit in `ETag`.
 
 5. **Existing routes are not ported ahead of their phase.** The eight GET list routes, the two POSTs
    and the coverage route remain Next.js handlers and die on the plan's schedule (Phase 3 and
@@ -260,6 +265,9 @@ Everything else as anticipated:
   all. (Done as described, 2026-10-21.)
 - The plan §3 line "Next.js stays the host for now" is still true. Its parenthetical becomes
   "Hono inside Next.js".
+
+  > **Later change (2026-10-21):** no longer true. `app/server.ts` is the host; the catch-all route
+  > and `@hono/vercel` are gone, and the Next.js app is the viewer, a client of the hub.
 - CoQui is unaffected. It addresses `/api/v1/...` and never sees the host.
 - A new dependency with a fast release cadence (Hono is at 4.x; the Vercel adapter reached 1.0 in
   2026). Pin exact versions in `app/package.json` and let CI catch breakage, as the repository does
