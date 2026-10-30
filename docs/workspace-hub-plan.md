@@ -212,6 +212,7 @@ Each tested against a second client before it enters the remote (Development Pri
 - **The cycle:** a contract test that runs a remote hub and a workspace hub in one process (`startHub` with port 0, twice): create, clone, write, push, bring in, deliver, with two workspaces and two users meeting on `main`; Quiver's ten scenarios (its §6) are the cases. The `asOf` rewrite on a dataset, a metric and an attestation written offline; a push interrupted after one commit and resumed; a 412 from a write on the remote branch; a 422 from a rule the remote has and the local copy lacks.
 - **The refusals:** every route in §9 marked refused answers `remote_only` on a workspace hub, and `/discover` says so.
 - **CI:** the cycle test in the contract job, against the TerminusDB service container as the remote.
+- **Already on `main` (2026-10-30, PR #70):** ADR-0065's two checks before acceptance, platform check AJ (messages with trailers round trip through the store, CRLF and trailing newlines kept) and two contract tests in `app/lib/api/write.test.ts` (an earlier commit of the same branch accepted as `asOf`; trailers returned by the history route). ADR-0065's Verification records the results.
 
 ## 14. Implementation plan
 
