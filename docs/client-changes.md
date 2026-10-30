@@ -15,6 +15,28 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-30 · The hub refuses hosts and web origins it does not serve
+
+**What changed.** Every hub checks two request headers before anything else runs (ADR-0067
+decision 7). A request whose `Host` is not `localhost`, `127.0.0.1`, `[::1]` or a name under
+`.localhost` (any port), or a name listed in `ARMATURE_ALLOWED_HOSTS`, is refused with **403**
+`host_not_allowed`. A request carrying an `Origin` header is refused with **403**
+`origin_not_allowed` when the origin is a remote web origin (`http` or `https` on a name other
+than a loopback one) that `ARMATURE_ALLOWED_ORIGINS` does not list, or `null`. A loopback origin
+and a non-web scheme (`tauri://localhost`, which Tauri's HTTP plugin sends on every request) are
+served. Only a listed origin gets CORS (cross-origin resource sharing) answers: a preflight, and
+`Access-Control-Allow-Origin` with `ETag` and `Armature-Version` exposed on every response,
+refusals included. This closes DNS rebinding, a web page reaching a hub on its reader's machine
+under the trusted `header` resolver. `@armature/client`'s `CLIENT_REVISION` is this revision.
+
+**What a client does.** A tool outside a browser, calling a hub by a loopback name, does
+nothing: it sends no `Origin`, or a desktop shell's. One that calls a hub by another name (the
+compose network's `hub`, a server's own name) needs that name in the hub's
+`ARMATURE_ALLOWED_HOSTS`; the compose file sets `hub`. A page in a browser that calls a hub
+directly needs its origin in `ARMATURE_ALLOWED_ORIGINS`. **CoQui:** nothing, since its server
+calls `http://hub:3100` with no `Origin` and the compose file allows `hub`. **Quiver:** nothing;
+its Tauri origin is served.
+
 ## 2026-10-22 · `ActivityGroup` is `Lesson`
 
 **What changed.** The ordered set of activities a module schedules is the class `Lesson`

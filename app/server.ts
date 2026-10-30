@@ -9,6 +9,9 @@
  * Environment:
  *   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS, TERMINUS_DB  the store (see README.md)
  *   ARMATURE_IDENTITY, ARMATURE_EXPORT_KEY                  optional, as for the Next.js host
+ *   ARMATURE_ALLOWED_HOSTS, ARMATURE_ALLOWED_ORIGINS        optional, comma-separated: host names besides
+ *                                                            loopback, and web origins, the hub serves
+ *                                                            (ADR-0067 decision 7; lib/api/boundary.ts)
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
  *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
  *                                                            the caller, so the hub stays on this machine

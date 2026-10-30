@@ -63,6 +63,14 @@ services:
       # The identity resolver (ADR-0032): `header` trusts the caller, which is
       # why the hub's port stays on loopback (see the note above).
       - ARMATURE_IDENTITY=${ARMATURE_IDENTITY:-header}
+      # The loopback boundary (ADR-0067 decision 7): besides loopback, the hub
+      # answers only the host names listed here, so a web page that points its
+      # own domain at this machine is refused. `hub` is the name the viewer and a
+      # client beside the instance call it by; add a name if anything calls the
+      # hub by one. A web page that calls the hub directly needs its origin in
+      # ARMATURE_ALLOWED_ORIGINS; none does by default.
+      - ARMATURE_ALLOWED_HOSTS=hub,${ARMATURE_ALLOWED_HOSTS:-}
+      - ARMATURE_ALLOWED_ORIGINS=${ARMATURE_ALLOWED_ORIGINS:-}
       # Set it so pseudonymous exports name the same person the same way every time (ADR-0031).
       - ARMATURE_EXPORT_KEY=${ARMATURE_EXPORT_KEY:-}
     depends_on:

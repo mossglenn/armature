@@ -6,6 +6,7 @@
  * commit, a write on a scratch branch with identity and If-Match, a 404 by
  * stable code, and a clean stop. The routes themselves are the other suites.
  */
+import { request } from 'node:http';
 import { createClient, HubError } from '@armature/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './api/app';
@@ -85,6 +86,25 @@ describe('the hub as its own process', () => {
     expect(err).toBeInstanceOf(HubError);
     expect((err as HubError).status).toBe(404);
     expect((err as HubError).code).toBe('not_found');
+  });
+
+  it('refuses a request whose Host header names another site, as a rebinding page sends (ADR-0067 decision 7)', async () => {
+    // fetch will not send a Host of the caller's choosing; a raw request does, as a browser
+    // does for a page whose domain was pointed at this machine.
+    const ask = (host: string) =>
+      new Promise<{ status: number; body: string }>((resolve, reject) => {
+        const req = request({ host: '127.0.0.1', port: running.port, path: '/api/v1/discover', headers: { Host: host } }, (res) => {
+          let body = '';
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    const refused = await ask(`attacker.example:${running.port}`);
+    expect(refused.status).toBe(403);
+    expect(JSON.parse(refused.body).error).toBe('host_not_allowed');
+    expect((await ask(`localhost:${running.port}`)).status).toBe(200);
   });
 
   it('stops cleanly and refuses connections afterward', async () => {
