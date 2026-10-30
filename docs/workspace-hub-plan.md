@@ -225,7 +225,13 @@ Each tested against a second client before it enters the remote (Development Pri
 
 Steps 1 to 4 need nothing from the remote except what exists; step 7's pushes from another machine wait for OIDC.
 
-*Decided 2026-10-30:* ADR-0067's `oidc` resolver is a prerequisite of the workspace hub. Read as: it is built before a workspace hub is released or pushes to a remote on another machine; until then development and the tests run against a remote on the same machine under `header`, as the contract suite does. Steps 2 to 4 start from Quiver's modules (§11). Step 7's desktop program is the first release candidate (§16, question 1); a compose profile or a command-line build serve during development.
+*Decided 2026-10-30:* ADR-0067 (authentication) and ADR-0068 (authorization) are prerequisites of the workspace hub. The `oidc` resolver is built before a workspace hub is released or pushes to a remote on another machine; until then development and the tests run against a remote on the same machine under `header`, as the contract suite does. Building all of OIDC earlier adds no safety, since a same-machine remote under `header` with ADR-0067's `Host` and `Origin` checks exposes nothing OIDC would close sooner. What does pay to build earlier is what decides the shape of a push, so that step 3 is written once. The order:
+
+- **First, on its own:** ADR-0067 decision 7, the `Host` and `Origin` checks, with the fresh-VM rehearsal (it changes the compose file). It closes an exposure present today.
+- **Before step 3 (push):** ADR-0068 whole (the `Grant` class with its schema change, branch ownership, the permission checks, the authorship rule, the guard's scope), and ADR-0067 decisions 3, 6 and 8 with the client's `agent` option (an agent acting for a person with `Armature-On-Behalf-Of`, hub-written trailers refused from clients, `header` reading `Armature-Agent`). All of these work under `header` and need no identity provider. Push then sends agent commits in their final form, and its failures include 403 from the start.
+- **Before step 7 (release):** the rest of ADR-0067: the `oidc` resolver (decision 1), native sign-in (2), services' credentials (4), relaying (5), and discovery's issuer, audience and client id (9), which the connection profile needs (§16, question 12).
+
+Step 1, the adapter interface, depends on none of them. Steps 2 to 4 start from Quiver's modules (§11). Step 7's desktop program is the first release candidate (§16, question 1); a compose profile or a command-line build serve during development.
 
 ## 15. What this plan declines to do
 

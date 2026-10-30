@@ -13,6 +13,10 @@
 
 Proposed (2026-10-29). Nothing is built on it.
 
+**Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065). Decision 7 is built first;
+decisions 3, 6 and 8, with the client's `agent` option, before the workspace hub's push; the rest
+(decisions 1, 2, 4, 5 and 9) before its release (`docs/workspace-hub-plan.md` §14).
+
 Written with ADR-0068 (authorization), which says what a resolved identity may do; this record
 says how the identity is established and what the hub records about it. The trigger is What's
 Next item 3 in `.claude/SESSION.md`: a writing client that runs somewhere other than the hub's

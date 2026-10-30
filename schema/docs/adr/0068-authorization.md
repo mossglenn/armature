@@ -12,6 +12,9 @@
 
 Proposed (2026-10-29). Nothing is built on it.
 
+**Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065), built whole before its push
+(`docs/workspace-hub-plan.md` §14), since push's failures depend on ownership.
+
 Written with ADR-0067 (authentication), which says how an identity is established; this record
 says what it may do. Raised by ADR-0065 (the workspace hub), whose decision 2 left branch
 ownership to convention, and by the question of who may be a commit's author (discussed
