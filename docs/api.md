@@ -1,6 +1,6 @@
 # Armature API reference
 
-This document describes every route of the Armature API (application programming interface) as built at the end of Phase 4 (8 October 2026). The code is the authority: routes are defined in `app/lib/api/routes/`, conventions in `app/lib/api/http.ts`, and error mapping in `app/lib/api/app.ts`. For the reasoning behind the design, see [How Armature Works](how-armature-works.md) Part III and the Architecture Decision Records (ADRs) cited below.
+This document describes every route of the Armature API (application programming interface) as built; [`client-changes.md`](client-changes.md) dates each addition (newest revision 2026-10-30). The code is the authority: routes are defined in `app/lib/api/routes/`, conventions in `app/lib/api/http.ts`, and error mapping in `app/lib/api/app.ts`. For the reasoning behind the design, see [How Armature Works](how-armature-works.md) Part III and the Architecture Decision Records (ADRs) cited below.
 
 ## Conventions
 
@@ -36,7 +36,7 @@ A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the bran
 
 Every route that changes data needs an identity (ADR-0032). Under the default `header` resolver, the request carries `Armature-User: <externalId>`, the external identifier of a registered `User` (the seed registers `demo-designer@example.edu`). The hub resolves it to a `User` document on `main`, records that user as the commit author, and sets `createdBy` on documents it creates. Missing header: **401** `identity_required`. Unregistered identifier: **401** `unknown_user`.
 
-The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself. An `oidc` (OpenID Connect) resolver is named but not built.
+The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself. An `oidc` (OpenID Connect) resolver is specified in ADR-0067 (Proposed; its `Host` and `Origin` checks, the next section, were built 2026-10-30), a prerequisite of the workspace hub (ADR-0065, Proposed); until it is built, every writing client runs beside the hub.
 
 ### Hosts and web origins
 
@@ -44,7 +44,7 @@ Every request is checked before anything else (ADR-0067 decision 7, since revisi
 
 ### Write envelopes
 
-Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message. A write without one is a **400** `message_required`. The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation is not a commit and takes `{ name, from }` with no message.
+Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message and returned by the history route byte for byte, git-style trailers included (verified 2026-10-30, platform check AJ); no trailer is defined yet (ADR-0025 decision 2), and ADR-0065 and ADR-0067 (Proposed) define the first. A write without one is a **400** `message_required`. The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation is not a commit and takes `{ name, from }` with no message.
 
 ### Document identifiers
 
@@ -111,11 +111,11 @@ The commits on a branch that touched one document, newest first.
 | `start`, `count` | Paging | 0, 20 |
 | `diff` | Include the structural difference each commit made; `diff=false` omits it | true |
 
-Response: `{ id, branch, start, count, entries: [ { commit, author, message, timestamp, diff } ] }`, with `ETag` the branch head the history was read at (since 2026-10-23; the store's own history answer names no commit). The hub keeps an answer by that head and serves it again while the head stands still, since the store walks the branch's whole log for a document touched rarely (seconds on a few hundred commits) and a read at a commit is immutable. `timestamp` is seconds since the epoch as a number, as the store records a commit (here and on a branch head). Lists inside a document (such as an item's options) are compared by position, so reordering reads as several changes.
+Response: `{ id, branch, start, count, entries: [ { commit, author, message, timestamp, diff } ] }`, with `ETag` the branch head the history was read at (since 2026-10-23; the store's own history answer names no commit). The hub keeps an answer by that head and serves it again while the head stands still, since the store walks the branch's whole log for a document touched rarely (seconds on a few hundred commits) and a read at a commit is immutable. `timestamp` is seconds since the epoch as a number, as the store records a commit (here and on a branch head). `message` is the write's `message` as stored, trailers included (platform check AJ). `diff` is TerminusDB's JSON patch (`docs/vendor/terminusdb/json-diff-and-patch.md`), passed through unchanged; every store under a hub produces it (ADR-0066 decision 5, Proposed). Lists inside a document (such as an item's options) are compared by position, so reordering reads as several changes.
 
 ### `GET /documents/:type/:id/diff?from=<commit>&to=<commit>`
 
-The structural difference in one document between two commits. Both are required (400 `range_required`) and must exist (404 `unknown_ref`). Response: `{ id, from, to, diff }`.
+The structural difference in one document between two commits, as TerminusDB's JSON patch (`docs/vendor/terminusdb/json-diff-and-patch.md`), passed through unchanged; every store under a hub produces it (ADR-0066 decision 5, Proposed). Both are required (400 `range_required`) and must exist (404 `unknown_ref`). Response: `{ id, from, to, diff }`.
 
 ### The write pipeline
 
@@ -175,7 +175,7 @@ The branch's latest commit: `{ name, head }`, with the commit in `ETag`.
 
 ### `POST /branches/:name/merge`
 
-Merges another branch into `:name` with the database's three-way merge (ADR-0025 decision 5).
+Merges another branch into `:name` with the database's three-way merge (ADR-0025 decision 5). The merged state is not checked by the invariants engine, so two clean branches can merge into a rule violation (for example `duplicate_sequence`, when each gave a new placement the same sequence); the operator's `check` (ADR-0062) finds it, and running the rules on merge is an ask in `docs/workspace-hub-plan.md` §12.
 
 - Headers: `Armature-User` (required).
 - Body: `{ "message": "...", "from": "<source branch>" }`.

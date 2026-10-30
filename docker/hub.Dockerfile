@@ -7,8 +7,8 @@
 # Two stages. The first installs the workspace and bundles app/server.ts with
 # esbuild (`npm run build:hub`): the API, @armature/types, hono and zod become
 # one file. The second holds Node and that file, nothing else: no node_modules,
-# no TypeScript, no Next.js. The image serves /api/v1 only; the Next.js pages
-# are the demo interface and run elsewhere or not at all.
+# no TypeScript, no Next.js. The image serves /api/v1 only; the viewer, a
+# client of the hub, has its own image (viewer.Dockerfile).
 #
 # The operator tools (ADR-0062) are bundled the same way from app/operator.ts
 # and sit beside the server, because the hub's container is where the store's

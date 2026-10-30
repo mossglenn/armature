@@ -35,7 +35,7 @@ curl http://localhost:3100/api/v1/discover
 
 It returns the contract revisions the hub serves, its capabilities with their settings, and where the schema is (Section 15).
 
-The hub published by the compose file listens on the machine's loopback interface only, and so does the standalone process by default, because the only identity resolver built so far trusts whatever identity a request claims (Section 10). A hub other machines can reach is a decision, not a default; a tool that writes runs on the hub's machine, or behind a proxy that authenticates, until an authenticating resolver exists.
+The hub published by the compose file listens on the machine's loopback interface only, and so does the standalone process by default, because the only identity resolver built so far trusts whatever identity a request claims (Section 10). A hub other machines can reach is a decision, not a default; a tool that writes runs on the hub's machine, or behind a proxy that authenticates, until the `oidc` resolver exists, specified in ADR-0067 (Proposed; its `Host` and `Origin` checks built 2026-10-30). Since 2026-10-30 a tool that calls a hub by any name but a loopback one needs that name in `ARMATURE_ALLOWED_HOSTS`, else 403 `host_not_allowed` (Section 11).
 
 ### 2. The client in five lines
 
@@ -317,7 +317,7 @@ The database does **not** check that a reference points at the right *class* of 
 
 **Absent fields.** The database returns no field for an empty set. An item that assesses nothing has no `assesses` key; read `doc.assesses ?? []`. The generated interfaces type every set as an array, so a reader guards the field, never the type.
 
-**History and difference.** `documents.history(type, id, { branch, start, count, diff })` lists the commits on a branch that touched one document, newest first, each with who, why, when, and the structural difference it made. `documents.diff(type, id, { from, to })` is the difference between two commits. Lists inside a document (an item's options) are compared by position, so reordering reads as several changes.
+**History and difference.** `documents.history(type, id, { branch, start, count, diff })` lists the commits on a branch that touched one document, newest first, each with who, why, when, and the structural difference it made (TerminusDB's JSON patch; see the API reference). `documents.diff(type, id, { from, to })` is the difference between two commits. Lists inside a document (an item's options) are compared by position, so reordering reads as several changes.
 
 **What a module or course looks like now.** The seven intelligence reads answer design questions from the graph's structure alone, at any ref, storing nothing (ADR-0056):
 
@@ -336,7 +336,7 @@ The coverage thresholds are the hub's provisional cut; a tool passes its own and
 
 ### 10. Writing
 
-**Who you are.** Every write carries an identity: the `user` given to `createClient` is sent as `Armature-User`, an external identifier of a `User` registered on `main`. The seed registers `demo-designer@example.edu`. A tool registers its own people, and its AI agents, once: `users.register({ message, user: { displayName, externalId, email?, institution? } })`; an agent's `externalId` begins with `agent:` (`agent:coqui/item-drafter`). There are no routes to edit or delete a user. The resolver built so far trusts the header, which is why a hub stays local (Section 1); an authenticating resolver is named and deferred until a deployment leaves the machine (ADR-0032).
+**Who you are.** Every write carries an identity: the `user` given to `createClient` is sent as `Armature-User`, an external identifier of a `User` registered on `main`. The seed registers `demo-designer@example.edu`. A tool registers its own people, and its AI agents, once: `users.register({ message, user: { displayName, externalId, email?, institution? } })`; an agent's `externalId` begins with `agent:` (`agent:coqui/item-drafter`). There are no routes to edit or delete a user. The resolver built so far trusts the header, which is why a hub stays local (Section 1); an authenticating resolver, `oidc`, is specified in ADR-0067 (Proposed) and is a prerequisite of the workspace hub (ADR-0065); the hub already refuses hosts and web origins it does not serve (Section 11).
 
 **Why.** Every write carries a `message`, the reason for the change, which becomes the commit message and the first home of rationale (Section 7.8). Write it for the designer who inherits the course in three years.
 

@@ -39,16 +39,16 @@ Through the design-intelligence reads under `/api/v1/intelligence/`, tools built
 
 ## Status
 
-As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-plan.md) are complete, and so are the decisions queued after them (commit ids on records that describe a state of the design, item statistics as measurements). Phase 5's attestations ([ADR-0028](schema/docs/adr/0028-attestation.md)) are built on a branch awaiting review:
+As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-plan.md) are complete, except a standing hosted instance (deferred by decision: two ran and were destroyed), and Phase 8's Design Graph is built. The decisions now waiting are the four Proposed ADRs of the workspace hub and its prerequisites: [ADR-0065](schema/docs/adr/0065-workspace-hub.md) (the workspace hub), [ADR-0066](schema/docs/adr/0066-workspace-hub-store.md) (its store), [ADR-0067](schema/docs/adr/0067-authentication.md) (authentication) and [ADR-0068](schema/docs/adr/0068-authorization.md) (authorization). Built and on `main`:
 
-- the schema (28 classes, 13 controlled vocabularies) with every accepted decision applied
+- the schema (31 classes, 15 controlled vocabularies) with every accepted decision applied
 - a version-controlled API: reads at any branch or commit, history and differences per document, branches, three-way merges with conflict reports
 - one write path for every document type, enforcing every rule the database cannot (the invariants engine), with the author and reason recorded on every change
 - identity resolution for people and AI agents
 - the seven design-intelligence reads (coverage, alignment, trace, impact, attestation staleness, item statistics and a module's content in teaching order) and a read-only Coverage View page that shows each item's statistics beside the coverage it counts toward, and the module's activities in order
 - the Design Graph (`/graph`, 2026-10-22): every record on a branch at a commit drawn in lifecycle columns, every relationship a labeled edge, derived in the viewer from the schema as data; filters, search, selection with its fields, annotations (attestations with their state), references and history, neighbors, upstream, downstream or the hub's trace lit in place, every view a URL; the Focus page (`/graph/<Type>/<id>`), one record's trace drawn the same way, linked from every record on the Coverage View; and the Walkthrough (`?walk=1`), Narrative 1 in ten steps from a result back to the evidence, with coverage read at the commit the cohort met and what changed since ([the visual language](docs/visual-language.md); [the plan](docs/graph-view-plan.md) for lenses and figure export); a Playwright smoke test drives all of it in CI
 - external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
-- 197 integration tests, run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
+- 296 tests (Vitest), run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
 
 - `@armature/types` and `@armature/client`, installable packages a plugin builds on: the schema as TypeScript and every route as a typed function (Phase 7, 2026-10-21)
 
@@ -56,9 +56,9 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 
 - an instance as three containers: the store, the hub (`docker/hub.Dockerfile`, the API bundled into one file and served by Node) and the viewer (`docker/viewer.Dockerfile`, the pages as a client of the hub); `docker compose --profile hub up` runs them on one private network on loopback, and `--profile public` adds Caddy as the only public container ([Running an instance](docs/deployment.md); Phase 7, 2026-10-21)
 
-**Next:** the rest of Phase 7: a standing hosted instance (the deployment was verified on a DigitalOcean Droplet on 2026-10-21 and destroyed by choice) and, before a writing client reaches one from elsewhere, the `oidc` resolver or an authenticating proxy. Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The first plugin, **CoQui** (an assessment-item review tool, in its own repository), is being built against this API.
+**Next:** the four Proposed decisions above, and, before a writing client reaches a hub from elsewhere, authentication and authorization: the `oidc` resolver is specified in [ADR-0067](schema/docs/adr/0067-authentication.md) and what a resolved identity may do in [ADR-0068](schema/docs/adr/0068-authorization.md), both Proposed, with ADR-0067's `Host` and `Origin` checks built 2026-10-30; an authenticating proxy is not the plan. A standing hosted instance is deferred by decision (the deployment was verified on a DigitalOcean Droplet on 2026-10-21, and again on 2026-10-26 with CoQui beside it; both destroyed by choice). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The clients: **CoQui** (an assessment-item review tool, in its own repository) is built against this API; the viewer reads; **Quiver**, a local-first item manager, is built and paused (2026-10-30) as the first real test of the workspace hub ([the plan](docs/workspace-hub-plan.md); ADR-0065, Proposed); an MCP server ([plan](docs/mcp-server-plan.md)) and a Storyline bridge ([plan](docs/storyline-bridge-plan.md)) are planned. [Demo coverage](docs/demo-coverage.md) scores what each shows.
 
-**Not yet suitable for public writes:** the current identity resolver trusts the caller, so the hub's port stays on the server's loopback and only the read-only viewer is published; writes happen on the server until an authenticating resolver exists. See [Running an instance](docs/deployment.md) and [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
+**Not yet suitable for public writes:** the current identity resolver trusts the caller, so the hub's port stays on the server's loopback and only the read-only viewer is published; writes happen on the server until an authenticating resolver exists (ADR-0067, Proposed; its `Host` and `Origin` checks built). See [Running an instance](docs/deployment.md) and [Limitations](docs/how-armature-works.md#29-limitations-and-risks).
 
 ## Documentation map
 
@@ -75,6 +75,10 @@ As of 18 October 2026, Phases 0 to 4 of the [development plan](docs/development-
 | Catch a client tool up with what changed | [Changes for client tools](docs/client-changes.md) |
 | Use Armature as a research instrument for one study | [The research path](docs/research-path.md) |
 | Stand up an instance on a server, or understand what runs where | [Running an instance](docs/deployment.md) |
+| See which hub capabilities each client tool shows, and the gaps no demo shows | [Demo coverage](docs/demo-coverage.md) |
+| Run the hub on your own machine and push to a shared one (planned; ADR-0065 to ADR-0068, Proposed) | [The workspace hub](docs/workspace-hub-plan.md) |
+| Ask the graph from an MCP assistant (planned) | [The MCP server](docs/mcp-server-plan.md) |
+| Record Storyline builds in the graph and bring results back (planned) | [The Storyline bridge](docs/storyline-bridge-plan.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
 | Work on the code (including with an AI assistant) | [.claude/CLAUDE.md](.claude/CLAUDE.md), [.claude/SESSION.md](.claude/SESSION.md) |
 
@@ -144,7 +148,7 @@ curl -X PUT "http://localhost:3100/api/v1/documents/DesignNote/my-note?branch=my
 
 Writes need the `Armature-User` header carrying a registered user's external identifier; the seed registers `demo-designer@example.edu`. The [API reference](docs/api.md) documents every route.
 
-**Tests.** `npm test` in `app/` runs the 197 integration tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
+**Tests.** `npm test` in `app/` runs the 296 Vitest tests against the running database. They work on scratch branches and leave `main` and the seed as they found them.
 
 **After a schema change.** Run `npm run generate:types` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
 
@@ -178,6 +182,11 @@ docs/
   deployment.md               Running an instance: the terms, the containers, who can do what, the steps, a hosted instance
   graph-view-plan.md          The Design Graph: the plan for the viewer's graph pages (Phase 8), the visual language and Narrative 1 as a walk
   visual-language.md          How Armature draws a record, a relationship and the lifecycle: stages, hues, glyphs, chips, edges; the page's values, for papers and slides
+  client-changes.md           What client tools must act on, newest first: each change to /api/v1 or the schema, and what a client does about it
+  demo-coverage.md            Which hub capabilities each built, planned or proposed client tool shows, and the gaps no demo shows (2026-10-27)
+  workspace-hub-plan.md       The workspace hub (draft 2026-10-28; ADR-0065 to ADR-0068 Proposed): the hub's own code in a second mode on one person's machine, pushing to a remote through /api/v1
+  mcp-server-plan.md          The Armature MCP server (draft 2026-10-27): a client that asks the graph through the intelligence reads at a named commit
+  storyline-bridge-plan.md    The Storyline bridge (draft 2026-10-27): a client that records each Storyline build in the graph by hash and brings results back as metrics
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
   research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings
@@ -190,7 +199,7 @@ packages/client/              @armature/client: every /api/v1 route as a typed f
 package.json                  The npm workspace root (app and packages/*)
 scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync (its own package)
 docker/                       Docker Compose for the store; --profile hub adds the hub and viewer, --profile public Caddy in front; their Dockerfiles, the Caddyfile, the operator entrypoint
-.github/workflows/ci.yml      CI: lint, type-check, the generated-types drift check, the hub bundle, the contract suite against a TerminusDB service container, and both container images
+.github/workflows/ci.yml      CI, five jobs: lint, type-check, the generated-types drift check and the hub bundle; the contract suite against a TerminusDB service container; the viewer's browser smoke test (Playwright over the built viewer and the bundled hub); @armature/client installed as another repository installs it; both container images built and started
 .claude/                      Context for AI-assisted development sessions: CLAUDE.md, PROJECT_CONTEXT.md, SESSION.md
 ```
 

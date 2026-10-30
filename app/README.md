@@ -17,7 +17,7 @@ The hub needs the TerminusDB container running with the schema and seed loaded (
 | `TERMINUS_USER` | Database account | `admin` |
 | `TERMINUS_PASS` | Its password; must match `TERMINUSDB_ADMIN_PASS` given to the container | `admin` |
 | `TERMINUS_DB` | Database name | `armature` |
-| `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local | `header` |
+| `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local; the `oidc` resolver is specified in ADR-0067 (Proposed) | `header` |
 | `ARMATURE_ALLOWED_HOSTS` | Optional, comma-separated. Host names the hub answers besides loopback ones (ADR-0067 decision 7); the compose file sets `hub` | none |
 | `ARMATURE_ALLOWED_ORIGINS` | Optional, comma-separated. Web origins whose pages may call the hub from a browser, and get CORS answers; other remote web origins are refused | none |
 | `ARMATURE_EXPORT_KEY` | Optional. The key under which `GET /api/v1/export?profile=pseudonymous` derives user tokens (ADR-0031); set it so the same person has the same token in every export, leave it unset and each export mints its own | unset |
@@ -72,9 +72,9 @@ lib/
     classes.ts                What the generated schema data says about a class
     write.ts                  The one write pipeline for every type
     errors.ts                 ApiError: status, stable code, message
-    invariants/               The invariants engine: rules 0 to 19, one module per constrained type
+    invariants/               The invariants engine: rules 0 to 20, one module per constrained type
     intelligence/             The coverage algorithm and the per-request graph reader
-    routes/                   documents, branches, users, intelligence, export
+    routes/                   documents, branches, users, intelligence, export, discover
     export/                   The export's slices (slices.json) and profiles (ADR-0031)
     *.test.ts                 Integration tests (app, write, intelligence, export)
 vitest.config.mts             Test configuration: the @ alias, and .env.local so tests hit the same database
@@ -82,7 +82,7 @@ vitest.config.mts             Test configuration: the @ alias, and .env.local so
 
 ## Tests
 
-`npm test` runs 197 integration tests that call the Hono app in-process (and, in `lib/hub.test.ts`, over a socket to the standalone host on an ephemeral port) and read from and write to the running TerminusDB container. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. They are the contract suite: CI runs them against a TerminusDB service container on every push and pull request (`.github/workflows/ci.yml`, the `contract` job: wait for the store, load the schema, seed, `npm test`). The files run one at a time (`fileParallelism: false`): each writes to its own scratch branch, but every commit lands in the database's one commit graph, and files writing in parallel made the store give up a transaction once in CI. `vitest.global-setup.mts` waits until the seeded database answers a read of `main`, then warms the store with the tests' kind of work (a scratch branch, one write, one coverage read, the branch deleted afterward) before the first test file starts, since a store on a cold machine has stalled mid-suite past the test timeout while a cheap read answered at once; `vitest.env.ts` reads `.env.local` for both the setup and the workers.
+`npm test` runs the 296 Vitest tests: the contract suite, which calls the Hono app in-process (and, in `lib/hub.test.ts`, over a socket to the standalone host on an ephemeral port) and reads from and writes to the running TerminusDB container, and the Design Graph's pure modules on a fixture and on the seed. They create scratch branches and delete them afterward, so `main` and the seed are left as they were. The one exception is the user-registration tests, which must write to `main` (where users live) and remove what they create. They are the contract suite: CI runs them against a TerminusDB service container on every push and pull request (`.github/workflows/ci.yml`, the `contract` job: wait for the store, load the schema, seed, `npm test`). The files run one at a time (`fileParallelism: false`): each writes to its own scratch branch, but every commit lands in the database's one commit graph, and files writing in parallel made the store give up a transaction once in CI. `vitest.global-setup.mts` waits until the seeded database answers a read of `main`, then warms the store with the tests' kind of work (a scratch branch, one write, one coverage read, the branch deleted afterward) before the first test file starts, since a store on a cold machine has stalled mid-suite past the test timeout while a cheap read answered at once; `vitest.env.ts` reads `.env.local` for both the setup and the workers.
 
 ## Rules for code in this directory
 
