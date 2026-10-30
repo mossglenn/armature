@@ -3,6 +3,8 @@
 Oct 19, 2026 · @Amos Glenn
 
 > **Status (2026-10-20).** A dated research snapshot, committed on 2026-10-20 and kept as written, except for the open-questions list at the end, which records what was decided. Renamed the same day from *Armature Schema Precedents and Plugin Candidates.md* to match the directory's naming. Cited by ADR-0028 (related work), ADR-0059 (context and related) and `docs/development-plan.md` (§6 and Phase 6). Companion to `learning-data-standards-precedents.md` (2026-10-06), which it does not repeat.
+>
+> **2026-10-30:** the gaps named under Scope are closed or planned: ADR-0059 built `GET /api/v1/discover` (capability negotiation), `GET /api/v1/schema` and the typed client `@armature/client` (2026-10-21); the MCP server and the Storyline bridge have plans (`docs/mcp-server-plan.md`, `docs/storyline-bridge-plan.md`, 2026-10-27).
 
 ## Scope
 
