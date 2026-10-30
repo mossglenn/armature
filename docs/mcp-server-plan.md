@@ -1,6 +1,6 @@
 # The Armature MCP server: plan
 
-*Status: draft 2026-10-27, for review; the questions in §13 are open, each with a recommendation the plan is written to. A plan for a client of the hub, built outside this repository. When the server exists, this document becomes its description here and its own repository carries the code.*
+*Status: draft 2026-10-27, for review; the questions in §13 are open, each with a recommendation the plan is written to, except questions 5 and 13, decided 2026-10-30 with ADR-0067: the agent writes acting for the person, on a workspace hub, and remote mode is read-only (§3, §7). A plan for a client of the hub, built outside this repository. When the server exists, this document becomes its description here and its own repository carries the code.*
 
 Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), HTTP (Hypertext Transfer Protocol), JSON (JavaScript Object Notation), MCP (Model Context Protocol), OAuth (Open Authorization), OIDC (OpenID Connect), REST (Representational State Transfer), SDK (software development kit), URI (Uniform Resource Identifier).
 
@@ -16,7 +16,7 @@ What it must demonstrate, in order of weight:
 
 1. **Design questions answered from structure, at a named commit.** "Which objectives in this module are under-assessed, and why?" is a coverage read and an alignment read, and the answer says which commit it describes.
 2. **The hub's rules hold for agents as for people.** An agent asking for a per-person summary is refused by the hub, not by a prompt (ADR-0021). An agent's writes go through the same pipeline and invariants as anyone's (plan P5).
-3. **Agent work is attributable and reviewable.** What the agent writes is credited to an agent `User`, lands on a branch, and reaches `main` only when a person merges it (ADR-0032 decision 7, ADR-0028's endorsement).
+3. **Agent work is attributable and reviewable.** What the agent writes is credited to an agent `User`, lands on a branch, and reaches `main` only when a person merges it (ADR-0032 decision 7, ADR-0028's endorsement). *Since 2026-10-30:* ADR-0068 (Proposed) makes this a rule the hub enforces (only a maintainer merges into `main`), ADR-0067 decision 3 records the person the agent worked for, and ADR-0067 decision 10 confines an agent's writes to a workspace hub on the person's machine (§7).
 4. **A client built from discovery.** The server learns what the hub offers from `GET /discover` and offers tools accordingly (ADR-0059).
 
 Constraints from the rest of the project, which hold throughout:
@@ -52,11 +52,14 @@ armature-mcp  ── tools, resources, prompts; shapes answers; no state beyond 
    │  @armature/client: Armature-Version, Armature-Capabilities, Armature-User, If-Match
    ▼
 hub /api/v1   ── reads at a ref; writes through the pipeline; refusals by stable code
+               a workspace hub on the person's machine (reads and writes), or a remote hub (reads only)
 ```
+
+*Which hub (decided 2026-10-30).* On a person's machine the server talks to their **workspace hub** (ADR-0065), the same `/api/v1` on loopback, where it reads the person's own work in progress and where its writes land in the person's workspace beside Quiver's and CoQui's; the person's push carries them to the remote. Against a **remote hub** the server only reads (ADR-0067 decision 10; §7). The server learns which it has from `GET /discover` (`armature/workspace`); on a workspace hub, branch creation, merge, deletion and user registration answer 400 `remote_only`, and a ref the clone does not hold answers 404 `unknown_ref` with `remote_needed` when offline (workspace hub plan §8, §9).
 
 - **Language and SDK.** TypeScript on the official MCP SDK, because `@armature/client` and `@armature/types` are TypeScript and give the server the hub's types, its error codes and the schema as data for free. The v2 line, `@modelcontextprotocol/server` (2.4.0; 2.0.0 shipped 2026-07-27), implements the 2026-07-28 revision, needs Node 20 or later and Zod 4, which `@armature/types` already uses (4.3.6), so its schemas can feed tool inputs directly. It serves stdio with `serveStdio` and HTTP with a stateless `createMcpHandler`, and by default answers clients still on the 2025 revisions without a session ([npm](https://www.npmjs.com/package/@modelcontextprotocol/server), [legacy clients](https://raw.githubusercontent.com/modelcontextprotocol/typescript-sdk/main/docs/serving/legacy-clients.md)). That default stays on: whether a given assistant speaks the 2026 revision yet is not something the server should depend on.
 - **Where it lives.** Its own repository, `mossglenn/armature-mcp`, installing `@armature/client` and `@armature/types` by git reference, as CoQui does (§13 question 1).
-- **Configuration.** Environment variables, the convention for stdio servers: `ARMATURE_HUB_URL` (default `http://localhost:3100`), `ARMATURE_AGENT` (the agent's `externalId`, for writes), `ARMATURE_BRANCH` (the default branch to read, `main`), `ARMATURE_WRITES` (`off` by default).
+- **Configuration.** Environment variables, the convention for stdio servers: `ARMATURE_HUB_URL` (default `http://localhost:3100`), `ARMATURE_USER` (the person's `externalId`; on a workspace hub, its owner; *added 2026-10-30*), `ARMATURE_AGENT` (the agent's `externalId`, sent as `Armature-Agent` on writes), `ARMATURE_BRANCH` (the default branch to read, `main`), `ARMATURE_WRITES` (`off` by default).
 
 ---
 
@@ -153,13 +156,15 @@ Every tool returns two forms of the same answer:
 
 ## 7. Identity, writes and review
 
-**Reads need no identity**, as in the hub. A read-only server can point at any hub its machine can reach.
+**Reads need no identity** under the `header` resolver, as in the hub today. A read-only server can point at any hub its machine can reach. *Since 2026-10-30:* under `oidc` (ADR-0067 decision 1) every request needs a token; a server on the person's machine holds the person's, and a hosted server holds its own (decision 4, `agent:<client id>`), which grants reads.
 
-**Writes are the agent's.** Under the hub's `header` resolver the server sends `Armature-User: <ARMATURE_AGENT>`, an agent `User` a person registered first with `POST /api/v1/users` (`agent:armature-mcp/<instance>`, ADR-0032 decision 7). Every commit the agent makes carries its id as author and `createdBy`. The `header` resolver trusts the caller and the hub's port stays on loopback while it is configured (`deployment.md`), so writes work only where the server runs beside the hub: a developer's machine, or the hub's own server.
+**Writes are the agent's, acting for the person, on a workspace hub.** *Rewritten 2026-10-30; as first drafted the server sent the agent's id in `Armature-User`, which a workspace hub's owner-only resolver would refuse.* The server sends the person in `Armature-User` (`ARMATURE_USER`; on a workspace hub, its owner) and the agent in `Armature-Agent` (`ARMATURE_AGENT`, an agent `User` a person registered once with `POST /api/v1/users` on the remote, `agent:armature-mcp`; one per tool is enough, ADR-0067 decision 3). Every commit the agent makes carries the agent's id as author and `createdBy`, and the hub records the person in an `Armature-On-Behalf-Of` trailer it writes itself. The writes land in the person's workspace; the person's push carries them to the remote, which writes the trailer and runs every rule again. Until ADR-0067 decision 3 is built, `header` accepts the agent's id in `Armature-User` with no trailer (decision 8), the form Quiver uses today; the server moves to the final form when `docs/client-changes.md` announces it.
+
+**No writes to a remote hub.** *Decided 2026-10-30 (ADR-0067 decision 10).* A remote refuses an agent's own writes unless they arrive as a workspace hub's push acting for the owner, so the server's remote mode (M5) is read-only. The reasons are the ADR's: a server running away from the person cannot carry the person's credential (the MCP specification forbids passing the assistant user's token through), so the remote could not record whom the agent worked for; an agent's proposals belong in the person's workspace beside their own drafts, delivered by the person's push; and an agent with a remote write path would be one grant away from `main`. What would reopen it is also there: a client with a demonstrated need and a way for the hub to verify whom the agent works for (a token carrying the person's identity as a verified claim, or a grant from the person naming the agent).
 
 **The person's acceptance is an endorsement.** A proposal reaches `main` when a person merges the branch, with their own identity, in a tool that writes as them (CoQui today; the viewer reads only). A person who wants their acceptance recorded on the record itself writes a claimless `Attestation` (ADR-0028), which is the endorsement the AI design assistant reference client needs. The server does not write attestations, because the attester must be the caller (rule 15) and the server is the agent.
 
-**Not modeled: acting on someone's behalf.** An assistant session is a person and an agent together, and the honest record is "the agent proposed, at this person's request". ADR-0032 decision 7 defers delegation until the AI design assistant is real, and the OIDC ADR names delegation as one of its four decisions (SESSION.md What's Next item 3). This server is that assistant becoming real, so it is the evidence that ADR waits for; until then it records the agent only, and the person who ran the session is not in the graph.
+**Acting on someone's behalf: modeled since ADR-0067 (Proposed 2026-10-29).** *As first drafted this paragraph was headed "Not modeled".* An assistant session is a person and an agent together, and the honest record is "the agent proposed, at this person's request". ADR-0032 decision 7 deferred delegation until the AI design assistant was real; this server and Quiver's drafter were that evidence, and ADR-0067 decision 3 is the answer: the agent is the author, the person is in the hub-written `Armature-On-Behalf-Of` trailer, and a client that sends that trailer itself is refused (decision 6, 400 `reserved_trailer`). Until it is built the hub records the agent only, and the person who ran the session is not in the graph.
 
 **Confirmation.** A host asks the person before it runs a tool that is not read-only; the write tools' descriptions say exactly what will be written and where, so that approval is informed. An elicitation form could ask for a confirmation of the proposal's text as well; §13 question 6 explains why the plan does not rely on one.
 
@@ -212,6 +217,7 @@ Beat 5 is the one no other demo can show, and the one most likely to stay with a
 - **Generation by the client's model.** Sampling is deprecated in the 2026-07-28 revision; summaries are written by the server's code.
 - **Pictures in the conversation.** The MCP Apps extension could render the Coverage View inside a chat; client support could not be confirmed. Revisit after M3.
 - **Remote hosting before OIDC.** Streamable HTTP with authorization waits for the hub's `oidc` resolver (§13 question 3).
+- **Writes to a remote hub, in any mode.** *Decided 2026-10-30:* an agent's own work reaches a remote only as a workspace hub's push acting for its owner (ADR-0067 decision 10; §7). A hosted server reads.
 
 ---
 
@@ -227,9 +233,9 @@ Milestones in the server's repository, each a pull request with its tests; Armat
 
 **M3 · Evaluation and the demo.** The twelve-question set, its runner, the descriptions revised until it passes; the §10 script rehearsed and recorded. Acceptance: eleven of twelve questions pass on two runs.
 
-**M4 · Proposals.** §4.5 behind `ARMATURE_WRITES=on`, the agent `User` registered through `POST /api/v1/users` by the seed's designer in the test and demo setup (so Armature's seed is unchanged), refusal tests. Acceptance: beat 6 of the demo; the finding's author is the agent; `main` unchanged.
+**M4 · Proposals.** §4.5 behind `ARMATURE_WRITES=on`, the agent `User` registered through `POST /api/v1/users` by the seed's designer in the test and demo setup (so Armature's seed is unchanged), refusal tests. Acceptance: beat 6 of the demo; the finding's author is the agent; `main` unchanged. *Since 2026-10-30:* against a workspace hub when one exists (the writes land in the person's workspace; `start_proposal_branch` becomes "the current workspace", since `POST /branches` is `remote_only` there); until then against a local hub under `header`, as the contract suite runs.
 
-**M5 · Remote** (when the hub has OIDC). Streamable HTTP with the protocol's authorization, the hub's `oidc` resolver as the authority, and delegation decided by the OIDC ADR. Not scheduled.
+**M5 · Remote, read-only** (when the hub has OIDC). Streamable HTTP with the protocol's authorization, the hub's `oidc` resolver as the authority, the server's own credential (ADR-0067 decision 4). *Decided 2026-10-30:* no writes in this mode (ADR-0067 decision 10; §7, §13 question 13). Not scheduled.
 
 Sequencing: M0 and M1 are the demo's core and one or two sessions each; M2 and M3 one each; M4 one; M5 waits for its trigger.
 
@@ -256,7 +262,7 @@ Each with the options and the recommendation the plan above is written to.
    - (a) stdio, configured from the environment.
    - (b) Streamable HTTP with the specification's OAuth 2.1 authorization.
 
-   *Recommendation: (a), with (b) as M5.* The specification says stdio servers take credentials from the environment rather than follow the authorization flow, which matches the hub's `header` resolver and its loopback-only rule. HTTP needs the hub's `oidc` resolver first. It also needs a credential of the server's own for the hub, because the specification forbids passing the assistant's token through to another service ([authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)); the OIDC sketch's client-credentials grant for background writers is that credential.
+   *Recommendation: (a), with (b) as M5.* The specification says stdio servers take credentials from the environment rather than follow the authorization flow, which matches the hub's `header` resolver and its loopback-only rule. HTTP needs the hub's `oidc` resolver first. It also needs a credential of the server's own for the hub, because the specification forbids passing the assistant's token through to another service ([authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)); ADR-0067 decision 4's client-credentials grant is that credential, and since 2026-10-30 it grants reads only (question 13).
 
 4. **Writes in scope.**
    - (a) Read-only.
@@ -270,7 +276,7 @@ Each with the options and the recommendation the plan above is written to.
    - (b) The person running the assistant.
    - (c) The agent, recording the person it acts for.
 
-   *Recommendation: (a) now, (c) when the OIDC ADR decides delegation.* (b) credits the person with the agent's words, against P5.
+   *Recommendation: (a) now, (c) when the OIDC ADR decides delegation.* (b) credits the person with the agent's words, against P5. *Decided in ADR-0067 decision 3 (Proposed 2026-10-29): (c), the agent as author with the person in a hub-written `Armature-On-Behalf-Of` trailer; (a) remains the interim form under `header` (decision 8).*
 
 6. **Confirming a write.**
    - (a) The host's own approval of each tool call, with precise descriptions and `destructiveHint: false`.
@@ -313,3 +319,10 @@ Each with the options and the recommendation the plan above is written to.
     - (b) Here for good, as the Design Graph plan is.
 
     *Recommendation: (a).* This follows Quiver, the other client in its own repository. The hub-facing parts (discovery's first client, the evidence for delegation) are noted in plan §6 when they happen.
+
+13. **Writes in remote mode, and whom the agent works for** (raised by the alignment review of 2026-10-30). A server away from the person's machine holds its own credential and cannot carry the person's, so the hub cannot write `Armature-On-Behalf-Of`; a `Relay` grant (ADR-0067 decision 5) would write the person as author, the wrong record for an agent's proposal.
+    - (a) Remote mode reads only; every write goes through the person's workspace hub, where the person is present and recorded.
+    - (b) Remote mode writes as the agent alone, with no person recorded.
+    - (c) A new grant or token form that lets the hub verify whom a hosted agent works for.
+
+    *Decided 2026-10-30: (a)* (ADR-0067 decision 10). (b) would put work in shared history that no one is answerable for, and give an agent a path one grant from `main`. (c) is what would reopen the decision: a client with a demonstrated need, and a verified claim (OAuth token exchange, RFC 8693, or a grant from the person naming the agent); the two-client test applies.
