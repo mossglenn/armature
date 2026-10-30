@@ -7,7 +7,7 @@
 #
 # Only the viewer is behind it. The hub is never proxied: its `header` identity
 # resolver trusts the caller (ADR-0032), so it stays on the private network until
-# an authenticating resolver exists: `oidc`, specified in ADR-0067 (Proposed; its
+# an authenticating resolver exists: `oidc`, specified in ADR-0067 (accepted 2026-10-30; its
 # Host and Origin checks built 2026-10-30; docs/deployment.md).
 {$ARMATURE_SITE} {
 	encode zstd gzip

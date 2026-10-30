@@ -17,7 +17,7 @@ The hub needs the TerminusDB container running with the schema and seed loaded (
 | `TERMINUS_USER` | Database account | `admin` |
 | `TERMINUS_PASS` | Its password; must match `TERMINUSDB_ADMIN_PASS` given to the container | `admin` |
 | `TERMINUS_DB` | Database name | `armature` |
-| `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local; the `oidc` resolver is specified in ADR-0067 (Proposed) | `header` |
+| `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local; the `oidc` resolver is specified in ADR-0067 (accepted 2026-10-30, not yet built) | `header` |
 | `ARMATURE_ALLOWED_HOSTS` | Optional, comma-separated. Host names the hub answers besides loopback ones (ADR-0067 decision 7); the compose file sets `hub` | none |
 | `ARMATURE_ALLOWED_ORIGINS` | Optional, comma-separated. Web origins whose pages may call the hub from a browser, and get CORS answers; other remote web origins are refused | none |
 | `ARMATURE_EXPORT_KEY` | Optional. The key under which `GET /api/v1/export?profile=pseudonymous` derives user tokens (ADR-0031); set it so the same person has the same token in every export, leave it unset and each export mints its own | unset |

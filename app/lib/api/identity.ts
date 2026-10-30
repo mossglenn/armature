@@ -16,7 +16,7 @@ import { createStore, StoreError, type Store, type TerminusDocument } from './st
  * Resolvers, chosen by `ARMATURE_IDENTITY`:
  *   header  (default) `Armature-User: <externalId>`; trusts the caller, so
  *           the mutating routes stay local while it is configured
- *   oidc    specified by ADR-0067 (Proposed), not yet built: OpenID Connect (OIDC) bearer token,
+ *   oidc    specified by ADR-0067 (accepted 2026-10-30), not yet built: OpenID Connect (OIDC) bearer token,
  *           `sub` as externalId, `name`
  *           and `email` as the other claims
  */

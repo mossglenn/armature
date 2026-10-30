@@ -36,7 +36,7 @@ A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the bran
 
 Every route that changes data needs an identity (ADR-0032). Under the default `header` resolver, the request carries `Armature-User: <externalId>`, the external identifier of a registered `User` (the seed registers `demo-designer@example.edu`). The hub resolves it to a `User` document on `main`, records that user as the commit author, and sets `createdBy` on documents it creates. Missing header: **401** `identity_required`. Unregistered identifier: **401** `unknown_user`.
 
-The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself. An `oidc` (OpenID Connect) resolver is specified in ADR-0067 (Proposed; its `Host` and `Origin` checks, the next section, were built 2026-10-30), a prerequisite of the workspace hub (ADR-0065, Proposed); until it is built, every writing client runs beside the hub.
+The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself. An `oidc` (OpenID Connect) resolver is specified in ADR-0067 (accepted 2026-10-30; its `Host` and `Origin` checks, the next section, are built, the rest not yet), a prerequisite of the workspace hub (ADR-0065, accepted the same day); until it is built, every writing client runs beside the hub.
 
 ### Hosts and web origins
 
@@ -44,7 +44,7 @@ Every request is checked before anything else (ADR-0067 decision 7, since revisi
 
 ### Write envelopes
 
-Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message and returned by the history route byte for byte, git-style trailers included (verified 2026-10-30, platform check AJ); no trailer is defined yet (ADR-0025 decision 2), and ADR-0065 and ADR-0067 (Proposed) define the first. A write without one is a **400** `message_required`. The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation is not a commit and takes `{ name, from }` with no message.
+Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message and returned by the history route byte for byte, git-style trailers included (verified 2026-10-30, platform check AJ); no trailer is defined yet (ADR-0025 decision 2), and ADR-0065 and ADR-0067 (accepted 2026-10-30, not yet built) define the first. A write without one is a **400** `message_required`. The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation is not a commit and takes `{ name, from }` with no message.
 
 ### Document identifiers
 

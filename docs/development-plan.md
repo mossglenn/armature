@@ -5,7 +5,8 @@ on 7 and 8 October 2026, pull requests #1 to #10; 5 on 18 October; 6 on 20 Octob
 22 October, except a standing hosted instance, deferred by decision on 22 October). Phase 8's
 Design Graph pull requests 1 to 4 are built (22 and 23 October); PR 5 waits for a paper or a
 larger store. ADR-0065 to ADR-0068 (the workspace hub, its store, authentication, authorization)
-are Proposed; ADR-0065 was verified on 30 October and is ready to accept.
+were proposed on 28 and 29 October; ADR-0065, ADR-0067 and ADR-0068 were accepted on 30 October
+after verification, none yet built; ADR-0066 stays Proposed.
 `.claude/SESSION.md` tracks day-to-day state against this plan. **Last reconciled with the code:**
 2026-10-30.
 
@@ -132,7 +133,7 @@ CoQui table.
 
 **Clients since 2026-10-21.** The table's last four rows are tools that exist or are planned
 rather than plausible ones: the viewer and Quiver are built, the MCP server and the Storyline
-bridge have plans. The workspace hub (ADR-0065, Proposed 2026-10-28) passed the two-client test
+bridge have plans. The workspace hub (ADR-0065, proposed 2026-10-28, accepted 2026-10-30) passed the two-client test
 on Quiver, the Storyline bridge and the MCP server, all three of which want a hub on the person's
 machine (ADR-0065 Context, decided 2026-10-30).
 
@@ -837,8 +838,8 @@ Work:
       and the store on loopback, with the viewer container (`docker/viewer.Dockerfile`) added so
       the hub need not be published at all. Left to decide: the server (a small VPS fits the
       compose file as is; PROJECT_CONTEXT named Railway or Render), and, before any writing
-      client reaches it from elsewhere, the `oidc` resolver, specified by ADR-0067 (Proposed
-      2026-10-29; its `Host` and `Origin` checks built 2026-10-30); an authenticating proxy is a
+      client reaches it from elsewhere, the `oidc` resolver, specified by ADR-0067 (accepted
+      2026-10-30; its `Host` and `Origin` checks built, the rest not yet); an authenticating proxy is a
       deployment of `header`, not the mechanism. (Server chosen 2026-10-21: a small virtual
       private server running the compose
       file as is, a DigitalOcean Droplet, over Railway, Render, Fly.io and App Platform, which
@@ -956,10 +957,10 @@ The decision records this plan reserved or produced, in number order, with their
 | 0063 | Outcome records name their source | 6 | Accepted and implemented 2026-10-20 | Constraint 20: a dataset has `producedBy` or an `externalRef`, a metric `derivedFrom` or an `externalRef`; closes the rule deferred since Phase 1; the seed gains one administration so Narrative 1 walks on `main` |
 | 0062 | Operator repair is a commit outside the plugin API | 7 (the toolkit), or on the first repair that needs it | Accepted and implemented 2026-10-22 (proposed 2026-10-20) | Gives 0024 decision 5 its meaning; 0025 decision 6 holds for operators; three tools (`check`, `delete`, `put --unchecked`) reusing the adapter and the invariants engine in-process; no superuser mode and no raw query route on `/api/v1` (§8) |
 | 0064 | `ActivityGroup` is `Lesson` | Decided 2026-10-22, outside a phase | Accepted and implemented 2026-10-22 | Renames the class and its two junctions (`ModuleLessonLink`, `LessonActivityLink`); constraints 3, 4 and 6 keep their numbers; the module-content read says `kind: "lesson"`; annotates 0003 and 0005 |
-| 0065 | The workspace hub | After Phase 8 (`docs/workspace-hub-plan.md`) | Proposed 2026-10-28; verified 2026-10-30, ready to accept | The hub's own code in a second mode on a person's machine; workspaces are branches created on the remote, cloned from its export and pushed back through its API; branches, merges and Users stay on the remote; passed the two-client test on Quiver, the Storyline bridge and the MCP server |
+| 0065 | The workspace hub | After Phase 8 (`docs/workspace-hub-plan.md`) | Accepted 2026-10-30 (proposed 2026-10-28, verified 2026-10-30); not yet built | The hub's own code in a second mode on a person's machine; workspaces are branches created on the remote, cloned from its export and pushed back through its API; branches, merges and Users stay on the remote; passed the two-client test on Quiver, the Storyline bridge and the MCP server |
 | 0066 | The workspace hub's store | With 0065 (plan step 6) | Proposed 2026-10-29 | A folder of files behind an adapter interface, TerminusDB the test bed meanwhile; amends 0055 decision 1 on acceptance; names TerminusDB's JSON patch as the diff route's format (decision 5) and check AI for Hash identifiers (decision 6) |
-| 0067 | Authentication | Prerequisite of 0065 (plan §14) | Proposed 2026-10-29; decision 7 built 2026-10-30; decision 10 added 2026-10-30 | The `oidc` resolver, agents acting for people with a hub-written `Armature-On-Behalf-Of` trailer, services and relays; decision 7 is the loopback boundary (`app/lib/api/boundary.ts`, 403 `host_not_allowed` and `origin_not_allowed`); decision 10 confines an agent's own writes to a workspace hub |
-| 0068 | Authorization | Prerequisite of 0065, built whole before its push (plan §14) | Proposed 2026-10-29; decision 9 added 2026-10-30 | `Grant` documents on `main`, branch ownership, only a maintainer merges into `main`, 403 `forbidden`; adds one class, so it lands with a schema change; decision 9: a workspace hub does not authorize, the remote refuses at push |
+| 0067 | Authentication | Prerequisite of 0065 (plan §14) | Accepted 2026-10-30 (proposed 2026-10-29); decision 7 built 2026-10-30, the rest not yet; decision 10 added 2026-10-30 | The `oidc` resolver, agents acting for people with a hub-written `Armature-On-Behalf-Of` trailer, services and relays; decision 7 is the loopback boundary (`app/lib/api/boundary.ts`, 403 `host_not_allowed` and `origin_not_allowed`); decision 10 confines an agent's own writes to a workspace hub |
+| 0068 | Authorization | Prerequisite of 0065, built whole before its push (plan §14) | Accepted 2026-10-30 (proposed 2026-10-29); not yet built; decision 9 added 2026-10-30 | `Grant` documents on `main`, branch ownership, only a maintainer merges into `main`, 403 `forbidden`; adds one class, so it lands with a schema change; decision 9: a workspace hub does not authorize, the remote refuses at push |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -1038,7 +1039,7 @@ what evidence would be enough.
   `createdBy`. Evidence: the AI design assistant reference client becoming real, or a research
   question that needs the distinction. *Noted 2026-10-30:* the evidence arrived, in Quiver's
   drafter and lint agents (2026-10-28) and the MCP server plan (`docs/mcp-server-plan.md`).
-  ADR-0067 decision 3 (Proposed 2026-10-29) records whom an agent acted for in a hub-written
+  ADR-0067 decision 3 (accepted 2026-10-30, not yet built) records whom an agent acted for in a hub-written
   `Armature-On-Behalf-Of` trailer on the commit message, with the agent as the commit's author
   and the record's `createdBy`; decision 10 (2026-10-30) confines an agent's own writes to a
   workspace hub, so they reach a remote only through its push, acting for the workspace's owner.
@@ -1139,7 +1140,7 @@ what evidence would be enough.
   network. *Evidence arrived 2026-10-26 to 2026-10-30:* four writing clients elsewhere: Quiver on
   a person's two machines, the MCP server's remote mode, the Storyline bridge on the designer's
   machine, and the workspace hub's push. *Resolved in draft by ADR-0067 (authentication) and
-  ADR-0068 (authorization), both Proposed 2026-10-29*, prerequisites of the workspace hub
+  ADR-0068 (authorization), both proposed 2026-10-29 and accepted 2026-10-30*, prerequisites of the workspace hub
   (ADR-0065). The build order is `docs/workspace-hub-plan.md` §14: ADR-0067 decision 7, the
   `Host` and `Origin` checks, first and on its own (built 2026-10-30, `app/lib/api/boundary.ts`);
   ADR-0068 whole and ADR-0067 decisions 3, 6 and 8 before the workspace hub's push; the rest of

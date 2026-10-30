@@ -41,7 +41,7 @@ No single division of plugins holds: designer against administrator, or who inst
 
 1. **Who is in the loop**, which is when it acts. *Interactive*: a person works in it. *Agent*: an AI acting as a `User`. *Batch*: run on demand or on a schedule. *Gate*: checks a change before it lands. The matrix's columns are grouped by this dimension, since a demo set is best with one of each; today no gate is built or planned.
 2. **Acts as whom.** The person using it; a service or agent `User`; or nobody, because it only reads.
-3. **Where it runs.** The designer's machine, beside the hub on its server's network, or anywhere. This mostly follows from dimension 2 and the hub's identity system rather than from the plugin: under the `header` resolver the hub trusts its caller, so it is reachable only from its own server or network (`deployment.md`, "A client on the same server"), and every client elsewhere waits for the `oidc` resolver, specified in ADR-0067 (Proposed), which also decides the reads question: under `oidc` every request needs a token, `/discover` excepted. A tool on a person's machine is planned to talk to a workspace hub there instead (ADR-0065, Proposed). The link between a plugin and a hub is a credential, not an installation: with OIDC, any designer can host CoQui on a Droplet for their SMEs.
+3. **Where it runs.** The designer's machine, beside the hub on its server's network, or anywhere. This mostly follows from dimension 2 and the hub's identity system rather than from the plugin: under the `header` resolver the hub trusts its caller, so it is reachable only from its own server or network (`deployment.md`, "A client on the same server"), and every client elsewhere waits for the `oidc` resolver, specified in ADR-0067 (accepted 2026-10-30, not yet built), which also decides the reads question: under `oidc` every request needs a token, `/discover` excepted. A tool on a person's machine is planned to talk to a workspace hub there instead (ADR-0065, accepted 2026-10-30). The link between a plugin and a hub is a credential, not an installation: with OIDC, any designer can host CoQui on a Droplet for their SMEs.
 4. **Whose rules configure it.** Personal, team or project, or institutional. Only Lint has configuration that matters so far, and it could be any of the three; where a rule set lives (in the plugin, or as records in the graph, versioned and inspectable like everything else) is Lint's question until a second configurable tool exists.
 
 **A gate has no mechanism in the hub.** `/api/v1` has no events, no webhooks and no checks the merge route calls, so a gate today either polls (`GET /branches/:name/changes?since=`) or runs inside the client before it acts, as Quiver plans to. An administrator "installing a linter" as policy needs merge-time checks the hub runs, close to Quiver's first ask (the merge route running the invariants engine over the merged state), which already passes the two-client test. The matrix carries this as **Reacting to changes**, marked *Partial*.
@@ -56,20 +56,20 @@ No single division of plugins holds: designer against administrator, or who inst
 | Ripple | Interactive | The person | Beside the hub |
 | Crosswalk | Interactive | The person: mapper or SME | Beside the hub |
 | Whyfinder | Interactive | Nobody | The reader's browser |
-| MCP server | Agent | Nobody when reading; an agent `User` when writes are on | The person's machine (stdio), through a workspace hub (ADR-0065, Proposed); beside the hub over HTTP |
+| MCP server | Agent | Nobody when reading; an agent `User` when writes are on | The person's machine (stdio), through a workspace hub (ADR-0065, accepted 2026-10-30); beside the hub over HTTP |
 | Formalizer | Agent | An agent `User` | Beside the hub |
-| Storyline bridge | Batch | The person running it | The designer's Windows machine (through a workspace hub, ADR-0065, Proposed) |
+| Storyline bridge | Batch | The person running it | The designer's Windows machine (through a workspace hub, ADR-0065, accepted 2026-10-30) |
 | DataShop bridge | Batch | A service `User` | Beside the hub |
 | Q-matrix exporter | Batch | Nobody | Anywhere the export reaches |
 | Experiment bridge | Batch | The person setting up conditions | Beside the hub |
 | Torus bridge | Batch | A service `User` | Beside the hub |
-| LEED importer | Batch | The person importing | The designer's machine (through a workspace hub, ADR-0065, Proposed) |
+| LEED importer | Batch | The person importing | The designer's machine (through a workspace hub, ADR-0065, accepted 2026-10-30) |
 | Drift | Batch | A service `User` | Beside the hub |
 | Projection | Batch | Nobody | Anywhere the export reaches |
 | Process miner | Batch | Nobody | A study's machine, over a pseudonymous export |
 | Response tracker | Batch | Nobody | Beside the hub |
 | Structure analyzer | Batch | Nobody; a person keeps its proposals as findings | Anywhere the export reaches |
-| Lint | Gate | Nobody; a person keeps a violation as a finding | The designer's machine before a push (through a workspace hub, ADR-0065, Proposed); beside the hub as policy, once merge-time checks exist |
+| Lint | Gate | Nobody; a person keeps a violation as a finding | The designer's machine before a push (through a workspace hub, ADR-0065, accepted 2026-10-30); beside the hub as policy, once merge-time checks exist |
 
 ## The matrix
 

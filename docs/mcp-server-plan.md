@@ -16,7 +16,7 @@ What it must demonstrate, in order of weight:
 
 1. **Design questions answered from structure, at a named commit.** "Which objectives in this module are under-assessed, and why?" is a coverage read and an alignment read, and the answer says which commit it describes.
 2. **The hub's rules hold for agents as for people.** An agent asking for a per-person summary is refused by the hub, not by a prompt (ADR-0021). An agent's writes go through the same pipeline and invariants as anyone's (plan P5).
-3. **Agent work is attributable and reviewable.** What the agent writes is credited to an agent `User`, lands on a branch, and reaches `main` only when a person merges it (ADR-0032 decision 7, ADR-0028's endorsement). *Since 2026-10-30:* ADR-0068 (Proposed) makes this a rule the hub enforces (only a maintainer merges into `main`), ADR-0067 decision 3 records the person the agent worked for, and ADR-0067 decision 10 confines an agent's writes to a workspace hub on the person's machine (§7).
+3. **Agent work is attributable and reviewable.** What the agent writes is credited to an agent `User`, lands on a branch, and reaches `main` only when a person merges it (ADR-0032 decision 7, ADR-0028's endorsement). *Since 2026-10-30:* ADR-0068 (accepted 2026-10-30, not yet built) makes this a rule the hub enforces (only a maintainer merges into `main`), ADR-0067 decision 3 records the person the agent worked for, and ADR-0067 decision 10 confines an agent's writes to a workspace hub on the person's machine (§7).
 4. **A client built from discovery.** The server learns what the hub offers from `GET /discover` and offers tools accordingly (ADR-0059).
 
 Constraints from the rest of the project, which hold throughout:
@@ -164,7 +164,7 @@ Every tool returns two forms of the same answer:
 
 **The person's acceptance is an endorsement.** A proposal reaches `main` when a person merges the branch, with their own identity, in a tool that writes as them (CoQui today; the viewer reads only). A person who wants their acceptance recorded on the record itself writes a claimless `Attestation` (ADR-0028), which is the endorsement the AI design assistant reference client needs. The server does not write attestations, because the attester must be the caller (rule 15) and the server is the agent.
 
-**Acting on someone's behalf: modeled since ADR-0067 (Proposed 2026-10-29).** *As first drafted this paragraph was headed "Not modeled".* An assistant session is a person and an agent together, and the honest record is "the agent proposed, at this person's request". ADR-0032 decision 7 deferred delegation until the AI design assistant was real; this server and Quiver's drafter were that evidence, and ADR-0067 decision 3 is the answer: the agent is the author, the person is in the hub-written `Armature-On-Behalf-Of` trailer, and a client that sends that trailer itself is refused (decision 6, 400 `reserved_trailer`). Until it is built the hub records the agent only, and the person who ran the session is not in the graph.
+**Acting on someone's behalf: modeled since ADR-0067 (proposed 2026-10-29, accepted 2026-10-30).** *As first drafted this paragraph was headed "Not modeled".* An assistant session is a person and an agent together, and the honest record is "the agent proposed, at this person's request". ADR-0032 decision 7 deferred delegation until the AI design assistant was real; this server and Quiver's drafter were that evidence, and ADR-0067 decision 3 is the answer: the agent is the author, the person is in the hub-written `Armature-On-Behalf-Of` trailer, and a client that sends that trailer itself is refused (decision 6, 400 `reserved_trailer`). Until it is built the hub records the agent only, and the person who ran the session is not in the graph.
 
 **Confirmation.** A host asks the person before it runs a tool that is not read-only; the write tools' descriptions say exactly what will be written and where, so that approval is informed. An elicitation form could ask for a confirmation of the proposal's text as well; §13 question 6 explains why the plan does not rely on one.
 
@@ -276,7 +276,7 @@ Each with the options and the recommendation the plan above is written to.
    - (b) The person running the assistant.
    - (c) The agent, recording the person it acts for.
 
-   *Recommendation: (a) now, (c) when the OIDC ADR decides delegation.* (b) credits the person with the agent's words, against P5. *Decided in ADR-0067 decision 3 (Proposed 2026-10-29): (c), the agent as author with the person in a hub-written `Armature-On-Behalf-Of` trailer; (a) remains the interim form under `header` (decision 8).*
+   *Recommendation: (a) now, (c) when the OIDC ADR decides delegation.* (b) credits the person with the agent's words, against P5. *Decided in ADR-0067 decision 3 (proposed 2026-10-29, accepted 2026-10-30): (c), the agent as author with the person in a hub-written `Armature-On-Behalf-Of` trailer; (a) remains the interim form under `header` (decision 8).*
 
 6. **Confirming a write.**
    - (a) The host's own approval of each tool call, with precise descriptions and `destructiveHint: false`.
