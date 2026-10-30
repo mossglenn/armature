@@ -38,6 +38,10 @@ Every route that changes data needs an identity (ADR-0032). Under the default `h
 
 The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself. An `oidc` (OpenID Connect) resolver is named but not built.
 
+### Hosts and web origins
+
+Every request is checked before anything else (ADR-0067 decision 7, since revision 2026-10-30). The hub answers a request whose `Host` is a loopback name (`localhost`, `127.0.0.1`, `[::1]`, or a name under `.localhost`, any port) or a name listed in `ARMATURE_ALLOWED_HOSTS`; any other is **403** `host_not_allowed`, so a web page that points its own domain at the hub's machine (DNS rebinding) is refused. A request with an `Origin` header, which browsers send, is **403** `origin_not_allowed` when the origin is `null` or a remote web origin not listed in `ARMATURE_ALLOWED_ORIGINS`; loopback origins and non-web schemes such as `tauri://localhost` (a desktop shell) are served. Only a listed origin gets CORS (cross-origin resource sharing) answers: `OPTIONS` preflights (204), and `Access-Control-Allow-Origin` with `ETag` and `Armature-Version` exposed on every response, refusals included. Tools outside a browser send no `Origin` and need nothing.
+
 ### Write envelopes
 
 Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message. A write without one is a **400** `message_required`. The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation is not a commit and takes `{ name, from }` with no message.
@@ -406,6 +410,7 @@ The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, cate
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
 | 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused`, `unknown_profile`, `unknown_slice` | Route-specific refusals |
 | 401 | `identity_required`, `unknown_user` | No identity, or an unregistered one |
+| 403 | `host_not_allowed`, `origin_not_allowed` | A host name or a web origin this hub does not serve (Hosts and web origins) |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit |
 | 409 | `type_conflict` | An identifier held by another type (rule 12) |
 | 409 | `user_exists`, `branch_exists` | Already registered or created |

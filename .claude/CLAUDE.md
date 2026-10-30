@@ -92,6 +92,7 @@ app/
     hub.test.ts            # The standalone host over a real socket on an ephemeral port: the same answers as app.request(), a write with If-Match, a clean stop
     api/
       app.ts               # The Armature API: Hono app, basePath /api/v1, mounts routes/, onError mapping. Never imports from next
+      boundary.ts          # The loopback boundary (ADR-0067 decision 7, built 2026-10-30): the first middleware; refuses a Host that is not loopback or in ARMATURE_ALLOWED_HOSTS (403 host_not_allowed, DNS rebinding) and an Origin that is null or a remote web origin not in ARMATURE_ALLOWED_ORIGINS (403 origin_not_allowed; tauri:// and loopback origins served); CORS for listed origins only; boundary.test.ts
       app.test.ts          # In-process Vitest tests via app.request(): reads, the Phase 2 walkthrough, users and identity; need the container running (users tests write to and clean up main)
       client.test.ts       # The contract test for @armature/client: every route through the client's fetch option over app.request (refs, commit from ETag, If-Match → 412, identity, envelopes, HubError codes)
       write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
