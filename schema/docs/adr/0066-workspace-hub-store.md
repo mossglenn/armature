@@ -35,7 +35,11 @@ store, and leaves the choice to its plan. Four facts bear on it.
    merges, creates a branch or deletes (ADR-0065 decisions 3 and 6), so what its store must do is
    narrower still: documents at the head, a log of local commits, and reads at those commits, at
    the base and at the subject snapshots of plan §8. The adapter (`app/lib/api/store.ts`) is a
-   concrete class imported by 23 modules.
+   concrete class imported by 26 modules outside the tests (counted 2026-10-30: 24 under
+   `app/lib/api/`, the two operator modules; 15 of them take the class, `createStore` or
+   `StoreError` as values, the rest only types). ADR-0055 decision 2's request-scoped
+   construction stays the interface's contract (`createStore(ref)` per request); a file store may
+   keep the workspace's in-memory index behind it.
 
 2. **TerminusDB is hard to put on a person's machine** (checked 2026-10-28, plan §10). Its GitHub
    releases v12.0.6 to v12.1.0-rc1 carry no binaries; Linux has a Snap package; there is no
