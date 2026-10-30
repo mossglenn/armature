@@ -18,6 +18,8 @@ The hub needs the TerminusDB container running with the schema and seed loaded (
 | `TERMINUS_PASS` | Its password; must match `TERMINUSDB_ADMIN_PASS` given to the container | `admin` |
 | `TERMINUS_DB` | Database name | `armature` |
 | `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local | `header` |
+| `ARMATURE_ALLOWED_HOSTS` | Optional, comma-separated. Host names the hub answers besides loopback ones (ADR-0067 decision 7); the compose file sets `hub` | none |
+| `ARMATURE_ALLOWED_ORIGINS` | Optional, comma-separated. Web origins whose pages may call the hub from a browser, and get CORS answers; other remote web origins are refused | none |
 | `ARMATURE_EXPORT_KEY` | Optional. The key under which `GET /api/v1/export?profile=pseudonymous` derives user tokens (ADR-0031); set it so the same person has the same token in every export, leave it unset and each export mints its own | unset |
 | `PORT`, `HOST` | The hub (`npm run start:hub` and the container): where it listens. Loopback by default because the `header` resolver trusts the caller; the container sets `HOST=0.0.0.0` inside its own network and `docker-compose.yml` confines what is published | `3100`, `127.0.0.1` |
 | `ARMATURE_HUB_URL` | The viewer only: the hub its pages read. The one variable the viewer needs; it reads no `TERMINUS_*` | `http://localhost:3100` |

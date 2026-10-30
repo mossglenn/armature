@@ -360,6 +360,7 @@ Every refusal is a `HubError` with a stable `code`. A tool branches on the code,
 | 400 | `bad_id`, `id_mismatch`, `type_mismatch`, `duplicate_id`, `duplicate_capture`, `invalid_type`, `message_required`, `unknown_field` | The request disagrees with itself or with the route | The same |
 | 400 | `unsupported_version`, `unsupported_capability` | The hub does not serve the revision or feature the tool declared (Section 15) | Stop and say so; the `details` list what the hub supports |
 | 401 | `identity_required`, `unknown_user` | No `user`, or one not registered on `main` | Register the user, or ask who the caller is |
+| 403 | `host_not_allowed`, `origin_not_allowed` | The hub does not answer to the name the tool called it by, or to the web page the request came from | Call the hub by a loopback name or one its administrator lists in `ARMATURE_ALLOWED_HOSTS`; a page in a browser needs its origin in `ARMATURE_ALLOWED_ORIGINS` |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit | The tool's view is stale, or the identifier is from another instance |
 | 409 | `type_conflict` | The identifier is held by a document of another type (rule 12) | Mint a different identifier; identifiers are never reused across types |
 | 409 | `branch_exists`, `user_exists`, `unmerged_branch`, `branch_moved`, `registration_conflict` | Branch and user bookkeeping | Usually fine to treat as done (`branch_exists`, `user_exists`) or retry once |

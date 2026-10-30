@@ -13,6 +13,12 @@
 
 Proposed (2026-10-29). Nothing is built on it.
 
+**Note 2026-10-30, built:** decision 7 is built, ahead of the rest as recommended:
+`app/lib/api/boundary.ts`, the first middleware on every request, with `boundary.test.ts` and a
+raw-socket case in `hub.test.ts`; the compose file sets `ARMATURE_ALLOWED_HOSTS=hub`; contract
+revision 2026-10-30. Building it corrected the Context and refined the decision (the notes
+beside each).
+
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065). Decision 7 is built first;
 decisions 3, 6 and 8, with the client's `agent` option, before the workspace hub's push; the rest
 (decisions 1, 2, 4, 5 and 9) before its release (`docs/workspace-hub-plan.md` §14).
@@ -82,6 +88,12 @@ beside the instance call the hub as `http://hub:3100` (`docker/docker-compose.ym
 it expects are configurable, not only `localhost`. Quiver calls the hub through Tauri's HTTP
 plugin, outside the browser engine, so an origin rule does not touch it.
 
+> **Later change (2026-10-30):** the last sentence is wrong. Tauri's HTTP plugin adds an `Origin`
+> header to every request, its webview's origin (`tauri://localhost` on macOS and Linux, a
+> loopback URL in development; `tauri-plugin-http` 2.8.3, `src/commands.rs`), unless built with
+> its `unsafe-headers` feature, which Quiver does not use. Decision 7 therefore serves such
+> origins (the note there).
+
 ## Decision
 
 1. **The `oidc` resolver verifies a signed token.** A request carries `Authorization: Bearer
@@ -142,6 +154,15 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    did not allow cannot write as them. The checks run first, before identity is resolved, as
    middleware beside `negotiate` (ADR-0059), so a refused request reaches no route. This decision
    stands alone and is recommended to be built first (Status).
+
+   > **Later change (2026-10-30, as built):** the origin rule refuses `null` and remote web
+   > origins (`http` or `https` on a name that is not a loopback one) unless listed, and serves
+   > the rest without CORS answers: loopback origins, which are pages served from this machine,
+   > and non-web schemes such as `tauri://localhost`, a desktop shell, both local programs the
+   > `header` resolver already trusts and neither forgeable by a web page. Names under
+   > `.localhost` count as loopback for both checks (RFC 6761). A listed origin's responses carry
+   > `Access-Control-Allow-Origin` and expose `ETag` and `Armature-Version`, refusals included;
+   > its preflights answer 204. The setting is read on each request.
 
 8. **`header` stays, bounded.** The `header` resolver remains the default for development, tests,
    a workspace hub's loopback and a private compose network, and reads `Armature-Agent` as
