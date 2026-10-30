@@ -81,6 +81,11 @@ store, and leaves the choice to its plan. Four facts bear on it.
    Only the workspace hub writes the folder: a lock file refuses a second process, and every file
    is written under a temporary name and renamed into place.
 
+   > **Note (2026-10-30):** ADR-0065's clone now holds as much as is reasonable (plan §16,
+   > question 3): `remote/at/` may hold a full export at each referenced `asOf` within a size
+   > budget, not only the subjects, and the folder may hold the branch's commit log. The layout's
+   > shape is unchanged; the budget's default comes from the measurement in Verification.
+
 3. **TerminusDB is the test bed first.** The plan's steps 2 to 5 (workspace mode, push, bring in
    and deliver, the subject snapshots) are built with TerminusDB as the local store, since its
    adapter exists and the contract suite already runs against it; a fault found then is in the

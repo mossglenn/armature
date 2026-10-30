@@ -26,6 +26,14 @@ behind an adapter interface, with TerminusDB as the test bed while steps 2 to 5 
 loopback boundary, and ADR-0068 (Proposed) for authorization, which enforces decision 2's
 ownership and replaces decision 7's refusal of agent writes.
 
+**Note 2026-10-30, decided before acceptance:** the workspace hub passes the two-client test,
+with the need documented in Context. Quiver pauses its development until the workspace hub is
+built, is its first real-world test, and its code (`sync/`, `workspace/`, `merge/`, `rules/`,
+`coverage/`) may be the basis of the workspace hub's. ADR-0067's `oidc` resolver is a
+prerequisite of the workspace hub. The plan's §16 records the rest: a desktop program for the
+first release candidate (question 1), a clone holding as much as is reasonable (question 3), the
+clone's slice to be determined (question 4), pseudonymous clones deferred (question 8).
+
 On acceptance it would annotate, not amend in substance:
 
 - **ADR-0025 decision 2**, which reserves git-style trailers in the commit message and defines
@@ -55,6 +63,17 @@ A second local-first client would build the same thing again. CoQui's offline au
 made client-supplied identifiers necessary (ADR-0024), and an importer or a bridge (the Storyline
 bridge plan) wants a scratch space it can write to before anyone sees the result. Two tools on one
 machine, an item manager and a review tool, should see the same workspace without a round trip.
+
+> **The two-client test (decided 2026-10-30).** The need is in three clients' own plans. Quiver
+> built its workspace, push, merge review and rules alone (its milestones 1 to 8, 2026-10-26 to
+> 2026-10-28) and asks for its rules as a package. The Storyline bridge must run on the designer's
+> machine beside Storyline, since it reads the project and package files there, and its plan
+> notes that under the `header` resolver it "writes only from the hub's own machine"
+> (`docs/storyline-bridge-plan.md`, "Reaching the hub"). The MCP server runs on the person's
+> machine as a stdio server and reads `ARMATURE_HUB_URL`, `http://localhost:3100` by default
+> (`docs/mcp-server-plan.md`), where a workspace hub would answer with the person's own work.
+> All three want a hub on the person's machine; Quiver and the bridge also want to write there
+> before anyone else sees the result.
 
 Three facts constrain the answer:
 
@@ -170,6 +189,8 @@ ship beside itself.
 
 - A local-first tool is a client of a hub like any other; Quiver's `sync/` and `workspace/`
   modules move into the workspace hub, and its folder of files can be the workspace hub's store.
+  > **Later change (2026-10-30):** Quiver pauses until the workspace hub is built and is its
+  > first real-world test; the workspace hub may be built from Quiver's modules.
 - The rules and the intelligence reads run on the person's machine with the hub's own code,
   which requires them to work through an adapter interface rather than the concrete class.
 - Local commit identifiers are provisional. Pushed commits get the remote's identifiers and the
@@ -177,6 +198,8 @@ ship beside itself.
 - History offline starts at the base. Reads at older commits, and the subject states that
   constraints 13 and 16 and the attestation staleness read need for records cloned with an older
   `asOf`, need either a larger clone or the remote (plan §8).
+  > **Later change (2026-10-30):** the clone holds as much as is reasonable, so that as many of
+  > the hub's reads as possible work offline (plan §8 and §16, question 3).
 - A store other than TerminusDB under a workspace hub must reproduce two of TerminusDB's formats
   that cross the API: the identifiers it mints for Hash-keyed classes, so a local record names the
   same junction the remote holds, and the JSON patch the diff route returns (plan §10).
@@ -184,4 +207,6 @@ ship beside itself.
   > `docs/api.md` as the route's format, and Hash identifiers are reproduced if check AI shows
   > how, else mapped at push, since Quiver found them not reproducible from the key fields.
 - The remote needs the `oidc` resolver before a workspace hub on another machine can push.
+  > **Later change (2026-10-30):** the `oidc` resolver (ADR-0067) is a prerequisite of the
+  > workspace hub, not only of a push from another machine.
 - Nothing changes for a client that talks to a remote hub directly.

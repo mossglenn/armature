@@ -87,7 +87,9 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    (`RS256`, `ES256`, `EdDSA`). A person's token resolves by `sub` as the `externalId`; first
    encounter registers a `User` when the token carries `name` (ADR-0032 decision 3, already
    built). One issuer per instance. Under `oidc` every request needs a token, reads included; a
-   service that only reads, such as the viewer, holds its own (decision 4).
+   service that only reads, such as the viewer, holds its own (decision 4). The one exception is
+   `GET /discover`, which stays open as it is today (ADR-0059): it says how to authenticate, so a
+   client must be able to read it before it can sign in.
 
 2. **A native client signs in as the person.** The workspace hub, Quiver and the Storyline bridge
    use the authorization code flow with PKCE (Proof Key for Code Exchange) and a loopback redirect,
@@ -148,7 +150,9 @@ plugin, outside the browser engine, so an origin rule does not touch it.
 9. **Discovery says how to authenticate.** `GET /discover` names the resolver, the issuer and
    audience under `oidc`, and the headers a client may send (`Armature-Agent`, and
    `Armature-User` for a relay). `@armature/client` gains a `token` option and an `agent` option,
-   and the change is a dated contract revision (ADR-0059).
+   and the change is a dated contract revision (ADR-0059). For native programs it also names the
+   client id they sign in with, which with the issuer and audience is what the workspace hub's
+   connection profile carries (`docs/workspace-hub-plan.md` §16, question 12).
 
 ## Alternatives considered
 
