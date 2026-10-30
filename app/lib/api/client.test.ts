@@ -16,7 +16,7 @@ const stamp = Date.now().toString(36);
 const BRANCH = `test-client-${stamp}`;
 
 const hub = createClient({
-  baseUrl: 'http://hub.test/',
+  baseUrl: 'http://hub.localhost/',
   user: 'demo-designer@example.edu',
   fetch: (input, init) => app.request(input, init),
 });
@@ -131,7 +131,7 @@ describe('@armature/client over the app in-process', () => {
   });
 
   it('refuses a write without an identity', async () => {
-    const anonymous = createClient({ baseUrl: 'http://hub.test', fetch: (input, init) => app.request(input, init) });
+    const anonymous = createClient({ baseUrl: 'http://hub.localhost', fetch: (input, init) => app.request(input, init) });
     const err = await anonymous.branches.create(`anon-${stamp}`).catch((e) => e);
     // Branch creation is not a commit and needs no identity; a write does.
     expect(err).not.toBeInstanceOf(HubError);
@@ -224,13 +224,13 @@ describe('@armature/client over the app in-process', () => {
   });
 
   it('is refused by name when it relies on a capability the hub lacks, or names a revision it does not serve', async () => {
-    const reliant = createClient({ baseUrl: 'http://hub.test', fetch: (i, init) => app.request(i, init), capabilities: ['armature/documents', 'edu.example/retention-policy'] });
+    const reliant = createClient({ baseUrl: 'http://hub.localhost', fetch: (i, init) => app.request(i, init), capabilities: ['armature/documents', 'edu.example/retention-policy'] });
     const cap = await reliant.branches.list().catch((e) => e);
     expect(cap).toBeInstanceOf(HubError);
     expect(cap.code).toBe('unsupported_capability');
     expect(cap.details.unsupported).toEqual(['edu.example/retention-policy']);
 
-    const future = createClient({ baseUrl: 'http://hub.test', user: 'demo-designer@example.edu', fetch: (i, init) => app.request(i, init), version: '2099-01-01' });
+    const future = createClient({ baseUrl: 'http://hub.localhost', user: 'demo-designer@example.edu', fetch: (i, init) => app.request(i, init), version: '2099-01-01' });
     expect((await future.branches.list()).version).toBe(CLIENT_REVISION); // a read is served
     const write = await future.branches.create(`future-${stamp}`).catch((e) => e); // a write is not
     expect(write).toBeInstanceOf(HubError);

@@ -27,7 +27,7 @@
 import type { ClassMap, ClassName, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-10-22';
+export const CLIENT_REVISION = '2026-10-30';
 
 // ── Options and results ──────────────────────────────────────────────────────
 

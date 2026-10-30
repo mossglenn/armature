@@ -17,10 +17,13 @@
  * route (ADR-0031): the graph at a commit under a profile and a slice;
  * Phase 7 adds the per-request version contract (ADR-0059): the
  * Armature-Version and Armature-Capabilities headers, read by `negotiate`
- * on every request, and the discovery and schema routes.
+ * on every request, and the discovery and schema routes. Phase 8 adds the
+ * loopback boundary (ADR-0067 decision 7): `boundary` refuses a request from a
+ * host or a web origin the hub does not serve, before anything else runs.
  */
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { boundary } from './boundary';
 import { ApiError } from './errors';
 import { branches } from './routes/branches';
 import { discover } from './routes/discover';
@@ -33,6 +36,9 @@ import { CURRENT_REVISION, negotiate } from './version';
 
 export const app = new Hono().basePath('/api/v1');
 
+// The loopback boundary first (ADR-0067 decision 7): a request from a host or a
+// web origin the hub does not serve is refused before anything else reads it.
+app.use('*', boundary);
 app.use('*', negotiate);
 
 app.route('/documents', documents);
