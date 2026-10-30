@@ -1,10 +1,13 @@
 # Armature Development Plan
 
-**Date:** 2026-10-05 · **Status:** Adopted; the project's roadmap. Phases 0 to 4 are done (7 and 8
-October 2026, pull requests #1 to #10); ADR-0057 was accepted and built on 18 October 2026; next
-is the rest of Phase 5.
+**Date:** 2026-10-05 · **Status:** Adopted; the project's roadmap. Phases 0 to 7 are done (0 to 4
+on 7 and 8 October 2026, pull requests #1 to #10; 5 on 18 October; 6 on 20 October; 7 on 21 and
+22 October, except a standing hosted instance, deferred by decision on 22 October). Phase 8's
+Design Graph pull requests 1 to 4 are built (22 and 23 October); PR 5 waits for a paper or a
+larger store. ADR-0065 to ADR-0068 (the workspace hub, its store, authentication, authorization)
+are Proposed; ADR-0065 was verified on 30 October and is ready to accept.
 `.claude/SESSION.md` tracks day-to-day state against this plan. **Last reconciled with the code:**
-2026-10-08.
+2026-10-30.
 
 **How to read this plan.** §1 states nine principles (P1 to P9) taken from the position paper;
 later sections cite them by label. §2 names the reference clients and the two-client test that
@@ -100,7 +103,7 @@ the minimal generic form and lets the client carry its own vocabulary in a refer
 
 ## 2. Reference clients: the test for every ask
 
-To avoid shaping the hub for CoQui, the plan names nine plausible tools the paper implies or the
+To avoid shaping the hub for CoQui, the plan names nine plausible tools (and, since 2026-10-21, four real or planned ones in the table's last rows) the paper implies or the
 project has discussed, beside CoQui. They are not commitments to build anything. They are a checklist: an ask is
 adopted into the hub when at least two reference clients would need the same capability.
 
@@ -116,11 +119,22 @@ adopted into the hub when at least two reference clients would need the same cap
 | **Rich item authoring tool** | Author drag-and-drop, hotspot and media-bearing items on a shared item bank | Items as a tree of addressable fragments, typed or generic; attachment references on fragments; interaction types with versioned renderers; impact analysis when a renderer or an image changes; the same review surface CoQui uses |
 | **Course builder** | Generate a deliverable course (SCORM, cmi5, xAPI) from the design at one commit, for instance by an AI assistant writing a course framework's pages | The ordered module-content view (ADR-0005); the course tree read at one commit; interaction types with renderable data shapes, keyed to `cmi.interaction` (ADR-0034); its source commit, stamped into the package as the results' `asOf` (ADR-0057); assessment settings as data |
 | **Complex learning object designer** (distant) | Develop simulations and other multi-file learning objects, with their own asset store or the hub's | References to a revision of an asset tree, with hash and reason; impact analysis when an asset revision moves; attestations and findings against a revision; the asset store's history reachable, not replayed |
+| **The viewer** (built; this repository) | Armature's own read-only pages: the module index, the Coverage View, the Design Graph | Coverage, item statistics, module content, export and branches, every read at a ref; no write |
+| **Quiver** (built 2026-10-26 to 28, paused 2026-10-30; `mossglenn/quiver`) | A local-first item manager: a workspace bound to a branch, offline writes, push with `If-Match`, merge review | What ADR-0065 proposes: a hub on the person's machine, workspaces as branches cloned from the remote and pushed back through its API, the rules run locally |
+| **MCP server** (planned; `docs/mcp-server-plan.md`) | Lets an assistant ask the graph through a Model Context Protocol (MCP) server on the person's machine | The intelligence reads at a named commit; discovery (`GET /discover`); notes and findings written as an agent acting for a person (ADR-0067 decision 3) |
+| **Storyline bridge** (planned; `docs/storyline-bridge-plan.md`) | Records each Storyline build in the graph by hash and maps its interactions to items | A hub on the designer's Windows machine; findings for differences; metrics at a build's commit (`asOf`) |
 
 Three of these need **binary attachments** today or soon: the needs-analysis intake tool
 (evidence documents), CoQui (item media, eventually), and the outcomes importer (raw dataset
-exports). The last row needs **versioned asset references**, and is the reason the reference
-shape is versioned-tree-capable from the start. See the note below the CoQui table.
+exports). The complex learning object designer's row needs **versioned asset references**, and is
+the reason the reference shape is versioned-tree-capable from the start. See the note below the
+CoQui table.
+
+**Clients since 2026-10-21.** The table's last four rows are tools that exist or are planned
+rather than plausible ones: the viewer and Quiver are built, the MCP server and the Storyline
+bridge have plans. The workspace hub (ADR-0065, Proposed 2026-10-28) passed the two-client test
+on Quiver, the Storyline bridge and the MCP server, all three of which want a hub on the person's
+machine (ADR-0065 Context, decided 2026-10-30).
 
 **Course builder, added 2026-10-18.** No row took the design out to a deliverable course; the
 outcomes importer only brought results back in. Mapping Tessera, a course framework designed for
@@ -186,8 +200,9 @@ each other without either duplicating the other.
 
 When this plan was written, the API was eleven routes written one at a time (eight list reads, a
 coverage read and two writes; Phase 3 retired them). The target is five layers, each with a
-single responsibility, so that adding a type or a client does not mean adding routes. As of Phase
-4, layers 1 to 4 exist; the typed client package is Phase 7.
+single responsibility, so that adding a type or a client does not mean adding routes. Layers 1 to
+4 existed as of Phase 4; the typed client package exists since 2026-10-21 (`@armature/client`,
+Phase 7), so all five do.
 
 ```
 Plugins (CoQui, future tools)
@@ -236,10 +251,11 @@ TerminusDB
   store only through its HTTP adapter, with the resolved Armature `User` as author on every write.
   The JavaScript client stays in `scripts/`. This supersedes SESSION.md's earlier "JS client
   retained over raw HTTP" decision and the narrowing of it that this bullet previously recorded.
-- **Next.js stays the host for now; the API is a Hono app.** PROJECT_CONTEXT's "separate API
-  service" is reaffirmed as the long-term goal (ADR-0026). The API itself is a Hono application in
-  `app/lib/api/` that imports nothing from Next.js; a single catch-all route mounts it under the
-  versioned prefix (ADR-0054, accepted 2026-10-07 after a six-check spike). Moving hosts later is
+- **The API is a Hono app; its host is `app/server.ts` (since 2026-10-21).** PROJECT_CONTEXT's
+  "separate API service" was reaffirmed as the long-term goal (ADR-0026) when this was written.
+  The API itself is a Hono application in `app/lib/api/` that imports nothing from Next.js; a
+  single catch-all route mounted it under the versioned prefix (ADR-0054, accepted 2026-10-07
+  after a six-check spike). Moving hosts later is
   a deployment change plus a build configuration that resolves the `@/` alias, never a handler
   change. Every route Phases 2 to 6 add is a Hono route; the legacy Next.js handlers die in
   Phase 3. (The move was made on 2026-10-21, Phase 7: `app/server.ts` serves the same app
@@ -615,7 +631,7 @@ ADR-0057's `asOf`, accepted and built 2026-10-18; the test now reads coverage at
 CoQui receives: the coverage and alignment reads its Narrative 2 integration needs; nothing it
 asked for, which is the point. This phase exists for every client.
 
-### Phase 5: Review vocabulary: findings and attestations (1 to 2 sessions)
+### Phase 5: Review vocabulary: findings and attestations (1 to 2 sessions) — done 2026-10-18, PR #16
 
 **Goal.** Give the hub a minimal, tool-neutral way to record that someone judged an artifact, so
 "how those alignments were established and whether they have since changed" is answerable.
@@ -760,7 +776,7 @@ Work:
 Exit: an export at a commit, re-imported into an empty database, reproduces the graph; the
 pseudonymous profile contains no `displayName` or `email`.
 
-### Phase 7: Toolkit and deployment (2 sessions)
+### Phase 7: Toolkit and deployment (2 sessions) — done 2026-10-21 and 22, PRs #27 to #44, except a standing hosted instance (deferred by decision 2026-10-22)
 
 **Goal.** Make the boundary real for a second client and put a hub where stakeholders can reach
 it.
@@ -821,8 +837,10 @@ Work:
       and the store on loopback, with the viewer container (`docker/viewer.Dockerfile`) added so
       the hub need not be published at all. Left to decide: the server (a small VPS fits the
       compose file as is; PROJECT_CONTEXT named Railway or Render), and, before any writing
-      client reaches it from elsewhere, the `oidc` resolver (ADR-0032) or an authenticating
-      proxy. (Server chosen 2026-10-21: a small virtual private server running the compose
+      client reaches it from elsewhere, the `oidc` resolver, specified by ADR-0067 (Proposed
+      2026-10-29; its `Host` and `Origin` checks built 2026-10-30); an authenticating proxy is a
+      deployment of `header`, not the mechanism. (Server chosen 2026-10-21: a small virtual
+      private server running the compose
       file as is, a DigitalOcean Droplet, over Railway, Render, Fly.io and App Platform, which
       has no persistent volumes. Rehearsed the same day on a fresh Ubuntu 24.04 VM (Lima, 2
       virtual CPUs, 4 GB), which found three gaps, now closed: no restart policy, so nothing
@@ -906,7 +924,7 @@ the explainer's figure for it is exported from the page with its commit.
 ## 5. ADR queue
 
 The decision records this plan reserved or produced, in number order, with their status as of
-2026-10-08. The full index of all decision records is `schema/docs/adr/README.md`. Numbers 0035 to
+2026-10-30. The full index of all decision records is `schema/docs/adr/README.md`. Numbers 0035 to
 0053 are research candidates (`docs/research/adr-candidates.md`), not decisions.
 
 | ADR | Title | Phase | Status | Notes |
@@ -927,7 +945,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0032 | Identity resolution | 3 | Accepted and implemented | Implements ADR-0015's boundary; pluggable resolver; `main` is the `User` registry; carried copies on branches; author and `createdBy` from the resolved identity |
 | 0033 | Items as a tree of fragments | 1 (shape), later (generic kinds) | Accepted; shape implemented | Abstract `Fragment` subdocument; `ItemOption` as a specialization; generic kinds with `sys:JSON` payload and per-kind validation land with the first non-text item type |
 | 0034 | Interaction types and renderers as versioned artifacts | When the first non-text item type is needed | Reserved, not written | `InteractionType` registry with version, data shape and renderer reference; the eight `ItemType` values become built-ins; renderer contract (H5P and QTI PCI, Portable Custom Interactions, as precedents); the hub never serves executable content from a graph document, and renderers load sandboxed under a content security policy (CSP) |
-| 0054 | The API is a Hono application | 0 | Accepted 2026-10-07 | Amends ADR-0026 decision 1; host-neutral app in `app/lib/api/`, one catch-all mount; numbered past the reserved and candidate blocks |
+| 0054 | The API is a Hono application | 0 | Accepted 2026-10-07 | Amends ADR-0026 decision 1; host-neutral app in `app/lib/api/`, served by `app/server.ts` since 2026-10-21 (the catch-all mount until then); numbered past the reserved and candidate blocks |
 | 0055 | The API layer reaches TerminusDB over HTTP | 2 | Accepted 2026-10-08 | One `fetch` adapter under `app/lib/api/`; the JavaScript client stays in `scripts/`; supersedes the "keep the JS client" decision and the earlier §3 split |
 | 0056 | Coverage is computed on read, never stored | 4 | Accepted 2026-10-08 | Supersedes ADR-0007's computed field and ADR-0029 decisions 4 to 6; the graph stores decisions and observations, the reads derive the rest |
 | 0057 | Records that refer to a state of the graph name its commit (`asOf`) | Before or with Phase 5 (needed by Phase 6) | Accepted and implemented 2026-10-18 | `LearningDataset`, `LearningMetric`, `DesignFinding`, Attestation; the hub fills the branch head on create, keeps it on replace, copies a dataset's onto its metrics, and validates a supplied or kept id (rule 13); closes Narrative 1's "adequate when" |
@@ -937,6 +955,11 @@ The decision records this plan reserved or produced, in number order, with their
 | 0061 | Formative use of items inside activities | Decided 2026-10-20, outside a phase | Accepted and implemented 2026-10-20 | `ActivityItemLink` junction with optional `sequence` (constraint 17); counts toward no coverage; trace follows it; the module-content view nests it when built; annotates 0003, 0005, 0029 |
 | 0063 | Outcome records name their source | 6 | Accepted and implemented 2026-10-20 | Constraint 20: a dataset has `producedBy` or an `externalRef`, a metric `derivedFrom` or an `externalRef`; closes the rule deferred since Phase 1; the seed gains one administration so Narrative 1 walks on `main` |
 | 0062 | Operator repair is a commit outside the plugin API | 7 (the toolkit), or on the first repair that needs it | Accepted and implemented 2026-10-22 (proposed 2026-10-20) | Gives 0024 decision 5 its meaning; 0025 decision 6 holds for operators; three tools (`check`, `delete`, `put --unchecked`) reusing the adapter and the invariants engine in-process; no superuser mode and no raw query route on `/api/v1` (§8) |
+| 0064 | `ActivityGroup` is `Lesson` | Decided 2026-10-22, outside a phase | Accepted and implemented 2026-10-22 | Renames the class and its two junctions (`ModuleLessonLink`, `LessonActivityLink`); constraints 3, 4 and 6 keep their numbers; the module-content read says `kind: "lesson"`; annotates 0003 and 0005 |
+| 0065 | The workspace hub | After Phase 8 (`docs/workspace-hub-plan.md`) | Proposed 2026-10-28; verified 2026-10-30, ready to accept | The hub's own code in a second mode on a person's machine; workspaces are branches created on the remote, cloned from its export and pushed back through its API; branches, merges and Users stay on the remote; passed the two-client test on Quiver, the Storyline bridge and the MCP server |
+| 0066 | The workspace hub's store | With 0065 (plan step 6) | Proposed 2026-10-29 | A folder of files behind an adapter interface, TerminusDB the test bed meanwhile; amends 0055 decision 1 on acceptance; names TerminusDB's JSON patch as the diff route's format (decision 5) and check AI for Hash identifiers (decision 6) |
+| 0067 | Authentication | Prerequisite of 0065 (plan §14) | Proposed 2026-10-29; decision 7 built 2026-10-30; decision 10 added 2026-10-30 | The `oidc` resolver, agents acting for people with a hub-written `Armature-On-Behalf-Of` trailer, services and relays; decision 7 is the loopback boundary (`app/lib/api/boundary.ts`, 403 `host_not_allowed` and `origin_not_allowed`); decision 10 confines an agent's own writes to a workspace hub |
+| 0068 | Authorization | Prerequisite of 0065, built whole before its push (plan §14) | Proposed 2026-10-29; decision 9 added 2026-10-30 | `Grant` documents on `main`, branch ownership, only a maintainer merges into `main`, 403 `forbidden`; adds one class, so it lands with a schema change; decision 9: a workspace hub does not authorize, the remote refuses at push |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -999,7 +1022,12 @@ what evidence would be enough.
   7 and 8 show that the merge route applies the store's merge without running the invariants
   engine over the result, so a clean merge can violate a rule; whether the hub refuses such a
   merge or reports it is the policy to decide when those scenarios run (SESSION.md What's Next
-  item 12).*
+  item 12).* *Noted 2026-10-30:* who may merge is ADR-0068 decision 4 (a maintainer of `main`;
+  Proposed 2026-10-29). Running the invariants engine over the merged state, and a dry-run merge
+  that returns the conflict report without a commit, are asks in `docs/workspace-hub-plan.md`
+  §12 that pass the two-client test (CoQui's round merge and the outcomes importer; CoQui's
+  preview). The fragment-by-fragment review is placed in the workspace hub (ADR-0065 decision 6)
+  if that record is accepted.*
 - **Project boundaries.** One TerminusDB database per course, per program, or per institution?
   Cross-database queries do not exist, and the research path wants comparability across
   courses. Evidence: a second course in any deployment, or the first research slice.
@@ -1008,7 +1036,14 @@ what evidence would be enough.
   covers it. Since ADR-0028 (2026-10-18), a person's acceptance is expressible as a claimless
   attestation (an endorsement) of the proposed record, and the agent's own proposal as its
   `createdBy`. Evidence: the AI design assistant reference client becoming real, or a research
-  question that needs the distinction.
+  question that needs the distinction. *Noted 2026-10-30:* the evidence arrived, in Quiver's
+  drafter and lint agents (2026-10-28) and the MCP server plan (`docs/mcp-server-plan.md`).
+  ADR-0067 decision 3 (Proposed 2026-10-29) records whom an agent acted for in a hub-written
+  `Armature-On-Behalf-Of` trailer on the commit message, with the agent as the commit's author
+  and the record's `createdBy`; decision 10 (2026-10-30) confines an agent's own writes to a
+  workspace hub, so they reach a remote only through its push, acting for the workspace's owner.
+  The proposal/acceptance distinction remains an endorsement attestation by the person
+  (ADR-0028); no `proposedBy` or `acceptedBy`.*
 - **Fragment ids beyond items.** Activities with steps, objectives with components, rubrics with
   criteria. ADR-0023's pattern generalizes; the plan does not apply it anywhere else until a
   tool needs it.
@@ -1098,6 +1133,20 @@ what evidence would be enough.
   record as raised: when Phase 7's container and client package exist, the move is
   mechanical. Evidence: a plugin that cannot or should not depend on a Next.js deployment, or
   the hosted demo needing independent scaling.
+- **Authentication and authorization.** How a hub knows who is asking once tools write from
+  other machines, and what they may then do. Today the `header` resolver trusts the caller and
+  the loopback binding is the gate, so a writing client runs on the hub's machine or its private
+  network. *Evidence arrived 2026-10-26 to 2026-10-30:* four writing clients elsewhere: Quiver on
+  a person's two machines, the MCP server's remote mode, the Storyline bridge on the designer's
+  machine, and the workspace hub's push. *Resolved in draft by ADR-0067 (authentication) and
+  ADR-0068 (authorization), both Proposed 2026-10-29*, prerequisites of the workspace hub
+  (ADR-0065). The build order is `docs/workspace-hub-plan.md` §14: ADR-0067 decision 7, the
+  `Host` and `Origin` checks, first and on its own (built 2026-10-30, `app/lib/api/boundary.ts`);
+  ADR-0068 whole and ADR-0067 decisions 3, 6 and 8 before the workspace hub's push; the rest of
+  ADR-0067 (the `oidc` resolver, native sign-in, services' credentials, relaying, discovery's
+  issuer) before its release. Still open in the two records: several issuers on one instance,
+  the provider for a hosted demonstration, and revocation (ADR-0067); read permissions and a
+  request for delivery (ADR-0068).
 - **Which store the hub operates for attachments, and when.** The reference shape (ADR-0030) is
   backend-neutral and versioned-tree-capable on purpose, so this question is about operations
   and timing, not about what the graph can express. Two workloads are in view and they want
@@ -1432,3 +1481,16 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   since the store may have committed it, and the caller's `If-Match` is what tells. Giving the
   hub's fetch a keep-alive timeout under two seconds would close the window for writes too, at
   the cost of `undici` as a dependency; not done while a dropped write has not been seen.
+
+**Commit messages** (2026-10-30)
+- *Verified (2026-10-30, check AJ):* a message ending in git-style trailers, sent as the write's
+  `message` query parameter, comes back byte for byte from `/api/log` and `/api/history` (AJ1); a
+  trailing newline, CRLF line endings and non-ASCII text are kept as sent (AJ2 to AJ4). The hub's
+  history route returns it unchanged after a `POST /documents` (`app/lib/api/write.test.ts`, the
+  trailer cases). ADR-0065 decision 5's push trailers rely on it.
+- *Named, not written:* AH (a native TerminusDB build a desktop program could ship beside
+  itself) and AI (reproducing TerminusDB's Hash identifiers from a record's key fields) are named
+  by `docs/workspace-hub-plan.md` and ADR-0066 but have no code yet. AH is no longer needed
+  before ADR-0065's acceptance (its Verification), since under ADR-0066 the workspace hub's store
+  is a folder of files; AI runs before the plan's step 6, the file-backed store (ADR-0066
+  decision 6).
