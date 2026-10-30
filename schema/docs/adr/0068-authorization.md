@@ -6,11 +6,16 @@
 > author and a reason: the person who creates a branch owns it and decides who else may write to
 > it; only a maintainer may merge into `main`; an administrator grants the rest. Separately, it
 > fixes who may be named as the author of a change: the person asking, or an AI tool working for
-> them, never another person. Proposed, not built.
+> them, never another person. Accepted on 2026-10-30 and not yet built.
 
 ## Status
 
-Proposed (2026-10-29). Nothing is built on it.
+Accepted (2026-10-30, with ADR-0065 and ADR-0067; Amos's decision after the alignment review of
+that day). Proposed 2026-10-29. Nothing is built yet: it is implemented whole before the workspace
+hub's push (`docs/workspace-hub-plan.md` §14), with the `Grant` class, the generated types, the
+appendix and `User`'s corrected schema documentation in one commit, and the tests §Verification
+names. The two open questions below stand with their recommendations. The dated notes this Status
+promised are on ADR-0015, ADR-0021, ADR-0025, ADR-0032 and ADR-0065 (2026-10-30).
 
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065), built whole before its push
 (`docs/workspace-hub-plan.md` §14), since push's failures depend on ownership.
@@ -36,6 +41,12 @@ annotate:
 - **ADR-0065 decision 2**, whose ownership by convention becomes a rule the remote enforces.
 - **ADR-0021**, whose non-aggregation guard is restated as applying to classes under
   `DesignRecord` (decision 8); what it protects, a person's design work, is unchanged.
+- *Added 2026-10-30 by the alignment review:* **ADR-0025 decisions 4, 5 and 6**: branch creation
+  gains a commit on `main` (the `Owner` grant, decision 3), "who may merge" is answered (decision
+  4), and deletion is the owner's or a maintainer's and revokes the branch's grants; **ADR-0032
+  decisions 3 and 6**: the first `Administrator` grant arrives as the first `User` does
+  (decision 6), registering a person needs an administrator, and `GET /users/me` returns grants
+  (decisions 4 and 7).
 
 ## Context
 
@@ -98,7 +109,7 @@ answers for, and not for another person, who never consented.
 
    | Operation | Who may |
    |---|---|
-   | Read any ref | Any resolved identity (whether reads need one at all is ADR-0067 decision 1) |
+   | Read any ref | Any resolved identity (under `oidc` every request needs a token, `GET /discover` excepted: ADR-0067 decision 1) |
    | Create a branch | Any registered `User` |
    | Write to a branch, or merge into it | Its owner, or a maintainer of it or of every branch |
    | Write to `main`, or merge into it | A maintainer of `main` or of every branch |
@@ -131,8 +142,8 @@ answers for, and not for another person, who never consented.
    branch, so the demonstration runs as it does now.
 
 7. **A caller can ask what it may do.** `GET /users/me` returns the caller's active grants, and a
-   capability (ADR-0059) says the hub authorizes, so a client can hide an action it would be
-   refused rather than discover the 403.
+   capability, `armature/authorization` (ADR-0059 decision 4; named 2026-10-30), says the hub
+   authorizes, so a client can hide an action it would be refused rather than discover the 403.
 
 8. **The non-aggregation guard covers design records, not grants.** The list route refuses a
    filter on a field naming a `User` (ADR-0021, `person_filter_refused`) so that no one lists a

@@ -7,11 +7,18 @@
 > AI tool working for someone writes under its own name, and the hub records whom it acted for. A
 > service that delivers someone's earlier work, such as CoQui's outbox, may do so only if an
 > administrator has allowed it, and the hub records the service as the carrier. A hub running on
-> someone's own computer also refuses web pages the person has not allowed. Proposed, not built.
+> someone's own computer also refuses web pages the person has not allowed. Accepted on
+> 2026-10-30; of its ten decisions only the last part, the refusal of unexpected host names and
+> web pages, is built.
 
 ## Status
 
-Proposed (2026-10-29). Nothing is built on it.
+Accepted (2026-10-30, with ADR-0065 and ADR-0068; Amos's decision after the alignment review of
+that day). Proposed 2026-10-29. Built so far: decision 7 only (the note below); the rest follows
+`docs/workspace-hub-plan.md` §14 (decisions 3, 6 and 8 before the workspace hub's push, the others
+before its release), each part with the verification §Verification names. The open questions
+below stand with their recommendations. The dated notes this Status promised are on ADR-0015,
+ADR-0025, ADR-0032, ADR-0059 and ADR-0065 (2026-10-30).
 
 **Note 2026-10-30, built:** decision 7 is built, ahead of the rest as recommended:
 `app/lib/api/boundary.ts`, the first middleware on every request, with `boundary.test.ts` and a
@@ -43,8 +50,10 @@ PROV-O's `actedOnBehalfOf`). On acceptance it would amend or annotate:
   modelled (decision 3).
 - **ADR-0025 decision 2**, which reserves trailers and defines none: decision 5 defines the first
   ones the hub writes itself.
-- **ADR-0059 decision 4**, whose discovery document gains the issuer and the headers a client
-  sends (decision 8).
+- **ADR-0059 decisions 4 and 6**, whose discovery document gains the issuer and the headers a
+  client sends (decision 9).
+- *Added 2026-10-30 by the alignment review:* **ADR-0015**, whose "Armature does not manage
+  passwords, sessions, or tokens" becomes "issues none and verifies tokens" (decision 1).
 - **ADR-0065 decision 7**, whose refusal of agent writes this replaces, with ADR-0068.
 
 **Recommended ahead of acceptance (2026-10-29):** decision 7, the `Host` and `Origin` checks,
@@ -158,7 +167,8 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    caller's claim, recorded as sent: the workspace trailers of ADR-0065 decision 5, and
    `Co-Authored-By: <name>` for someone who contributed without signing in, such as a
    subject-matter expert dictating beside the designer. `docs/api.md` and `docs/research-path.md`
-   say which trailers the hub vouches for and which are claims.
+   will say which trailers the hub vouches for and which are claims, when the first trailer is
+   built (the alignment review of 2026-10-30 found neither mentions trailers yet).
 
 7. **Every hub checks `Host` and `Origin`.** A request whose `Host` is not `localhost`,
    `127.0.0.1` or `[::1]` (any port), or a name in `ARMATURE_ALLOWED_HOSTS`, is refused with 403
@@ -189,9 +199,16 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    under `header` with no `Armature-On-Behalf-Of`, until clients move; `docs/client-changes.md`
    records the move.
 
+   > **Note (2026-10-30):** the hub image binds `0.0.0.0` by default (`docker/hub.Dockerfile`),
+   > and CI's images job runs it with no environment, so when this decision is built the compose
+   > file's `hub` service and that CI step set `ARMATURE_TRUST_NETWORK=1`, not the Dockerfile, so
+   > that an image run anywhere else still refuses; the change to the compose file gets the
+   > fresh-VM rehearsal (CLAUDE.md, Branches item 5).
+
 9. **Discovery says how to authenticate.** `GET /discover` names the resolver, the issuer and
    audience under `oidc`, and the headers a client may send (`Armature-Agent`, and
-   `Armature-User` for a relay). `@armature/client` gains a `token` option and an `agent` option,
+   `Armature-User` for a relay), in a top-level `identity` entry beside `versions`, `capabilities`
+   and `schema` (ADR-0059 decision 6; the entry's name added 2026-10-30). `@armature/client` gains a `token` option and an `agent` option,
    and the change is a dated contract revision (ADR-0059). For native programs it also names the
    client id they sign in with, which with the issuer and audience is what the workspace hub's
    connection profile carries (`docs/workspace-hub-plan.md` §16, question 12).
@@ -277,9 +294,12 @@ how an instance runs.
 
 - A writing client can run anywhere, and the hub can be reached beyond its server once
   authorization (ADR-0068) is in place.
-- Agent work records the person it was done for, so "which proposals did Amos's drafter make" is
-  a read of commit messages; research reading process data (`docs/research-path.md`) gains the
-  distinction PROV-O draws between who did something and on whose behalf.
+- Agent work records the person it was done for, so a study reading process data
+  (`docs/research-path.md`) gains the distinction PROV-O draws between who did something and on
+  whose behalf. The hub itself offers no list of commits filtered by author or by the trailer:
+  ADR-0021's refusal of person-scoped enumeration holds for commit messages as for documents, and
+  the trailer is read in an export or a history the reader already holds (reworded 2026-10-30;
+  it first said "a read of commit messages").
 - A relayed write is visible as relayed, and only services an administrator named can make one.
 - Quiver changes how it pushes agent commits (`Armature-Agent` with the person's credential); the
   old form keeps working under `header` until it moves.
