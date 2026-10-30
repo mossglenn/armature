@@ -8,11 +8,16 @@
 > written to locally, and sent back by replaying its local commits through the remote's own API,
 > so every rule and every identity check runs there as for any other write. What makes history
 > shared stays on the remote: the workspace hub refuses to create branches, merge or register
-> people. It is proposed, not built; `docs/workspace-hub-plan.md` is the plan.
+> people. Accepted on 2026-10-30 and not yet built; `docs/workspace-hub-plan.md` is the plan.
 
 ## Status
 
-Proposed (2026-10-28). Nothing is built on it.
+Accepted (2026-10-30, with ADR-0067 and ADR-0068; Amos's decision after the alignment review of
+that day). Proposed 2026-10-28; verified 2026-10-30 (§Verification). Nothing of the workspace hub
+is built yet: implementation follows `docs/workspace-hub-plan.md` §14, step 1 (the adapter
+interface) first. ADR-0066, its store, stays Proposed until check AI runs. The dated notes this
+Status promised are on ADR-0025, ADR-0026, ADR-0032, ADR-0055, ADR-0059 and ADR-0062 (2026-10-30),
+and plan §2's terms are in CLAUDE.md's table.
 
 **Note 2026-10-29:** the store decision 8 leaves open is ADR-0066 (Proposed): a folder of files
 behind an adapter interface, with TerminusDB as the test bed while steps 2 to 5 are built.
@@ -53,6 +58,11 @@ On acceptance it would annotate, not amend in substance:
   (decision 8): the adapter would become an interface with two implementations.
 - **ADR-0059 decision 4**, which gains one capability, `armature/workspace`, and settings on
   `armature/branches` and `armature/users` saying which of their routes a hub serves.
+- *Added 2026-10-30 by the alignment review:* **ADR-0026 decision 4**, whose "second host" the
+  workspace hub is; **ADR-0032 decision 2**, since a workspace hub's `main` is a read-only mirror
+  of the registry and registration is refused there (decision 3); **ADR-0025 decision 6**, since
+  branch deletion is refused on a workspace hub; **ADR-0062**, whose operator tools are not
+  shipped on a workspace hub (plan §9 and §15).
 
 Each of those ADRs gets a dated note pointing here when this one is accepted.
 
@@ -166,6 +176,10 @@ Three facts constrain the answer:
    merge the workspace hub runs the invariants engine over the merged state and reports what it
    finds, since the remote's merge route does not.
 
+   > **Later change (2026-10-30):** the merge into `main` needs a `Maintainer` of `main` on the
+   > remote (ADR-0068 decision 4); a workspace owner who is not one asks someone who is, and the
+   > workspace hub shows who holds the grant when delivery is refused (ADR-0068, open question 2).
+
 7. **Tools reach a workspace hub on loopback, as its owner.** The `header` resolver serves, and
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the
    remote. Writes by an agent identity are refused until the remote can tell an agent's push from
@@ -177,6 +191,11 @@ Three facts constrain the answer:
    > agent writes locally, and the push sends its commits as the agent acting for the owner, with
    > the owner recorded in an `Armature-On-Behalf-Of` trailer the remote writes itself. Quiver's
    > drafter and lint agent, already built, are the case.
+   >
+   > **Later change (2026-10-30):** a request to a workspace hub naming anyone but its owner, or
+   > an agent acting for anyone but its owner, is refused with 403 `forbidden` (the code ADR-0068
+   > decision 1 gives a refusal of authority), not 401 `identity_required`, which means no
+   > identity was sent (ADR-0032 decision 8).
    >
    > **Later change (2026-10-30, decided):** this is the only way an agent's own work reaches a
    > remote. An agent writes on a workspace hub, where the owner is present and recorded, and the
