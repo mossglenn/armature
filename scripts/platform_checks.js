@@ -112,6 +112,12 @@
 //      fetch, given no timeout, keeps an idle connection for four, so a request can go out on a
 //      connection the store is closing (`UND_ERR_SOCKET`, "other side closed")
 //
+// Commit messages with trailers (ADR-0065 decision 5, ADR-0067 decision 6), added 2026-10-30:
+//   AJ. A multi-line message ending in git-style trailers, sent as the `message` query parameter
+//      of a document write as the adapter sends it, comes back byte for byte from /api/log and
+//      from /api/history; and what the store does with a trailing newline, CRLF line endings
+//      and non-ASCII text
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -932,6 +938,24 @@ async function main() {
     agClosedAfter === Infinity ? "the idle connection was still open after 10 s"
       : agClosedAfter === undefined ? "the connection failed before an answer"
       : `the store closed the idle connection ${agClosedAfter} ms after its answer (fetch keeps one for 4000 ms)`);
+
+  // AJ: messages with trailers round trip. The workspace hub's push writes its trailers into the
+  // message (the document API ignores commit metadata, V4), and the remote's own trailers are
+  // appended the same way, so a reader of the history must get back exactly what was written.
+  const ajMessages = [
+    ["AJ1", "PASS", "trailers", "Reword the stem\n\nArmature-Workspace-Commit: 4f1c2a9e0b7d\nArmature-Authored-At: 2026-10-30T12:00:00.000Z\nArmature-Workspace-Part: 1/2"],
+    ["AJ2", "INFO", "a trailing newline", "Reword the stem\n\nArmature-Workspace-Commit: 4f1c2a9e0b7d\n"],
+    ["AJ3", "INFO", "CRLF line endings", "Reword the stem\r\n\r\nArmature-Workspace-Commit: 4f1c2a9e0b7d"],
+    ["AJ4", "INFO", "non-ASCII text", "Révision — “guillemets” 日本語 🙂\n\nCo-Authored-By: Ana Pérez <ana@example.edu>"],
+  ];
+  for (const [id, verdictIfSame, what, message] of ajMessages) {
+    r = await api("PUT", at("branch/main", `${commit(message)}&create=true`), { "@type": "Artifact", "@id": "Artifact/aj", label: id });
+    const ajLog = (await log("main", 1))?.[0]?.message;
+    const ajHist = (await api("GET", `/api/history/admin/${DB}/local/branch/main?id=Artifact/aj&count=1`)).json?.[0]?.message;
+    const same = ajLog === message && ajHist === message;
+    record(id, same ? verdictIfSame : verdictIfSame === "PASS" ? "FAIL" : "INFO",
+      `${what}: write ${r.status}; /api/log ${ajLog === message ? "identical" : "differs: " + JSON.stringify(ajLog)}; /api/history ${ajHist === message ? "identical" : "differs: " + JSON.stringify(ajHist)}`);
+  }
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);

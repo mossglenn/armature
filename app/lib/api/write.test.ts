@@ -496,6 +496,25 @@ describe('generic write path and invariants (Phase 3)', () => {
       expect(right.status).toBe(200);
     });
 
+    it('accepts an earlier commit of the same branch as asOf, as a workspace push names one (ADR-0065)', async () => {
+      // A workspace hub replays local commits in order; a record written offline at an older local
+      // commit arrives naming the remote commit that commit became, behind the head it is written on.
+      const first = await put(`/api/v1/documents/AssessmentItem/asof-early-${stamp}${q}`, { message: 'Add item', document: item(`asof-early-${stamp}`) });
+      expect(first.status).toBe(200);
+      const earlier = (await first.json()).commit;
+      const second = await put(`/api/v1/documents/AssessmentItem/asof-early2-${stamp}${q}`, { message: 'Add another', document: item(`asof-early2-${stamp}`) });
+      expect(second.status).toBe(200);
+      const head = (await second.json()).commit;
+
+      const replayed = await app.request(`/api/v1/documents/DesignFinding/asof-early-f-${stamp}${q}`, {
+        method: 'PUT',
+        headers: { ...HEADERS, 'If-Match': `"${head}"` },
+        body: JSON.stringify({ message: 'Judged at the first item', document: finding({ subject: [`AssessmentItem/asof-early-${stamp}`], regarding: OBJECTIVE, asOf: earlier }) }),
+      });
+      expect(replayed.status).toBe(200);
+      expect((await (await get(`/api/v1/documents/DesignFinding/asof-early-f-${stamp}${q}`)).json()).asOf).toBe(earlier);
+    });
+
     it('validates a kept asOf against the subjects of the replace', async () => {
       // The finding now names withItem; a replace adding a subject created after it fails.
       const later = await put(`/api/v1/documents/AssessmentItem/asof-later-${stamp}${q}`, { message: 'Add item', document: item(`asof-later-${stamp}`) });
@@ -936,6 +955,28 @@ describe('generic write path and invariants (Phase 3)', () => {
         document: { ...base, externalRefs: [{ '@type': 'ExternalRef', system: 'Other', identifier: 'doi:10.1000/example.2026.17', label: 'Sector benchmark 2026' }] },
       });
       expect(benchmark.status).toBe(200);
+    });
+  });
+
+  describe('commit messages keep their trailers (ADR-0065 decision 5; check AJ)', () => {
+    it('returns a message ending in trailers byte for byte from the history route', async () => {
+      // The workspace hub's push writes its trailers into the message, since the document API
+      // ignores commit metadata (check V4); a reader of process data must get back what was written.
+      const message = [
+        'Reword the stem',
+        '',
+        'Armature-Workspace-Commit: 4f1c2a9e0b7d',
+        'Armature-Authored-At: 2026-10-30T12:00:00.000Z',
+        'Armature-Workspace-Part: 1/2',
+      ].join('\n');
+      const id = `LearningNeed/trailers-${stamp}`;
+      const res = await post(`/api/v1/documents${q}`, {
+        message,
+        documents: [{ '@type': 'LearningNeed', '@id': id, label: 'Need', rationale: 'Pushed from a workspace' }],
+      });
+      expect(res.status).toBe(200);
+      const history = await (await get(`/api/v1/documents/${id}/history${q}`)).json();
+      expect(history.entries[0].message).toBe(message);
     });
   });
 });
