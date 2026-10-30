@@ -187,6 +187,24 @@ the remote, and a test that a message with trailers is returned byte for byte. I
 under decision 8 is TerminusDB, a lettered check (AH) of a native build that a desktop program can
 ship beside itself.
 
+**Results (2026-10-30, TerminusDB v12.0.7, PR #70):** both checks before acceptance hold.
+
+- **An earlier commit as `asOf`.** A finding written with `If-Match` naming the branch head and
+  `asOf` naming the commit before it passes constraint 13 and keeps that `asOf`
+  (`app/lib/api/write.test.ts`, "accepts an earlier commit of the same branch as asOf"). The
+  push's rewrite of an `asOf` naming an older local commit is therefore accepted by the remote.
+- **Messages with trailers.** A message ending in `Armature-Workspace-Commit`,
+  `Armature-Authored-At` and `Armature-Workspace-Part`, sent as the write's `message` query
+  parameter, comes back byte for byte from the store's `/api/log` and `/api/history` (platform
+  check AJ1) and from the hub's history route after a `POST /documents` (`write.test.ts`,
+  "returns a message ending in trailers byte for byte"). The store also keeps a trailing newline,
+  CRLF line endings and non-ASCII text as sent (AJ2 to AJ4), so normalizing line endings, if
+  ever wanted, is the hub's choice, not the store's; a reader of trailers accepts both `\n` and
+  `\r\n`.
+- **Check AH** is no longer needed before acceptance: under ADR-0066 the workspace hub's store of
+  record is the file-backed store, and TerminusDB under a workspace hub is a test bed run in a
+  container. It returns only if the sidecar path reopens (ADR-0066, Alternatives).
+
 ## Consequences
 
 - A local-first tool is a client of a hub like any other; Quiver's `sync/` and `workspace/`
