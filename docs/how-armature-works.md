@@ -2,7 +2,7 @@
 
 **An explainer for learning scientists and other academic readers**
 
-*State described: the repository as of 8 October 2026, when Phase 4 of the development plan was complete. Author voice: third person; "the project" means Armature's design and development work.*
+*State described: the repository as of 30 October 2026: Phases 0 to 7 of the development plan complete, except a standing hosted instance (deferred by decision); Phase 8's Design Graph built; four decision records Proposed and not yet accepted (ADR-0065 to ADR-0068). Author voice: third person; "the project" means Armature's design and development work.*
 
 ---
 
@@ -172,7 +172,7 @@ Readers comfortable with databases and version control can skip this section. Ev
 - **Merge.** Combining the changes made on one branch into another. When both branches changed the same thing differently, the merge reports a *conflict* instead of guessing.
 - **Ref.** Short for reference to a state of the database: either a branch name (meaning its latest commit) or a specific commit identifier. Every Armature read happens "at a ref."
 - **API (application programming interface) route.** One kind of request the API accepts, written as a method and a path, such as `GET /api/v1/documents/LearningObjective/x` (read) or `PUT /api/v1/documents/AssessmentItem/y` (write). `GET` reads, `PUT` and `POST` write, `DELETE` deletes.
-- **HTTP status code.** HTTP (Hypertext Transfer Protocol) is the protocol web browsers and servers use to exchange requests and responses. A status code is the number every web response carries: 200 means success, 400 means the request was malformed, 404 means not found, 409 means a conflict, 422 means the request was well-formed but broke a rule, 412 means a precondition (such as "nobody changed this since I read it") failed, 500 means an unexpected server error.
+- **HTTP status code.** HTTP (Hypertext Transfer Protocol) is the protocol web browsers and servers use to exchange requests and responses. A status code is the number every web response carries: 200 means success, 400 means the request was malformed, 403 means the hub refuses to serve the request's host name or web page (`host_not_allowed`, `origin_not_allowed`; and, proposed in ADR-0068, an identity not allowed the action, `forbidden`), 404 means not found, 409 means a conflict, 422 means the request was well-formed but broke a rule, 412 means a precondition (such as "nobody changed this since I read it") failed, 500 means an unexpected server error.
 - **Plugin / client.** A separate application that uses the API.
 
 ---
@@ -218,6 +218,10 @@ Phases 0 to 4 were then completed between 7 and 8 October 2026, each on its own 
 
 As of 8 October 2026 the repository holds 106 commits, 34 decision records, and 95 automated tests that run against the live database.
 
+### 7.5 Phases 5 to 8 and the proposals that followed (18 to 30 October 2026)
+
+The remaining phases went quickly. Phase 5 (18 October) added the review vocabulary, findings and attestations (Section 15.4). Phase 6 (20 October) added external references and attachments, export profiles and slices, and the rule that outcome records name their source. Phase 7 (21 and 22 October) moved the hub into its own process and container, produced the typed client and types packages, put the contract suite in CI against a database service container, wrote the schema guide for tool authors and the administrator's deployment guide, and rehearsed the deployment on a fresh virtual machine and on a hosted server, which was then destroyed by choice; a standing hosted instance was deferred by decision. Phase 8 (22 and 23 October) built the Design Graph, the viewer's drawing of the whole graph (Section 18). Between 25 and 28 October a second writing tool, Quiver, was planned and built in its own repository, and plans were written for two more clients (Section 24.5). On 28 and 29 October four decision records were proposed, ADR-0065 to ADR-0068: a second role for the hub on a person's own machine, its store, authentication and authorization; on 30 October the first part of one of them, the hub's refusal of host names and web pages it does not serve, was built. As of 30 October 2026 the repository holds 68 decision records and 296 automated tests; Section 24.5 describes what is proposed next.
+
 ## 8. Working methods
 
 The way Armature has been built is itself an expression of its thesis: design decisions are recorded with their rationale, made inspectable, and revised in the open.
@@ -228,11 +232,11 @@ Every significant decision is written up as an **Architecture Decision Record (A
 
 ADRs are never deleted. When a decision is overturned, the old ADR is marked "Superseded by ADR-XXXX" and the new ADR explains what changed and why. This produces a readable history of the project's reasoning, including its mistakes. The repository calls this "Armature practicing what it preaches: design rationale preserved as structured, inspectable artifacts." The research survey in `docs/research/` notes that ADRs are one of the few rationale-capture practices that have survived in software engineering, where heavier argumentation tools did not, because they are short, live beside the work, and are superseded rather than edited.
 
-**Numbering.** ADR numbers are mostly sequential, with deliberate gaps. Numbers 0030, 0031 and 0034 are reserved by the development plan for decisions not yet written (external references and attachments, export profiles, interaction types); 0028, attestations, was written on 18 October 2026. Numbers 0035 to 0053 are provisional candidates from the research survey. ADR-0054 onward are decisions made after those blocks were reserved. Appendix D lists all of them.
+**Numbering.** ADR numbers are mostly sequential, with deliberate gaps. Numbers 0030, 0031 and 0034 were reserved by the development plan for decisions not yet written; 0030 (external references and attachments) and 0031 (export profiles) were accepted on 20 October 2026, and only 0034 (interaction types) remains reserved; 0028, attestations, was written on 18 October 2026. Numbers 0035 to 0053 are provisional candidates from the research survey. ADR-0054 onward are decisions made after those blocks were reserved. Appendix D lists all of them.
 
 ### 8.2 Verify the platform before relying on it
 
-A recurring discipline is that no decision relies on a database behavior until that behavior has been demonstrated. The script `scripts/platform_checks.js` creates a temporary scratch database, runs a lettered series of probes (A to Z), prints PASS, FAIL or INFO with the evidence, and deletes the scratch database. When an ADR depends on a behavior, it cites the check letter.
+A recurring discipline is that no decision relies on a database behavior until that behavior has been demonstrated. The script `scripts/platform_checks.js` creates a temporary scratch database, runs a lettered series of probes (A to AJ), prints PASS, FAIL or INFO with the evidence, and deletes the scratch database. When an ADR depends on a behavior, it cites the check letter.
 
 This discipline has paid off repeatedly. Check L, run in October 2026, found that TerminusDB checks that a referenced document *exists* but not that it is of the declared *type*: a field meant to hold an objective would accept a user record. Several earlier ADRs had assumed otherwise. The finding led to the first rule in the invariants engine (Section 13). Checks P and Q found that the TerminusDB documentation copied into the repository (the "vendored" documentation) described the merge conflict report and the direction of the rebase operation (which replays commits onto another branch) incorrectly. Check X found that one write mode merged old and new values instead of replacing them, so Armature never uses it.
 
@@ -313,12 +317,12 @@ flowchart TB
     I["Identity and provenance<br/>who is asking; author of every change"]
     D["Core document API<br/>read at any point in history, list, write,<br/>history, differences, branches, merges"]
     R["Invariants engine<br/>the rules the database cannot enforce"]
-    G["Design-intelligence reads<br/>coverage, alignment, trace, impact"]
+    G["Design-intelligence reads<br/>coverage, alignment, trace, impact,<br/>attestations, item statistics, module content"]
     S["Store adapter<br/>the only code that talks to the database"]
   end
   DB[("TerminusDB<br/>documents, graph, commit history")]
   P -- "HTTP (Hypertext Transfer Protocol)<br/>web requests to /api/v1" --> Hub
-  V -- "the same requests, made inside<br/>the same running program" --> Hub
+  V -- "the same requests over HTTP,<br/>through the same client library as a plugin" --> Hub
   I --> D
   D --> R
   G --> S
@@ -388,7 +392,7 @@ This distinction drives much of Part III.
 | Field types (text, number, date, true/false) | That a referenced document is of the *declared* type (Section 13, constraint 0) |
 | Required fields are present | Rules that span documents ("no two items in one assessment at the same position") |
 | Enum values are from the allowed list | Conditional rules ("a dismissed finding needs a reason") |
-| Minimum counts on sets (`@min_cardinality`) | Who is allowed to do what (not yet enforced by Armature either; Section 15.2) |
+| Minimum counts on sets (`@min_cardinality`) | Who is allowed to do what (not yet enforced by Armature either; proposed in ADR-0068; Section 15.2) |
 | A referenced document exists | Anything about meaning (left to people) |
 | Identifiers are unique | |
 
@@ -671,7 +675,7 @@ Every write passes two kinds of check before anything is saved.
 1. **Shape** (answered with HTTP, or Hypertext Transfer Protocol, status 400, "invalid document"): does each document have the right fields, of the right kinds, with allowed enum values, at least the minimum number of entries in a set, and no unknown fields? These checks are generated automatically from the schema, so they can never disagree with it.
 2. **Rules** (answered with HTTP 422, "invariant violation"): does the write respect the rules that span documents or depend on conditions, which the database cannot express? These are the **invariants**, and the code that checks them is the **invariants engine** (`app/lib/api/invariants/`).
 
-"Invariant" is a software term for a condition that must always hold. The engine checks every rule on every write, whatever route the write came through, and reports **every** violation at once rather than stopping at the first, so a tool can show a designer everything that needs fixing.
+"Invariant" is a software term for a condition that must always hold. The engine checks every rule on every write, whatever route the write came through, and reports **every** violation at once rather than stopping at the first, so a tool can show a designer everything that needs fixing. One route is the exception: a merge (Section 14.6) makes its commit without running the engine over the merged state, so two branches each clean on their own can merge into a violation (two placements at the same position, say). The operator's whole-branch check (Section 14.7) finds such a state afterward; running the rules on merge is planned (`docs/workspace-hub-plan.md` §12).
 
 ### 13.2 The rules in plain language
 
@@ -766,7 +770,7 @@ The hub adds three things the database does not provide (ADR-0025 decision 5):
 2. **Remembering what was merged.** A merge commit in TerminusDB has a single parent, so the database does not record which commit was merged in. The hub writes it into the merge commit's metadata, the extra data a commit can carry (`armature.mergeSource`). Without it, merging the same branch a second time would replay changes already merged (this was found by testing).
 3. **A readable conflict report.** On conflict the hub answers 409 with, for each conflicting field, the document, the field, and three values: the base value, the target branch's value, and the source branch's value (the database's report omits the last, so the hub reads it).
 
-**Not yet decided:** merge *policy*. Who may merge a branch, whether some kinds of document (findings, for instance) should merge without approval, and where a fragment-by-fragment conflict view lives are open questions, waiting for a second writer on a shared branch (Section 25).
+**Not yet decided:** merge *policy*. Who may merge a branch is proposed in ADR-0068 (the person who creates a branch owns it; only a maintainer merges into `main`; Section 24.5), not yet accepted or built. Whether some kinds of document (findings, for instance) should merge without approval, and where a fragment-by-fragment conflict view lives, are open questions, waiting for a second writer on a shared branch (Section 27). Open too is a gap found on 26 October 2026: the merge route makes its commit without running the invariants engine over the merged state (Section 13.1), so two branches each clean on their own can merge into a rule violation, which the operator's whole-branch check finds afterward; running the rules on merge is one of the asks the workspace hub plan makes of the shared hub (`docs/workspace-hub-plan.md` §12).
 
 ### 14.7 History is never rewritten
 
@@ -804,8 +808,8 @@ A `User` has a display name, an external identifier (the stable identifier from 
 
 Every request that changes anything must say who is making it. A pluggable **resolver** turns the request into a set of claims, statements about who is asking (at minimum the external identifier); the hub then finds the matching `User`.
 
-- The current resolver, `header`, reads the external identifier from a request header (`Armature-User: <externalId>`) and **trusts the caller**. It is for a single machine and demonstration only: anyone who can reach the API (application programming interface) can claim to be anyone. While it is configured, the hub stays on its server's loopback interface, where only the server's own processes and operators reach it; an instance publishes the read-only viewer and nothing else (`docs/deployment.md`). Since 2026-10-30 every hub also refuses a request that names it by an unexpected host, or that comes from a web page the administrator has not listed, so a page open in a browser on the same machine cannot use the trusted header to write as anyone (ADR-0067 decision 7).
-- A future resolver, `oidc` (OpenID Connect, the common single-sign-on protocol), will read a signed token (a tamper-proof credential issued by the login system). It is named but not built; the claims shape is fixed now so adding it changes no route.
+- The current resolver, `header`, reads the external identifier from a request header (`Armature-User: <externalId>`) and **trusts the caller**. It is for a single machine and demonstration only: anyone who can reach the API (application programming interface) can claim to be anyone. While it is configured, the hub stays on its server's loopback interface, where only the server's own processes and operators reach it; an instance publishes the read-only viewer and nothing else (`docs/deployment.md`). Since 30 October 2026 every hub also checks two headers before anything else (ADR-0067 decision 7, built; `app/lib/api/boundary.ts`). A request whose `Host` is neither a loopback name (`localhost`, `127.0.0.1`, `[::1]`, a name under `.localhost`) nor one listed in `ARMATURE_ALLOWED_HOSTS` is refused with 403 `host_not_allowed`, which closes DNS rebinding (a web page pointing its own domain name at the hub's machine). A request whose `Origin`, the header browsers send, is `null` or a remote web origin not listed in `ARMATURE_ALLOWED_ORIGINS` is refused with 403 `origin_not_allowed`; loopback origins and desktop-shell schemes such as `tauri://localhost` are served, and only a listed origin gets cross-origin answers, so only a listed page can read responses. A page open in a browser on the same machine therefore cannot use the trusted header to write as anyone unless the administrator listed it; tools outside a browser send no `Origin` and need nothing.
+- A future resolver, `oidc` (OpenID Connect, the common single-sign-on protocol), will read a signed token (a tamper-proof credential issued by the login system). It is specified in ADR-0067 (Proposed), a prerequisite of the workspace hub (Section 24.5), and not built; the claims shape is fixed now so adding it changes no route.
 
 ### 15.3 Where `User` documents live
 
@@ -817,7 +821,7 @@ A subtlety arises with branches. A design document's `createdBy` must refer to a
 
 ### 15.4 AI agents
 
-An AI (artificial intelligence) agent is an ordinary `User` whose external identifier begins with `agent:` (for example `agent:coqui/item-drafter`), registered by a person. An agent writes through the same routes, under the same rules, and its commits carry its identifier as author. This satisfies principle P5: AI contributions are distinguishable and subject to the same structural review. "Acting on someone's behalf" (an agent drafting for a particular designer) is not yet modeled; it waits for an AI design assistant to become a real client.
+An AI (artificial intelligence) agent is an ordinary `User` whose external identifier begins with `agent:` (for example `agent:coqui/item-drafter`), registered by a person. An agent writes through the same routes, under the same rules, and its commits carry its identifier as author. This satisfies principle P5: AI contributions are distinguishable and subject to the same structural review. "Acting on someone's behalf" (an agent drafting for a particular designer) is modeled in ADR-0067 decision 3 (Proposed, not built): the agent is the commit's author and the `createdBy` of what it creates, and the hub records the person in an `Armature-On-Behalf-Of` trailer that it writes into the commit message itself. The trigger this waited for arrived in October 2026 with Quiver's drafter and lint agents and the plan for an MCP (Model Context Protocol) server (Section 24.5).
 
 ## 16. The life of a write, step by step
 
@@ -1059,7 +1063,7 @@ Adding a new type is therefore one edit to the schema (with its category and key
 
 ### 21.3 Platform checks
 
-`scripts/platform_checks.js` runs the lettered probes (A to Z) described in Section 8.2 against a scratch database it creates and deletes. It never touches the Armature database.
+`scripts/platform_checks.js` runs the lettered probes (A to AJ) described in Section 8.2 against a scratch database it creates and deletes. It never touches the Armature database.
 
 ### 21.4 Tests and continuous integration
 
@@ -1104,8 +1108,8 @@ Most decisions are explained where they matter in Part III. This part collects t
 | Decision | Chosen | Alternatives rejected, and why |
 |---|---|---|
 | The database (Project context; the discussion in ADR-0017, an Architecture Decision Record) | TerminusDB | A property graph such as Neo4j (no branches or history; edges cannot be annotated); a relational database (awkward polymorphic references; history built by hand) |
-| Where the API (application programming interface) runs (ADR-0026) | Inside the Next.js application for now, under `/api/v1`; a separate service later | Standing up a separate Express or Fastify service (two common server frameworks) immediately (two separately deployed programs before anything needed them) |
-| How the API is written (ADR-0054) | Hono, a host-neutral framework (one that does not depend on the program hosting it), attached by one Next.js file | Next.js's own request handlers with discipline enforced by review (the existing code already lacked it); Elysia (built first for Bun, a less common JavaScript environment); tRPC (not plain web routes, which every client needs); NestJS (far more structure than needed); exposing TerminusDB's own API to plugins (would bypass rules, identity and the non-aggregation policy) |
+| Where the API (application programming interface) runs (ADR-0026) | Its own Node process since 21 October 2026 (decision 4), under `/api/v1`; Next.js hosted it until then | Standing up a separate Express or Fastify service (two common server frameworks) immediately (two separately deployed programs before anything needed them) |
+| How the API is written (ADR-0054) | Hono, a host-neutral framework (one that does not depend on the program hosting it), served by `app/lib/hub.ts` over `@hono/node-server`; attached to Next.js until 21 October 2026 | Next.js's own request handlers with discipline enforced by review (the existing code already lacked it); Elysia (built first for Bun, a less common JavaScript environment); tRPC (not plain web routes, which every client needs); NestJS (far more structure than needed); exposing TerminusDB's own API to plugins (would bypass rules, identity and the non-aggregation policy) |
 | How the API reaches the database (ADR-0055) | One small adapter (a translation module) over plain HTTP (Hypertext Transfer Protocol) web requests | The official JavaScript client, which, on reading its source, fixes the commit author to the database account, keeps a stale concurrency token (the marker used to detect concurrent edits) across calls, flattens errors into text, and lags the server's features. Also rejected: one database account per Armature user (makes the database the identity provider) and maintaining a modified copy (a fork) of the client |
 | Version history (ADR-0025) | The database's commit graph; author and reason on every commit; no version fields | Version and timestamp fields; a "new version of" relation; exposing history rewriting |
 | Merge (ADR-0025) | The database's three-way merge, wrapped: the hub finds the base, records what was merged, and reports conflicts with all three values | Building a merge in the hub (the database already does it correctly and never resolves silently) |
@@ -1117,7 +1121,7 @@ Most decisions are explained where they matter in Part III. This part collects t
 
 # Part V. The future
 
-## 24. The road ahead: Phases 5 to 7
+## 24. The road ahead: Phases 5 to 7, done, and what is proposed next
 
 ### 24.1 Done first: ADR-0057 (`asOf`), accepted 18 October 2026
 
@@ -1129,7 +1133,7 @@ Building it settled one subtlety the proposal had not. A commit's identifier doe
 
 The session log also lists a small fix (a race condition in the branch routes when a branch is deleted between two reads) and a seed improvement (an objective that reaches `FullyAssessed`).
 
-### 24.2 Phase 5: findings and attestations, the review vocabulary
+### 24.2 Phase 5: findings and attestations, the review vocabulary (done 18 October 2026)
 
 **Goal:** a minimal, tool-neutral way to record that someone judged an artifact, so the paper's "how those alignments were established and whether they have since changed" becomes answerable.
 
@@ -1140,7 +1144,7 @@ The session log also lists a small fix (a race condition in the branch routes wh
 
 > **[Interpretive framing]** The research survey suggests giving attestations the claim–evidence–warrant structure of evidence-centered design (Mislevy, Steinberg & Almond, 2003), and reading each attestation as a *nanopublication* (an assertion, its provenance, and its publication information). Neither is adopted yet.
 
-### 24.3 Phase 6: the ecosystem and the research path
+### 24.3 Phase 6: the ecosystem and the research path (done 20 October 2026)
 
 **Goal:** reference external standards without duplicating them (P6), and make data-first adoption by researchers possible (P7, P8).
 
@@ -1153,7 +1157,7 @@ The session log also lists a small fix (a race condition in the branch routes wh
 
 **Standards named in this plan.** CASE for competency frameworks; QTI for assessment items; xAPI and Caliper (another learning-activity standard) for learning activity records; LTI for launching tools from a learning management system (LMS); SCORM (Sharable Content Object Reference Model) and cmi5 (a profile of xAPI for launching and tracking packaged content) for packaged content. The principle (P6) is to reference them by identifier, never to translate between them; the plan's list of things it declines to do includes any import or export *format* beyond JSON-LD, which are plugin work.
 
-### 24.4 Phase 7: toolkit and deployment
+### 24.4 Phase 7: toolkit and deployment (done 21 and 22 October 2026, except a standing hosted instance)
 
 **Goal:** make the boundary real for a second plugin, and put a hub where stakeholders can reach it.
 
@@ -1164,6 +1168,14 @@ The session log also lists a small fix (a race condition in the branch routes wh
 - A schema guide written from a tool author's perspective (done 2026-10-21: `docs/schema-guide.md`, in three parts, a hub and the client, the graph, the work of a tool).
 - The operator tools for repair outside the API (done 2026-10-22, ADR-0062; Section 14.7): a whole-branch rule check, a delete and a write that can skip the hub's rules, each repair a commit, run inside the hub's container on a server.
 - **Exit criterion:** a developer with the repository, Docker (the container software) and the client package can write a new plugin without reading TerminusDB documentation.
+
+### 24.5 Proposed next (October 2026)
+
+With Phases 5 to 7 done and Phase 8's Design Graph built (Section 18), the next work is proposed rather than planned, in four decision records written on 28 and 29 October 2026, none yet accepted. ADR-0065 gives the hub a second role. A **workspace hub** is the same hub code running on a person's own machine, serving the same API (application programming interface) to the tools there, offline if need be. It holds **workspaces**: each is a branch created on the shared hub (the **remote**) and cloned to the machine from the remote's export at its latest commit; the person's tools write to it locally, and a **push** replays each local commit through the remote's own API, with `If-Match` on every write, so every rule and every identity check runs on the remote exactly as for any other client. What makes history shared stays on the remote: a workspace hub refuses to create branches, merge or register people. ADR-0066 proposes its store: a folder of plain files the hub reads and writes itself, behind an adapter interface, so that installing Armature on a designer's computer, Windows included, is one install with nothing running beside it; TerminusDB is the test bed while it is built.
+
+Two records are its prerequisites, both Proposed on 29 October 2026. ADR-0067, authentication, specifies the `oidc` resolver Section 15.2 names: a person signs in with their institution's identity provider and sends a signed token, which the hub verifies and resolves to a `User`; an AI (artificial intelligence) agent working for someone writes under its own name, and the hub records whom it acted for in a trailer it writes itself (decision 3; Section 15.4); a service that delivers someone's earlier work may do so only under an administrator's grant. One part of it is built, ahead of the rest: the `Host` and `Origin` checks of decision 7, since 30 October 2026 (Section 15.2). ADR-0068, authorization, says what a resolved identity may do: permissions kept as `Grant` documents on `main`, so that every change of authority is itself a commit with an author and a reason; the person who creates a branch owns it and decides who else may write to it; only a maintainer merges into `main`; a refused action is 403 `forbidden`. A workspace hub does not authorize: the remote refuses a push it would not allow (ADR-0068 decision 9), and an agent's own work reaches a remote only through a workspace hub's push, acting for the workspace's owner (ADR-0067 decision 10).
+
+The build order is `docs/workspace-hub-plan.md` §14: the adapter interface first; workspace mode with TerminusDB as the local store; push, with ADR-0068 and the agent parts of ADR-0067 built before it so that a push is written once; bring in and deliver, with the invariants engine run over the merged state; the file-backed store; and packaging as one desktop program for macOS, Windows and Linux, the first release candidate, with the `oidc` resolver built before release. Quiver, a local-first item manager built in its own repository between 26 and 28 October 2026, paused on 30 October to become the workspace hub's first real test, with its modules the starting code. Two more clients are planned and not built: an MCP (Model Context Protocol) server that lets an AI assistant ask the graph through the intelligence reads at a named commit (`docs/mcp-server-plan.md`), and a Storyline bridge that records each Storyline build in the graph by hash and brings results back as metrics (`docs/storyline-bridge-plan.md`). `docs/demo-coverage.md` scores every client, built, planned or proposed, against the hub's capabilities.
 
 ## 25. Rich artifacts: beyond multiple choice
 
@@ -1193,7 +1205,7 @@ CoQui is an assessment-item review tool built in a separate repository. It struc
 | Read users and create one | `/api/v1/users` (ADR-0032) | Done (Phase 3) |
 | Item history and changes since a commit | History, differences and branch changes for any type | Done (Phase 2) |
 | An `Attestation` type | ADR-0028, in tool-neutral form, with the claim optional | Built 18 October 2026 (Phase 5) |
-| A merge with a conflict report | The wrapped three-way merge | Done (Phase 2); merge policy still open |
+| A merge with a conflict report | The wrapped three-way merge | Done (Phase 2); who may merge proposed in ADR-0068, the rest of merge policy still open (Section 14.6) |
 
 **What failed the two-client test and stays in CoQui:** the review *round* (a branch at the boundary), the *craft grid* and *claim version* (they travel inside an attestation's plugin-scoped claim reference), and CoQui's review *workflow states* (mapped onto the four `ItemStatus` values).
 
@@ -1203,16 +1215,16 @@ CoQui is an assessment-item review tool built in a separate repository. It struc
 
 The development plan (§6) lists questions to be decided deliberately, each with the evidence that would settle it.
 
-- **Merge policy.** Who may merge; whether findings and attestations reach `main` without approval (which would need a merge filtered by document type, which the database does not offer); where a fragment-level conflict view lives. *Evidence:* a second writer on a shared branch, or CoQui's first real conflict.
+- **Merge policy.** Who may merge: *proposed 29 October 2026 (ADR-0068)*, branch ownership and a maintainer's merge into `main`, not yet accepted. Still open: whether findings and attestations reach `main` without approval (which would need a merge filtered by document type, which the database does not offer); where a fragment-level conflict view lives; and the merge route running the invariants engine over the merged state, which it does not today (found 26 October 2026; Sections 13.1 and 14.6; `docs/workspace-hub-plan.md` §12). *Evidence:* a second writer on a shared branch, or CoQui's first real conflict.
 - **Project boundaries.** One database per course, program or institution? The database cannot query across databases, and the research path wants comparability across courses. *Evidence:* a second course in a deployment, or the first research slice.
-- **AI (artificial intelligence) provenance beyond `createdBy`.** Does an AI-proposed, human-accepted artifact need `proposedBy` and `acceptedBy`, or does an attestation by a person already cover it? *Evidence:* a real AI design assistant, or a research question that needs the distinction.
+- **AI (artificial intelligence) provenance beyond `createdBy`.** Does an AI-proposed, human-accepted artifact need `proposedBy` and `acceptedBy`, or does an attestation by a person already cover it? *Answered in proposal, 29 October 2026 (ADR-0067 decision 3, Proposed, not built):* no new fields. The agent is the author and `createdBy`; the hub records the person it acted for in an `Armature-On-Behalf-Of` trailer it writes itself (Section 15.4). The evidence named arrived: Quiver's drafter and lint agents, and the MCP (Model Context Protocol) server plan.
 - **Fragment identifiers beyond items.** Activities with steps, objectives with components, rubrics with criteria. *Evidence:* a tool that needs it.
 - **A structured `DesignDecision` type.** *Evidence:* recurring structure in how `DesignNote.category` is used.
 - **A fourth finding status** for a reviewer withdrawing their own concern. *Evidence:* a second tool needing the distinction.
 - **One placement per item per assessment.** *Evidence:* sections inside assessments, or an import source that repeats an item.
 - **Must every assessment item name an objective?** *Decided 20 October 2026 (ADR-0060): no.* A question may be stored before it is aligned; it counts toward no objective, and the alignment read lists every such question. The question that replaces it: **how does Armature encourage alignment without requiring it at all times?** Candidates are a readiness rule (a question, or its placement, may not be approved while unaligned), the coverage read naming unaligned questions placed in a module, a finding raised from the alignment read, or an assistant proposing alignments for a person to attest. *Evidence to settle it:* the first imported bank, and what its users do with the list of unaligned questions.
 - **Items used formatively, inside activities.** *Decided 20 October 2026 (ADR-0061).* A live classroom poll or an ungraded question on a content page is recorded as an `ActivityItemLink`: the activity, the question and, when it matters, the order. It carries no score and counts toward no coverage. Still open on it: a purpose for the use, and whether a "practiced" figure should sit beside the two coverage figures.
-- **A separate API (application programming interface) service.** *Evidence:* a plugin that should not depend on a Next.js deployment, or independent scaling needs.
+- **A separate API (application programming interface) service.** *Decided 21 October 2026 (ADR-0026 decision 4): yes.* The hub is its own process, `app/server.ts` in its own container, and the Next.js pages are a client of it (Section 10.1). The evidence named was a plugin that should not depend on a Next.js deployment, or independent scaling needs; what settled it was the pages holding database credentials of their own.
 - **Which file store the hub operates, and when.** *Evidence:* the first tool that develops multi-file assets on Armature.
 
 The research survey adds its own open questions: whether alignment models belong in the demonstration; whether a change of an objective's *meaning* should create a new objective linked by `replacedBy` (as CASE, the Competencies and Academic Standards Exchange, does) rather than editing in place; whether to tag seed activities with coarse activity types so published learning-design analytics studies could be rerun on Armature data; and which export target a pilot partner would actually use.
@@ -1242,12 +1254,12 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 
 > **[Brevity candidate]** Some of these repeat earlier sections; they are gathered here for a reviewer's convenience.
 
-- **Identity is trusted, not authenticated.** The current resolver believes whatever identity a request claims. The hub therefore stays on its server's loopback interface, with only the read-only viewer published, until an authenticating resolver exists; a tool that writes runs on the server or behind a proxy that authenticates.
+- **Identity is trusted, not authenticated.** The current resolver, `header`, believes whatever identity a request claims. The hub therefore stays on its server's loopback interface, with only the read-only viewer published, and a tool that writes runs beside the hub on the same server. Since 30 October 2026 the hub also refuses a request that names it by an unexpected host name or comes from a web page not listed for it, so a browser on the same machine cannot use the trusted header (ADR-0067 decision 7, built; Section 15.2). How the identity becomes authenticated is specified, not built: the `oidc` resolver of ADR-0067 (Proposed), a prerequisite of the workspace hub (Section 24.5); what an authenticated identity may do is ADR-0068 (Proposed).
 - **Not yet tested at scale.** The intelligence reads and the merge-base search (finding the common starting point of two branches) make many small requests. This is negligible for the seed course but will need database queries written in WOQL (Web Object Query Language, TerminusDB's query language) for large courses. History walks are capped at 5,000 commits per branch.
 - **The database-backed tests run in CI (continuous integration) against a store that starts fresh every time.** Since Phase 7 (2026-10-21) CI starts TerminusDB as a service container, loads the schema and the seed, and runs the suite. A store that has just started on a cold machine has stalled on one request mid-suite, so the suite waits for the seeded database and then exercises it once (a branch, a write, a read) before it begins; whether that is enough is being watched.
 - **The coverage thresholds are unevidenced**, and coverage inherits the reliability of the alignments it counts (Section 17.1).
 - **Capture burden is the historical killer of rationale tools.** Armature's answer (capture as a byproduct of useful tools; the commit message as the primary rationale) is a strategy, not yet a demonstrated result.
-- **One real client.** Every generalization so far rests on CoQui plus imagined reference clients.
+- **Few writing clients.** CoQui is the one tool that writes to a hub in real use; the viewer only reads. Quiver, a second writing tool, was built in October 2026 and paused on 30 October as the workspace hub's first test (Section 24.5); the MCP (Model Context Protocol) server and the Storyline bridge are planned, not built. Every generalization still rests on one writing client in use plus reference clients on paper.
 - **Some list filters read a whole type.** The database cannot filter on an optional or multi-valued reference or an optional enumerated field (platform check Y), so the hub lists the type and filters it (for example, all items that assess a given objective). The answer is correct; the cost grows with the type, and a query in TerminusDB's own query language will replace it when a type outgrows a list.
 - **The module-content view covers one module.** The course builder also needs the whole course tree at one commit (every module in order with its content); it is the module-content read once per module until a tool asks for one read.
 - **Lossless writes are unsolved.** A tool built against an older schema can erase newer fields by replacing a document (research lesson 1).
@@ -1292,7 +1304,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **Graph** | Nodes connected by edges; Armature's nodes are documents and its edges are references |
 | **Hash key / random key** | Two ways the database assigns identifiers: computed from defining references (junctions), or opaque (artifacts, which may also accept a client-supplied identifier) |
 | **Hono** | The web framework the API is written in |
-| **HTTP (Hypertext Transfer Protocol) status codes** | 200 success; 201 created; 400 malformed; 401 identity missing or unknown; 404 not found; 409 conflict; 412 precondition failed; 422 rule violated; 500 server error |
+| **HTTP (Hypertext Transfer Protocol) status codes** | 200 success; 201 created; 400 malformed; 401 identity missing or unknown; 403 host name or web origin not served (`host_not_allowed`, `origin_not_allowed`; `forbidden`, an identity not allowed the action, proposed in ADR-0068); 404 not found; 409 conflict; 412 precondition failed; 422 rule violated; 500 server error |
 | **Host** | One process running the API's code and giving it a network socket: the Node process in `app/server.ts`, or the container built from it. A server runs as many as it has ports for. Invisible to clients |
 | **Hub** | One host bound to one store: the address a client talks to. The relation of API to hub is that of a protocol to a server; every hub serves the same API, and there can be many hubs |
 | **Instance** | A hub with its particular data: the demonstration's seed course, or a study's own graph. Usually interchangeable with hub |
@@ -1304,7 +1316,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **LMS (learning management system)** | Delivery software such as Canvas or Moodle |
 | **Merge (three-way)** | Combining one branch's changes into another by comparing both with their common ancestor; conflicts are reported, never guessed |
 | **Next.js** | The web application framework Armature's viewer is written in. It hosted the API as well until 21 October 2026 |
-| **OIDC (OpenID Connect)** | A common single-sign-on protocol; a planned identity resolver |
+| **OIDC (OpenID Connect)** | A common single-sign-on protocol; the planned identity resolver, specified in ADR-0067 (Proposed), a prerequisite of the workspace hub |
 | **Optimistic concurrency** | Letting writes proceed and refusing one only if the data changed since the writer read it |
 | **Placement** | An `ItemInstance`: a bank item placed into one assessment |
 | **Platform check** | A lettered experiment in `scripts/platform_checks.js` that demonstrates a database behavior before a decision relies on it |
@@ -1368,7 +1380,7 @@ All API (application programming interface) routes are under `/api/v1`. Reads ac
 
 | Route | What it does |
 |---|---|
-| `GET /documents/:type?field=value&count=&skip=` | List documents of a type, filtered by field values (filters on optional or multi-valued references currently fail; see `docs/api.md`) |
+| `GET /documents/:type?field=value&count=&skip=` | List documents of a type, filtered by field values (optional and multi-valued fields are filtered by the hub itself, platform check Y; a filter on a field naming a person is refused, ADR-0021) |
 | `GET /documents/:type/:id` | Read one document at a ref |
 | `PUT /documents/:type/:id` | Create or replace one document (`{ message, document }`) |
 | `POST /documents` | Write up to 500 documents in one commit (`{ message, documents }`) |
@@ -1388,6 +1400,13 @@ All API (application programming interface) routes are under `/api/v1`. Reads ac
 | `GET /intelligence/alignment?module=` | Bloom's-level mismatches, objectives without activities, and items that assess nothing |
 | `GET /intelligence/trace/:type/:id` | The design lifecycle walked both ways from a document |
 | `GET /intelligence/impact/:type/:id` | Every document that references a document |
+| `GET /intelligence/attestations/:type/:id` | Every attestation about a document, each with its state (current, stale or removed) from comparing the judged part at `asOf` with now |
+| `GET /intelligence/item-statistics?module=&unit=` | Every metric about each item, grouped by item, newest administration first; the hub picks no "latest" |
+| `GET /intelligence/module-content/:moduleId` | A module's activities and lessons in teaching order, as a tree of placements |
+| `GET /export?profile=&slice=` | The graph at a ref as one JSON-LD document with its reloadable schema, under a profile (`full`, `pseudonymous`, `institutional`), whole or as a declared slice |
+| `GET /export/slices` | The declared slices |
+| `GET /discover` | The API revisions this hub serves, its capabilities with their settings, and where the schema is (takes no ref and needs no identity) |
+| `GET /schema` | The schema graph at a ref, in its reloadable form |
 
 ## Appendix D. Decision record index
 
@@ -1398,9 +1417,10 @@ See `schema/docs/adr/README.md` for the full index with one-line summaries. In b
 | 0001–0010 | Foundational modeling (February 2026): evidence types, references, junctions, back-references, sequencing, cardinality, module objectives, enums, enrichments, deferrals |
 | 0011–0015 | Schema review (February 2026): placeholder objectives, design notes, schema-level cardinality, the common base class, users and authorship |
 | 0016–0023 | The CoQui fit analysis (August–September 2026): keys, the `DesignRecord` abstract root, readiness, coverage and readiness, findings, the non-goal on practitioner performance, embedded item parts, fragment identifiers |
-| 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0030, 0031 and 0034 are reserved and unwritten; 0028 (attestations) was written 18 October 2026 |
+| 0024–0034 | The development plan's reserved block (October 2026): client-supplied identifiers, version control, API (application programming interface) host, self-description, coverage algorithm, identity, fragments. 0030 and 0031 were accepted 20 October 2026, 0028 (attestations) was written 18 October 2026, and only 0034 (interaction types) remains reserved and unwritten |
 | 0035–0053 | Research candidates, not decisions (`docs/research/adr-candidates.md`) |
-| 0054–0061 | Decisions made after the reserved blocks: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item, and a proposal (0059, not yet built) for how a tool states per request which revision of the API and which features it relies on |
+| 0054–0064 | Decisions made after the reserved blocks, all accepted and built: Hono, the HTTP (Hypertext Transfer Protocol) adapter through which the API reaches the database, coverage computed on read, `asOf`, item statistics as metrics about the item, how a tool states per request which revision of the API and which features it relies on (0059, built 21 October 2026), items that exist before they are aligned (0060), formative use of items inside activities (0061), operator repair outside the API (0062, the operator tools), outcome records naming their source (0063), and `ActivityGroup` renamed `Lesson` (0064) |
+| 0065–0068 | Proposed on 28 and 29 October 2026, not yet accepted: the workspace hub (0065), its store as a folder of files (0066), authentication (0067; its decision 7, the `Host` and `Origin` checks, built 30 October 2026) and authorization (0068); Section 24.5 |
 
 ## Appendix E. References
 
