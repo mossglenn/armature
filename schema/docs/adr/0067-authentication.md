@@ -176,6 +176,10 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    recorded on `main` with a reason. This replaces stored refresh tokens, which would put every
    reviewer's long-lived credential in a queue.
 
+   > **Later change (2026-10-30, decided):** the grant names whom the service may speak for and
+   > until when (`Grant.relayedUsers` and `Grant.expires`, ADR-0068 decision 2, note); a relayed
+   > write naming anyone else, or after the expiry, is 403 `forbidden`. Review H1.
+
 6. **The hub writes some trailers itself and refuses them from clients.** `Armature-On-Behalf-Of`
    and `Armature-Relayed-By` are written only by the hub; a request whose message already has a
    line beginning with either is refused with 400 `reserved_trailer`. Every other trailer is the
@@ -205,6 +209,16 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > `.localhost` count as loopback for both checks (RFC 6761). A listed origin's responses carry
    > `Access-Control-Allow-Origin` and expose `ETag` and `Armature-Version`, refusals included;
    > its preflights answer 204. The setting is read on each request.
+   >
+   > **Later change (2026-10-30, decided):** on a workspace hub these checks are joined by a
+   > per-launch secret on every write, and push is the desktop program's own action rather than
+   > a route (ADR-0065 decision 7, note of the same day; review B6). A remote hub is published
+   > under its own name beside the viewer's, `api.<site>`, proxied by Caddy only when the
+   > instance runs the `oidc` resolver (the compose file refuses the pairing of a public proxy
+   > with `header`), with that name in `ARMATURE_ALLOWED_HOSTS` and the viewer holding a service
+   > credential (decision 4); the hub gains a cheap liveness route and a store-backed readiness
+   > route, and the proxy sets body and time limits the deployment guide states. The connection
+   > profile's public address (decision 9; plan §16, question 12) is this name. Review H5.
 
 8. **`header` stays, bounded.** The `header` resolver remains the default for development, tests,
    a workspace hub's loopback and a private compose network, and reads `Armature-Agent` as
@@ -219,6 +233,14 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > file's `hub` service and that CI step set `ARMATURE_TRUST_NETWORK=1`, not the Dockerfile, so
    > that an image run anywhere else still refuses; the change to the compose file gets the
    > fresh-VM rehearsal (CLAUDE.md, Branches item 5).
+   >
+   > **Later change (2026-10-30, decided):** the compose file's one network becomes two: a store
+   > network joined only by TerminusDB, the hub and the operator service, and a front network
+   > joined by the hub, the viewer, Caddy and any client deployed beside the instance, which still
+   > calls `http://hub:3100` and never reaches the store. The `public` profile refuses to start
+   > while `TERMINUSDB_ADMIN_PASS` is unset, instead of defaulting to `admin`. Both change how an
+   > instance runs and get the fresh-VM rehearsal; planned with step 2's compose profile
+   > (workspace hub plan §14). Review H8.
 
 9. **Discovery says how to authenticate.** `GET /discover` names the resolver, the issuer and
    audience under `oidc`, and the headers a client may send (`Armature-Agent`, and

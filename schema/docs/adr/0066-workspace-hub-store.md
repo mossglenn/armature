@@ -89,6 +89,18 @@ store, and leaves the choice to its plan. Four facts bear on it.
    > question 3): `remote/at/` may hold a full export at each referenced `asOf` within a size
    > budget, not only the subjects, and the folder may hold the branch's commit log. The layout's
    > shape is unchanged; the budget's default comes from the measurement in Verification.
+   >
+   > **Later change (2026-10-30, decided):** a commit file is immutable, and the push state lives
+   > beside the commits, not in them. The plan's first layout wrote `pushedAs` into each commit
+   > file after the push, which a file named by a hash of its content cannot carry. Instead a
+   > `push.json` holds, per local commit, the remote commit it became, the parts sent so far and
+   > an in-flight marker written before each request, so that after a crash the hub knows which
+   > request may have landed and reads the remote branch's log for its own
+   > `Armature-Workspace-Commit` trailers to settle it (the log route, plan §12). Durability is
+   > stated: a file is written under a temporary name, flushed, renamed into place, and its
+   > directory flushed; the branch head advances only after the commit file is durable. The
+   > review's alternative, a SQLite journal, was declined as more machinery than one writer and
+   > one folder need. Review B4 (`docs/armature-deep-review-2026-10-30.md`).
 
 3. **TerminusDB is the test bed first.** The plan's steps 2 to 5 (workspace mode, push, bring in
    and deliver, the subject snapshots) are built with TerminusDB as the local store, since its

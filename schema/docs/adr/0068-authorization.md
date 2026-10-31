@@ -99,12 +99,34 @@ answers for, and not for another person, who never consented.
    by agents only. `Grant` does not inherit `DesignRecord`, as `User` does not (ADR-0017): a grant
    is not a design decision, and cannot be the subject of a note, a finding or an attestation.
 
+   > **Later change (2026-10-30, decided):** a `Relay` grant is narrowed by two Optional fields
+   > on `Grant`, added in the same schema commit: `relayedUsers`, a Set of `User`, the people the
+   > service may name as authors, absent meaning any registered person; and `expires`, a
+   > dateTime after which the grant is treated as revoked. The hub checks both on a relayed write
+   > (ADR-0067 decision 5), refusing with 403 `forbidden`. A compromised relay service is then
+   > bounded to the people and the period an administrator named, where before it could write as
+   > anyone on its branch; the `Armature-Relayed-By` trailer stays as evidence, not as the limit.
+   > Neither field is in the key, so narrowing a grant is a replace. Review H1.
+
 3. **The person who creates a branch owns it.** `POST /branches` writes an `Owner` grant for the
    caller on `main` in the same request, as a commit of its own on `main` (creating a branch makes
    none). An agent acting for a person (ADR-0067 decision 3) creates a branch its person owns; an
    agent acting on its own owns its branch. Deleting a branch revokes its grants. `main` has no
    owner. Branches created before this decision have none; an administrator assigns one, and
    until then they are writable as today.
+
+   > **Later change (2026-10-30, decided):** three bounds, since the branch and its grant are two
+   > commits on two branches and cannot be one. **Order.** Creation writes the `Owner` grant on
+   > `main` first and creates the branch second; deletion revokes the grants first and deletes
+   > second. A crash between the two then leaves a grant for a branch that does not exist, which
+   > is harmless, rather than a branch anyone may write. **The check.** The operator's `check`
+   > (ADR-0062) gains two whole-graph rules: an active grant naming a branch the store lacks, and
+   > a branch with no active `Owner`; the repair is `put` on the grant, as a commit with a reason.
+   > **Ownerless branches.** "Writable as today" ends with a migration window the instance's
+   > administrator closes: after it, a branch with no owner is writable only by an administrator
+   > or a maintainer of every branch, so a partial failure can never widen authority. A branch
+   > identity in the grant beyond its name (its first commit) waits for a recreated name that
+   > inherits a stale grant to be seen, which the ordering above makes unlikely. Review H2.
 
 4. **What each operation requires.**
 
