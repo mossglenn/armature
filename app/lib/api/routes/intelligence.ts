@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { isKnownType } from '../classes';
 import { ApiError } from '../errors';
-import { intQuery, refFromQuery, requireCommit, setEtag } from '../http';
+import { intQuery, refFromQuery, setEtag, snapshot } from '../http';
 import {
   COVERAGE_STATUSES,
   DEFAULT_THRESHOLDS,
@@ -59,10 +59,8 @@ import { createStore, type TerminusDocument } from '../store';
 export const intelligence = new Hono();
 
 async function graphAt(c: Context): Promise<Graph> {
-  const ref = refFromQuery(c);
-  const store = createStore(ref);
-  if ('commit' in ref) await requireCommit(store, ref.commit);
-  return new Graph(store);
+  const { at, commit } = await snapshot(createStore(refFromQuery(c)));
+  return new Graph(at, commit);
 }
 
 async function requireDocument(graph: Graph, type: string, id: string): Promise<TerminusDocument> {

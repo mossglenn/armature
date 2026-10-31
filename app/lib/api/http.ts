@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import { ApiError } from './errors';
-import { isRecord, type Commit, type DocumentReader, type Ref } from './store';
+import { isRecord, type Commit, type DocumentReader, type Ref, type Store } from './store';
 
 /**
  * Request and response conventions shared by the route groups (architecture
@@ -23,6 +23,23 @@ export async function requireCommit(store: DocumentReader, id: string, what = 'c
   const commit = await store.getCommit(id);
   if (!commit) throw new ApiError(404, 'unknown_ref', `No ${what} ${id}`);
   return commit;
+}
+
+/**
+ * A read request's ref, resolved once (the deep review's B1): a branch to its
+ * head at this moment, a commit checked to exist (404 otherwise). A request
+ * that reads more than once reads through `at`, bound to that commit, so a
+ * branch that moves while it runs is read as it stood and `commit` is the
+ * ETag of every part of the answer. A single read needs none of this: it
+ * reports the commit it was served from.
+ */
+export async function snapshot(store: Store): Promise<{ at: DocumentReader; commit: string | undefined }> {
+  if ('commit' in store.ref) {
+    await requireCommit(store, store.ref.commit);
+    return { at: store, commit: store.ref.commit };
+  }
+  const head = await store.head();
+  return head ? { at: store.at({ commit: head.id }), commit: head.id } : { at: store, commit: undefined };
 }
 
 /** `?branch=`, `main` when absent. For routes that only make sense on a branch. */
