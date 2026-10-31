@@ -24,13 +24,15 @@ Every read happens at a **ref**, a named state of the design:
 
 Passing both is a 400 (`ambiguous_ref`). A commit identifier that does not exist is a 404 (`unknown_ref`). Writes always go to a branch; `?ref=` on a write is a 400 (`write_at_commit`).
 
+A read that reads the store more than once (every intelligence read, the export) resolves `?branch=` to the branch's head once, when it starts, and reads everything at that commit, so a commit landing on the branch while it runs changes nothing in the answer, and the answer's `ETag` names the one commit all of it is from (since 2026-10-31; the deep review's B1). A client whose view combines several responses reads the later ones at the first one's commit (`?ref=`), as the viewer does.
+
 ### The commit in every response: `ETag`
 
 Every response that read from or wrote to the database carries the commit it was served from or created, as a standard `ETag` header holding a bare commit identifier: `ETag: "<commit-id>"`. (ADR-0025 decision 7. TerminusDB's own version header never appears in this API.)
 
 ### Optimistic concurrency: `If-Match`
 
-A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the branch is still at this commit." If anyone has committed to the branch since, the write is refused with **412** (`precondition_failed`), and the body carries `expected` and `current` commit identifiers. The token is the branch head, not a fingerprint of one document, so a 412 may mean someone changed a different document; re-read and retry. Without `If-Match`, writes are unconditional. `If-None-Match` is not supported.
+A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the branch is still at this commit." If anyone has committed to the branch since, the write is refused with **412** (`precondition_failed`), and the body carries `expected` and `current` commit identifiers. The token is the branch head, not a fingerprint of one document, so a 412 may mean someone changed a different document; re-read and retry. Without `If-Match`, a write is not conditioned on what the client read, but it is checked and committed at one commit: the hub conditions it on the head its rules were checked at, and if another commit lands in between, runs the whole write again on the new head, up to three runs, then answers **409** `branch_moved` with nothing written (since 2026-10-31; the deep review's B2). A stale `If-Match` is refused before the write's rules are checked, so its 412 comes before a `type_conflict` or an `invariant_violation`. `If-None-Match` is not supported.
 
 ### Identity: `Armature-User`
 
@@ -111,7 +113,7 @@ The commits on a branch that touched one document, newest first.
 | `start`, `count` | Paging | 0, 20 |
 | `diff` | Include the structural difference each commit made; `diff=false` omits it | true |
 
-Response: `{ id, branch, start, count, entries: [ { commit, author, message, timestamp, diff } ] }`, with `ETag` the branch head the history was read at (since 2026-10-23; the store's own history answer names no commit). The hub keeps an answer by that head and serves it again while the head stands still, since the store walks the branch's whole log for a document touched rarely (seconds on a few hundred commits) and a read at a commit is immutable. `timestamp` is seconds since the epoch as a number, as the store records a commit (here and on a branch head). `message` is the write's `message` as stored, trailers included (platform check AJ). `diff` is TerminusDB's JSON patch (`docs/vendor/terminusdb/json-diff-and-patch.md`), passed through unchanged; every store under a hub produces it (ADR-0066 decision 5, Proposed). Lists inside a document (such as an item's options) are compared by position, so reordering reads as several changes.
+Response: `{ id, branch, start, count, entries: [ { commit, author, message, timestamp, diff } ] }`, with `ETag` the branch head the history was read at (since 2026-10-23; the store's own history answer names no commit). The store reads history only at a branch (platform check AM2), so the hub reads the head before and after: the same head both times proves the answer is that commit's, since history is never rewritten, and only such an answer is served. If the head moves around three reads in a row, the answer is **503** `branch_busy` with `Retry-After: 1` (since 2026-10-31). The hub keeps an answer by that head and serves it again while the head stands still, since the store walks the branch's whole log for a document touched rarely (seconds on a few hundred commits) and a read at a commit is immutable. `timestamp` is seconds since the epoch as a number, as the store records a commit (here and on a branch head). `message` is the write's `message` as stored, trailers included (platform check AJ). `diff` is TerminusDB's JSON patch (`docs/vendor/terminusdb/json-diff-and-patch.md`), passed through unchanged; every store under a hub produces it (ADR-0066 decision 5, Proposed). Lists inside a document (such as an item's options) are compared by position, so reordering reads as several changes.
 
 ### `GET /documents/:type/:id/diff?from=<commit>&to=<commit>`
 
@@ -125,7 +127,7 @@ The structural difference in one document between two commits, as TerminusDB's J
 2. **Identity of the document.** An identifier held by another type: **409** `type_conflict`. An existing document (found by `@id`, or for a junction by its key fields) makes this write a replace. Before the lookup, an `Attestation` without `attestedBy` gets the resolved user, since the attester is part of its key: a re-attestation finds the caller's own record, never another person's.
 3. **Provenance.** `createdBy` is set to the resolved user on create and preserved on replace (a value in the body is ignored). On a branch that lacks the user's `User` document, a copy from `main` is written in the same commit. `asOf`, the commit a `LearningDataset`, `LearningMetric` or `DesignFinding` refers to (ADR-0057), is filled when the body omits it: on create, with the branch head the write starts from (the `If-Match` commit when one is sent); on replace, with the stored value, except for an `Attestation`, whose every write is a new verdict and takes the head again (ADR-0028 decision 5); on a metric with a `derivedFrom` dataset, with the dataset's value. A body may supply `asOf`, for example when importing historical results, and rule 13 checks it.
 4. **Rules.** Every invariant is checked against the branch as it will be after the write. Failure: **422** `invariant_violation` with every violation at once, as `violations: [ { code, id?, index, field?, message } ]`.
-5. **One commit**, authored by the resolved user with the request's message, honoring `If-Match` (**412** when the branch has moved).
+5. **One commit**, authored by the resolved user with the request's message. Steps 2 to 4 read the branch at its head as the write began (the `If-Match` commit when one is sent, else **412** before step 2), and the commit is accepted only onto that head: when another lands first, a write with `If-Match` is a **412**, and one without runs steps 2 to 5 again on the new head, up to three runs, then **409** `branch_moved`.
 
 The rules, numbered as in `.claude/CLAUDE.md`:
 
@@ -415,9 +417,10 @@ The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, cate
 | 409 | `type_conflict` | An identifier held by another type (rule 12) |
 | 409 | `user_exists`, `branch_exists` | Already registered or created |
 | 409 | `merge_conflict`, `no_common_ancestor` | The merge cannot proceed |
-| 409 | `unmerged_branch`, `branch_moved` | Branch deletion refused |
+| 409 | `unmerged_branch`, `branch_moved` | Branch deletion refused; `branch_moved` also a write whose branch moved under each of its three runs (The write pipeline) |
 | 409 | `registration_conflict` | Concurrent user registration; retry |
 | 412 | `precondition_failed` | The branch moved since the commit in `If-Match` |
 | 422 | `invariant_violation` | One or more rules broken (see `violations`) |
 | 500 | `store_unavailable` | The database rejected the configured credentials |
 | 500 | `store_error`, `internal_error` | An unexpected database or server error (details in the server log only) |
+| 503 | `branch_busy` | A document's history could not be read at one head; `Retry-After` |

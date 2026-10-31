@@ -15,6 +15,32 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-31 · Reads and writes at one commit
+
+**What changed.** A write is checked and committed at one commit (the deep review's B2). The
+hub captures the branch head when the write begins, checks the write's rules against the branch
+at that commit, and sends that commit to the store as the write's condition, so two writers who
+each pass a rule alone (two placements at one `sequence`) can no longer land together. A write
+**without** `If-Match` that loses a race to another commit is run again, whole, on the new head,
+up to three runs; if the branch moves under every run the answer is **409** `branch_moved` and
+nothing is written. A write **with** `If-Match` that is not the head is now refused with **412**
+before its rules are checked, so a stale `If-Match` outranks `type_conflict` and
+`invariant_violation`. A read that reads the store more than once (every intelligence read, the
+export) resolves a branch to its head once and reads everything at that commit, its `ETag` (B1).
+`GET /documents/:type/:id/history` serves only an answer read with the head standing still around
+it, and answers **503** `branch_busy` with `Retry-After: 1` if the head moved around three reads
+in a row. Also a fix with no revision of its own: `POST /branches` from a `from` branch that does
+not exist answers **404** `unknown_ref`, as the error table promised, not **409**
+`branch_exists`. `@armature/client`'s `CLIENT_REVISION` is this revision.
+
+**What a client does.** Treat `branch_moved` on a write like a 412: re-read and decide again;
+it is rare, since the hub has already retried. Back off on `branch_busy` for the `Retry-After`
+seconds. A client that shows several responses together (a page reading the export, then the
+coverage, then the trace) reads the later ones at the first one's `ETag` with `?ref=` so they
+describe one commit; the viewer now does. **CoQui:** its writes send no `If-Match`, so they are
+the ones the hub retries; map `branch_moved` onto its existing retry for a 412. **Quiver:**
+nothing until it resumes; its push already sends `If-Match`.
+
 ## 2026-10-30 · The hub refuses hosts and web origins it does not serve
 
 **What changed.** Every hub checks two request headers before anything else runs (ADR-0067
