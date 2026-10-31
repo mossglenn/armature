@@ -1,375 +1,268 @@
 # Armature — Claude Code Context
 
-This file is the primary context for AI-assisted development on Armature. Read this first, then read PROJECT_CONTEXT.md and SESSION.md before starting any work session; read HISTORY.md, the log of past sessions, only when SESSION.md points at it or no ADR or document answers a "why". Human readers new to the project should start with `docs/how-armature-works.md`.
+The primary context for AI-assisted development on Armature: the rules and the map. Read this first, then `PROJECT_CONTEXT.md` (the problem, audiences, reference clients) and `SESSION.md` (the state) before any work session; read `HISTORY.md`, the log, only when `SESSION.md` points at it or no ADR or document answers a "why". Human readers start with `docs/how-armature-works.md`. Budget: 32 KB (`docs/context-files-plan.md`).
 
-Abbreviations used here: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), SME (subject-matter expert), WOQL (TerminusDB's query language), OIDC (OpenID Connect).
+Abbreviations: ADR (Architecture Decision Record), API, CI, WOQL (TerminusDB's query language), OIDC (OpenID Connect).
 
 ---
 
 ## What Armature Is
 
-Armature is graph-based infrastructure for learning engineering. It provides an open schema and API that preserves design rationale in the relationships between instructional artifacts — objectives, assessments, activities, and modules.
+Armature is graph-based infrastructure for learning engineering. It provides an open schema and API that preserves design rationale in the relationships between instructional artifacts: objectives, assessments, activities, modules.
 
-The core insight: current instructional design tools capture *what was built* but not *why design decisions were made* or *how artifacts connect to each other*. Armature treats the artifact graph as a first-class data structure, making design decisions inspectable, queryable, and reusable.
+The core insight: current instructional design tools capture *what was built* but not *why design decisions were made* or *how artifacts connect to each other*. Armature treats the artifact graph as a first-class data structure, making design decisions inspectable, queryable and reusable.
 
-**The Git analogy:** Git didn't replace text editors — it added a relational layer underneath them that made the history and provenance of changes visible and inspectable. Armature does the same for instructional design tools.
+**The Git analogy:** Git did not replace text editors; it added a relational layer underneath them that made the history and provenance of changes visible. Armature does the same for instructional design tools.
 
 ---
 
 ## Architecture
 
 ### Stack
-- **TerminusDB** — graph database storing the artifact graph
-- **Armature API** — a Hono application in `app/lib/api/` (ADR-0054), host-neutral: nothing under that directory imports from `next`. Its host is `app/server.ts`, a standalone Node process through `app/lib/hub.ts` and `@hono/node-server`, bundled by `npm run build:hub` (esbuild, one file) and packaged by `docker/hub.Dockerfile` (ADR-0026 decision 4, done 2026-10-21). Next.js no longer mounts it: the catch-all route and `@hono/vercel` were removed the same day, and the Next.js app is the viewer, a client of the hub. The demo-era unversioned routes were retired in Phase 3 (2026-10-08)
-- **Armature Viewer** — the Next.js app's two pages (the module index and the Coverage View), a client of a hub over HTTP through `@armature/client` (`app/lib/viewer.ts`), configured by `ARMATURE_HUB_URL` alone (default `http://localhost:3100`); it holds no store credentials and only reads
-- **CoQui** — first plugin; an assessment-item review tool built on top of the Armature API (separate repo, not here)
-- **Docker Compose** — `docker/docker-compose.yml` runs TerminusDB (port 6363 on loopback); with `--profile hub` it runs an instance on one private network, all on loopback: the store, the hub (`hub.Dockerfile`, port 3100, since the `header` resolver trusts the caller) and the viewer (`viewer.Dockerfile`, port 3000, reading the hub by service name); `--profile public` adds Caddy (`docker/Caddyfile`, ports 80 and 443, HTTPS for `ARMATURE_SITE`), the only public container: a hosted instance. The network is named `armature`, so a client deployed beside the instance (CoQui for the demonstration) joins it from its own compose file and calls `http://hub:3100`, its public site a file in `docker/sites/` that Caddy imports (2026-10-25; `deployment.md` § "A client on the same server"); `load_schema.js --recreate` resets a demonstration instance to the seed, log included. Every service restarts with Docker. The `operator` profile runs the scripts in a throwaway Node 22 container on the network (`docker compose run --rm operator node load_schema.js`), so a server needs Docker and nothing else; repairs run in the hub's container, whose image carries the operator tools (`docker compose exec hub node operator.mjs check`, ADR-0062). The instance's settings (`TERMINUSDB_ADMIN_PASS`, `ARMATURE_SITE`) live in `docker/.env` on a server, never inline. `docs/deployment.md` is the administrator's guide, rehearsed on a fresh Ubuntu VM and run on a DigitalOcean Droplet 2026-10-21, and again 2026-10-26 with CoQui's demo beside it (both destroyed by choice; none is running). Locally the hub can run on the machine instead (`npm run build:hub && npm run start:hub`, reads `.env.local`) with the viewer as `npm run dev` pointed at it. Decided 2026-10-30, not yet made (ADR-0067 decisions 7 and 8, notes): two networks, the store's joined only by TerminusDB, the hub and the operator; the `public` profile refusing to start without `TERMINUSDB_ADMIN_PASS`; and the hub published as `api.<site>` under `oidc` only
 
-- **Export** — `GET /api/v1/export?branch=|ref=&profile=full|pseudonymous|institutional&slice=<name>` returns the graph at a ref as one JSON-LD document (ADR-0031; under `oidc`, when built, `full` needs a maintainer of `main` or an administrator and the default is `pseudonymous`: ADR-0068 decision 4, note). `ARMATURE_EXPORT_KEY` in `app/.env.local` makes pseudonyms stable across exports; without it they are per export. There is no import route: re-import is an operator step (load `schema`, post `documents`; ADR-0062)
-- **Identity locally** — writes need `Armature-User: <externalId>` (the seed registers `demo-designer@example.edu`); `ARMATURE_IDENTITY` in `app/.env.local` selects the resolver (`header`, the default, trusts the caller, so mutating routes stay local). Every hub answers only loopback host names and those in `ARMATURE_ALLOWED_HOSTS` (the compose file sets `hub`), and refuses unlisted remote web origins (`ARMATURE_ALLOWED_ORIGINS`; ADR-0067 decision 7, `app/lib/api/boundary.ts`, 2026-10-30): a test calling the hub by another name gets 403 `host_not_allowed`. The app's `.env.local` holds `TERMINUS_URL`, `TERMINUS_USER`, `TERMINUS_PASS`, `TERMINUS_DB`; the scripts read the same variables from the shell, defaulting to admin/admin
-- **Accepted, not yet built (ADR-0065, ADR-0067, ADR-0068; accepted 2026-10-30)** — a second role for the same hub code, the *workspace hub* on a person's machine, serving tools on loopback and pushing its commits through a remote hub's `/api/v1` (ADR-0065, proposed 2026-10-28, verified and accepted 2026-10-30); its store a folder of files behind an adapter interface extracted from `store.ts` (ADR-0066, still Proposed until check AI runs); authentication, the `oidc` resolver and agents acting for people (ADR-0067; its `Host` and `Origin` checks, decision 7, are the one built part); authorization, `Grant` documents on `main` (ADR-0068). Decided 2026-10-30: a workspace hub does not authorize (ADR-0068 decision 9), and an agent's own work reaches a remote only through a workspace hub (ADR-0067 decision 10). Decided 2026-10-30 after the deep review (`docs/armature-deep-review-2026-10-30.md`, B3, B5, B7, H4): a merge is checked before it commits and refused with 422, with a dry run (ADR-0025 decision 5, note); a split push keeps a provisional id with its referrers (ADR-0065 decision 5, note); under `oidc` first encounter needs `ARMATURE_OIDC_ADMIT`, `User` gains `issuer`, and a full export or `GET /users` needs a maintainer of `main` or an administrator (ADR-0067 decision 1 and ADR-0068 decision 4, notes). Decided later the same day (B4, B6, H1, H2, H5, H8): commit files immutable with `push.json` beside them and recovery from the log's trailers (ADR-0066 decision 2, note); a per-launch secret on a workspace hub's writes and push only as the desktop program's own action (ADR-0065 decision 7, note); `Grant.relayedUsers` and `Grant.expires` (ADR-0068 decision 2, note); the grant written before the branch and revoked before its deletion, `check`'s two rules, ownerless branches closed after a window (ADR-0068 decision 3, note); the hub published as `api.<site>` under `oidc` only (ADR-0067 decision 7, note); two compose networks and a required store password (ADR-0067 decision 8, note). `docs/workspace-hub-plan.md` is the plan and §14 its build order (step 1, the adapter interface, first); its §2 terms are in the table below. Nothing changes for a client of the hub as built
-- **Node.js** — CI uses Node 22; the scripts and tests also run on later versions
+- **TerminusDB** stores the graph: one database per store, with its own commit history, branches and `User` registry. Pinned to v12.0.7 in `docker/docker-compose.yml`, on loopback.
+- **The Armature API** is a Hono application in `app/lib/api/` (ADR-0054), host-neutral: nothing there imports from `next`. It reaches the store only through `store.ts` (ADR-0055). Its host is `app/server.ts`, bundled by `npm run build:hub` into one file and packaged by `docker/hub.Dockerfile`. Next.js hosts no API.
+- **The viewer** is the Next.js app's pages (modules, the Coverage View, the Design Graph), a client of a hub over HTTP through `@armature/client` (`app/lib/viewer.ts`, `ARMATURE_HUB_URL`, default `http://localhost:3100`); no store credentials, reads only.
+- **The packages**: `@armature/types` (generated: interfaces, the schema as data, Zod schemas) and `@armature/client` (every route as a typed function), in an npm workspace with `app`; `scripts/` stays outside so the TerminusDB client resolves only there.
+- **Docker Compose** (`docker/`) runs the store alone by default; `--profile hub` adds the hub and the viewer on one private network, `armature`, all on loopback; `--profile public` adds Caddy in front of the viewer, the only public container; the `operator` profile runs `scripts/` in a Node container. A client beside an instance joins the network and calls `http://hub:3100`. Settings live in `docker/.env`. `docs/deployment.md` is the administrator's guide.
+- **Identity** is resolved by `identity.ts` (ADR-0032). The built resolver, `header`, trusts `Armature-User: <externalId>`, so a hub under it stays on its server's loopback; every hub answers only loopback host names and `ARMATURE_ALLOWED_HOSTS`, and refuses unlisted remote web origins (`ARMATURE_ALLOWED_ORIGINS`; ADR-0067 decision 7). The seed registers `demo-designer@example.edu`. `app/.env.local` holds the `TERMINUS_*` variables, `ARMATURE_IDENTITY` and `ARMATURE_EXPORT_KEY`; the scripts read the same from the shell.
+- **Export**: `GET /api/v1/export?branch=|ref=&profile=full|pseudonymous|institutional&slice=<name>` is the graph at a ref as one JSON-LD document with its reloadable schema (ADR-0031). There is no import route; re-import is operator work (ADR-0062).
+- **Accepted, not built**: the workspace hub (ADR-0065), its file-backed store (ADR-0066, Proposed), authentication beyond decision 7 (ADR-0067), authorization (ADR-0068). `docs/workspace-hub-plan.md` §14 is the build order; the ADRs' dated notes hold every later decision. Nothing changes for a client of the hub as built.
+- **Clients**: CoQui (item review) is built in its own repository; Quiver (a local-first item manager) is paused until the workspace hub exists; `docs/demo-coverage.md` maps every built, planned and proposed client.
+- **Node.js**: CI uses Node 22; later versions work.
 
 ### Topology
+
 ```
-CoQui (plugin)  ─┐
-                 ├─▶  Armature Hub  =  Armature API (Hono)  →  TerminusDB
-Viewer (Next.js) ┘     one address, /api/v1       (this repo)
+CoQui, Quiver, the MCP server ─┐
+                               ├─▶  a hub  =  the Armature API (Hono)  →  one store (TerminusDB)
+the viewer (Next.js)          ─┘     one address, /api/v1
 ```
 
-The API is the boundary. Plugins never talk to TerminusDB directly. This is architecturally important — the separation demonstrates the hub-plugin model and makes the demo narrative coherent.
+The API is the boundary: plugins never talk to a store directly. A second role for the same code, the *workspace hub* on a person's machine pushing through a remote hub's `/api/v1`, is accepted and not built (ADR-0065).
 
 ### Terms
-Used the same way in every document here (settled 2026-10-21; the workspace terms added 2026-10-30 on ADR-0065's acceptance, from `docs/workspace-hub-plan.md` §2; `docs/deployment.md` has the same table):
-- **A server** — a machine. It runs processes; with Docker, containers, each one process with its packaging. A container adds nothing to the vocabulary
-- **The schema** — the vocabulary: `schema/schema.json`, its types, fields and rules. What a design record is
-- **The API** — the contract at `/api/v1` (routes, envelopes, headers, error codes, rules; `docs/api.md`), and its implementation, the Hono app in `app/lib/api/`. A client is written against this and nothing else
-- **A store** — one TerminusDB database: a graph with its own commit history, branches and `User` registry. The TerminusDB process (the store server) holds any number of stores; only the API talks to them
-- **A host** — one Node process running the API's code: `app/server.ts`, or the container built from it. A server runs as many hosts as it has ports for; a host is invisible to clients
-- **A hub** — one host bound to one store (`TERMINUS_DB`): the address a client talks to, and the thing that "serves revisions", "fills `asOf`", "refuses a write". The relation of API to hub is that of a protocol to a server: every hub serves the same API; there can be many hubs. Several projects are either courses in one store (one hub) or separate stores (a hub each)
-- **An instance** — a hub with its particular data: the demo's seed, or a study's own graph. Usually interchangeable with hub
-- **A client, or plugin** — any program that consumes the API: CoQui, the viewer, a future importer. Never touches a store
-- **The viewer** — the Next.js pages, a client that only reads; `viewer.Dockerfile` is its container
-- **A remote hub**, the remote — a hub as built: where workspaces are created, merged and deleted, and `User` documents registered (ADR-0065 decision 1). Every hub today is one
-- **A workspace hub** — the same API, from the same code, in workspace mode on one person's machine; serves tools on loopback as its owner; holds workspaces from one remote; refuses branch creation, merge, deletion and registration (400 `remote_only`); does not authorize (ADR-0068 decision 9); its store a folder of files (ADR-0066, Proposed). Not yet built; a client learns a hub's role from `GET /discover`
-- **A workspace** — a branch on the remote, created there, owned by one person, cloned to their workspace hub from the export at its head
-- **The base** — the remote commit a workspace was cloned at, or last brought up to date with
-- **A local commit** — a commit made on a workspace hub; its identifier is provisional until pushed
-- **Push** — replaying local commits onto the workspace's branch on the remote through `/api/v1`, one `POST /documents` per commit with `If-Match`, `asOf` rewritten to remote commits, the local id and time kept as trailers; 403, 412 or 422 stops it
-- **Bring in `main`** — the remote's merge of `main` into the workspace, then the result copied down
-- **Deliver** — the remote's merge of the workspace into `main`, which needs a maintainer of `main` (ADR-0068)
+
+Used the same way in every document (`docs/deployment.md` and `docs/workspace-hub-plan.md` §2 have the same table):
+
+- **A server**: a machine. It runs processes; with Docker, containers. A container adds nothing to the vocabulary
+- **The schema**: the vocabulary, `schema/schema.json`, its types, fields and rules
+- **The API**: the contract at `/api/v1` (routes, envelopes, headers, error codes, rules; `docs/api.md`) and its implementation, the Hono app. A client is written against this and nothing else
+- **A store**: one TerminusDB database. The TerminusDB process holds any number; only the API talks to them
+- **A host**: one Node process running the API's code, `app/server.ts` or its container; invisible to clients
+- **A hub**: one host bound to one store (`TERMINUS_DB`): the address a client talks to, the thing that serves revisions, fills `asOf`, refuses a write. Every hub serves the same API; there can be many
+- **An instance**: a hub with its particular data; usually interchangeable with hub
+- **A client, or plugin**: any program that consumes the API. Never touches a store
+- **The viewer**: the Next.js pages, a client that only reads
+- **The workspace terms** (ADR-0065, not built; defined in `docs/workspace-hub-plan.md` §2): a **remote hub** is a hub as built, where workspaces are created, merged and deleted and `User`s registered; a **workspace hub** is the same API in workspace mode on one person's machine, serving tools on loopback as its owner, refusing branch creation, merge, deletion and registration (400 `remote_only`), authorizing nothing; a **workspace** is a branch on the remote, owned by one person, cloned to their workspace hub from the export at its head, **the base**; a **local commit**'s identifier is provisional until **push** replays it through `/api/v1` with `If-Match`; **bring in `main`** and **deliver** are the remote's merges in each direction, delivery needing a maintainer of `main`
 
 ### Repository Structure
+
+One line per entry: what it is and where its rules are. The code's own comments and the documents hold the rest.
+
 ```
-schema/
-  schema.json              # TerminusDB schema — single source of truth for all types
-  docs/adr/                # Architecture Decision Records; README.md is the index with every ADR's status
-docker/                    # docker-compose.yml (TerminusDB pinned to v12.0.7 on loopback; behind the `hub` profile the hub and the viewer on loopback, one private network named `armature`; the `public` profile adds Caddy on 80 and 443; the `operator` profile runs scripts/ in a Node container), Caddyfile (HTTPS for ARMATURE_SITE, proxying the viewer, and importing other sites from sites/, whose *.caddy files Git ignores), operator-entrypoint.sh (the scripts' dependencies in a volume, the checkout read-only), hub.Dockerfile (bundle, then Node plus the one file), viewer.Dockerfile (next build standalone, then Node plus the output)
-.dockerignore              # What the hub image's build context (the repository root) leaves out
-.github/workflows/ci.yml   # CI: lint, typecheck, check:types and the hub bundle at the root; the contract suite against a TerminusDB service container; the viewer's browser smoke test (Playwright over the built viewer and the bundled hub, same seeded store); the hub and viewer images built and started
-package.json               # The npm workspace root: app and packages/*; scripts/ stays outside so the TerminusDB client is resolvable only there (ADR-0055)
-packages/
-  types/                   # @armature/types (GENERATED src/, do not edit): types.ts (interfaces, ClassMap, schema as data) and schemas.ts (Zod); TypeScript source, no build; the app depends on it as a workspace, another repository by git reference
-  client/                  # @armature/client: every /api/v1 route as a typed function (refs, ETag as commit, If-Match, Armature-User, envelopes, HubError with the stable code); takes a fetch, so app/lib/api/client.test.ts runs it over app.request in-process; sends Armature-Version on every call (ADR-0059)
-scripts/
-  generate-types.js        # Derives packages/types/src/types.ts (types + schema as data) and schemas.ts (Zod) from schema.json — run after schema changes
-  generate-schema-appendix.js  # Derives docs/SCHEMA_APPENDIX.md from schema.json
-  load_schema.js           # Replaces the schema graph in one full_replace; --clear-instances empties data first for breaking changes
-  platform_checks.js       # Probes store behaviors the ADRs depend on, in a scratch database it creates and deletes (run before encoding a platform assumption); lettered A to AJ (AJ, 2026-10-30: commit messages with trailers round trip byte for byte); AH, AI, AK (`apply` under a head precondition) and AL (what one request holds) are named in the workspace hub plan and ADR-0025, ADR-0065 and ADR-0066, not yet written
-  seed_data.js             # Inserts the demo course: 61 documents plus their embedded fragments, then one Attestation in a second commit whose asOf names the first, then one LearningDataset and three LearningMetrics in a third (ADR-0063), so Narrative 1 walks on main; then the design's response (2026-10-25): a DesignFinding by the designer with the bias item's difficulty as its evidence, Open, in a fourth, and a second item for the objective, its placement and the finding Addressed in a fifth, so the coverage at the dataset's asOf and now differ; a CASE reference on one objective and an xAPI reference on the dataset (ADR-0030); one FullyAssessed declaration (Module 2, prompts); Module 1's activities with a lesson and a formative use (ADR-0005, ADR-0061); an unaligned Draft item (ADR-0060); every item with both general feedbacks, correct and incorrect (2026-10-25, since CoQui's import requires them); two Users, the designer and a reviewer, named in createdBy (filled from the schema's classes) and attestedBy. CI runs the operator's check over it
-  migrate_schema_docs.js   # Reproduces past schema documentation migrations
-  sync-terminusdb-docs.js  # Vendors TerminusDB docs into docs/vendor/terminusdb (see skill); also npm run sync:terminusdb-docs
-app/
-  app/page.tsx             # The viewer's index: a branch's modules, each linking to its Coverage View; reads the hub through lib/viewer.ts, never the store
-  app/coverage/[moduleId]/page.tsx  # The read-only Coverage View over GET /api/v1/intelligence/coverage/:moduleId (Phase 4), with each item's statistics from /intelligence/item-statistics and the module's content in teaching order from /intelligence/module-content, both at the same commit (ADR-0058's first client; ADR-0005's composed view), read from the hub
-                           # (No route file: since 2026-10-21 Next.js hosts no API; the catch-all route and @hono/vercel are gone)
-  app/graph/page.tsx       # The Design Graph (Phase 8 PR 1, 2026-10-22): reads GET /export at the ref, drops the people, hands the documents to GraphView; ?select=, ?related=, ?depth=, ?hide=, ?edges=nodes, ?lens= with its parameters and ?figure=1 reproduce a view (lib/graph/state.ts); lensReads.ts reads what a lens needs (every module's coverage, the alignment read, one attestations read per attested subject, the changes since a commit with the deleted records read at it; PR 4, 2026-10-22)
-  app/graph/GraphView.tsx  # 'use client': derives and lays out in the browser (lib/graph), React Flow read-only, column headers, semantic zoom below 0.6, the lit relation (neighbors, upstream, downstream, the hub's trace), URL mirrored (replaceState for view-only changes, the router when the server must read for the selected record); ArmatureNode.tsx (the card and the Glyph), FilterRail.tsx, LensRail.tsx (one lens at a time, its parameters, its legend), GraphPanel.tsx (actions incl. Frame, Fields, About it with attestation state, Referenced by, History with "changes since" links), Search.tsx, Figure.tsx (figure mode: the stamp, the legend tile, the bar, exportPng inlining the SVG styles html-to-image drops); reads.ts (the server's reads for a selected record: attestations, history, trace). Hover keeps a node's neighborhood and recedes the rest, arrows pan, f fits, z frames the selection (plan §5.2)
-  app/graph/[type]/[id]/page.tsx  # The Focus page (PR 2, 2026-10-22): the trace read's neighborhood drawn by GraphView restricted to it (lib/graph/focus.ts), the walk lit, the root outlined, the panel open on the root; a type the trace does not walk from gets its neighbors. With ?walk=n the Walkthrough (PR 3, 2026-10-22): lib/graph/walk.ts builds the steps from the trace, the page fills the coverage (at asOf and now) and changes steps from the hub, GraphView lights the walk so far and frames the step, WalkPanel.tsx shows the text; ← → step
-  app/layout.tsx           # Page shell (titled Armature) with the navigation: Design Graph · Modules, and the branch picker (BranchPicker.tsx, fed by the layout's branches.list(); none when the hub cannot be read)
-  e2e/graph.spec.ts        # The browser smoke test (Playwright, playwright.config.ts starts the bundled hub and the built viewer): the seed drawn, a selection, a view from its URL, relationships as nodes, the Focus page and the Walkthrough, every lens, figure mode's stamp and a downloaded PNG, the branch picker, moving around, no console error; CI's viewer job
-  lib/
-    graph/                 # The Design Graph's pure modules (no React, no DOM): stages.ts (the visual language as data: stage, hue, glyph per class, the column names with their short forms; a test fails for an artifact class without one), headers.ts (which form of a column header fits its column on screen: the name in two lines, else the short form; widths estimated from the header font, calibrated against measured widths; 2026-10-23), glyphs.ts (Lucide's inner SVG, generated), derive.ts (documents + CLASS_FIELDS → nodes, edges, about, referencedBy; junctions as edges or chips; every edge along the lifecycle), layout.ts (dagre pinned to columns by an anchor chain bounding every node from both sides, the anchor edges weighing almost nothing so real edges order a column; a seed test bounds the crossings), ports.ts (one source port per outgoing edge and one target port per incoming, ordered by the other end's height, so fans and bundles leave and arrive as separate strands; the node draws the handles; 2026-10-23), relations.ts (neighbors, upstream, downstream, the trace mapped on), focus.ts (TRACEABLE checked against the hub by a test, the focus of a trace or of a record's neighbors, restrict), walk.ts (the Walkthrough: buildWalk orders a trace's records one stage per step with templated text, completeWalk fills the coverage and changes steps from reads, and restates the assessment step when placements were made after asOf (2026-10-25); tested on the seed's ten steps and its revision), state.ts (the view state's URL form, the lens and figure parameters included), grid.ts (the dot grid at three scales: each layer's opacity by its spacing on screen, dots a fixed size on screen; 2026-10-23), lenses.ts (each intelligence read mapped onto the drawing as marks with their words and a legend whose counts are the read's own; the outcomes lens from the export's metrics; namedCommits for the changes lens's choices); fixture.ts for the tests
-  server.ts                # The standalone hub's entry: .env.local, PORT (3100) and HOST (loopback by default; the header resolver trusts the caller), startHub, SIGTERM; what build:hub bundles and the container runs
-  operator.ts              # The operator tools' command line (ADR-0062): check, delete, put; what build:operator bundles into dist/operator.mjs, which the hub's image carries beside server.mjs
-  README.md                # What the app hosts, its env vars, scripts and layout
-  lib/
-    envLocal.ts            # Reads .env.local into process.env (an existing variable wins); used by server.ts and operator.ts
-    operator/              # The operator tools (ADR-0062), reusing the adapter, the engine and the pipeline in-process: check.ts (the invariants engine over a whole branch, the two write-only rules skipped by code), repair.ts (the operator as a registered User; delete a document or a scratch branch; put through the pipeline, --unchecked passing invariants: 'skip'; every repair made on a transient operator- branch and applied onto the target as one commit marked { armature: { operator: { tool, rulesSkipped } } } in its metadata, check AF), operator.test.ts (a repair walked end to end on a scratch branch; the seed checked clean)
-    viewer.ts              # The viewer's hub: hubUrl() from ARMATURE_HUB_URL (default http://localhost:3100), hubPublicUrl() for footer links (ARMATURE_HUB_PUBLIC_URL, else only a localhost hub; omitted when private), viewerHub(), a read-only @armature/client
-    hub.ts                 # startHub({ port, hostname }): the API served by Node (@hono/node-server); port 0 for a free one; returns url, revision, close()
-    hub.test.ts            # The standalone host over a real socket on an ephemeral port: the same answers as app.request(), a write with If-Match, a clean stop
-    api/
-      app.ts               # The Armature API: Hono app, basePath /api/v1, mounts routes/, onError mapping. Never imports from next
-      boundary.ts          # The loopback boundary (ADR-0067 decision 7, built 2026-10-30): the first middleware; refuses a Host that is not loopback or in ARMATURE_ALLOWED_HOSTS (403 host_not_allowed, DNS rebinding) and an Origin that is null or a remote web origin not in ARMATURE_ALLOWED_ORIGINS (403 origin_not_allowed; tauri:// and loopback origins served); CORS for listed origins only; boundary.test.ts
-      app.test.ts          # In-process Vitest tests via app.request(): reads, the Phase 2 walkthrough, users and identity; need the container running (users tests write to and clean up main)
-      client.test.ts       # The contract test for @armature/client: every route through the client's fetch option over app.request (refs, commit from ETag, If-Match → 412, identity, envelopes, HubError codes)
-      write.test.ts        # The generic write path and every CLAUDE.md constraint, failing and passing (Phase 3 exit criterion)
-      intelligence.test.ts # The seven intelligence reads on the seed; both PROJECT_CONTEXT narratives walked through routes alone, Narrative 1 on a scratch branch that writes its own dataset and metric (Phase 4 exit criterion); attestations made on a round branch, merged, then reported Stale after a fragment changes (Phase 5 exit criterion)
-      store.ts             # The store adapter (ADR-0055): the ONLY module that talks to TerminusDB; createStore(ref) per request; a read dropped by the store's closing connection is sent once more, a write never (check AG, 2026-10-25); store.test.ts over a stubbed fetch
-      http.ts              # Request/response conventions: ?branch=|?ref=, ETag/If-Match as bare commit ids, write envelopes
-      identity.ts          # Identity resolution (ADR-0032): pluggable resolver (header now; oidc specified by ADR-0067, accepted 2026-10-30, not yet built) → User on main, the registry; carries a User copy onto a branch when a write needs it
-      classes.ts           # What the generated maps say about a class: known, writable, inherits (CLASS_ANCESTORS), carries createdBy or attestedBy
-      write.ts             # The one write pipeline: Zod shape → attestedBy → 409 on a foreign id (Hash keys: required fields in the store, Optional ones matched in the hub) → createdBy and asOf → invariants → one commit
-      fragments.ts         # A record's parts by fragmentId, from the schema's fragment category, and the canonical form two states are compared in (constraint 16, attestation staleness)
-      invariants/          # The invariants engine: index.ts (context, registry, 422), references.ts (constraint 0), asOf.ts (constraint 13), fragmentRef.ts (constraint 16), attachments.ts (constraints 18 and 19), observations.ts (constraint 20), one module per constrained type
-      intelligence/
-        coverage.ts        # The coverage algorithm (ADR-0029 decisions 1 to 3) and its vocabulary; computed on read, never stored (ADR-0056)
-        graph.ts           # Per-request cached reads at one ref for the intelligence routes; schema-driven reverse lookups (Optional and Set references listed and filtered: check Y)
-      errors.ts            # ApiError: status + stable code + message, rendered by onError
-      memo.ts              # CommitMemo: a bounded in-process memo for reads at a commit, keyed by the commit and the read's parameters (ADR-0025: a read at a commit is immutable); the history route's answers first (2026-10-23)
-      version.ts           # The per-request version contract (ADR-0059): REVISIONS (the dated entries of docs/client-changes.md, newest first; a test checks they agree), CAPABILITIES (each mapped to its route prefix; a route under none fails a test), discovery(), and `negotiate`, the middleware on every request: Armature-Version (a newer revision is served on a read, refused on a write), Armature-Capabilities, and the Armature-Version response header
-      routes/
-        documents.ts       # list with field filters (Optional/Set filtered in the hub; User fields refused), GET at ref, PUT, batch POST (@capture/@ref), history (kept by the head it was read at in memo.ts, since the store walks the whole log for a document touched rarely; ETag the head; 2026-10-23), diff
-        branches.ts        # list, create, head, merge (three-way via apply; source recorded in commit metadata; InsertConflict reported), changes since a commit, delete (only when another branch holds the head)
-        users.ts           # list at ref, /me, register on main (ADR-0032)
-        intelligence.ts    # coverage/:moduleId and coverage?course=, alignment, trace/:type/:id, impact/:type/:id, attestations/:type/:id (staleness by fragment, ADR-0028), item-statistics?module=&unit= (every metric about each item, ADR-0058), module-content/:moduleId (activities and lessons in teaching order, a tree of placements, ADR-0005): design intelligence from structure alone, at any ref (plan P4, ADR-0056)
-        export.ts          # GET /export?profile=&slice= (the graph at a ref as one JSON-LD document with its reloadable schema) and /export/slices (ADR-0031)
-        discover.ts        # GET /discover (the revisions served, the capabilities with their settings, where the schema is; no ref, no identity) and GET /schema?branch=|ref= (the schema graph at a ref in the reloadable form, commit in ETag; ADR-0027 decision 4, built with ADR-0059)
-      export/
-        exporter.ts        # Slices (membership by class or ancestor), unresolved references, schema normalization (the store's @max_cardinality "inf", check AE5), the three profiles (HMAC tokens under ARMATURE_EXPORT_KEY)
-        slices.json        # The declared slices: full, outcomes-loop, review. A study's slice is an entry here, not code
-  vitest.config.mts        # Vitest: '@' alias, reads .env.local so tests hit the same store as the app
-docs/
-  how-armature-works.md    # The complete explainer for academic readers: purpose, history, every mechanism, decisions, future
-  schema-guide.md          # The schema guide for tool authors (Phase 7): a hub and the client, the graph's patterns and rules, reading, writing, refusals by code, mapping a tool's concepts (CoQui's as the example), worked examples with the client
-  api.md                   # Reference for every /api/v1 route, envelope, query parameter and error code
-  SCHEMA_APPENDIX.md       # GENERATED — do not edit; run node scripts/generate-schema-appendix.js (not drift-checked in CI)
-  development-plan.md      # Phased plan; §6 open questions; §9 lists verified TerminusDB platform facts
-  armature-asks-from-Coqui.md  # CoQui's dated handoff (2026-10-05): its asks and lessons; a status banner says what landed
-  armature-deep-review-2026-10-30.md  # An outside agent's review of the repository at `e3c0396` (2026-10-30): seven blockers (B1 to B7), eight high findings (H1 to H8), documentation facts; kept as written, a status banner says what landed and what awaits a decision
-  client-changes.md        # What client tools (CoQui first) must act on, newest first: what changed, what a client does, CoQui's mappings. Add an entry for every change to /api/v1 or the schema a client would act on
-  research-path.md         # How a learning scientist stands up a constrained Armature for one study: instance, what the tools write, slice, profile, export at a pinned commit, reproduction, process questions only (Phase 6)
-  graph-view-plan.md       # The Design Graph (Phase 8, planned 2026-10-22; PR 1 built the same day): the viewer's graph pages (/graph, the Focus page, the Walkthrough, figure mode) on React Flow with dagre; the visual language (stages, hues, glyphs); Narrative 1 as ten steps; five PRs; §14 records the decisions
-  visual-language.md       # How Armature draws: stages, hues (validated with the dataviz skill), glyphs (Lucide, inlined), node and edge anatomy, chips; the values app/lib/graph/stages.ts uses, for papers and slides
-  mcp-server-plan.md       # The Armature MCP server (draft 2026-10-27): a client in its own repository that lets an MCP assistant ask the graph through the intelligence reads at a named commit, tools registered from /discover, hub refusals passed through, notes and findings proposed on branches as an agent behind a switch; §13 holds twelve open questions with recommendations
-  demo-coverage.md         # Demo coverage (2026-10-27): hub capabilities against built, planned and proposed client tools, each row scored with ADR-0029's verdict; the gaps no demo shows and which proposed tool closes them. Update when a tool changes status or the hub gains a capability
-  storyline-bridge-plan.md # The Storyline bridge (draft 2026-10-27): a client that records each Storyline build in the graph by hash (source, package, interaction map), maps positional interaction ids to items through stable slide ids, writes findings for differences, exports items to the question template, brings results back as metrics at the build's commit, flags builds that predate changes; no published output modified; §14 holds twelve open questions
-  workspace-hub-plan.md    # The workspace hub (draft 2026-10-28, with ADR-0065; its store, a folder of files with TerminusDB as the test bed, is ADR-0066, Proposed; identity is ADR-0067 and ADR-0068, prerequisites with the build order in §14; ADR-0065, ADR-0067 and ADR-0068 accepted 2026-10-30, none yet built): the hub's own code in a second mode on one person's machine, serving tools on loopback; workspaces are branches created on the remote and cloned from its export; push replays each local commit through /api/v1 with If-Match, a local-to-remote commit table rewriting asOf, and two message trailers keeping the local time; branches, merges and Users stay on the remote; the store underneath TerminusDB or files behind an adapter interface; Quiver (paused 2026-10-30) is its first real test and its modules the starting code; §16 holds twelve questions, most decided 2026-10-29 and 2026-10-30, question 4 (the clone's slice) open
-  deployment.md            # The administrator's guide to an instance: the terms, the containers and what each publishes, who can do what and why, the steps, a hosted instance (machine size, domain and DNS, firewall, reboots and updates, backups, the tunnel, the DigitalOcean run with a scoped token from the Keychain; measured on the VM and the Droplet), several projects, what is not built (authentication, an admin page, a running hosted instance, published images)
-  demo-api.md              # RETIRED demo-era API spec, kept for history
-  positionpaper/           # The position paper (March 2026); not edited
-  research/                # Standards-precedents survey, candidate ADRs 0035–0053, reading list (2026-10-06 snapshot); schema-precedents-and-plugin-candidates.md (2026-10-20); three client mappings (DQ QuestionBank Core, Tessera, QuiQui)
-  vendor/terminusdb/       # GENERATED — vendored TerminusDB docs; INDEX.md, VERSION.json, 50 curated pages
-.claude/
-  CLAUDE.md                # This file
-  PROJECT_CONTEXT.md       # Problem space, audiences, demo goals
-  SESSION.md               # The state a session needs: current phase, what's next, what is in flight, blockers, the hand-off; budget 32 KB (docs/context-files-plan.md)
-  HISTORY.md               # The log: one entry per session since February 2026, newest first, with each session's facts and decisions; appended by prompts/update-session.md, read on demand
-  prompts/                 # Reusable workflow prompts
-  skills/terminusdb/       # How to answer TerminusDB questions: which vendored page, what to trust, when to re-sync
+schema/schema.json         # The schema, single source of truth; its @documentation is authoritative
+schema/docs/adr/           # The ADRs; README.md is the index with every status
+docker/                    # docker-compose.yml, Caddyfile, hub.Dockerfile, viewer.Dockerfile, operator-entrypoint.sh; docs/deployment.md explains them
+.github/workflows/ci.yml   # Lint, typecheck, drift check, the hub bundle; the contract suite against a store container; the client install check; the browser test; both images
+package.json               # The npm workspace root: app and packages/*
+packages/types/            # @armature/types, GENERATED src/ (types.ts, schemas.ts); do not edit
+packages/client/           # @armature/client, every route as a typed function; takes a fetch; install-check/ is CI's consumer test
+scripts/                   # Outside the workspace: generate-types.js, generate-schema-appendix.js, load_schema.js (--clear-instances, --recreate),
+                           #   seed_data.js (six commits; its header says what each adds), platform_checks.js (lettered probes; its header lists them), sync-terminusdb-docs.js
+app/server.ts              # The hub's entry (.env.local, PORT, HOST loopback by default); what build:hub bundles
+app/operator.ts            # The operator tools' command line: check, delete, put (ADR-0062); bundled, shipped in the hub image
+app/app/                   # The viewer: page.tsx (modules), coverage/[moduleId], graph/ (the Design Graph, Focus page, Walkthrough; docs/graph-view-plan.md), layout.tsx
+app/e2e/graph.spec.ts      # The browser smoke test (Playwright); CI's viewer job
+app/lib/viewer.ts          # The viewer's client of the hub (ARMATURE_HUB_URL); hub.ts starts the API on a port; envLocal.ts reads .env.local
+app/lib/graph/             # The Design Graph's pure modules (no React, no DOM), each tested; stages.ts is the visual language as data
+app/lib/operator/          # check.ts (the engine over a whole branch), repair.ts (every repair a marked commit through a transient branch)
+app/lib/api/               # The Armature API, the Hono app (app.ts, basePath /api/v1; never imports from next)
+  boundary.ts, version.ts  #   First: Host and Origin checks (ADR-0067 d7); then negotiate: REVISIONS mirrors docs/client-changes.md, every route under a CAPABILITY (ADR-0059)
+  store.ts                 #   The store adapter: the ONLY module that talks to TerminusDB; createStore(ref); a dropped read resent once, a write never
+  identity.ts, write.ts    #   The resolver → a User on main (ADR-0032); the one write pipeline: shape → attestedBy → 409 → createdBy and asOf → invariants → one commit
+  http.ts, classes.ts, fragments.ts, errors.ts, memo.ts  # Conventions (?branch=|?ref=, ETag/If-Match); the class maps; parts by fragmentId; ApiError; reads kept by commit
+  invariants/              #   The engine; index.ts maps each constraint number to its module
+  intelligence/            #   coverage.ts (ADR-0029, computed on read), graph.ts (per-request cached reads at one ref)
+  export/                  #   exporter.ts (slices, profiles, schema normalization), slices.json (a study's slice is an entry here)
+  routes/                  #   documents, branches, users, intelligence, export, discover; docs/api.md is their reference
+  *.test.ts                #   The contract suite over app.request(): write (every constraint failing and passing), intelligence (both narratives), client, store, boundary, ...
+app/vitest.config.mts      # '@' alias; reads .env.local; files run one at a time
+docs/                      # how-armature-works.md (the explainer), api.md (the reference), schema-guide.md (for tool authors), client-changes.md (the revision list),
+                           #   SCHEMA_APPENDIX.md (GENERATED), development-plan.md (§2 clients, §6 questions, §9 platform facts), deployment.md, research-path.md,
+                           #   the plans (workspace-hub, graph-view, mcp-server, storyline-bridge, context-files), visual-language.md, demo-coverage.md,
+                           #   the kept records with banners (armature-asks-from-Coqui.md, armature-deep-review-2026-10-30.md, demo-api.md RETIRED),
+                           #   positionpaper/, research/, figures/, vendor/terminusdb/ (GENERATED; _all/ gitignored)
+.claude/                   # CLAUDE.md (this file), PROJECT_CONTEXT.md, SESSION.md (the state), HISTORY.md (the log, read on demand),
+                           #   prompts/ (update-session.md, commit-message-guide.md), skills/terminusdb/
 ```
 
 ### TerminusDB documentation
 
-Questions about what the store does (schema language, document API, branches and merge,
-history, access control, the JS client) are answered from the vendored docs in
-`docs/vendor/terminusdb/`, following the `terminusdb` skill in `.claude/skills/`. The installed
-client source under `scripts/node_modules/terminusdb` (the only copy; `app/` has no client) is authoritative for client behavior; the running Docker
-container is authoritative for server behavior. Re-run `node scripts/sync-terminusdb-docs.js`
-after a TerminusDB release; `docs/vendor/terminusdb/VERSION.json` records the last sync.
+Questions about what the store does are answered from the vendored docs in `docs/vendor/terminusdb/`, following the `terminusdb` skill. The installed client source under `scripts/node_modules/terminusdb` is authoritative for client behavior; the running container for server behavior; `docs/development-plan.md` §9 lists where the docs are known wrong. Re-run `node scripts/sync-terminusdb-docs.js` after a release; `VERSION.json` there records the last sync.
 
 ---
 
 ## The Schema
 
-The schema is the single source of truth for everything. Read `schema/schema.json` before working on the API or any data-related code. The inline `@documentation` comments on every type and field are authoritative.
+The schema is the single source of truth. Read `schema/schema.json` before working on the API or any data-related code. The inline `@documentation` on every type and field is authoritative.
 
 ### Types are generated, not hand-maintained
 
-`packages/types/src/types.ts` and `packages/types/src/schemas.ts` (the `@armature/types` workspace package, imported as `@armature/types` and `@armature/types/schemas`; in `app/lib/` until 2026-10-21) are **generated** from `schema/schema.json` by `scripts/generate-types.js`. Never edit them directly. `types.ts` carries the interfaces and the schema as runtime data (`CLASS_CATEGORY`, `CLASS_ANCESTORS`, `CLASS_KEY`, `CLASS_FIELDS`); `schemas.ts` carries one strict Zod schema per concrete class for the write routes.
+`packages/types/src/types.ts` and `schemas.ts` (`@armature/types`, imported as `@armature/types` and `@armature/types/schemas`) are **generated** from `schema/schema.json` by `scripts/generate-types.js`. Never edit them. `types.ts` carries the interfaces and the schema as runtime data (`CLASS_CATEGORY`, `CLASS_ANCESTORS`, `CLASS_KEY`, `CLASS_FIELDS`); `schemas.ts` one strict Zod schema per concrete class for the write routes.
 
-After any change to `schema/schema.json`:
-```bash
-# From the repository root
-npm run generate:types
+After any change to `schema/schema.json`, from the repository root: `npm run generate:types`, then `npm run check:types` (also in CI).
 
-# Verify (also runs in CI)
-npm run check:types
-```
+The generator's header documents every mapping (xsd to TS, `Optional` to optional, `Set` and `List` to arrays, references to an id, subdocuments inline, enums to unions plus `VALID_*` arrays; in Zod, `@min_cardinality` to `.min(n)`, references as an id or `{ "@ref" }`, a Set or List without a minimum optional).
 
-The generator handles: xsd primitives → TS primitives, `sys:JSON` → `unknown`, `Optional<T>` → optional fields, `Set<T>`/`List<T>` → arrays, document class references → `string` (@id), `@subdocument` references → the inline interface, enum references → union types plus `VALID_*` arrays, `@abstract` → JSDoc comment, inheritance as declared (junctions extend `DesignRecord`), property-less classes → type aliases. Its second output, `schemas.ts`, holds strict Zod request schemas (`@min_cardinality` → `.min(n)`, references as an id or `{ "@ref" }`, abstract subdocuments as discriminated unions).
-
-To add a new type: (1) update `schema.json` (with ADR), giving the class `@metadata.armature.category` (`infrastructure`, `fragment`, `artifact` or `relationship`; ADR-0027) and an explicit `@key` (ADR-0024), (2) run `generate:types` and `node scripts/generate-schema-appendix.js`, (3) commit `schema.json`, `types.ts`, `schemas.ts` and `SCHEMA_APPENDIX.md` together. If the type has rules the store cannot express, add a validator in `app/lib/api/invariants/` with a failing and a passing test. There is no list of types in the generators; a class without a category fails generation, which CI catches. Before relying on any store behavior a change depends on, add a check to `scripts/platform_checks.js` and run it against the scratch database it creates.
+To add a type: (1) update `schema.json` with an ADR, giving the class `@metadata.armature.category` (`infrastructure`, `fragment`, `artifact` or `relationship`; ADR-0027) and an explicit `@key` (ADR-0024); (2) run `generate:types` and `node scripts/generate-schema-appendix.js`; (3) commit `schema.json`, `types.ts`, `schemas.ts` and `SCHEMA_APPENDIX.md` together. Rules the store cannot express are a validator in `app/lib/api/invariants/` with a failing and a passing test. A class without a category fails generation. Before relying on a store behavior, add a lettered check to `scripts/platform_checks.js` and run it.
 
 ### Key types and their roles
 
 | Type | Role |
 |---|---|
-| `DesignRecord` | Abstract root of every artifact and relationship; the type `DesignNote.subject` and `DesignFinding.subject` point at. `User` is outside it (ADR-0017) |
-| `LearningObjective` | Central node — everything connects to it |
-| `AssessmentItem` | Reusable question in the item bank; a tree of fragments (stem, options, feedbacks) with its own `status`; placed into Assessments via `ItemInstance`; may assess no objective yet (ADR-0060) |
-| `Fragment` / `TextFragment` / `ItemOption` | Subdocument parts of an item, returned inline; identity is the client-assigned `fragmentId`, never the nested store id (ADR-0022, ADR-0023, ADR-0033). `text` is optional since ADR-0030: a part carries text or at least one attachment (constraint 19) |
-| `ExternalRef` | Subdocument on every `ArmatureDocument` (`externalRefs`): an identifier in another system (`system`: CASE, QTI, xAPI, LTI, Other; `identifier`; optional `label`). Points outward, copies nothing in, carries no relation to its target yet (ADR-0030) |
-| `Attachment` | Subdocument on every `ArmatureDocument` and every `Fragment` (`attachments`): a verifiable coordinate for bytes or a revision of a tree of bytes in a store the hub may or may not operate (`store`, `storeUri`, `contentHash`, `hashAlgorithm` mandatory; `revision` required for Git and Lore, constraint 18; `path`, `mediaType`, `byteSize`, `role`, `label` optional). The graph never holds bytes; a changed hash on a fragment's attachment is a change to the part, so attestations go stale (ADR-0030) |
-| `ItemInstance` | Assessment-context wrapper around an `AssessmentItem`; its `status` is placement clearance, distinct from the item's own (ADR-0018) |
-| `DesignFinding` | An evidence-grounded concern about any design record, or one part of it (`fragmentId`), with `status` and resolution rationale (ADR-0020, ADR-0028) |
-| `Attestation` | One person's verdict (`Affirmed`, `Declined`) about a design record or one part of it, as of a commit; with a claim (`claimRef` and `claimText`) or as a plain endorsement. Relationship, Hash key over `(subject, fragmentId, claimRef, attestedBy)`: one current verdict per person, part and claim; no client `@id`. Staleness is a read (ADR-0028) |
-| `ModuleObjective` | Junction carrying a module's declaration of an objective and its design intent (`role`, `roleRationale`, `sequence`); written by clients through the generic document API, which ADR-0007 records as the decision since 2026-10-18; it stores no coverage, which is computed on read (ADR-0056) |
-| `LearningMetric` | A measurement from a `LearningDataset` (`derivedFrom`), naming the design record it measures in `subject`; an item statistic is a metric whose `subject` is the item, never a field on the item (ADR-0058) |
-| `PrerequisiteRecord` | Junction doc; carries `rationale` and `prerequisiteType` — design decision preserved as data |
-| `NeedEvidenceLink` | Junction doc; links LearningNeed to LearningEvidence with `confidence` weighting |
-| `ModuleActivityLink` | Junction doc; places LearningActivity in Module with `sequence` |
-| `ModuleLessonLink` | Junction doc; places a `Lesson` (an ordered set of activities, the peer of an assessment; `ActivityGroup` until ADR-0064) in Module with `sequence` |
-| `LessonActivityLink` | Junction doc; places LearningActivity in Lesson with sub-`sequence` |
-| `ActivityItemLink` | Junction doc; an item used formatively inside a LearningActivity (a poll, a practice question) with its own optional `sequence`; Hash key over `(activity, item)`; no points, no clearance, counts toward no coverage (ADR-0061) |
+| `DesignRecord` | Abstract root of every artifact and relationship; what `DesignNote.subject` and `DesignFinding.subject` point at. `User` is outside it (ADR-0017) |
+| `LearningObjective` | The central node; everything connects to it |
+| `AssessmentItem` | A reusable question: a tree of fragments with its own `status`; placed via `ItemInstance`; may assess no objective yet (ADR-0060) |
+| `Fragment` / `TextFragment` / `ItemOption` | Subdocument parts of an item, returned inline; identity is the client-assigned `fragmentId`, never the nested store id (ADR-0022, ADR-0023, ADR-0033). A part carries text or at least one attachment (constraint 19) |
+| `ExternalRef` | Subdocument on every `ArmatureDocument` (`externalRefs`): an identifier in another system; points outward, copies nothing in (ADR-0030) |
+| `Attachment` | Subdocument on every `ArmatureDocument` and `Fragment` (`attachments`): a verifiable coordinate for bytes, never the bytes (`contentHash` and `hashAlgorithm` mandatory; `revision` for Git and Lore); a changed hash on a fragment's attachment is a change to the part (ADR-0030) |
+| `ItemInstance` | A placement of an item in an Assessment; its `status` is placement clearance, distinct from the item's own (ADR-0018); Hash key over `(assessment, implements)`, one placement per item per assessment |
+| `DesignFinding` | An evidence-grounded concern about any design record or one part of it (`fragmentId`), with `status` and resolution rationale (ADR-0020, ADR-0028) |
+| `Attestation` | One person's verdict (`Affirmed`, `Declined`) about a record or a part, as of a commit; with a claim or as an endorsement; Hash key over `(subject, fragmentId, claimRef, attestedBy)`, no client `@id`; staleness is a read (ADR-0028) |
+| `ModuleObjective` | Junction: a module's declaration of an objective and its design intent (`role`, `roleRationale`, `sequence`); written through the generic document API (ADR-0007); stores no coverage (ADR-0056) |
+| `LearningMetric` | A measurement from a `LearningDataset` (`derivedFrom`) about the record in `subject`; an item statistic is a metric whose `subject` is the item, never a field on it (ADR-0058) |
+| `PrerequisiteRecord` | Junction with `rationale` and `prerequisiteType`: a design decision as data |
+| `NeedEvidenceLink` | Junction: LearningNeed to LearningEvidence with `confidence` (reliability, not direction) |
+| `ModuleActivityLink`, `ModuleLessonLink` | Junctions placing an activity or a `Lesson` (an ordered set of activities, the peer of an assessment; ADR-0064) in a Module with `sequence` |
+| `LessonActivityLink` | Junction placing an activity in a Lesson with its own `sequence` |
+| `ActivityItemLink` | Junction: an item used formatively inside an activity, optional `sequence`, Hash key over `(activity, item)`; no points, no clearance, no coverage (ADR-0061) |
 
-### Critical API constraints (not enforced by TerminusDB schema)
+### Critical API constraints (not enforced by the TerminusDB schema)
 
-These are enforced by the invariants engine in `app/lib/api/invariants/` on every write, whatever the route; its `index.ts` maps each number below to the module that checks it. TerminusDB enforces field types, required fields, `@min_cardinality`, enum values and that a referenced document *exists*. It does **not** check the class of a referenced document (verified 2026-10-07, `scripts/platform_checks.js` check L), and it cannot express cross-document or conditional rules. Shape (types, required fields, enums, minimum cardinality) is checked first by the generated Zod schemas and answered with 400; the rules below are answered with 422 `invariant_violation`, every violation at once, except where a rule says otherwise (2 is shape, 400; 12 is 409; 1 is retired). `docs/api.md` lists every violation code.
+Enforced by the invariants engine on every write; `invariants/index.ts` maps each number to its module. The store enforces types, required fields, `@min_cardinality`, enums and that a referenced document *exists*, not its class (check L), and no cross-document or conditional rule. Shape is Zod first, 400; the rules below answer 422 `invariant_violation` with every violation at once, except where a rule says otherwise. `docs/api.md` lists every code.
 
-0. **Every reference field's target must be an instance of the declared class or a subclass.** Generic, applies to every type. This is what keeps a `User` out of `DesignNote.subject` and an `AssessmentItem` out of `Module.course` (ADR-0014, ADR-0017 amended)
-1. *Retired 2026-10-20 (ADR-0060).* `AssessmentItem.assesses` may be empty or absent: an item may exist before it is aligned; it counts toward no objective's coverage, and `GET /api/v1/intelligence/alignment` lists it under `itemsWithoutObjective`. Readers treat an absent `assesses` as none (the store returns no field for an empty set)
-2. `LearningActivity.targets` — must contain at least one `LearningObjective` (schema `@min_cardinality`, ADR-0013; checked as shape by Zod, 400; kept after rule 1's retirement until a client shows an activity that exists before it targets anything, ADR-0060 decision 4)
-3. `ModuleActivityLink.sequence` and `ModuleLessonLink.sequence` — must be unique across both types for a given Module (they share one integer namespace)
-4. `LessonActivityLink.sequence` — must be unique within a lesson
-5. `ItemInstance.sequence` — must be unique within an Assessment
-6. `Lesson` — must not contain other `Lesson` instances (flatness constraint; falls out of constraint 0, since `LessonActivityLink.activity` is a `LearningActivity`)
-7. Coverage is never stored (ADR-0056). `GET /api/v1/intelligence/coverage/:moduleId` computes it at the requested ref from the distinct items placed in the module's assessments that assess each declared objective, twice: Approved placements of Approved items, and everything not Retired (ADR-0029 decisions 1 to 3; default cut 0 `Uncovered`, 1 `PartiallyAssessed`, 2 to 4 `FullyAssessed`, 5 or more `OverAssessed`, with the thresholds as query parameters and the counts in the response). No write recomputes anything; a `ModuleObjective` with a coverage field is an unknown key, 400. Nothing in the invariants engine checks this; the schema simply has no such field
-8. `fragmentId` — unique across all fragments (stem, options, feedbacks) of one `AssessmentItem`; never regenerated by the hub (ADR-0023, ADR-0033)
-9. `ItemOption.text` — unique within one item where present (presence is constraint 19's job since ADR-0030; a picture option has none); the number of correct options must suit `itemType` (ADR-0022)
-10. `ItemInstance.status` — may not be `Approved` while its `AssessmentItem.status` is `Draft` or `InReview` (ADR-0018)
-11. `DesignFinding.resolutionRationale` — required when `status` is `Dismissed` (ADR-0020)
-12. A write whose `@id` exists under a different `@type` — rejected with 409 `type_conflict` by the write pipeline (ADR-0024)
-13. `asOf` on `LearningDataset`, `LearningMetric` and `DesignFinding` — a bare commit id the store holds, at which the record's subjects exist (a dataset's `producedBy`; a metric's `subject`; a finding's `subject` and `regarding`); a metric with a `derivedFrom` dataset carries the dataset's value. The pipeline fills it from the branch head on create (the head the write starts from, or `If-Match`), keeps it on replace and copies it onto a metric; every value not taken from the head is checked (ADR-0057, ADR-0058; `invariants/asOf.ts`). On `Attestation` too, with `subject` checked; a replace of an attestation refills `asOf` from the head (every write of one is a new verdict), and its subject may not be written in the same request (`subject_in_same_write`; ADR-0028 decision 5)
-14. `Attestation.claimRef` and `claimText` — both present (a claim) or both absent (an endorsement), `claim_incomplete` (ADR-0028)
-15. `Attestation.attestedBy` — the resolved identity. The pipeline fills it before looking for the record to replace, since it is in the key; a body naming anyone else is `attester_not_caller` (ADR-0028, ADR-0032)
-16. `fragmentId` on `Attestation`, `DesignNote` and `DesignFinding` — the record names exactly one `subject` (`fragment_needs_one_subject`), which has a part with that `fragmentId` at `asOf` when that is checked, else as the write leaves it (`unknown_fragment`; ADR-0028 decision 6, `invariants/fragmentRef.ts`)
-17. `ActivityItemLink.sequence` — must be unique within a `LearningActivity`; independent of every module and lesson sequence (`duplicate_sequence`; ADR-0061)
-18. `Attachment` — a verifiable coordinate: `revision` present when `store` is a versioned kind (`Git`, `Lore`; `revision_required`), and `contentHash` lower-case hexadecimal of the length `hashAlgorithm` implies for the IANA registry names the hub knows (`sha-256`, `sha-512`, `sha-1`, `md5` and so on; `hash_malformed`); an unknown algorithm is accepted unchecked. Checked wherever an attachment sits, on the artifact or on a fragment (ADR-0030; `invariants/attachments.ts`)
-19. `Fragment` — carries text or at least one attachment (`empty_fragment`; ADR-0030). `Fragment.text` is `Optional` in the schema since ADR-0030
-20. `LearningDataset` and `LearningMetric` — name their source: a dataset has `producedBy` or at least one `externalRef` (`dataset_without_source`); a metric has `derivedFrom` or at least one `externalRef` (`metric_without_source`). Nothing is inferred about whose assessment it was (ADR-0063; `invariants/observations.ts`)
+0. **Every reference field's target is an instance of the declared class or a subclass.** Generic; keeps a `User` out of `DesignNote.subject` and an `AssessmentItem` out of `Module.course` (ADR-0014, ADR-0017)
+1. *Retired (ADR-0060).* `AssessmentItem.assesses` may be empty or absent; such an item counts toward no coverage and the alignment read lists it under `itemsWithoutObjective`; readers treat an absent Set as empty
+2. `LearningActivity.targets` has at least one `LearningObjective` (schema `@min_cardinality`, ADR-0013; shape, 400; kept until a client shows the case, ADR-0060 decision 4)
+3. `ModuleActivityLink.sequence` and `ModuleLessonLink.sequence` are unique across both types within a Module (one integer namespace)
+4. `LessonActivityLink.sequence` is unique within a lesson
+5. `ItemInstance.sequence` is unique within an Assessment
+6. A `Lesson` contains no `Lesson` (falls out of constraint 0)
+7. Coverage is never stored (ADR-0056); the coverage read computes it at the ref over the module's placements, two populations, the default cut 0/1/2 to 4/5 or more (ADR-0029 decisions 1 to 3). A `ModuleObjective` with a coverage field is an unknown key, 400
+8. `fragmentId` is unique across all fragments of one `AssessmentItem` and never regenerated by the hub (ADR-0023, ADR-0033)
+9. `ItemOption.text` is unique within one item where present; the number of correct options suits `itemType` (ADR-0022)
+10. `ItemInstance.status` may not be `Approved` while its item is `Draft` or `InReview` (ADR-0018)
+11. `DesignFinding.resolutionRationale` is required when `status` is `Dismissed` (ADR-0020)
+12. A write whose `@id` exists under a different `@type` is 409 `type_conflict` (ADR-0024)
+13. `asOf` on `LearningDataset`, `LearningMetric`, `DesignFinding` and `Attestation` is a bare commit id the store holds, at which the record's subjects exist; a metric carries its dataset's value. Filled from the head (or `If-Match`) on create, kept on replace, checked when supplied; an attestation's replace refills it and its subject may not be written in the same request (`subject_in_same_write`) (ADR-0057, ADR-0058, ADR-0028 decision 5)
+14. `Attestation.claimRef` and `claimText` are both present or both absent (`claim_incomplete`; ADR-0028)
+15. `Attestation.attestedBy` is the resolved identity, filled before the replace lookup since it is in the key; a body naming anyone else is `attester_not_caller` (ADR-0028, ADR-0032)
+16. `fragmentId` on `Attestation`, `DesignNote` and `DesignFinding`: the record names exactly one `subject` (`fragment_needs_one_subject`) with a part of that id at `asOf` when checked, else as the write leaves it (`unknown_fragment`; ADR-0028 decision 6)
+17. `ActivityItemLink.sequence` is unique within an activity (`duplicate_sequence`; ADR-0061)
+18. `Attachment`: `revision` present when `store` is `Git` or `Lore` (`revision_required`); `contentHash` lower-case hexadecimal of the length `hashAlgorithm` implies for the IANA names the hub knows (`hash_malformed`); checked on an artifact or a fragment (ADR-0030)
+19. A `Fragment` carries text or at least one attachment (`empty_fragment`; ADR-0030)
+20. A `LearningDataset` has `producedBy` or an `externalRef` (`dataset_without_source`); a `LearningMetric` has `derivedFrom` or an `externalRef` (`metric_without_source`) (ADR-0063)
 
-The pending rule on `LearningDataset.producedBy` became constraint 20 on 2026-10-20 (ADR-0063). The list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021's non-aggregation guard) and filters `Optional` enum or reference and `Set` fields in the hub, since the store answers those template queries with a 500 (checks Y2, Y3, Y5).
+Also in the API: the list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021) and filters `Optional` and `Set` fields in the hub, since the store 500s on those templates (check Y). Decided, not built: a merge is checked before it commits, 422 (ADR-0025 decision 5, note).
 
 ### Junction document pattern
 
-Armature uses junction documents extensively for M:M relationships and semantically rich associations. This is intentional — relationships are first-class artifacts, not just edges. See ADR-0003.
-
-Every junction document follows the same pattern:
-- Named after both sides: `NeedEvidenceLink`, `ModuleActivityLink`, `LessonActivityLink`, `ActivityItemLink`
-- Carries the relationship-level data that makes it worth reifying
-- Back-reference pattern: children carry the parent reference, not the other way around (ADR-0004)
+Relationships are first-class artifacts, not edges (ADR-0003). Every junction is named after both sides, carries the relationship-level data that makes it worth reifying, and follows the back-reference pattern: children carry the parent reference (ADR-0004). Every junction class is Hash-keyed over its ends, so a client never supplies its id and reaches it in a batch by `@capture` and `@ref` (ADR-0024).
 
 ---
 
 ## Development Principles
 
-### 1. The API is the boundary
-Plugins never touch TerminusDB directly. All reads and writes go through Armature API endpoints. This is both an architectural principle and a demo narrative requirement.
-
-The API is also host-neutral (ADR-0054). Every `/api/v1` route is a Hono route in `app/lib/api/`, written against Web-standard `Request` and `Response`. Nothing under `app/lib/api/` imports from `next`; `app/server.ts` with `app/lib/hub.ts` is its host, and Next.js appears nowhere near it since 2026-10-21, when the catch-all route went and the pages became a client. This is what made the separate process a deployment change rather than a rewrite.
-
-### 2. Constraints belong in the API
-TerminusDB enforces field types, required fields, enum values, minimum cardinality and reference existence. Everything else (reference class, sequence uniqueness, conditional and cross-document rules) belongs in the API layer, in the invariants engine. See ADR-0006 (the original principle; superseded for minimum cardinality by ADR-0013) and the constraints above. Derived values are not constraints to maintain: they are computed on read (ADR-0056).
-
-### 3. Design rationale is explicit
-Every non-obvious decision should have a rationale — in code comments, in ADRs, or in the schema documentation. This is Armature practicing what it preaches.
-
-### 4. Schema changes require an ADR
-Any modification to `schema/schema.json` that changes existing types or adds new ones warrants an ADR. Adding an ADR first, then implementing, is the preferred order. After schema changes, always regenerate `packages/types` (see The Schema section above) and commit the schema and the generated files together.
-
-### 5. Framework vs. plugin boundary
-Ask before adding anything: "Does this belong in the graph infrastructure, or in a specific tool's UX?" System-of-record concerns (artifact typing, relationships, schema versioning) belong here. Editing workflows, import/export formats, and UI patterns belong in plugins.
-
-### 6. The two-client test
-A capability requested by one client enters the hub only in the generic form a second reference client would also need. Test every ask against the reference-clients table in PROJECT_CONTEXT.md: if at least two clients need it, adopt the generic form; if only one does, it stays in that plugin. CoQui's round, craft grid, claim version and workflow states are the standing examples of asks that fail the test and map onto branches, `claimRef`, `ItemStatus` and `User` at CoQui's boundary. See `docs/development-plan.md` §2.
-
-### 7. Text fields on rationale-bearing documents are intentionally provisional
-Fields like `LearningNeed.rationale`, `PrerequisiteRecord.rationale`, and `DesignNote.rationale` are free-text placeholders, not design failures. The schema cannot pre-design structure for design decisions it doesn't yet understand — real usage patterns in the graph will reveal what structure is warranted. When those patterns emerge, text fields can be progressively formalized: add an optional enum alongside the existing text field, introduce a structured type, or reify the relationship as a junction document. Do not suggest replacing text fields with structured types without concrete evidence from real usage. The migration path is intentionally clean: optional field additions don't break existing records, and TerminusDB schema migration supports incremental formalization. See ADR-0010.
+1. **The API is the boundary.** Plugins never touch a store. The API is host-neutral (ADR-0054): every route is a Hono route in `app/lib/api/` against Web-standard `Request` and `Response`, served by `app/server.ts`.
+2. **Constraints belong in the API.** The store enforces types, required fields, enum values, minimum cardinality and reference existence; everything else is the invariants engine (ADR-0006's principle, ADR-0013 for the minimums). Derived values are not constraints to maintain: they are computed on read (ADR-0056).
+3. **Design rationale is explicit.** Every non-obvious decision has a rationale in a code comment, an ADR or the schema documentation.
+4. **Schema changes require an ADR**, written first; the schema and the generated files are committed together.
+5. **Framework against plugin.** Ask of anything new: does it belong in the graph infrastructure or in a tool's experience? System-of-record concerns belong here; editing workflows, import and export formats and interface patterns belong in plugins.
+6. **The two-client test.** A capability enters the hub only in the generic form a second reference client would also need (the table in `PROJECT_CONTEXT.md`; `docs/development-plan.md` §2). CoQui's round, craft grid, claim version and workflow states failed it and map onto branches, `claimRef`, `ItemStatus` and `User` at its boundary.
+7. **Text fields on rationale-bearing documents are intentionally provisional** (ADR-0010). Do not propose replacing them with structure without evidence from real usage; the path is an optional enum beside the text, then a structured type, then a junction.
+8. **Decisions wait for evidence, and a settled one is reopened when building it shows its cost** (ADR-0056 reversed a stored field the day its machinery was built). Options with pros, cons and a recommendation are presented; Amos decides; then build and record.
 
 ---
 
-## ADR Reference
+## ADRs to read first
 
-All architecture decisions are documented in `schema/docs/adr/`. The filenames are self-descriptive. Key decisions to read before working on the API:
+The index with every status is `schema/docs/adr/README.md`. Before working on the API or the schema, read:
 
-- **ADR-0002** — References, not ownership (affects all relationship queries)
-- **ADR-0003** — Set vs. junction document (affects all write operations)
-- **ADR-0004** — Back-references on children (affects all list queries)
-- **ADR-0005** — Module content sequencing (affects activity ordering logic); its composed view is `GET /api/v1/intelligence/module-content/:moduleId` (2026-10-22): merged by `sequence`, unsequenced entries last, an activity placed twice shown at each placement and listed in `repeated`
-- **ADR-0013** — Minimum cardinality at schema level (supersedes ADR-0006, whose "the API enforces what the store cannot" principle the invariants engine now carries); amended by ADR-0060, which removed the minimum on `AssessmentItem.assesses`
-- **ADR-0060** — Items may exist unaligned: `assesses` is zero or more, rule 1 retired, the alignment read lists `itemsWithoutObjective`; `LearningActivity.targets` keeps its minimum until a client shows the case; how to encourage alignment without requiring it is open (plan §6)
-- **ADR-0061** — Formative use of items inside activities: `ActivityItemLink` (activity, item, optional `sequence`; constraint 17); counts toward no coverage; the trace follows it downstream and shows an activity with its modules
-- **ADR-0064** — `ActivityGroup` is `Lesson` (2026-10-22): an ordered set of activities a module schedules, the peer of an assessment; `LessonActivityLink` (field `lesson`) and `ModuleLessonLink` (field `lesson`) replace `ActivityGroupMember` and `ModuleActivityGroupLink`; constraints 3, 4 and 6 keep their numbers; the module-content read says `kind: "lesson"`; earlier ADRs keep the old names
-- **ADR-0063** — Outcome records name their source: a dataset has `producedBy` or an `externalRef`, a metric has `derivedFrom` or an `externalRef` (constraint 20); closes the rule the plan deferred since Phase 1, made expressible by ADR-0030; the seed gains one administration (a dataset and three metrics in a third commit) so Narrative 1 walks on `main`
-- **ADR-0031** — Export profiles and schema slices: `GET /api/v1/export` returns the graph at a ref with its reloadable schema; profiles rewrite people only (`full`, `pseudonymous` with HMAC tokens, `institutional`); slices are configuration in `slices.json`, membership by class or ancestor, references leaving the slice reported as `unresolved`, never dropped; re-import is operator work; JSON-LD only, no vocabulary-mapped context yet
-- **ADR-0030** — External references and attachments: `externalRefs` and `attachments` subdocument sets on every `ArmatureDocument`, `attachments` on every `Fragment`, `Fragment.text` optional; the graph never holds bytes; `contentHash` and `hashAlgorithm` (IANA registry names) mandatory, `revision` required for versioned stores (constraint 18), a fragment has text or an attachment (constraint 19); an artifact whose bytes live in an asset store carries its design history as the graph commits that move its reference, a projection of the asset history, never a replay (amends ADR-0025); the tool-managed path is built, the hub-managed endpoints wait for a client with a file
-- **ADR-0007** — ModuleObjective as the junction for a module's declaration (its computed field superseded by ADR-0056)
-- **ADR-0024** — Client-supplied identifiers and replace semantics; 409 on an id held by another type (constraint 12)
-- **ADR-0025** — Design process data lives in the commit graph (author and reason on every commit, reads at a ref, ETag/If-Match, merge, no history rewriting); amended by ADR-0030 for artifacts whose bytes live in an asset store; decision 5 amended 2026-10-30 (not yet built): a merge is checked on a transient branch before it commits, refused with 422, with a dry run
-- **ADR-0026** — API host and route versioning (as amended by ADR-0054: Hono is the API, Next.js the host; routes under `/api/v1`)
-- **ADR-0027** — Schema self-description: `@metadata.armature.category` on every class
-- **ADR-0029** — Coverage algorithm (decisions 1 to 3: counted over the module's placements, two eligibility rules, the default thresholds)
-- **ADR-0056** — Coverage is computed on read, never stored (the graph holds decisions and observations; derived values are reads at a ref; supersedes the stored field)
-- **ADR-0032** — Identity resolution (`main` is the `User` registry; author and `createdBy` come from the resolved identity, never the body; a branch that lacks the `User` gets `main`'s copy in the same commit)
-- **ADR-0054** — The API is a Hono application (host-neutral; nothing under `app/lib/api/` imports from `next`)
-- **ADR-0055** — The API layer reaches TerminusDB over HTTP through one adapter (the JavaScript client stays in `scripts/`)
-- **ADR-0057** — Records that refer to a state of the graph name its commit (`asOf`): filled from the branch head, kept on replace, constraint 13
-- **ADR-0058** — Item statistics are `LearningMetric`s about the item (`subject`), not fields on it; summaries are reads. `GET /api/v1/intelligence/item-statistics` (2026-10-22) groups them by item, newest administration first, and picks no "latest": the client chooses; the Coverage View is its first client
-- **ADR-0028** — Attestation: a person's verdict on a record or part as of a commit; the claim optional; Hash key with `attestedBy` from identity; staleness a read; `fragmentId` on notes and findings (constraints 14 to 16)
-- **ADR-0062** (accepted and built 2026-10-22) — Operator repair outside the plugin API: a state the rules will not let a client leave is repaired with store credentials, as a new commit by the operator's registered `User` with the reason as the message, marked `armature.operator` in its metadata (a document delete is one; the store refuses to delete a referenced document); three tools in `app/lib/operator/` reuse the adapter, the invariants engine and the pipeline in-process (`check` a whole branch, `delete` a document or a scratch branch, `put` with `--unchecked` skipping the hub's rules only), bundled like the hub and shipped in the hub's image, never in `@armature/client` (decided 2026-10-22), so they run in the hub's container (`docker compose exec hub node operator.mjs check`; locally `npm run operator --workspace app -- check`); no superuser mode and no raw query route on `/api/v1`
-- **ADR-0065** (proposed 2026-10-28; verified and accepted 2026-10-30; not yet built) — The workspace hub: a hub has one of two roles, remote (as built) or workspace (the same code on one person's machine); a workspace is a branch created on the remote and cloned from its export at a base; push replays each local commit through the remote's `/api/v1` with `If-Match`, rewriting `asOf` and carrying `Armature-Workspace-Commit`, `Armature-Authored-At` and `Armature-Workspace-Part` trailers; branch creation, merge, deletion and user registration are refused on a workspace hub (400 `remote_only`); a client learns the role from `GET /discover`; decision 5's split rule (2026-10-30): a provisional id travels in one request with its referrers, or is resolved from the previous part's answer; decision 7 (2026-10-30): a per-launch secret on writes, push the desktop program's own action
-- **ADR-0066** (Proposed 2026-10-29) — The workspace hub's store is a folder of files behind an adapter interface extracted from `store.ts` (plan step 1, a refactor with no behavior change); TerminusDB the test bed first; the diff route's format is TerminusDB's JSON patch; Hash ids reproduced if check AI shows how, else mapped at push; decision 2 (2026-10-30): commit files immutable, `push.json` beside them, flushed then renamed, recovery from the log's trailers
-- **ADR-0067** (proposed 2026-10-29; accepted 2026-10-30; decision 7 built, the rest not yet) — Authentication: the `oidc` resolver (bearer JWT, PKCE sign-in for native programs), agents acting for people (`Armature-Agent`, the hub-written `Armature-On-Behalf-Of` trailer), services, `Relay` grants, hub-written trailers refused from clients (400 `reserved_trailer`), the `Host` and `Origin` checks (`boundary.ts`), `header` kept and bounded; decision 10 (2026-10-30): an agent's own work reaches a remote only through a workspace hub's push; decision 1 amended 2026-10-30: first encounter needs `ARMATURE_OIDC_ADMIT`, else 403 `not_registered`; `User.issuer`, resolution by `(issuer, sub)`; decisions 7 and 8 (2026-10-30): `api.<site>` under `oidc` only, two compose networks, a required store password
-- **ADR-0068** (proposed 2026-10-29; accepted 2026-10-30; not yet built) — Authorization: the hub authorizes (403 `forbidden`); `Grant` documents on `main` (Owner, Maintainer, Administrator, Relay); the branch creator owns it; only a maintainer merges into `main`; the author is the caller, an agent acting for the caller, or a relayed person; the non-aggregation guard restated as classes under `DesignRecord`; decision 9 (2026-10-30): a workspace hub does not authorize, warns at workspace creation, and the remote refuses at push; decision 4 amended 2026-10-30: under `oidc` a full export and `GET /users` need a maintainer of `main` or an administrator, the default profile `pseudonymous`; decisions 2 and 3 (2026-10-30): `Grant.relayedUsers` and `expires`, the grant before the branch, `check`'s two rules, ownerless branches closed after a window
-
-The full index, with every ADR's status, is `schema/docs/adr/README.md`.
+- **ADR-0002, ADR-0003, ADR-0004**: references not ownership; junctions for relationships with data; back-references on children
+- **ADR-0024**: client-supplied identifiers and replace semantics; Hash keys for junctions
+- **ADR-0025**: design process data lives in the commit graph (author and reason on every commit, reads at a ref, ETag and If-Match, merge, no history rewriting)
+- **ADR-0028**: attestation, a person's verdict as of a commit; staleness a read
+- **ADR-0029 and ADR-0056**: the coverage algorithm; nothing derived is stored
+- **ADR-0030 and ADR-0031**: external references and attachments; export profiles and slices
+- **ADR-0032**: identity resolution; `main` is the `User` registry; author from identity, never the body
+- **ADR-0054 and ADR-0055**: the API is a Hono app; one HTTP adapter to the store
+- **ADR-0057 and ADR-0058**: `asOf`; item statistics are metrics about the item
+- **ADR-0059**: capability negotiation per request (`Armature-Version`, `Armature-Capabilities`, `GET /discover`)
+- **ADR-0062**: operator repair outside the plugin API, as marked commits; no superuser mode, no raw query route
+- **ADR-0065 to ADR-0068**: the workspace hub, its store, authentication and authorization; accepted and not built except ADR-0067 decision 7; their dated notes hold the later decisions
 
 ---
 
 ## Workflow
 
 ### Session startup
-1. Read SESSION.md for current state and next steps (it is under 32 KB; read it whole)
-2. Check git log for recent commits
-3. Read any files relevant to today's work
-4. Read HISTORY.md only for a session or decision SESSION.md points at, or when no ADR or document says why something is as it is
+1. Read `SESSION.md` whole (it is under 32 KB) for the state and the next step
+2. Check `git log` for recent commits
+3. Read the files relevant to today's work
+4. Read `HISTORY.md` only for a session or decision `SESSION.md` points at, or when no ADR or document says why something is as it is
 
 ### Tests
-`npm test` in `app/` runs Vitest. The tests under `app/lib/api/` call the Hono app in-process with `app.request()` and read from the TerminusDB container, so the container must be up with the seed loaded. They are the contract suite: CI's `contract` job (`.github/workflows/ci.yml`) starts TerminusDB v12.0.7 as a service container, waits for it (`scripts/wait_for_store.js`), loads the schema, seeds, checks the seed against every rule with the operator's `check` (ADR-0062) and runs them on every push and pull request (Phase 7). `app/vitest.global-setup.mts` waits until the seeded database answers a read of `main`, then does the tests' kind of work once (a scratch branch, a write through the pipeline, a coverage read; the branch deleted afterward) before the first test file starts, because a store on a cold machine has stalled mid-suite past the 15-second test timeout and the cheap read never caught it. The `app` job runs lint, `tsc --noEmit` and the types drift check. The Design Graph's pure modules (`app/lib/graph/`) are tested on a fixture and on the seed in the same Vitest run; the page itself is driven in a browser by `app/e2e/graph.spec.ts` (Playwright; `npm run test:e2e` in `app/` after `build:hub` and `build`, which CI's `viewer` job does against the same seeded store). The rule (2026-10-22): a test is included unless it is very unlikely to show a real problem or very costly to run.
+`npm test` in `app/` runs Vitest. The tests under `app/lib/api/` call the Hono app in-process against the TerminusDB container, which must be up with the seed loaded; they are the contract suite, which CI's `contract` job runs against a service container after seeding and the operator's `check`. Files run one at a time (the store has one commit graph); the global setup warms a cold store first. The Design Graph's modules are tested on a fixture and the seed; the pages in a browser by `app/e2e/graph.spec.ts` (`npm run test:e2e` after `build:hub` and `build`; CI's `viewer` job). **The rule:** a test is included unless it is very unlikely to show a real problem or very costly. The seed is a fixture the tests read (Module 1's sequences 1 and 2 are taken; two people are named).
 
 ### Session end
-Say "update session" and follow the prompt in `.claude/prompts/update-session.md`.
+Say "update session" and follow `.claude/prompts/update-session.md`: the history entry first, then the state, then the budgets.
 
 ### Branches, commits and pull requests
-1. Work happens on a branch named for the unit of work (`phase-2/version-control`, `spike/adr-0054-hono`, `docs/...`), never directly on `main`. The one exception is the session-close commit, `docs(.claude): update session state for <date>`, made on `main`.
+1. Work happens on a branch named for the unit of work (`phase-2/version-control`, `spike/adr-0054-hono`, `docs/...`), never on `main`; the one exception is the session-close commit, `docs(.claude): update session state for <date>`.
 2. Before committing, show the proposed commit sequence (one logical change per commit, Conventional Commits per `.claude/prompts/commit-message-guide.md`) and wait for approval.
-3. Commit, push and open a pull request only when asked; merge only when asked, with a rebase merge (`--rebase --delete-branch`) so each commit stays visible on `main`, then confirm CI on `main`.
-4. Platform assumptions get a lettered check in `scripts/platform_checks.js` before an ADR relies on them; cite the letter in the ADR.
-5. A pull request that changes how an instance runs (`docker/docker-compose.yml`, either Dockerfile, the `Caddyfile`, `docker/operator-entrypoint.sh`, or the steps in `docs/deployment.md`) gets a rehearsal on a fresh Lima VM before it merges; CI covers the code, not the deployment. A Droplet is for keeping an instance, before the first remote writing client, and whenever authentication changes. Never run the contract suite against a store with real data; the operator's `check` is the health check there. `docs/deployment.md` § "Testing a deployment" (decided 2026-10-22)
+3. Commit, push and open a pull request only when asked; merge only when asked ("confirm and merge"), with a rebase merge (`--rebase --delete-branch`) so each commit stays visible on `main`, then confirm CI on `main`.
+4. Platform assumptions get a lettered check in `scripts/platform_checks.js` before an ADR relies on them; the ADR cites the letter.
+5. A pull request that changes how an instance runs (`docker/docker-compose.yml`, either Dockerfile, the `Caddyfile`, `docker/operator-entrypoint.sh`, or the steps in `docs/deployment.md`) gets a rehearsal on a fresh Lima VM before it merges; CI covers the code, not the deployment. A Droplet is for keeping an instance, before the first remote writing client, and whenever authentication changes. Never run the contract suite against a store with real data; the operator's `check` is the health check there (`docs/deployment.md` § "Testing a deployment").
 
 ### After schema changes
-1. Write or update the ADR in `schema/docs/adr/`
+1. Write or update the ADR
 2. Update `schema/schema.json`
-3. Run `npm run generate:types` from the repository root
-4. Run `npm run check:types` to verify output
-5. Run `node scripts/generate-schema-appendix.js` from the repository root
-6. Commit `schema.json`, `packages/types/src/types.ts`, `packages/types/src/schemas.ts` and `docs/SCHEMA_APPENDIX.md` together in the same commit
+3. `npm run generate:types`, then `npm run check:types`, from the repository root
+4. `node scripts/generate-schema-appendix.js`
+5. Commit `schema.json`, `packages/types/src/types.ts`, `schemas.ts` and `docs/SCHEMA_APPENDIX.md` together
 
 ### Adding an ADR
-1. Find the next available number in `schema/docs/adr/`
-2. Use the format: `NNNN-short-decision-title.md`
-3. Follow the Nygard format: Status / Context / Decision / Consequences
-4. Reference the ADR number in any related schema `@documentation` comments
+1. The next number past the candidate block 0035–0053; `NNNN-short-decision-title.md`
+2. Nygard format (Status, Context, Decision, Consequences) with In brief, Alternatives and Verification as the recent ADRs have them
+3. Reference the number in related schema `@documentation`; add the row to the index
+
+### Documents and records
+- **American spelling; acronyms expanded per section.**
+- **A historical record is annotated, never rewritten.** An accepted ADR changes only by dated notes (`> **Later change (date):**`, `> **Note (date):**`); a consistency fix goes in before the Status changes. A handoff or review kept in `docs/` gets a status banner saying what landed, never an edit to its body.
+- **A change to a route, the schema, a decision or what runs where updates the human-facing documents too** (the README, the reference, the guide, the explainer, deployment, the research path, demo coverage, the plans), as each describes the thing changed.
+- **`docs/client-changes.md` is also the revision list.** Every change a client would act on gets a dated, tool-neutral entry with a CoQui note; a dated entry is a revision `REVISIONS` in `version.ts` must name (a test fails otherwise), and `CLIENT_REVISION` follows. A read added on a day that already has a revision rides it; a header the contract already promised is a fix, not a revision.
+- **A review** of the documents runs as parallel readers over disjoint file groups against one written brief, whole files, every high finding spot-checked by the lead. An outside review is checked citation by citation first; its findings are cited by its own identifiers; a finding on an accepted ADR becomes a dated note; a disagreement goes into its banner with the reason.
+- **The context files keep their budgets** (this file and `SESSION.md` 32 KB, `PROJECT_CONTEXT.md` 20 KB): over budget means move, not shorten; a fact lives in one place and the rest point.
 
 ---
 
 ## What Not To Do
 
-- **Don't** write directly to TerminusDB — always go through the API layer
-- **Don't** add owned subdocuments for relationships — every relationship between documents is a reference (ADR-0002). The embedded exceptions are an item's parts (`Fragment`, `TextFragment`, `ItemOption`; ADR-0022, ADR-0033), addressed by `fragmentId`, never by their nested store ids, and the outward coordinates `ExternalRef` and `Attachment` (ADR-0030), which have no identity at all and are never addressed
-- **Don't** put UI logic, import/export formats, or plugin-specific code in this repo
-- **Don't** change `schema.json` without an ADR
-- **Don't** edit `packages/types/src/` manually — it's generated; change `schema.json` and run `generate:types`
-- **Don't** write API routes as Next.js route handlers, or add any file under `app/app/api/` — every route is a Hono route in `app/lib/api/` under `/api/v1` (ADR-0054), served by `app/server.ts`; the Next.js app is the viewer and hosts no API since 2026-10-21
-- **Don't** import from `next` anywhere under `app/lib/api/`, and don't import `app/lib/api/` from a page — a page reaches the hub over HTTP through `app/lib/viewer.ts`, like any plugin
-- **Don't** add the `terminusdb` client to `app/` — the API layer reaches the store through its HTTP adapter (ADR-0055); the client is a dependency of `scripts/` only. The one exception would be `lib/woql.js` to build query JSON the adapter posts, and the first such use amends the ADR
-- **Don't** write a per-type route or hand-write a request schema — type behavior is a validator in `app/lib/api/invariants/`, and request shape comes from the generated `schemas.ts`
-- **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1` — responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter does the translation (ADR-0025 decision 7)
-- **Don't** expose or call reset, squash or rebase — shared history is never rewritten; a mistake is undone by a new commit (ADR-0025 decision 6). A branch is deleted only when another branch holds its head; there is no force. Repairs the rules prevent are operator work outside `/api/v1`, still as commits (ADR-0062, the tools in `app/lib/operator/`); never add a bypass header or a raw query route to the API, and never pass the pipeline's `invariants: 'skip'` from a route (a test reads the API's modules for it)
-- **Don't** take the commit author, `createdBy` or `attestedBy` from a request body — all three come from the identity the request resolved to (a body `attestedBy` naming anyone else is refused, constraint 15); `User` documents are created on `main` only (ADR-0032). Under ADR-0067 and ADR-0068 (accepted 2026-10-30, not yet built) the author may also be a registered agent acting for the caller (`Armature-Agent`, the caller recorded in a hub-written `Armature-On-Behalf-Of` trailer) or, for a service holding a `Relay` grant, the person whose earlier work it delivers; never another person
-- **Don't** add an import route, or any write that bypasses the pipeline, to `/api/v1` — reproducing an export skips identity, `asOf` and the rules, which is operator work through the adapter's operator-side methods (`createEmptyBranch`, `replaceSchema`, `insertDocuments`; ADR-0031 decision 4, ADR-0062)
-- **Don't** put bytes in the graph — an image, a file or an asset tree is an `Attachment` reference with a content hash and, for a versioned store, a revision; the backend is a deployment choice, never a schema fact (ADR-0030)
-- **Don't** store a derived value in the graph — coverage, alignment and any future score are computed by the intelligence reads at a ref, never written into a document (ADR-0056); a judgment someone wants on record is a `DesignFinding` or an `Attestation` with a person's name on it, and whether an attestation still holds is a read, never a field (ADR-0028); an imported measurement is a `LearningMetric` with a `subject`, never a field on what it measures (ADR-0058)
-- **Don't** leave API constraints undocumented — if TerminusDB can't enforce it, the schema comment must say the API will
+- **Don't** write directly to TerminusDB; everything goes through the API
+- **Don't** add owned subdocuments for relationships: every relationship between documents is a reference (ADR-0002). The embedded exceptions are an item's parts, addressed by `fragmentId`, never by nested store ids, and `ExternalRef` and `Attachment`, which have no identity
+- **Don't** put UI logic, import or export formats, or plugin-specific code in this repository
+- **Don't** change `schema.json` without an ADR, or edit `packages/types/src/` by hand
+- **Don't** write API routes as Next.js route handlers or add any file under `app/app/api/`: every route is a Hono route in `app/lib/api/` under `/api/v1`, served by `app/server.ts`; the Next.js app is the viewer and hosts no API
+- **Don't** import from `next` under `app/lib/api/`, or import `app/lib/api/` from a page; a page reaches the hub over HTTP through `app/lib/viewer.ts`, like any plugin
+- **Don't** add the `terminusdb` client to `app/`; the API reaches the store through its HTTP adapter (ADR-0055). The one exception would be a `lib/woql.js` building query JSON the adapter posts, and the first such use amends the ADR
+- **Don't** write a per-type route or hand-write a request schema; type behavior is a validator in `invariants/`, request shape is the generated `schemas.ts`
+- **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1`; responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter translates (ADR-0025 decision 7)
+- **Don't** expose or call reset, squash or rebase; history is never rewritten, a mistake is undone by a new commit, a branch is deleted only when another holds its head (ADR-0025 decision 6). Repairs the rules prevent are operator work, still as commits (ADR-0062); never a bypass header, a raw query route, or `invariants: 'skip'` from a route (a test reads the API's modules for it)
+- **Don't** take the commit author, `createdBy` or `attestedBy` from a request body; all three come from the resolved identity (constraint 15); `User` documents are created on `main` only (ADR-0032). When ADR-0067 and ADR-0068 are built the author may also be an agent acting for the caller or a relayed person under a `Relay` grant; never another person
+- **Don't** add an import route or any write that bypasses the pipeline; reproducing an export is operator work through the adapter's operator-side methods (ADR-0031 decision 4, ADR-0062)
+- **Don't** put bytes in the graph; an image, a file or an asset tree is an `Attachment` reference with a content hash and, for a versioned store, a revision (ADR-0030)
+- **Don't** store a derived value in the graph; coverage, alignment and any score are reads at a ref (ADR-0056); a judgment on record is a `DesignFinding` or an `Attestation` (ADR-0028); a measurement is a `LearningMetric` with a `subject` (ADR-0058)
+- **Don't** use the store's `POST overwrite=true`, which merges values into a list rather than replacing (check X3a); the upsert is `PUT create=true` over a list
+- **Don't** claim a reference's class is schema-enforced; the store checks existence only (check L), the engine checks class (constraint 0)
+- **Don't** leave an API constraint undocumented; if the store cannot enforce it, the schema comment says the API will
