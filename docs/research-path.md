@@ -39,7 +39,7 @@ A study's slice is a new entry, by pull request: a description and the class nam
 
 A **profile** says what happens to people in the export (ADR-0031, ADR-0021):
 
-- `full`: people as stored. For reuse within the institution or by a partner who needs to know whom to ask.
+- `full`: people as stored. For reuse within the institution or by a partner who needs to know whom to ask. Under the planned `oidc` resolver only a maintainer of `main` or an administrator may take one, and the default there is `pseudonymous` (ADR-0068 decision 4, note of 2026-10-30; not yet built).
 - `pseudonymous`: every `User` becomes an opaque token and every reference to a person is rewritten to it; nothing else about the person is kept. For a research corpus.
 - `institutional`: the token plus `institution`. Keeps "verified by an expert at Memorial Health" without the person.
 

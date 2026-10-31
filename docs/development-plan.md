@@ -1028,7 +1028,9 @@ what evidence would be enough.
   that returns the conflict report without a commit, are asks in `docs/workspace-hub-plan.md`
   §12 that pass the two-client test (CoQui's round merge and the outcomes importer; CoQui's
   preview). The fragment-by-fragment review is placed in the workspace hub (ADR-0065 decision 6)
-  if that record is accepted.*
+  if that record is accepted.* *Decided 2026-10-30 (review B3):* the remote refuses a merge whose
+  result breaks a rule, 422, checked on a transient branch before the commit, with a dry run
+  (ADR-0025 decision 5, note); the workspace hub's post-merge check becomes a preview.
 - **Project boundaries.** One TerminusDB database per course, per program, or per institution?
   Cross-database queries do not exist, and the research path wants comparability across
   courses. Evidence: a second course in any deployment, or the first research slice.

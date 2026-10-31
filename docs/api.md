@@ -175,7 +175,7 @@ The branch's latest commit: `{ name, head }`, with the commit in `ETag`.
 
 ### `POST /branches/:name/merge`
 
-Merges another branch into `:name` with the database's three-way merge (ADR-0025 decision 5). The merged state is not checked by the invariants engine, so two clean branches can merge into a rule violation (for example `duplicate_sequence`, when each gave a new placement the same sequence); the operator's `check` (ADR-0062) finds it, and running the rules on merge is an ask in `docs/workspace-hub-plan.md` §12.
+Merges another branch into `:name` with the database's three-way merge (ADR-0025 decision 5). The merged state is not checked by the invariants engine, so two clean branches can merge into a rule violation (for example `duplicate_sequence`, when each gave a new placement the same sequence); the operator's `check` (ADR-0062) finds it, and running the rules on merge is an ask in `docs/workspace-hub-plan.md` §12. *Decided 2026-10-30, not yet built (ADR-0025 decision 5, note):* the merge will be checked before it commits and refused with 422 `invariant_violation`, the target unchanged, and a dry run will return the conflicts and violations without a commit; a `client-changes.md` entry will say so when it lands.
 
 - Headers: `Armature-User` (required).
 - Body: `{ "message": "...", "from": "<source branch>" }`.
