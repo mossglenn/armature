@@ -69,7 +69,8 @@ Principle 6):
 
 Two kinds of protection need keeping apart. **Invalid content**, a change that breaks the rules,
 is the write pipeline's job, with one known gap: the merge route does not run the invariants over
-the merged state (`.claude/SESSION.md`, What's Next item 12). **Unwanted but valid content**, a
+the merged state (`.claude/SESSION.md`, What's Next item 12). *Decided 2026-10-30: the remote
+checks a merge before it commits and refuses with 422 (ADR-0025 decision 5, note).* **Unwanted but valid content**, a
 change nobody with authority accepted, is what this record addresses.
 
 On authorship, the hub can verify only the caller's credential (ADR-0067, Context). An author
@@ -127,6 +128,17 @@ answers for, and not for another person, who never consented.
    that request is made is a client's interface, not the hub's (open question 2). An instance
    with one designer, or a team that wants no gate, grants each person `Maintainer` of `main`, so
    the gate binds only where an instance chooses it.
+
+   > **Later change (2026-10-30, decided):** two rows change under `oidc`; under `header` nothing
+   > does, since it trusts the caller and stays on loopback. *Read any ref* stays open to every
+   > resolved identity, but a full export (`profile=full`) and the user list (`GET /users`;
+   > `/users/me` stays everyone's own) need `Maintainer` of `main` or `Administrator`; anyone else
+   > asking for `profile=full` is refused with 403 `forbidden`, and the default profile under
+   > `oidc` is `pseudonymous`. Profiles transform the export a caller chooses and were never a
+   > gate, which open question 1 had treated them as. *Register a person* on first encounter
+   > needs the token admitted by `ARMATURE_OIDC_ADMIT` (ADR-0067 decision 1, note), else 403
+   > `not_registered` until an administrator registers them. A branch-scoped `Reader` grant stays
+   > deferred to open question 1's trigger. Review B7.
 
 5. **Who may be named as an author.** Each write's author is the caller; or a registered agent
    acting for the caller (ADR-0067 decision 3), any agent whoever registered it, with the caller
@@ -206,7 +218,10 @@ answers for, and not for another person, who never consented.
 
 1. **Read permissions.** Every resolved identity may read every ref. A study's instance may want a
    branch only some may read. *Recommendation:* none until a study asks; the export's profiles and
-   slices (ADR-0031) already govern what leaves an instance.
+   slices (ADR-0031) already govern what leaves an instance. *Narrowed 2026-10-30:* profiles are
+   not a gate; a full export and the user list need a maintainer of `main` or an administrator,
+   and first encounter needs admission (decision 4's note). Branch-scoped reading still waits for
+   a study.
 2. **A request for delivery.** Decision 4 leaves asking a maintainer to merge to the client. A
    branch is not a record, so no note or finding can be about one, and a "ready to deliver" mark
    stored in the graph would be a new kind of record with one client. *Recommendation:* no hub

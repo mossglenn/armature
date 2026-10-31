@@ -122,6 +122,21 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    `GET /discover`, which stays open as it is today (ADR-0059): it says how to authenticate, so a
    client must be able to read it before it can sign in.
 
+   > **Later change (2026-10-30, decided):** two amendments. **Admission.** First encounter
+   > registers a person only when the token is admitted by `ARMATURE_OIDC_ADMIT`, a list of
+   > issuers or of email domains matched against the token's `email` claim; a valid token from
+   > anyone else is refused with 403 `not_registered` until an administrator registers them with
+   > `POST /users` (ADR-0068 decision 4). A person already registered resolves whatever the list
+   > says. Without the variable no one is admitted on first encounter, so a hub behind a
+   > federated issuer such as CILogon admits no one it was not told to, and an instance that
+   > wants its whole institution lists its domain. **The issuer.** A `User` registered under
+   > `oidc` records the token's `iss` in a new Optional field, `issuer`, and resolution matches
+   > `(issuer, sub)`; `externalId` stays the bare `sub`. A second issuer, or a change of
+   > provider, then needs no migration. The field is added in ADR-0068's schema commit, which
+   > already touches `User`. Open question 1 is resolved by this. Review B7 and H4
+   > (`docs/armature-deep-review-2026-10-30.md`); `not_registered` is a name chosen without a
+   > separate decision, open to overrule.
+
 2. **A native client signs in as the person.** The workspace hub, Quiver and the Storyline bridge
    use the authorization code flow with PKCE (Proof Key for Code Exchange) and a loopback redirect,
    the standard for native applications (RFC 8252), and keep the refresh token in the operating
@@ -272,7 +287,8 @@ plugin, outside the browser engine, so an origin rule does not touch it.
 1. **Several issuers on one instance**, for a study that spans institutions: `externalId` as
    `sub` qualified by `iss`, which would need existing `User`s migrated. *Recommendation:* one
    issuer until a study needs two; CILogon, which federates research institutions behind one
-   issuer, may make that rare.
+   issuer, may make that rare. *Resolved 2026-10-30:* `User.issuer` from the start, resolution by
+   `(issuer, sub)`, `externalId` unchanged (decision 1's note); still one issuer per instance.
 2. **The provider for a hosted demonstration.** *Recommendation:* CILogon for institutional
    research logins; a hosted provider otherwise; the ADR names none, since any standard issuer
    works.
