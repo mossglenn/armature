@@ -1,7 +1,7 @@
 import { CLASS_FIELDS, VALID_BloomsLevel, type FieldShape } from '@armature/types';
 import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
 import { inheritsFrom } from '../classes';
-import { StoreError, type Store, type TerminusDocument } from '../store';
+import { StoreError, type DocumentReader, type TerminusDocument } from '../store';
 
 /**
  * A read-only view of the graph at one ref for the intelligence routes
@@ -28,7 +28,7 @@ export class Graph {
   private readonly past = new Map<string, Promise<TerminusDocument | undefined>>();
   commit: string | undefined;
 
-  constructor(readonly store: Store) {}
+  constructor(readonly store: DocumentReader) {}
 
   private served(commit: string | undefined): void {
     if (!this.commit && commit) this.commit = commit;
@@ -45,7 +45,7 @@ export class Graph {
           return r.document;
         })
         .catch((err: unknown) => {
-          if (err instanceof StoreError && err.type === 'api:DocumentNotFound') return undefined;
+          if (err instanceof StoreError && err.kind === 'not_found') return undefined;
           throw err;
         });
       this.docs.set(id, p);
@@ -68,7 +68,7 @@ export class Graph {
         try {
           return (await this.store.at({ commit: commitId }).getDocument(id)).document;
         } catch (err) {
-          if (err instanceof StoreError && err.type === 'api:DocumentNotFound') return undefined;
+          if (err instanceof StoreError && err.kind === 'not_found') return undefined;
           throw err;
         }
       })();

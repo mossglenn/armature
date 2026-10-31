@@ -17,7 +17,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { app } from './app';
-import { createStore, isUnknownRef, Store } from './store';
+import { createOperatorStore, createStore, isUnknownRef, TerminusStore } from './store';
 
 /** The seed's User and the header value that resolves to it (ADR-0032 decision 1). */
 const AUTHOR = 'User/demo-designer';
@@ -372,8 +372,8 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     // another request deletes it between the two calls.
     const GHOST = `test-ghost-${stamp}`;
     const listWithGhost = () => {
-      const real = Store.prototype.listBranches;
-      return vi.spyOn(Store.prototype, 'listBranches').mockImplementation(async function (this: Store) {
+      const real = TerminusStore.prototype.listBranches;
+      return vi.spyOn(TerminusStore.prototype, 'listBranches').mockImplementation(async function (this: TerminusStore) {
         return [GHOST, ...(await real.call(this))];
       });
     };
@@ -463,7 +463,7 @@ describe('users and identity resolution (ADR-0032)', () => {
   });
 
   afterAll(async () => {
-    const main = createStore({ branch: 'main' });
+    const main = createOperatorStore({ branch: 'main' });
     for (const name of [EARLY, LATE]) await main.deleteBranch(name).catch(() => undefined);
     for (const id of [REVIEWER_ID, agentId]) {
       if (id) await main.deleteDocument(id, { author: AUTHOR, message: `Test cleanup: remove ${id}` }).catch(() => undefined);

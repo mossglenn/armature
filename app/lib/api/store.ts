@@ -10,10 +10,20 @@
  * `StoreError` that carries the server's `@type`. A read the store's closing
  * connection drops is sent once more; a write never is (check AG).
  *
- * A `Store` is bound to one ref and holds no other state, so one is created
- * per request from the resolved ref (`createStore`). The endpoints and
- * behaviors relied on here are the ones recorded in docs/development-plan.md
- * §9 and reproduced by scripts/platform_checks.js checks K and M to X.
+ * The rest of the API sees three interfaces, not the class, so a second
+ * store can stand behind them (workspace hub plan §10, ADR-0066):
+ * `DocumentReader`, documents at one ref, all the invariants engine and the
+ * intelligence reads need; `Store`, adding writes, history, branches and
+ * merge, what the routes need; and `OperatorStore`, adding the operator-side
+ * methods that bypass the write pipeline (ADR-0062), which no route reaches.
+ * A store's refusals reach callers as a `StoreError` whose `kind` is the same
+ * whatever the store.
+ *
+ * A store is bound to one ref and holds no other state, so one is created
+ * per request from the resolved ref (`createStore`). `TerminusStore` is the
+ * one implementation; the endpoints and behaviors it relies on are the ones
+ * recorded in docs/development-plan.md §9 and reproduced by
+ * scripts/platform_checks.js checks K and M to X.
  */
 
 /** A branch head or a commit. Reads accept either; writes need a branch. */
@@ -82,36 +92,157 @@ export function idFromIri(iri: string): string {
   return iri.replace(/^[a-z][a-z0-9+.-]*:\/\/.*?\/data\//i, '');
 }
 
-/** A non-2xx response from the store, with the server's error `@type`. */
+/**
+ * What a store's refusal means to the hub, whatever the store. Callers test
+ * this, never a store's own error names, so a second store maps its errors
+ * onto the same kinds.
+ */
+export type StoreErrorKind =
+  /** The document named does not exist at the ref. */
+  | 'not_found'
+  /** The commit the write was conditioned on is no longer the branch head. */
+  | 'version_mismatch'
+  /** The branch, commit or document named does not exist. */
+  | 'unknown_ref'
+  /** A branch or an inserted id already exists. */
+  | 'exists'
+  /** A client-supplied id does not begin with its own type. */
+  | 'id_prefix'
+  /** A client-supplied id disagrees with the one a Hash key derives. */
+  | 'id_mismatch'
+  | 'other';
+
+/** A refusal from the store: its `kind`, and the store's own status, error name and body for logs. */
 export class StoreError extends Error {
   constructor(
     readonly status: number,
     readonly type: string,
-    readonly body: unknown
+    readonly body: unknown,
+    readonly kind: StoreErrorKind
   ) {
-    super(`TerminusDB ${status} ${type}`);
+    super(`Store ${status} ${type}`);
     this.name = 'StoreError';
   }
 }
 
-/**
- * Store error types that mean "the ref or id you named does not exist". A
- * branch deleted after it was listed answers a log read with
- * `UnresolvableAbsoluteDescriptor` and a delete with `BranchDoesNotExistError`
- * (both HTTP 400; seen 2026-10-18).
- */
-const UNKNOWN_REF_TYPES = new Set([
-  'api:NotValidRefError',
-  'api:BadDataVersion',
-  'api:UnresolvableAbsoluteDescriptor',
-  'api:BranchDoesNotExist',
-  'api:BranchDoesNotExistError',
-  'api:DocumentAccessImpossible',
-]);
-
 /** True when the store refused because the named branch, commit or document does not exist. */
 export const isUnknownRef = (err: unknown): boolean =>
-  err instanceof StoreError && (err.status === 404 || UNKNOWN_REF_TYPES.has(err.type));
+  err instanceof StoreError && (err.status === 404 || err.kind === 'unknown_ref');
+
+/**
+ * TerminusDB's error `@type`s by kind. A branch deleted after it was listed
+ * answers a log read with `UnresolvableAbsoluteDescriptor` and a delete with
+ * `BranchDoesNotExistError` (both HTTP 400; seen 2026-10-18).
+ */
+const TERMINUS_KINDS: Record<string, StoreErrorKind> = {
+  'api:DocumentNotFound': 'not_found',
+  'api:DataVersionMismatch': 'version_mismatch',
+  'api:NotValidRefError': 'unknown_ref',
+  'api:BadDataVersion': 'unknown_ref',
+  'api:UnresolvableAbsoluteDescriptor': 'unknown_ref',
+  'api:BranchDoesNotExist': 'unknown_ref',
+  'api:BranchDoesNotExistError': 'unknown_ref',
+  'api:DocumentAccessImpossible': 'unknown_ref',
+  'api:BranchExistsError': 'exists',
+  'api:DocumentIdAlreadyExists': 'exists',
+  'api:SubmittedDocumentIdDoesNotHaveExpectedPrefix': 'id_prefix',
+  'api:SubmittedIdDoesNotMatchGeneratedId': 'id_mismatch',
+};
+
+function terminusError(status: number, body: unknown): StoreError {
+  const type = errorType(body);
+  return new StoreError(status, type, body, TERMINUS_KINDS[type] ?? 'other');
+}
+
+/**
+ * Documents at one ref: what the invariants engine, the intelligence reads
+ * and the operator's `check` ask of a store. Every read reports the commit it
+ * was served from; a read at a branch serves its head at the time of the read.
+ */
+export interface DocumentReader {
+  readonly ref: Ref;
+  /** The same store bound to another ref. */
+  at(ref: Ref): DocumentReader;
+  /** One document; a `not_found` StoreError when there is none. */
+  getDocument(id: string): Promise<{ document: TerminusDocument; commit: string }>;
+  /** Several documents by id in one read; ids that do not exist are left out. */
+  getDocuments(ids: string[]): Promise<{ documents: TerminusDocument[]; commit: string }>;
+  /** The documents of `type` whose fields match `template`; an empty template lists the type. */
+  queryDocuments(
+    type: string,
+    template: Record<string, unknown>,
+    opts?: { count?: number; skip?: number }
+  ): Promise<{ documents: TerminusDocument[]; commit: string }>;
+  /** Every instance document. */
+  allDocuments(): Promise<{ documents: TerminusDocument[]; commit: string }>;
+  /** The schema: the `@context` entry and every class and enum. */
+  getSchema(): Promise<{ entries: Record<string, unknown>[]; commit: string }>;
+  /** One commit by id, or undefined when the store holds none. */
+  getCommit(id: string): Promise<Commit | undefined>;
+}
+
+/**
+ * A store as the routes use it: reads, and on a branch, writes as commits
+ * with an author and a message, conditioned on `ifMatch` (a bare commit id; a
+ * `version_mismatch` StoreError when the head has moved), history, diff,
+ * branches and merge.
+ */
+export interface Store extends DocumentReader {
+  at(ref: Ref): Store;
+  /** The branch this store writes to. Throws when bound to a commit. */
+  readonly branch: string;
+  /** Replace (or create) one document as a commit. */
+  putDocument(
+    document: TerminusDocument,
+    opts: { author: string; message: string; ifMatch?: string; create?: boolean }
+  ): Promise<{ commit: string }>;
+  /** Replace (or create) several documents in one commit; `ids` are the written ids in input order. */
+  putDocuments(
+    documents: Array<Record<string, unknown>>,
+    opts: { author: string; message: string; ifMatch?: string; create?: boolean }
+  ): Promise<{ commit: string; ids: string[] }>;
+  /** Insert one document with its id; an `exists` StoreError, or a refusal, when the id is taken. */
+  insertDocument(
+    document: TerminusDocument & { '@id': string },
+    opts: { author: string; message: string; ifMatch?: string }
+  ): Promise<{ id: string; commit: string }>;
+  /** Commits on this branch, newest first. */
+  log(opts?: { start?: number; count?: number }): Promise<Commit[]>;
+  /** This branch's head commit. */
+  head(): Promise<Commit | undefined>;
+  /** The commits that touched one document on this branch, newest first. */
+  history(
+    id: string,
+    opts?: { start?: number; count?: number; diff?: boolean }
+  ): Promise<{ entries: HistoryEntry[]; commit?: string }>;
+  /** The structural difference between two commits or branches, for one document or all. */
+  diff(from: string, to: string, documentId?: string): Promise<unknown>;
+  listBranches(): Promise<string[]>;
+  /** A new branch starting at a branch head or a commit. */
+  createBranch(name: string, origin: Ref): Promise<void>;
+  deleteBranch(name: string): Promise<void>;
+  /** Three-way merge of `base` to `source` onto the branch `target`, as a commit; a conflict returns witnesses. */
+  apply(
+    target: string,
+    opts: { base: string; source: string; author: string; message: string; metadata?: Record<string, unknown> }
+  ): Promise<ApplyResult>;
+}
+
+/**
+ * The operator-side methods (ADR-0062): changes that bypass the write
+ * pipeline, for the operator tools and the tests. No route reaches them.
+ */
+export interface OperatorStore extends Store {
+  at(ref: Ref): OperatorStore;
+  /** Replace this branch's schema in one commit. */
+  replaceSchema(entries: Record<string, unknown>[], opts: { author: string; message: string }): Promise<{ commit: string }>;
+  /** Insert documents with their ids in one commit, unchecked. */
+  insertDocuments(documents: TerminusDocument[], opts: { author: string; message: string }): Promise<{ commit: string }>;
+  /** Delete one document as a commit. */
+  deleteDocument(id: string, opts: { author: string; message: string }): Promise<{ commit: string }>;
+  /** A branch with no origin, empty of data and schema. */
+  createEmptyBranch(name: string): Promise<void>;
+}
 
 interface StoreConfig {
   url: string;
@@ -209,18 +340,16 @@ interface StoreResponse {
   commit?: string;
 }
 
-export class Store {
+export class TerminusStore implements OperatorStore {
   constructor(
     private readonly config: StoreConfig,
     readonly ref: Ref
   ) {}
 
-  /** The same connection bound to another ref. */
-  at(ref: Ref): Store {
-    return new Store(this.config, ref);
+  at(ref: Ref): TerminusStore {
+    return new TerminusStore(this.config, ref);
   }
 
-  /** The branch this store writes to. Throws when bound to a commit. */
   get branch(): string {
     if (!('branch' in this.ref)) {
       throw new Error('This store is bound to a commit, which is read-only');
@@ -233,7 +362,7 @@ export class Store {
   }
 
   /** `org/db/local/branch/<name>` or `org/db/local/commit/<id>`. */
-  refPath(ref: Ref = this.ref): string {
+  private refPath(ref: Ref = this.ref): string {
     return 'branch' in ref
       ? `${this.dbPath}/local/branch/${encodeURIComponent(ref.branch)}`
       : `${this.dbPath}/local/commit/${encodeURIComponent(ref.commit)}`;
@@ -277,7 +406,7 @@ export class Store {
       }
     }
     const commit = commitFromDataVersion(res.headers.get('terminusdb-data-version'));
-    if (!res.ok) throw new StoreError(res.status, errorType(body), body);
+    if (!res.ok) throw terminusError(res.status, body);
     // A GET of a document deleted from the branch answers HTTP 200 with the
     // error response as text: a "Status: 404" line, headers, a blank line,
     // then the JSON (check AC4). Read the embedded status, so it fails as the
@@ -290,7 +419,7 @@ export class Store {
       } catch {
         // Keep the text.
       }
-      throw new StoreError(Number(embedded[1]), errorType(inner), inner);
+      throw terminusError(Number(embedded[1]), inner);
     }
     return { status: res.status, body, commit };
   }
@@ -478,7 +607,7 @@ export class Store {
       });
       return toCommit(r.body);
     } catch (err) {
-      if (err instanceof StoreError && err.type === 'api:DocumentNotFound') return undefined;
+      if (err instanceof StoreError && err.kind === 'not_found') return undefined;
       throw err;
     }
   }
@@ -586,5 +715,14 @@ export class Store {
 
 /** A store for one request, bound to the ref the request resolved. */
 export function createStore(ref: Ref): Store {
-  return new Store(configFromEnv(), ref);
+  return new TerminusStore(configFromEnv(), ref);
+}
+
+/**
+ * A store with the operator-side methods (ADR-0062), for the operator tools
+ * and the tests. No module under `app/lib/api/` calls this; a test reads them
+ * for it.
+ */
+export function createOperatorStore(ref: Ref): OperatorStore {
+  return new TerminusStore(configFromEnv(), ref);
 }

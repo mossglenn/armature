@@ -5,7 +5,7 @@ import { ApiError } from './errors';
 import { userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
 import { AS_OF_PARENT, AS_OF_REFILLED_ON_REPLACE, hasAsOf } from './invariants/asOf';
-import { StoreError, type Store, type TerminusDocument } from './store';
+import { StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
 
 /**
  * The generic write path (plan §4 Phase 3; architecture decision records
@@ -170,7 +170,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
       create: true,
     });
   } catch (err) {
-    if (err instanceof StoreError && err.type === 'api:DataVersionMismatch') {
+    if (err instanceof StoreError && err.kind === 'version_mismatch') {
       const head = await branch.head();
       throw new ApiError(412, 'precondition_failed', `Branch ${branch.branch} has moved since commit ${opts.ifMatch}`, {
         expected: opts.ifMatch,
@@ -249,12 +249,12 @@ async function fillAsOf(
  * here, absent only against absent, which is how the store hashes them
  * (check AA3): a template on an Optional reference is a store 500 (Y2).
  */
-async function findExisting(branch: Store, doc: TerminusDocument): Promise<TerminusDocument | undefined> {
+async function findExisting(branch: DocumentReader, doc: TerminusDocument): Promise<TerminusDocument | undefined> {
   if (typeof doc['@id'] === 'string' && doc['@id']) {
     try {
       return (await branch.getDocument(doc['@id'])).document;
     } catch (err) {
-      if (err instanceof StoreError && err.type === 'api:DocumentNotFound') return undefined;
+      if (err instanceof StoreError && err.kind === 'not_found') return undefined;
       throw err;
     }
   }

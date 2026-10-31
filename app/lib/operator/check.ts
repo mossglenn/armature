@@ -1,5 +1,5 @@
 import { checkInvariants, createWriteContext, InvariantError, type Violation } from '../api/invariants';
-import type { Store } from '../api/store';
+import type { DocumentReader } from '../api/store';
 
 /**
  * `check` (ADR-0062 decision 5.1): the invariants engine over a whole branch,
@@ -29,7 +29,7 @@ export interface CheckReport {
   skipped: Array<{ code: string; reason: string }>;
 }
 
-export async function checkBranch(store: Store): Promise<CheckReport> {
+export async function checkBranch(store: DocumentReader): Promise<CheckReport> {
   const { documents, commit } = await store.allDocuments();
   // Every later read at the commit the documents came from, so a branch that
   // moves while the check runs is checked as it was.

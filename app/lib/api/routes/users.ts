@@ -86,7 +86,7 @@ users.post('/', async (c) => {
         const type = held['@type'];
         throw new ApiError(409, type === 'User' ? 'user_exists' : 'type_conflict', `${id} already exists as ${type}`);
       } catch (err) {
-        if (!(err instanceof StoreError && err.type === 'api:DocumentNotFound')) throw err;
+        if (!(err instanceof StoreError && err.kind === 'not_found')) throw err;
       }
     }
     const document: UserDocument = {
@@ -106,7 +106,7 @@ users.post('/', async (c) => {
       setEtag(c, commit);
       return c.json({ id: document['@id'], commit }, 201);
     } catch (err) {
-      if (err instanceof StoreError && err.type === 'api:DataVersionMismatch') {
+      if (err instanceof StoreError && err.kind === 'version_mismatch') {
         if (ifMatch) {
           const current = await main.head();
           throw new ApiError(412, 'precondition_failed', `main has moved since commit ${ifMatch}`, {

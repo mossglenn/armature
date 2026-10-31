@@ -106,7 +106,7 @@ export async function checkAsOf(doc: TerminusDocument, index: number, ctx: Write
       try {
         await at.getDocument(value);
       } catch (err) {
-        if (!(err instanceof StoreError && err.type === 'api:DocumentNotFound')) throw err;
+        if (!(err instanceof StoreError && err.kind === 'not_found')) throw err;
         out.push(violation('absent_at_commit', path, `${path} names ${value}, which does not exist at asOf ${asOf}`));
       }
     }

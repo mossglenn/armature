@@ -11,7 +11,7 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { app } from './app';
 import { canonical } from './fragments';
-import { createStore, type TerminusDocument } from './store';
+import { createOperatorStore, createStore, type TerminusDocument } from './store';
 
 const stamp = Date.now().toString(36);
 const get = (path: string) => app.request(path);
@@ -148,7 +148,7 @@ describe('GET /api/v1/export (ADR-0031)', () => {
       const source = body as Export;
 
       // The operator's steps (ADR-0062), through the adapter rather than any route.
-      const store = createStore({ branch: BRANCH });
+      const store = createOperatorStore({ branch: BRANCH });
       await store.createEmptyBranch(BRANCH);
       await store.replaceSchema(source.schema, { author: 'User/demo-designer', message: `Schema from export at ${etag}` });
       await store.insertDocuments(source.documents, { author: 'User/demo-designer', message: `Documents from export at ${etag}` });

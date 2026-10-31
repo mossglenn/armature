@@ -1,5 +1,5 @@
 import { findUserByExternalId, registry, REGISTRY_BRANCH, type ResolvedUser } from '../api/identity';
-import { createStore, type Commit, type Store } from '../api/store';
+import { createOperatorStore, type Commit, type OperatorStore } from '../api/store';
 import { parseDocuments, writeDocuments, type WriteResult } from '../api/write';
 
 /**
@@ -55,15 +55,15 @@ async function asOperatorCommit<T>(
   who: ResolvedUser,
   message: string,
   marker: OperatorMarker,
-  change: (transient: Store) => Promise<T>
+  change: (transient: OperatorStore) => Promise<T>
 ): Promise<{ commit: string; base: Commit; result: T }> {
-  const target = createStore({ branch });
+  const target = createOperatorStore({ branch });
   const base = await target.head();
   if (!base) throw new OperatorError(`Branch ${branch} has no commits`);
   const name = `operator-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
   await target.createBranch(name, { commit: base.id });
   try {
-    const transient = createStore({ branch: name });
+    const transient = createOperatorStore({ branch: name });
     const result = await change(transient);
     const source = await transient.head();
     if (!source || source.id === base.id) throw new OperatorError('The repair changed nothing');
@@ -130,7 +130,7 @@ export async function deleteScratchBranch(name: string): Promise<{ head?: Commit
   if (!SCRATCH_PREFIXES.some((p) => name.startsWith(p))) {
     throw new OperatorError(`${name} is not a scratch branch (its name must start with ${SCRATCH_PREFIXES.join(', ')}); name an abandoned exploration, do not delete it`);
   }
-  const store = createStore({ branch: name });
+  const store = createOperatorStore({ branch: name });
   const head = await store.head();
   await store.deleteBranch(name);
   return { head };
