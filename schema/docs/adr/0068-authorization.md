@@ -227,6 +227,10 @@ into `main` by a non-maintainer is 403 and by a maintainer succeeds; a test that
 cannot name another person as author under any header; and the operator's `check` over a seed
 with grants.
 
+> **Note (2026-10-30):** accepted the same day with none of the above run, since nothing of this
+> ADR is built. "Before acceptance" reads as "before the build": the workspace hub plan's §14
+> places the whole ADR before its step 3, push, and these tests come with it.
+
 ## Consequences
 
 - Authority over the graph is itself in the graph: who could merge into `main` at a given commit

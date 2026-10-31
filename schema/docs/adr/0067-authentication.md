@@ -290,6 +290,14 @@ hub's own trailer is returned byte for byte by the history route; and a rehearsa
 file with `ARMATURE_ALLOWED_HOSTS` on a fresh VM (CLAUDE.md, Branches item 5), since it changes
 how an instance runs.
 
+> **Note (2026-10-30):** accepted the same day with decision 7's part of this done and the rest
+> to come. Done: `app/lib/api/boundary.test.ts` refuses `Host: attacker.example` and an unlisted
+> `Origin` before any route runs, and the compose change was rehearsed on a fresh Lima VM (PR #72);
+> platform check AJ shows a message with trailers round trips byte for byte through the store,
+> which the trailer test will build on. "Before acceptance" above reads as "before the build":
+> the JWKS tests with decision 1 and the refused-trailer test with decision 6, in the workspace
+> hub plan's §14 order.
+
 ## Consequences
 
 - A writing client can run anywhere, and the hub can be reached beyond its server once
