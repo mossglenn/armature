@@ -118,6 +118,10 @@ store, and leaves the choice to its plan. Four facts bear on it.
    local commits (ADR-0065 decision 5). Junctions cloned from the remote keep the remote's ids
    either way.
 
+   > **Note (2026-10-30):** how the mapping crosses a split push is ADR-0065 decision 5's note of
+   > the same day: a provisional id and its referrers travel in one request as `@capture` and
+   > `@ref`, or the remote's id is written into the next part before it is sent. Review B5.
+
 ## Alternatives considered
 
 - **TerminusDB beside the hub, for everyone** (a container, or its executable as a sidecar of a

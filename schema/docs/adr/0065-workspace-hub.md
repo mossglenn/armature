@@ -168,6 +168,18 @@ Three facts constrain the answer:
    > not write the branch on the remote, which the warning at workspace creation (decision 4's
    > note) will usually have said already. The push stops before its first commit.
 
+   > **Later change (2026-10-30, decided):** how a local commit too large for one request is
+   > split. Its documents are ordered so that each follows what it names, and documents that name
+   > each other stay in one request; the split falls only between such groups. Within a request a
+   > provisional id (ADR-0066 decision 6) is a `@capture` and its referrers `@ref`; between
+   > requests, the ids the remote returned for part *n* are written into part *n*+1 before it is
+   > sent, so no part names an id the remote has not minted, and each part is an ordinary write
+   > the remote checks like any other. A group larger than one request can hold is a push error,
+   > not a split; what one request holds, in documents and bytes, is platform check AL, and the
+   > limit a push may use is set from it. Parts invisible until a final commit were declined: the
+   > remote would hold staging state, and the push would no longer be a client of `/api/v1`.
+   > Review B5.
+
 6. **Delivery is the remote's merge, driven from the workspace hub.** With nothing left to push,
    the workspace hub asks the remote to merge `main` into the workspace (`POST /branches/<ws>/
    merge` with `from: main`), presents any conflict for review, writes the resolution as local
@@ -179,6 +191,13 @@ Three facts constrain the answer:
    > **Later change (2026-10-30):** the merge into `main` needs a `Maintainer` of `main` on the
    > remote (ADR-0068 decision 4); a workspace owner who is not one asks someone who is, and the
    > workspace hub shows who holds the grant when delivery is refused (ADR-0068, open question 2).
+   >
+   > **Later change (2026-10-30, decided):** the remote's merge route checks the merged state
+   > before it commits and refuses with 422, the target unchanged (ADR-0025 decision 5, note of
+   > the same day), so "the workspace hub runs the invariants engine over the merged state ...
+   > since the remote's merge route does not" is superseded: the workspace hub shows the remote's
+   > refusal, and may run the engine over the local result first as a preview, as plan §6 foresaw.
+   > Review B3.
 
 7. **Tools reach a workspace hub on loopback, as its owner.** The `header` resolver serves, and
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the

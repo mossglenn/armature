@@ -181,6 +181,20 @@ Phase 2's routes land (ADR-0054 consequences).
    merge filtering and a fragment-level conflict view remain the open merge-policy question in
    plan §6.
 
+   > **Later change (2026-10-30, decided):** when built (workspace hub plan §14, step 4), a merge is
+   > checked before it commits. The hub applies the diff from base to source onto a transient
+   > branch taken from the target head (the operator's repair pattern, ADR-0062), runs the
+   > invariants engine over the whole result (the mode the operator's `check` has), and only then
+   > applies onto the target; a result that breaks a rule is refused with 422 `invariant_violation`
+   > and the violations, the target unchanged. The transient branch is deleted on every outcome.
+   > Whether `apply` honors a head precondition on the target is platform check AK; if it does
+   > not, the hub compares the target head before and after and records the residual race. A dry
+   > run returns the conflicts and the violations without a commit (CoQui's preview, plan §12).
+   > This moves onto the remote, where the authority is, the check ADR-0065 decision 6 had the
+   > workspace hub run afterward, when `main` already held the violation; Quiver's scenarios 7
+   > and 8 showed that a clean merge need not be a valid one. Review B3
+   > (`docs/armature-deep-review-2026-10-30.md`).
+
 6. **Shared history is never rewritten.** The hub exposes no reset, squash or rebase, on any
    branch, and does not call them. Rebase changes commit identifiers (Q2), and a pinned id would
    then name a commit no branch reaches. Reads at a commit id still work after a rebase or a
