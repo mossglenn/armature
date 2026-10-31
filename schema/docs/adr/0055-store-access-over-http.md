@@ -37,6 +37,18 @@ becomes an interface with one implementation per store, the TerminusDB adapter s
 module that talks to TerminusDB, decisions 2 to 7 unchanged for it; extracting that interface is the
 plan's step 1 (`docs/workspace-hub-plan.md` §14), a refactor with no behavior change.
 
+> **Note (2026-10-31):** that interface is extracted (plan §14 step 1). `store.ts` exports three
+> interfaces by role: `DocumentReader`, documents at one ref, all the invariants engine, the
+> intelligence reads and the operator's `check` use; `Store`, adding writes, history, branches and
+> merge, for the routes; and `OperatorStore`, adding the operator-side methods of ADR-0062, reached
+> only through `createOperatorStore`, which a test keeps out of every module under `app/lib/api/`.
+> The class is `TerminusStore`, still the only code that talks to TerminusDB, and no other module
+> of the API names it (the same test); `createStore(ref)` per request is unchanged. A refusal is a
+> `StoreError` with a store-neutral `kind` (`not_found`, `version_mismatch`, `unknown_ref`,
+> `exists`, `id_prefix`, `id_mismatch`, `other`) mapped inside the adapter from TerminusDB's error
+> `@type`, which the error keeps for logs, so nothing outside the adapter reads TerminusDB's error
+> names. Decision 1 otherwise stands until ADR-0066 is accepted.
+
 ## Context
 
 Phase 2 replaces the module-level client singleton in `app/lib/terminusdb.ts` with something
