@@ -1,6 +1,6 @@
 # The context files: a plan for `.claude/`
 
-*Written 2026-10-30; Amos decided every question in §7 as recommended the same night, and step 1 was done then (the pull request that adds this file). Steps 2 and 3 are SESSION.md's What's Next item 29.*
+*Written 2026-10-30; Amos decided every question in §7 as recommended the same night, and step 1 was done then (the pull request that adds this file); step 2, the CLAUDE.md pass, followed the same night. Step 3 is SESSION.md's What's Next item 29.*
 
 ## 1. Purpose
 
