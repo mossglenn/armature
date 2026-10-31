@@ -61,18 +61,18 @@ app.onError((err, c) => {
   }
   if (err instanceof HTTPException) return err.getResponse();
   if (err instanceof StoreError) {
-    if (err.type === 'api:DocumentNotFound') {
+    if (err.kind === 'not_found') {
       return c.json({ error: 'not_found', message: 'Document not found' }, 404);
     }
-    if (err.type === 'api:DataVersionMismatch') {
+    if (err.kind === 'version_mismatch') {
       return c.json({ error: 'precondition_failed', message: 'The branch has moved since the commit in If-Match' }, 412);
     }
-    if (err.type === 'api:SubmittedDocumentIdDoesNotHaveExpectedPrefix') {
+    if (err.kind === 'id_prefix') {
       // The store derives the id prefix from the class (platform check X5);
       // a client-supplied id must start with its own type (ADR-0024).
       return c.json({ error: 'bad_id', message: 'A document id must begin with its own type, as Type/<id>' }, 400);
     }
-    if (err.type === 'api:SubmittedIdDoesNotMatchGeneratedId') {
+    if (err.kind === 'id_mismatch') {
       // A Hash-keyed class derives its id from its key fields (ADR-0024);
       // a client-supplied id on one can only disagree with it.
       return c.json({ error: 'bad_id', message: 'This type derives its id from its key fields; omit @id and let the hub mint it' }, 400);

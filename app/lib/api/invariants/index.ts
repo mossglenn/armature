@@ -1,5 +1,5 @@
 import { ApiError } from '../errors';
-import { StoreError, type Store, type TerminusDocument } from '../store';
+import { StoreError, type DocumentReader, type TerminusDocument } from '../store';
 import { namesFragment } from '../fragments';
 import { checkAsOf, hasAsOf } from './asOf';
 import { validateAssessmentItem } from './assessmentItem';
@@ -75,7 +75,7 @@ export class InvariantError extends ApiError {
 /** What a validator may ask about the write it is checking. */
 export interface WriteContext {
   /** The branch being written. */
-  branch: Store;
+  branch: DocumentReader;
   /** Every document in the write, after the pipeline filled @id and @type. */
   batch: TerminusDocument[];
   /** Batch documents by @capture. */
@@ -142,7 +142,7 @@ export const refId = (value: unknown): string | undefined => (typeof value === '
  * such as the `User` copy of ADR-0032 decision 5: resolvable, not validated.
  */
 export function createWriteContext(
-  branch: Store,
+  branch: DocumentReader,
   batch: TerminusDocument[],
   replacing: Set<string>,
   caller: string,
@@ -162,7 +162,7 @@ export function createWriteContext(
         .getDocument(id)
         .then((r) => r.document)
         .catch((err: unknown) => {
-          if (err instanceof StoreError && err.type === 'api:DocumentNotFound') return undefined;
+          if (err instanceof StoreError && err.kind === 'not_found') return undefined;
           throw err;
         });
       fromBranch.set(id, p);

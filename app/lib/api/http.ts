@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import { ApiError } from './errors';
-import { isRecord, type Commit, type Ref, type Store } from './store';
+import { isRecord, type Commit, type DocumentReader, type Ref } from './store';
 
 /**
  * Request and response conventions shared by the route groups (architecture
@@ -19,7 +19,7 @@ export function refFromQuery(c: Context): Ref {
 }
 
 /** A caller-supplied commit id that must exist; 404 otherwise. */
-export async function requireCommit(store: Store, id: string, what = 'commit'): Promise<Commit> {
+export async function requireCommit(store: DocumentReader, id: string, what = 'commit'): Promise<Commit> {
   const commit = await store.getCommit(id);
   if (!commit) throw new ApiError(404, 'unknown_ref', `No ${what} ${id}`);
   return commit;

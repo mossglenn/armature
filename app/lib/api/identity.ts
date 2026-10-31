@@ -118,7 +118,7 @@ export async function resolveUser(c: Context): Promise<ResolvedUser> {
       });
       return { id, user: document };
     } catch (err) {
-      if (err instanceof StoreError && (err.type === 'api:DataVersionMismatch' || err.status === 400)) continue;
+      if (err instanceof StoreError && (err.kind === 'version_mismatch' || err.status === 400)) continue;
       throw err;
     }
   }
@@ -141,7 +141,7 @@ export async function userCopyFor(branchStore: Store, who: ResolvedUser): Promis
     await branchStore.getDocument(who.id);
     return undefined;
   } catch (err) {
-    if (err instanceof StoreError && err.type === 'api:DocumentNotFound') return who.user;
+    if (err instanceof StoreError && err.kind === 'not_found') return who.user;
     throw err;
   }
 }

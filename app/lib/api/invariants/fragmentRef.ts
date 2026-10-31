@@ -36,7 +36,7 @@ export async function checkFragmentRef(doc: TerminusDocument, index: number, ctx
     try {
       subject = (await ctx.branch.at({ commit: asOf }).getDocument(subjects[0])).document;
     } catch (err) {
-      if (err instanceof StoreError && err.type === 'api:DocumentNotFound') return [];
+      if (err instanceof StoreError && err.kind === 'not_found') return [];
       throw err;
     }
   } else {

@@ -1,10 +1,14 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isDroppedConnection, Store } from './store';
+import { isDroppedConnection, isUnknownRef, StoreError, TerminusStore } from './store';
 
 // The adapter over a stubbed fetch: a connection the store closes under a
-// request (check AG) is retried once for a read and never for a write.
+// request (check AG) is retried once for a read and never for a write; the
+// store's error names reach callers as kinds. Then the seam itself: the rest
+// of the API sees the interfaces, never the class.
 
-const store = new Store({ url: 'http://store.test', user: 'u', pass: 'p', org: 'admin', db: 'db' }, { branch: 'main' });
+const store = new TerminusStore({ url: 'http://store.test', user: 'u', pass: 'p', org: 'admin', db: 'db' }, { branch: 'main' });
 
 const socketError = (code: string, message: string) => Object.assign(new Error(message), { code });
 const dropped = () => new TypeError('fetch failed', { cause: socketError('UND_ERR_SOCKET', 'other side closed') });
@@ -89,5 +93,55 @@ describe('a dropped connection', () => {
     const fetch = stubFetch(refused);
     await expect(store.log()).rejects.toBe(refused);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a refusal from the store', () => {
+  const refusal = (status: number, type: string) => () =>
+    new Response(JSON.stringify({ 'api:error': { '@type': type } }), { status, headers: { 'Content-Type': 'application/json' } });
+  const refused = async (status: number, type: string): Promise<StoreError> => {
+    stubFetch(refusal(status, type));
+    return store.getDocument('Module/m1').then(
+      () => expect.fail('the read should have been refused'),
+      (err: unknown) => err as StoreError
+    );
+  };
+
+  it('carries a kind mapped from the store\'s error name, and keeps the name', async () => {
+    const err = await refused(404, 'api:DocumentNotFound');
+    expect(err).toBeInstanceOf(StoreError);
+    expect(err.kind).toBe('not_found');
+    expect(err.type).toBe('api:DocumentNotFound');
+    expect((await refused(412, 'api:DataVersionMismatch')).kind).toBe('version_mismatch');
+    expect((await refused(400, 'api:BranchExistsError')).kind).toBe('exists');
+    expect((await refused(400, 'api:SubmittedIdDoesNotMatchGeneratedId')).kind).toBe('id_mismatch');
+  });
+
+  it('is an unknown ref for a missing branch or commit, or any 404', async () => {
+    const missing = await refused(400, 'api:UnresolvableAbsoluteDescriptor');
+    expect(missing.kind).toBe('unknown_ref');
+    expect(isUnknownRef(missing)).toBe(true);
+    expect(isUnknownRef(await refused(404, 'api:SomethingElse'))).toBe(true);
+  });
+
+  it('is other for a name the adapter does not map', async () => {
+    const err = await refused(400, 'api:SomethingElse');
+    expect(err.kind).toBe('other');
+    expect(isUnknownRef(err)).toBe(false);
+  });
+});
+
+describe('the adapter stays behind its interfaces (workspace hub plan §13)', () => {
+  const root = __dirname;
+  const sources = readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'store.ts')
+    .map((f) => ({ file: f, text: readFileSync(join(root, f), 'utf8') }));
+
+  it('no module of the API but the adapter names the class', () => {
+    expect(sources.filter((s) => /\bTerminusStore\b/.test(s.text)).map((s) => s.file)).toEqual([]);
+  });
+
+  it('no module of the API reaches the operator-side methods (ADR-0062)', () => {
+    expect(sources.filter((s) => /\b(createOperatorStore|OperatorStore)\b/.test(s.text)).map((s) => s.file)).toEqual([]);
   });
 });
