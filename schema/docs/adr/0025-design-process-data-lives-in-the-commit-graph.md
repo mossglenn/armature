@@ -159,6 +159,14 @@ Phase 2's routes land (ADR-0054 consequences).
    (a commit id), never both. A read at a commit is read-only by construction. The response
    carries the commit it was served from (decision 7).
 
+   > **Note (2026-10-31):** a request that reads more than once now reads at one commit (the deep
+   > review's B1): the intelligence reads and the export resolve `branch` to its head once and read
+   > everything at that commit (`snapshot` in `app/lib/api/http.ts`), so a commit landing mid-request
+   > changes nothing in the answer and the ETag names the one commit all of it is from. A document's
+   > history cannot be read at a commit (platform check AM2), so the hub reads the head around it,
+   > serves only an answer with the head standing still, and answers 503 `branch_busy` after three
+   > moving reads. The viewer reads its companion panels at the export's commit.
+
 4. **Branches are the unit of parallel work.** `main` is the shared branch. A branch is created
    from a branch head or from a commit, and the hub validates the name. Branch creation is not a
    commit and records no author in the store; the hub does not add one. Branch names are a
@@ -234,6 +242,14 @@ Phase 2's routes land (ADR-0054 consequences).
    the read, whether or not they touched this document; the client re-reads and retries. The
    store's `TerminusDB-Data-Version` header and its `branch:` and `commit:` prefixes never appear
    in `/api/v1`, which closes the question ADR-0054 raised.
+
+   > **Note (2026-10-31):** every write is now conditioned, `If-Match` or not (the deep review's
+   > B2). The pipeline captures the head first; a supplied `If-Match` that is not it is a 412 before
+   > anything is read; every lookup and rule of the write reads at that commit; and the store is
+   > sent that commit as the write's data version. A write without `If-Match` that loses a race is
+   > run again, whole, on the new head, up to three runs, then 409 `branch_moved`; one with it gets
+   > the 412 it asked for. So a write's rules are checked on the state it lands on, which "every
+   > write" in CLAUDE.md's constraint list always claimed. Race tests: `app/lib/api/race.test.ts`.
 
 8. **History, changes and diff are read routes over the store's endpoints.** A document's
    history returns the commits that touched it, newest first, each with commit id, author,
