@@ -1,6 +1,6 @@
 # The context files: a plan for `.claude/`
 
-*Written 2026-10-30; Amos decided every question in §7 as recommended the same night, and step 1 was done then (the pull request that adds this file); step 2, the CLAUDE.md pass, followed the same night. Step 3 is SESSION.md's What's Next item 29.*
+*Written 2026-10-30; Amos decided every question in §7 as recommended the same night, and step 1 was done then (the pull request that adds this file); steps 2 and 3, the CLAUDE.md pass and the budgets check in CI with PROJECT_CONTEXT's pointer pass, followed the same night. The plan is done; its rules live on in CLAUDE.md's "Documents and records", `prompts/update-session.md` and `scripts/check_context_size.js`.*
 
 ## 1. Purpose
 

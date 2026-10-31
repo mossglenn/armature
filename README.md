@@ -199,7 +199,7 @@ packages/client/              @armature/client: every /api/v1 route as a typed f
 package.json                  The npm workspace root (app and packages/*)
 scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync (its own package)
 docker/                       Docker Compose for the store; --profile hub adds the hub and viewer, --profile public Caddy in front; their Dockerfiles, the Caddyfile, the operator entrypoint
-.github/workflows/ci.yml      CI, five jobs: lint, type-check, the generated-types drift check and the hub bundle; the contract suite against a TerminusDB service container; the viewer's browser smoke test (Playwright over the built viewer and the bundled hub); @armature/client installed as another repository installs it; both container images built and started
+.github/workflows/ci.yml      CI, five jobs: lint, type-check, the generated-types drift check, the context files' budgets and the hub bundle; the contract suite against a TerminusDB service container; the viewer's browser smoke test (Playwright over the built viewer and the bundled hub); @armature/client installed as another repository installs it; both container images built and started
 .claude/                      Context for AI-assisted development sessions: CLAUDE.md, PROJECT_CONTEXT.md, SESSION.md
 ```
 
