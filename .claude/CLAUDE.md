@@ -137,6 +137,7 @@ docs/
   SCHEMA_APPENDIX.md       # GENERATED — do not edit; run node scripts/generate-schema-appendix.js (not drift-checked in CI)
   development-plan.md      # Phased plan; §6 open questions; §9 lists verified TerminusDB platform facts
   armature-asks-from-Coqui.md  # CoQui's dated handoff (2026-10-05): its asks and lessons; a status banner says what landed
+  armature-deep-review-2026-10-30.md  # An outside agent's review of the repository at `e3c0396` (2026-10-30): seven blockers (B1 to B7), eight high findings (H1 to H8), documentation facts; kept as written, a status banner says what landed and what awaits a decision
   client-changes.md        # What client tools (CoQui first) must act on, newest first: what changed, what a client does, CoQui's mappings. Add an entry for every change to /api/v1 or the schema a client would act on
   research-path.md         # How a learning scientist stands up a constrained Armature for one study: instance, what the tools write, slice, profile, export at a pinned commit, reproduction, process questions only (Phase 6)
   graph-view-plan.md       # The Design Graph (Phase 8, planned 2026-10-22; PR 1 built the same day): the viewer's graph pages (/graph, the Focus page, the Walkthrough, figure mode) on React Flow with dagre; the visual language (stages, hues, glyphs); Narrative 1 as ten steps; five PRs; §14 records the decisions
