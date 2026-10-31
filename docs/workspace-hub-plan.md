@@ -223,7 +223,7 @@ Each tested against a second client before it enters the remote (Development Pri
 
 ## 14. Implementation plan
 
-1. **The adapter interface** (§10): a refactor with no behavior change; its own pull request.
+1. **The adapter interface** (§10): a refactor with no behavior change; its own pull request. *Built 2026-10-31,* and the deep review's B1 and B2 in the pull request after it (ADR-0025 decisions 3 and 7, notes).
 2. **Workspace mode** with TerminusDB as the local store, because the adapter exists: the role in `/discover`, the refusals, the mirror of `main`, the workspace routes for create and clone. Tested in one process against a remote. The `workspace` compose profile for developers and researchers (§10), rehearsed with Colima and Podman Desktop before it is documented. With it, the compose file's two networks and the `public` profile's refusal to start without a store password (ADR-0067 decision 8, note of 2026-10-30; review H8), under the same rehearsal.
 3. **Push** with the commit table and the trailers; the failures of §5; the split rule (ADR-0065 decision 5, note of 2026-10-30), with platform check AL first.
 4. **Bring in, review and deliver** (§6), with the remote's merge route checking the merged state before it commits and the dry run (ADR-0025 decision 5, note of 2026-10-30; platform check AK first).
