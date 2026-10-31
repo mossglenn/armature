@@ -185,7 +185,7 @@ branches.post('/', async (c) => {
   try {
     await store.createBranch(name, from);
   } catch (err) {
-    if (err instanceof StoreError && /exist/i.test(err.type)) {
+    if (err instanceof StoreError && err.kind === 'exists') {
       throw new ApiError(409, 'branch_exists', `Branch ${name} already exists`);
     }
     throw err;

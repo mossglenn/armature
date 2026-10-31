@@ -167,7 +167,7 @@ Every branch with its latest commit: `[ { name, head: { commit, author, message,
 
 ### `POST /branches`
 
-Creates a branch. Body: `{ "name": "...", "from": { "branch": "main" } }` or `{ "name": "...", "from": { "commit": "<commit-id>" } }`; `from` defaults to `main`. Names must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$` (400 `bad_name`). An existing name: 409 `branch_exists`. Response **201**: `{ name, from, head }`. Branch creation is not a commit and needs no identity.
+Creates a branch. Body: `{ "name": "...", "from": { "branch": "main" } }` or `{ "name": "...", "from": { "commit": "<commit-id>" } }`; `from` defaults to `main`. Names must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$` (400 `bad_name`). An existing name: 409 `branch_exists`; a `from` branch or commit that does not exist: 404 `unknown_ref`. Response **201**: `{ name, from, head }`. Branch creation is not a commit and needs no identity.
 
 ### `GET /branches/:name`
 
