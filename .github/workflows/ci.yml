@@ -63,7 +63,7 @@ on:
 
 jobs:
   app:
-    name: Lint, type-check, generated-types drift check and hub bundle
+    name: Lint, type-check, generated-types drift check, context budgets and hub bundle
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -77,6 +77,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run check:types
+      - run: npm run check:context
       - run: npm run build:hub --workspace app
       - run: npm run build:operator --workspace app
 
