@@ -179,6 +179,11 @@ Three facts constrain the answer:
    > limit a push may use is set from it. Parts invisible until a final commit were declined: the
    > remote would hold staging state, and the push would no longer be a client of `/api/v1`.
    > Review B5.
+   >
+   > **Later change (2026-10-30, decided):** the table from local to remote commits is a file
+   > beside the commit files, never a field in them, with an in-flight marker written before each
+   > request; a push interrupted after the remote accepted a part recovers by reading the branch's
+   > log for the trailers above (ADR-0066 decision 2, note; review B4).
 
 6. **Delivery is the remote's merge, driven from the workspace hub.** With nothing left to push,
    the workspace hub asks the remote to merge `main` into the workspace (`POST /branches/<ws>/
@@ -220,6 +225,25 @@ Three facts constrain the answer:
    > remote. An agent writes on a workspace hub, where the owner is present and recorded, and the
    > push carries its commits as the agent acting for the owner; a remote refuses an agent's own
    > writes made directly (ADR-0067 decision 10, with the reasons and what would reopen it).
+   >
+   > **Later change (2026-10-30, decided):** two bounds on the loopback trust. **A per-launch
+   > secret.** The desktop program draws a random value at each start and keeps it in memory; a
+   > tool it launches receives it in its environment (`ARMATURE_LOCAL_TOKEN`), a tool started
+   > elsewhere pairs once by pasting the value the program shows, and every write to a workspace
+   > carries it as `Armature-Local-Token`; a write without it is 403 `forbidden`. Reads stay open.
+   > It answers "are you a tool I started" and nothing more: identity stays the owner's, and the
+   > workspace hub still authorizes nothing (ADR-0068 decision 9). It closes the port to other
+   > accounts on the machine and to processes the owner did not start; a process running as the
+   > owner that reads the owner's own process environment is the trust a personal machine
+   > extends to its programs, written down as such. **Only the workspace hub pushes.** Push, bring
+   > in and deliver are actions of the desktop program's own interface, not routes a tool may
+   > call: the `armature/workspace` capability a tool sees offers create and status, and the
+   > remote credential in the keychain is used by the program alone. No tool, launched or paired,
+   > can move work to the remote; an agent's commits reach it only when the owner pushes
+   > (decision 10). Scoped tokens with expiry, the review's fuller design, wait for a local tool
+   > that needs a narrower grant than the owner's own, or a workspace hub serving more than one
+   > person, which decision 1 rules out. Review B6; the two names are chosen without a separate
+   > decision, open to overrule.
 
 8. **The store under a workspace hub is a choice behind the adapter.** TerminusDB as a process
    beside the hub and a file-backed store are both admissible. Decisions 3 and 6 limit what the
