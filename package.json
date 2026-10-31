@@ -13,6 +13,7 @@
     "typecheck": "npm run typecheck --workspaces",
     "test": "npm test --workspace app",
     "generate:types": "node scripts/generate-types.js",
-    "check:types": "node scripts/generate-types.js --check"
+    "check:types": "node scripts/generate-types.js --check",
+    "check:context": "node scripts/check_context_size.js"
   }
 }
