@@ -118,6 +118,11 @@
 //      from /api/history; and what the store does with a trailing newline, CRLF line endings
 //      and non-ASCII text
 //
+// Reads pinned to one commit (the deep review's B1), added 2026-10-31:
+//   AM. Which reads accept a commit path: /api/log at local/commit/<id> lists from that commit
+//      back; /api/history at a commit path is a 500, so a document's history is read only at a
+//      branch and the hub proves its answer belongs to one head by reading the head around it
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -956,6 +961,18 @@ async function main() {
     record(id, same ? verdictIfSame : verdictIfSame === "PASS" ? "FAIL" : "INFO",
       `${what}: write ${r.status}; /api/log ${ajLog === message ? "identical" : "differs: " + JSON.stringify(ajLog)}; /api/history ${ajHist === message ? "identical" : "differs: " + JSON.stringify(ajHist)}`);
   }
+
+  // AM: reads at a commit path. Every multi-read request resolves a branch to its head once and
+  // reads at that commit (B1); history is the one read that cannot.
+  const amLog = await log("main", 2);
+  const amHead = amLog?.[0]?.identifier;
+  const amParent = amLog?.[1]?.identifier;
+  r = await api("GET", `/api/log/admin/${DB}/local/commit/${amParent}?count=1`);
+  record("AM1", r.status === 200 && r.json?.[0]?.identifier === amParent ? "PASS" : "FAIL",
+    `/api/log at the head's parent: ${r.status}, first entry ${r.json?.[0]?.identifier ?? "none"} (parent ${amParent}, head ${amHead})`);
+  r = await api("GET", `/api/history/admin/${DB}/local/commit/${amHead}?id=Artifact/aj&count=1`);
+  record("AM2", r.status === 500 ? "PASS" : "INFO",
+    `/api/history at a commit path: ${r.status} ${r.json?.["api:error"]?.["@type"] ?? ""} (500 expected; anything else means history can be pinned)`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
