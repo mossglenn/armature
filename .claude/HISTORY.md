@@ -6,6 +6,38 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-10-30, night, later (the context files plan and its three steps; PRs #80 to #82)
+
+**Where things stood at the close.** **Phase 8; the workspace hub's decisions complete, nothing of it built; the context files split (2026-10-30, night; PRs #77 to #79 merged, CI green on `main` at `a14db1e`).** ADR-0065 (the workspace hub), ADR-0067 (authentication) and ADR-0068 (authorization) are accepted since 2026-10-30; ADR-0066 (the file-backed store) stays Proposed until platform check AI runs. Of all that, only ADR-0067 decision 7, the `Host` and `Origin` checks, is built. An outside agent's deep review of the repository (`docs/armature-deep-review-2026-10-30.md`) was checked and found accurate; its ten decisions are taken as dated notes on ADR-0025, 0065, 0066, 0067 and 0068, and its two confirmed code defects, B1 and B2, are folded into step 1. **Next: `docs/workspace-hub-plan.md` §14 step 1, the adapter interface extracted from `app/lib/api/store.ts`, with B1 and B2 (reads and writes pinned to one commit, with race tests) in its scope or right behind it.**
+
+### Done
+
+- **`docs/context-files-plan.md`** written and its seven questions decided by Amos as recommended: `.claude/HISTORY.md` for the log; budgets checked by the prompt and by CI; no dates in CLAUDE.md beyond ADR statuses; a read-first ADR list; a two-session expiry for Notes; no generated tree; the log cut by hand once
+- **PR #80, the split:** `HISTORY.md` built from the three records every session had left in `SESSION.md` (its Current Phase paragraph, its What's Done section, its Recent Sessions bullets), word for word under one heading per session, newest first, with each session's facts block; the settled Active Decisions in one appendix in their original order, the old Blockers paragraph in a second; every PR number (69) and ADR number (42) the old file had present. `SESSION.md` 246 KB to 26 KB: one Current Phase paragraph, What's Next with its "since" chains collapsed and its numbers kept, live Blockers, thirteen in-flight decisions, Notes with the hand-off and three standing facts tagged with a home or an expiry. `prompts/update-session.md` rewritten: sizes in step 1, the history entry written first, the state rewrite with the collapse and expiry rules, a budgets step. CLAUDE.md's startup rule for HISTORY.md. The tooling facts moved to Claude's memory for the project
+- **PR #81, the CLAUDE.md pass:** 67 KB to 32,718 bytes. The tree at one line per entry with no dates or PR numbers; Stack in the present tense; the workspace terms folded into one entry; the ADR Reference replaced by a twelve-line read-first list; the rules kept and trimmed where they narrated; a new "Documents and records" section holding the rules of working SESSION.md had carried (spelling, annotate never rewrite, which documents follow a change, `client-changes.md` as the revision list and its corollaries, how reviews run, the budgets); principle 8 (decisions wait for evidence, reopened when building shows the cost; options, then the call); two don'ts from the settled decisions. The old Stack, Repository Structure and ADR Reference appended to HISTORY.md verbatim
+- **PR #82, the check:** `scripts/check_context_size.js` (dependency-free; `npm run check:context`) fails when a file is over its budget with a "move, do not shorten" message; CI's app job runs it after the drift check and is renamed. PROJECT_CONTEXT's merge-policy question brought current and its resolved paragraph reduced to pointers. README and CLAUDE.md name the check
+- The files a session reads: 330 KB to 74 KB
+
+### Session notes
+
+- Amos asked whether SESSION.md was too large and whether the log should move; measured the three files (330 KB, about 84k tokens; SESSION.md past one read, about 20 KB of its 246 state; CLAUDE.md 17k tokens on every turn) and recommended a split with budgets; wrote the plan with seven questions; Amos took every recommendation
+- The split: HISTORY.md by a script slicing the old file at its headings, so content stayed byte-exact, with a mapping of thirty sessions written by hand; the new SESSION.md written by hand. A `strip("\n-")` on a section ate the first bullet's leading dash and made one kept decision unmatched; found by printing the bullets
+- The CLAUDE.md pass was written whole, then trimmed four times to land under 32,768 bytes, each time by moving or shortening narration, never a rule; the sections it dropped went to HISTORY.md first so nothing lacked a home
+- The check wired into CI in the same job as the drift check; its own PR was the first run of the step and passed. Each PR merged on Amos's "confirm and merge", CI confirmed on `main`
+
+### Facts from the 2026-10-30 night, later, worth keeping
+
+- **`scripts/` is `"type": "module"`**, so a new script there is written as ESM (`import`, `import.meta.url`), as `check_context_size.js` is (home: the code)
+- **Python's `str.strip("\n-")` strips every `-` at the ends**, not only the separator line; a Markdown section whose first line is a list item loses its dash. Split on the separator instead (home: Claude's memory, `armature-tooling-facts`, if it bites again)
+- **`docs/vendor/terminusdb/_all/` is gitignored** (`.gitignore` L51) and `scripts/generate-schema-appendix.js` stamps a UTC date; both moved out of SESSION.md's Notes here, the first homed in CLAUDE.md's tree, the second dropped as harmless
+
+### Decisions taken
+
+- The seven questions of `docs/context-files-plan.md` §7, as recommended (Amos, 2026-10-30): `.claude/HISTORY.md` for the log; budgets of 32, 32 and 20 KB checked by the prompt and CI; ADR statuses the only dates in CLAUDE.md; a read-first list of about ten ADRs; a two-session expiry for Notes; no generated tree; the log cut by hand once. Recorded in the plan, CLAUDE.md's "Documents and records", `prompts/update-session.md` and `scripts/check_context_size.js`
+- The settled Active Decisions filed in one appendix of HISTORY.md in their original order rather than under their sessions (the plan's §7 notes the deviation)
+
+---
+
 ## 2026-10-30, night
 
 **Where things stood at the close.** **Phase 8 with the deep review assessed and its ten decisions recorded (2026-10-30, night; PRs #77 to #79, all merged, CI green on `main` at `90eba60`).** An outside agent's review of the repository at `e3c0396` (`docs/armature-deep-review-2026-10-30.md`: seven blockers, eight high findings, documentation facts) was checked citation by citation and found accurate; its priority was reassessed (B1 and B2 confirmed code defects, new, cheap, folded into step 1; B3 known and scheduled, the review's argument for a prospective check on the remote adopted; B4 and B5 confirmed gaps in the plan; B6, B7 and H1 to H8 release items; its advice to pause declined). **PR #77** fixed its documentation facts and kept the review with a status banner. **Amos then decided every item the review raised**: four in PR #78 (B3 the merge checked before it commits, B5 the split rule, B7 admission and reads under `oidc`, H4 `User.issuer`) and six in PR #79 (B4 immutable commit files with `push.json`, B6 a per-launch secret and push only as the desktop program's own action, H1 `Relay` narrowed, H2 the grant before the branch, H5 the hub published as `api.<site>` under `oidc`, H8 two compose networks and a required password), each a dated note on ADR-0025, 0065, 0066, 0067 or 0068, none built. **Next: plan §14 step 1, the adapter interface, with B1 and B2 (reads and writes pinned to one commit, with race tests) in its scope or right behind it.**
