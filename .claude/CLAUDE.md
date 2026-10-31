@@ -1,6 +1,6 @@
 # Armature — Claude Code Context
 
-This file is the primary context for AI-assisted development on Armature. Read this first, then read PROJECT_CONTEXT.md and SESSION.md before starting any work session. Human readers new to the project should start with `docs/how-armature-works.md`.
+This file is the primary context for AI-assisted development on Armature. Read this first, then read PROJECT_CONTEXT.md and SESSION.md before starting any work session; read HISTORY.md, the log of past sessions, only when SESSION.md points at it or no ADR or document answers a "why". Human readers new to the project should start with `docs/how-armature-works.md`.
 
 Abbreviations used here: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), SME (subject-matter expert), WOQL (TerminusDB's query language), OIDC (OpenID Connect).
 
@@ -154,7 +154,8 @@ docs/
 .claude/
   CLAUDE.md                # This file
   PROJECT_CONTEXT.md       # Problem space, audiences, demo goals
-  SESSION.md               # Current state and next steps
+  SESSION.md               # The state a session needs: current phase, what's next, what is in flight, blockers, the hand-off; budget 32 KB (docs/context-files-plan.md)
+  HISTORY.md               # The log: one entry per session since February 2026, newest first, with each session's facts and decisions; appended by prompts/update-session.md, read on demand
   prompts/                 # Reusable workflow prompts
   skills/terminusdb/       # How to answer TerminusDB questions: which vendored page, what to trust, when to re-sync
 ```
@@ -320,9 +321,10 @@ The full index, with every ADR's status, is `schema/docs/adr/README.md`.
 ## Workflow
 
 ### Session startup
-1. Read SESSION.md for current state and next steps
+1. Read SESSION.md for current state and next steps (it is under 32 KB; read it whole)
 2. Check git log for recent commits
 3. Read any files relevant to today's work
+4. Read HISTORY.md only for a session or decision SESSION.md points at, or when no ADR or document says why something is as it is
 
 ### Tests
 `npm test` in `app/` runs Vitest. The tests under `app/lib/api/` call the Hono app in-process with `app.request()` and read from the TerminusDB container, so the container must be up with the seed loaded. They are the contract suite: CI's `contract` job (`.github/workflows/ci.yml`) starts TerminusDB v12.0.7 as a service container, waits for it (`scripts/wait_for_store.js`), loads the schema, seeds, checks the seed against every rule with the operator's `check` (ADR-0062) and runs them on every push and pull request (Phase 7). `app/vitest.global-setup.mts` waits until the seeded database answers a read of `main`, then does the tests' kind of work once (a scratch branch, a write through the pipeline, a coverage read; the branch deleted afterward) before the first test file starts, because a store on a cold machine has stalled mid-suite past the 15-second test timeout and the cheap read never caught it. The `app` job runs lint, `tsc --noEmit` and the types drift check. The Design Graph's pure modules (`app/lib/graph/`) are tested on a fixture and on the seed in the same Vitest run; the page itself is driven in a browser by `app/e2e/graph.spec.ts` (Playwright; `npm run test:e2e` in `app/` after `build:hub` and `build`, which CI's `viewer` job does against the same seeded store). The rule (2026-10-22): a test is included unless it is very unlikely to show a real problem or very costly to run.
