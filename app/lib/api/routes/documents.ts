@@ -36,6 +36,9 @@ import { parseDocuments, writeDocuments } from '../write';
 /** History answers by the commit they were read at (docs/api.md § history). */
 export const historyMemo = new CommitMemo<HistoryEntry[]>();
 
+/** Reads of a document's history before a branch that keeps moving is answered 503 `branch_busy`. */
+const HISTORY_ATTEMPTS = 3;
+
 export const documents = new Hono();
 
 const fieldsOf = (type: string): Record<string, FieldShape> =>
@@ -188,21 +191,34 @@ documents.get('/:type/:id/history', async (c) => {
   const count = intQuery(c, 'count', 20);
   const diff = c.req.query('diff') !== 'false';
   const docId = `${type}/${id}`;
-  // The store walks the branch's whole log for a document touched rarely
-  // (seconds on a few hundred commits), and a read at a commit is immutable,
-  // so an answer is kept by the head it was read at and served again while
-  // the head stands still. The store's history answer names no commit, so
-  // the head is read around it and the answer kept only when it did not move.
+  // The store reads history only at a branch (check AM2), so the head is
+  // read around the answer: the same head before and after proves the answer
+  // is that commit's, since history is never rewritten (ADR-0025 decision 6),
+  // and only then is it served, under that head as the ETag (the deep
+  // review's B1). The store walks the branch's whole log for a document
+  // touched rarely (seconds on a few hundred commits), so a proven answer is
+  // kept by its head and served again while the head stands still.
   const store = createStore({ branch });
-  const head = await store.head();
   const keyAt = (at: string) => CommitMemo.key(at, docId, start, count, diff);
-  let entries = head ? historyMemo.get(keyAt(head.id)) : undefined;
-  if (!entries) {
-    entries = (await store.history(docId, { start, count, diff })).entries;
-    const after = await store.head();
-    if (head && after?.id === head.id) historyMemo.set(keyAt(head.id), entries);
+  let served: { entries: HistoryEntry[]; head: string | undefined } | undefined;
+  for (let attempt = 0; attempt < HISTORY_ATTEMPTS && !served; attempt++) {
+    const head = (await store.head())?.id;
+    const kept = head ? historyMemo.get(keyAt(head)) : undefined;
+    if (kept) {
+      served = { entries: kept, head };
+      break;
+    }
+    const entries = (await store.history(docId, { start, count, diff })).entries;
+    if ((await store.head())?.id !== head) continue;
+    if (head) historyMemo.set(keyAt(head), entries);
+    served = { entries, head };
   }
-  setEtag(c, head?.id);
+  if (!served) {
+    c.header('Retry-After', '1');
+    throw new ApiError(503, 'branch_busy', `Branch ${branch} moved during each of ${HISTORY_ATTEMPTS} reads of the history; retry`);
+  }
+  const { entries, head } = served;
+  setEtag(c, head);
   return c.json({
     id: docId,
     branch,

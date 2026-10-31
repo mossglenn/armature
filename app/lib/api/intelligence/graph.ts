@@ -8,8 +8,9 @@ import { StoreError, type DocumentReader, type TerminusDocument } from '../store
  * (plan §3 layer 4). Every read goes through the store adapter (architecture
  * decision record ADR-0055) and is cached for the life of the request, so a
  * route that walks the same objective from three items fetches it once.
- * `commit` is the commit the first read was served from; every read in one
- * request is at the same ref, so it is the ETag (entity tag) for the response.
+ * `commit` is the ETag (entity tag) for the response: the commit the routes
+ * resolved the request's ref to (`snapshot`, the deep review's B1), so every
+ * read is at it; given none, the commit the first read was served from.
  *
  * Reverse lookups are schema-driven: `referencing` reads CLASS_FIELDS for
  * every reference field whose declared class the target is or inherits
@@ -26,9 +27,10 @@ export class Graph {
   private readonly docs = new Map<string, Promise<TerminusDocument | undefined>>();
   private readonly lists = new Map<string, Promise<TerminusDocument[]>>();
   private readonly past = new Map<string, Promise<TerminusDocument | undefined>>();
-  commit: string | undefined;
-
-  constructor(readonly store: DocumentReader) {}
+  constructor(
+    readonly store: DocumentReader,
+    public commit?: string
+  ) {}
 
   private served(commit: string | undefined): void {
     if (!this.commit && commit) this.commit = commit;
