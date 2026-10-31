@@ -13,7 +13,7 @@ Superseded by ADR-0013
 **Superseded by ADR-0013** (applied 2026-02-26, commit `44d13b8`; noted 2026-10-08). The general
 principle in this ADR's consequences, that rules TerminusDB cannot express are enforced by the API,
 is no longer carried by a live ADR. It is implemented by the invariants engine
-(`app/lib/api/invariants/index.ts`; constraints 0 to 12 in `.claude/CLAUDE.md`). Later ADRs that
+(`app/lib/api/invariants/index.ts`; constraints 0 to 20 in `.claude/CLAUDE.md`; 0 to 12 when this note was written). Later ADRs that
 cite ADR-0006 for that principle (ADR-0014, ADR-0016, ADR-0017, ADR-0018, ADR-0019,
 ADR-0020, ADR-0022, ADR-0029) mean the principle, not this minimum-cardinality decision.
 

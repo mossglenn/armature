@@ -3,8 +3,9 @@
 > **In brief.** Several fields accept only values from a fixed list, such as the six levels of
 > Bloom's taxonomy or the stages an objective passes through. This decision defined each such list
 > once, as a named type of its own (an enumeration, or enum), which every field that uses it refers
-> to by name. It still holds. The inventory below is out of date: the schema now has twelve enums,
-> including `FindingStatus` and no longer `CoverageStatus`.
+> to by name. It still holds. The inventory below is out of date: the schema now has fifteen enums,
+> including `FindingStatus`, `AttestationVerdict`, `ExternalSystem` and `AttachmentStore`, and no
+> longer `CoverageStatus`.
 
 ## Status
 Accepted
@@ -30,6 +31,9 @@ The schema currently defines thirteen enums: `BloomsLevel`, `ObjectiveState`, `I
 > `DesignNoteCategory`, `FindingStatus`. `FindingStatus` was added by ADR-0020. `CoverageStatus`
 > left the schema with ADR-0056; its four values survive only as the coverage read's vocabulary.
 > `docs/SCHEMA_APPENDIX.md` is the generated, current list.
+
+> **Later change (2026-10-30):** fifteen. ADR-0028 added `AttestationVerdict`; ADR-0030 added
+> `ExternalSystem` and `AttachmentStore`. The appendix remains the current list.
 
 ## Consequences
 - Enum types are reusable. `BloomsLevel` is referenced by both `LearningObjective` and `AssessmentItem` — they share the same vocabulary, enabling Bloom's alignment queries across both types.
