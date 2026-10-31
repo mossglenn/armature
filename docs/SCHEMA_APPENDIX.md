@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-10-22_
+_Schema snapshot · Generated 2026-10-31_
 
 ---
 
@@ -15,7 +15,7 @@ Armature models the full instructional design artifact graph from problem defini
 - **Relationships as documents** — many-to-many relationships are reified as first-class graph nodes that carry data about the relationship itself (rationale, role, sequence, confidence) and can themselves be the subject of a `DesignNote` or `DesignFinding` (ADR-0003, ADR-0017).
 - **Fragments** — an item is a tree of embedded subdocuments (stem, options, feedbacks), each with a client-assigned `fragmentId` so a part can be addressed without having document identity (ADR-0022, ADR-0023, ADR-0033).
 - **Back-reference pattern** — child documents hold foreign keys to their parents (e.g., `Assessment.module`, `Module.course`), keeping parent documents lean regardless of child count (ADR-0004).
-- **API constraints** — TerminusDB checks that a referenced document exists but not its class, and cannot express cross-document or conditional rules. Those constraints (reference class, unique sequences, conditional requirements) are enforced on every write by the API's invariants engine (`app/lib/api/invariants/`, numbered 0 to 12 in `.claude/CLAUDE.md`) and are noted inline as API CONSTRAINT (ADR-0006, superseded for minimum cardinality by ADR-0013).
+- **API constraints** — TerminusDB checks that a referenced document exists but not its class, and cannot express cross-document or conditional rules. Those constraints (reference class, unique sequences, conditional requirements) are enforced on every write by the API's invariants engine (`app/lib/api/invariants/`; the numbered list is in `.claude/CLAUDE.md` and `docs/api.md`) and are noted inline as API CONSTRAINT (ADR-0006, superseded for minimum cardinality by ADR-0013).
 - **Nothing derived is stored** — coverage and alignment are computed from the structure at read time by the intelligence routes, at any commit, and never written into a document (ADR-0056).
 
 ---

@@ -82,7 +82,7 @@ Armature is **infrastructure for instructional design**. The name comes from scu
 
 Concretely, Armature is two things:
 
-1. **An open schema.** A schema is a formal definition of the kinds of records a database holds and how they connect. Armature's schema (`schema/schema.json`) defines 28 kinds of record (learning needs, objectives, assessment items, modules, design notes, attestations and so on) and 13 controlled vocabularies (such as Bloom's levels). It is the shared vocabulary every tool uses.
+1. **An open schema.** A schema is a formal definition of the kinds of records a database holds and how they connect. Armature's schema (`schema/schema.json`) defines 31 kinds of record (learning needs, objectives, assessment items, modules, design notes, attestations and so on) and 15 controlled vocabularies (such as Bloom's levels). It is the shared vocabulary every tool uses.
 2. **An API (application programming interface).** An API is a defined set of requests that other software can make, such as "give me this objective as it stood last Tuesday" or "record this new item, and here is why." Armature's API stores design records, enforces the rules that keep them coherent, keeps their full history, and answers questions about the design ("which objectives in this module have too few assessment items?").
 
 What Armature is **not**, in the paper's words: not a learning management system, not an object repository, not a learning record store, not an adaptive learning engine, not an assessment platform, not a content delivery system, and not a content-authoring app, quiz builder or curriculum-mapping tool. It is designer-facing, not student-facing, and it operates at design time, not delivery time.
@@ -404,10 +404,10 @@ This section explains the schema conceptually. It follows the design lifecycle f
 
 ### 12.1 Basic building blocks
 
-- **Classes (types).** Each kind of document is a class, such as `LearningObjective`. There are 28 classes.
+- **Classes (types).** Each kind of document is a class, such as `LearningObjective`. There are 31 classes: four abstract, five embedded parts (Section 12.7), and 22 concrete document classes.
 - **Fields.** Each class has fields. A field is either a plain value (text, number, date, true/false), a reference to another document, an enum value, or an embedded part (Section 12.7).
 - **Required, optional, sets and lists.** A field is required unless marked `Optional`. A `Set` holds any number of unordered values; a `List` holds ordered values. A set can declare a minimum count (`@min_cardinality`).
-- **Enums.** Twelve controlled vocabularies, such as `BloomsLevel` and `ItemStatus`. Using an enum rather than free text means "MultipleChoice," "multiple_choice" and "MC" cannot all appear, so queries are reliable (ADR-0008; ADR stands for Architecture Decision Record).
+- **Enums.** Fifteen controlled vocabularies, such as `BloomsLevel` and `ItemStatus`. Using an enum rather than free text means "MultipleChoice," "multiple_choice" and "MC" cannot all appear, so queries are reliable (ADR-0008; ADR stands for Architecture Decision Record).
 - **Inheritance.** A class can inherit fields from another. Abstract classes define shared fields and cannot be created directly.
 
 ### 12.2 The design lifecycle, as the schema sees it
@@ -1286,7 +1286,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **Client / plugin** | A separate application that uses the Armature API, such as CoQui |
 | **Closed-world assumption** | The database treats what it does not contain as false, so queries have definite answers |
 | **Commit** | A permanent, attributed, explained change to the database |
-| **Constraint / invariant / rule** | A condition every write must satisfy. Armature's are numbered 0 to 13 (Section 13) |
+| **Constraint / invariant / rule** | A condition every write must satisfy. Armature's are numbered 0 to 20 (Section 13) |
 | **CoQui** | The first Armature plugin, an assessment-item review tool in a separate repository |
 | **Coverage** | How many distinct eligible items placed in a module's assessments assess each objective the module declares (Section 17.1) |
 | **`createdBy`** | The `User` responsible for a record entering the graph, set by the hub |
@@ -1372,7 +1372,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 
 *A question mark marks an optional field; "≥1" marks a set that must have at least one member. Every artifact also has `label`, `description?` and `createdBy?`.*
 
-**The twelve controlled vocabularies:** `BloomsLevel`, `ObjectiveState`, `ItemType`, `ItemStatus`, `EvidenceMethod`, `ObjectiveRole`, `ActivityType`, `PrerequisiteType`, `ConfidenceLevel`, `NeedPriority`, `DesignNoteCategory`, `FindingStatus`.
+**The fifteen controlled vocabularies:** `BloomsLevel`, `ObjectiveState`, `ItemType`, `ItemStatus`, `EvidenceMethod`, `ObjectiveRole`, `ActivityType`, `PrerequisiteType`, `ConfidenceLevel`, `NeedPriority`, `DesignNoteCategory`, `FindingStatus`, `AttestationVerdict`, `ExternalSystem`, `AttachmentStore`.
 
 ## Appendix C. The API routes
 
