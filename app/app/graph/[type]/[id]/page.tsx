@@ -27,12 +27,13 @@ type Query = Record<string, string | undefined>;
 /** The walk for a traceable root, its coverage and changes steps filled from the hub (quietly: a failed read leaves a step saying so). */
 async function walkFor(
   hub: ReturnType<typeof viewerHub>, graph: ReturnType<typeof derive>, traced: WalkTrace | undefined,
-  byId: Map<string, Doc>, at: { branch?: string; ref?: string },
+  byId: Map<string, Doc>, at: { branch?: string; ref?: string; commit?: string },
 ): Promise<Walk | undefined> {
   if (!traced) return undefined;
   const walk = buildWalk(graph, traced, byId);
   const quiet = async <T,>(p: Promise<{ data: T }>): Promise<T | undefined> => p.then((r) => r.data).catch(() => undefined);
-  const now = at.ref ? { ref: at.ref } : { branch: at.branch };
+  // Coverage now at the export's commit, the state the drawing shows (B1).
+  const now = at.ref ? { ref: at.ref } : at.commit ? { ref: at.commit } : { branch: at.branch };
   const [coverageThen, coverageNow, changes] = await Promise.all([
     walk.module && walk.asOf ? quiet(hub.intelligence.coverage(walk.module, { ref: walk.asOf })) : undefined,
     walk.module ? quiet(hub.intelligence.coverage(walk.module, now)) : undefined,
@@ -54,10 +55,15 @@ export default async function FocusPage({ params, searchParams }: { params: Prom
     if (err instanceof HubError && err.status === 404) notFound();
     throw err;
   };
-  const [{ data, commit }, traced] = await Promise.all([
+  const [{ data, commit }, tracedFirst] = await Promise.all([
     hub.export.read(at).catch(notFoundOn404),
-    isTraceable(parts.type) ? hub.intelligence.trace(parts.type, parts.local, at).then((r) => r.data).catch(notFoundOn404) : Promise.resolve(undefined),
+    isTraceable(parts.type) ? hub.intelligence.trace(parts.type, parts.local, at).catch(notFoundOn404) : Promise.resolve(undefined),
   ]);
+  // Read side by side against a branch, the two may name different commits if
+  // it moved between them; the trace is then read again at the export's (B1).
+  const traced = tracedFirst && commit && tracedFirst.commit !== commit
+    ? (await hub.intelligence.trace(parts.type, parts.local, { ref: commit }).catch(notFoundOn404)).data
+    : tracedFirst?.data;
   const exported = (data.documents as Doc[]).filter((d) => d['@type'] !== 'User');
   const root = exported.find((d) => d['@id'] === rootId);
   if (!root) notFound();
@@ -74,10 +80,10 @@ export default async function FocusPage({ params, searchParams }: { params: Prom
   // The root's reads are not awaited: they stream to the view when they land
   // (its history over a long log takes seconds); the walk and the lens shape
   // the drawing, so they wait.
-  const reads = readsFor(hub, select, { branch, ref, trace: initial.direction === 'trace' });
+  const reads = readsFor(hub, select, { branch, ref, commit, trace: initial.direction === 'trace' });
   const [walk, lens] = await Promise.all([
-    walkFor(hub, graph, traced, byId, { branch, ref }),
-    lensReadsFor(hub, initial.lens, exported, { branch, ref, since: initial.since, fullyAssessedAt: initial.fullyAssessedAt, overAssessedAbove: initial.overAssessedAbove }),
+    walkFor(hub, graph, traced, byId, { branch, ref, commit }),
+    lensReadsFor(hub, initial.lens, exported, { branch, ref, commit, since: initial.since, fullyAssessedAt: initial.fullyAssessedAt, overAssessedAbove: initial.overAssessedAbove }),
   ]);
   const ghosts = lens.reads?.lens === 'changes' ? lens.reads.ghosts : [];
   const docs = ghosts.length ? [...exported, ...ghosts] : exported;

@@ -27,12 +27,15 @@ export function splitId(id: string): { type: ClassName; local: string } | undefi
 export async function readsFor(
   hub: ReturnType<typeof viewerHub>,
   id: string | undefined,
-  options: { branch?: string; ref?: string; trace: boolean },
+  options: { branch?: string; ref?: string; commit?: string; trace: boolean },
 ): Promise<SelectedReads | undefined> {
   if (!id) return undefined;
   const parts = splitId(id);
   if (!parts) return { id };
-  const at = options.ref ? { ref: options.ref } : { branch: options.branch };
+  // At the export's commit when the view is of a branch, so the panels read the
+  // state the drawing shows (the deep review's B1); history and changes are
+  // read on the branch, the only place the hub serves them.
+  const at = options.ref ? { ref: options.ref } : options.commit ? { ref: options.commit } : { branch: options.branch };
   const quiet = async <T>(p: Promise<{ data: T }>): Promise<T | undefined> => p.then((r) => r.data).catch(() => undefined);
   const [attestations, history, trace] = await Promise.all([
     quiet(hub.intelligence.attestations(parts.type, parts.local, at)),
