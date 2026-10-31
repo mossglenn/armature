@@ -29,7 +29,7 @@ The core insight: current instructional design tools capture *what was built* bu
 - **Export**: `GET /api/v1/export?branch=|ref=&profile=full|pseudonymous|institutional&slice=<name>` is the graph at a ref as one JSON-LD document with its reloadable schema (ADR-0031). There is no import route; re-import is operator work (ADR-0062).
 - **Accepted, not built**: the workspace hub (ADR-0065), its file-backed store (ADR-0066, Proposed), authentication beyond decision 7 (ADR-0067), authorization (ADR-0068). `docs/workspace-hub-plan.md` §14 is the build order; the ADRs' dated notes hold every later decision. Nothing changes for a client of the hub as built.
 - **Clients**: CoQui (item review) is built in its own repository; Quiver (a local-first item manager) is paused until the workspace hub exists; `docs/demo-coverage.md` maps every built, planned and proposed client.
-- **Node.js**: CI uses Node 22; later versions work.
+- **Node.js** 22 in CI; later versions work.
 
 ### Topology
 
@@ -39,7 +39,7 @@ CoQui, Quiver, the MCP server ─┐
 the viewer (Next.js)          ─┘     one address, /api/v1
 ```
 
-The API is the boundary: plugins never talk to a store directly. A second role for the same code, the *workspace hub* on a person's machine pushing through a remote hub's `/api/v1`, is accepted and not built (ADR-0065).
+The API is the boundary: plugins never talk to a store directly. A second role for the same code, the *workspace hub* on a person's machine pushing through a remote's `/api/v1`, is accepted and not built (ADR-0065).
 
 ### Terms
 
@@ -64,12 +64,12 @@ One line per entry: what it is and where its rules are. The code's own comments 
 schema/schema.json         # The schema, single source of truth; its @documentation is authoritative
 schema/docs/adr/           # The ADRs; README.md is the index with every status
 docker/                    # docker-compose.yml, Caddyfile, hub.Dockerfile, viewer.Dockerfile, operator-entrypoint.sh; docs/deployment.md explains them
-.github/workflows/ci.yml   # Lint, typecheck, drift check, the hub bundle; the contract suite against a store container; the client install check; the browser test; both images
+.github/workflows/ci.yml   # Lint, typecheck, drift check, context budgets, the hub bundle; the contract suite against a store container; the client install check; the browser test; both images
 package.json               # The npm workspace root: app and packages/*
 packages/types/            # @armature/types, GENERATED src/ (types.ts, schemas.ts); do not edit
 packages/client/           # @armature/client, every route as a typed function; takes a fetch; install-check/ is CI's consumer test
 scripts/                   # Outside the workspace: generate-types.js, generate-schema-appendix.js, load_schema.js (--clear-instances, --recreate),
-                           #   seed_data.js (six commits; its header says what each adds), platform_checks.js (lettered probes; its header lists them), sync-terminusdb-docs.js
+                           #   seed_data.js (six commits; its header says what each adds), platform_checks.js (lettered probes; its header lists them), check_context_size.js
 app/server.ts              # The hub's entry (.env.local, PORT, HOST loopback by default); what build:hub bundles
 app/operator.ts            # The operator tools' command line: check, delete, put (ADR-0062); bundled, shipped in the hub image
 app/app/                   # The viewer: page.tsx (modules), coverage/[moduleId], graph/ (the Design Graph, Focus page, Walkthrough; docs/graph-view-plan.md), layout.tsx
@@ -243,7 +243,7 @@ Say "update session" and follow `.claude/prompts/update-session.md`: the history
 - **A change to a route, the schema, a decision or what runs where updates the human-facing documents too** (the README, the reference, the guide, the explainer, deployment, the research path, demo coverage, the plans), as each describes the thing changed.
 - **`docs/client-changes.md` is also the revision list.** Every change a client would act on gets a dated, tool-neutral entry with a CoQui note; a dated entry is a revision `REVISIONS` in `version.ts` must name (a test fails otherwise), and `CLIENT_REVISION` follows. A read added on a day that already has a revision rides it; a header the contract already promised is a fix, not a revision.
 - **A review** of the documents runs as parallel readers over disjoint file groups against one written brief, whole files, every high finding spot-checked by the lead. An outside review is checked citation by citation first; its findings are cited by its own identifiers; a finding on an accepted ADR becomes a dated note; a disagreement goes into its banner with the reason.
-- **The context files keep their budgets** (this file and `SESSION.md` 32 KB, `PROJECT_CONTEXT.md` 20 KB): over budget means move, not shorten; a fact lives in one place and the rest point.
+- **The context files keep their budgets** (this file and `SESSION.md` 32 KB, `PROJECT_CONTEXT.md` 20 KB; `npm run check:context`, in CI): over budget means move, not shorten; a fact lives in one place and the rest point.
 
 ---
 
