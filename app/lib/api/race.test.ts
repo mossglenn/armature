@@ -9,6 +9,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { app } from './app';
 import { createStore, TerminusStore, type TerminusDocument } from './store';
+import { WRITE_ATTEMPTS } from './write';
 
 const AUTHOR = 'User/demo-designer';
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
@@ -45,6 +46,9 @@ async function concurrentWrite(documents: Array<Record<string, unknown>> = []): 
   return commit;
 }
 
+/** True when a putDocuments call carries the document with this id (the test's own write, not a concurrent one). */
+const carries = (documents: Array<Record<string, unknown>>, id: string) => documents.some((d) => d['@id'] === id);
+
 beforeAll(async () => {
   const res = await post('/api/v1/branches', { name: BRANCH, from: { branch: 'main' } });
   expect(res.status).toBe(201);
@@ -64,6 +68,99 @@ afterEach(() => {
 
 afterAll(async () => {
   await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+});
+
+describe('a write checks its rules on the state it lands on (B2)', () => {
+  it('runs again on the new head when another write lands first, and the rule sees that write', async () => {
+    // Both writers place an activity at sequence 21; before B2 both landed.
+    const mine = `LearningActivity/race-a-${stamp}`;
+    const theirs = `LearningActivity/race-b-${stamp}`;
+    const put = vi.spyOn(TerminusStore.prototype, 'putDocuments').mockImplementation(async function (this: TerminusStore, documents, opts) {
+      if (put.mock.calls.length === 1) {
+        await concurrentWrite([{ '@type': 'ModuleActivityLink', module: MODULE, activity: theirs, sequence: 21 }]);
+      }
+      return real.putDocuments.call(this, documents, opts);
+    });
+    const res = await post(`/api/v1/documents${q}`, {
+      message: 'Place activity A',
+      documents: [{ '@type': 'ModuleActivityLink', module: MODULE, activity: mine, sequence: 21 }],
+    });
+    expect(res.status).toBe(422);
+    expect((await res.json()).violations.map((v: { code: string }) => v.code)).toEqual(['duplicate_sequence']);
+    // The first run reached the store and lost; the second was refused by the rule.
+    expect(put).toHaveBeenCalledTimes(1);
+    const placed = await json(`/api/v1/documents/ModuleActivityLink${q}&module=${MODULE}`);
+    expect(placed.filter((l: TerminusDocument) => l.sequence === 21).map((l: TerminusDocument) => l.activity)).toEqual([theirs]);
+  });
+
+  it('fills asOf with the head of the run that lands, not of the run that lost', async () => {
+    const id = `DesignFinding/race-${stamp}`;
+    let theirs: string | undefined;
+    const put = vi.spyOn(TerminusStore.prototype, 'putDocuments').mockImplementation(async function (this: TerminusStore, documents, opts) {
+      if (put.mock.calls.length === 1) theirs = await concurrentWrite();
+      return real.putDocuments.call(this, documents, opts);
+    });
+    const res = await post(`/api/v1/documents${q}`, {
+      message: 'Raise a finding',
+      documents: [{ '@type': 'DesignFinding', '@id': id, label: 'Race', finding: 'f', subject: [OBJECTIVE], status: 'Open' }],
+    });
+    expect(res.status).toBe(200);
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(theirs).toBeDefined();
+    expect((await json(`/api/v1/documents/${id}${q}`)).asOf).toBe(theirs);
+  });
+
+  it(`answers 409 branch_moved when the branch moves under each of ${WRITE_ATTEMPTS} runs, and writes nothing`, async () => {
+    const id = `LearningNeed/race-moved-${stamp}`;
+    const put = vi.spyOn(TerminusStore.prototype, 'putDocuments').mockImplementation(async function (this: TerminusStore, documents, opts) {
+      await concurrentWrite();
+      return real.putDocuments.call(this, documents, opts);
+    });
+    const res = await post(`/api/v1/documents${q}`, {
+      message: 'Never lands',
+      documents: [{ '@type': 'LearningNeed', '@id': id, label: 'Never', rationale: 'r' }],
+    });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('branch_moved');
+    expect(put.mock.calls.filter(([documents]) => carries(documents, id))).toHaveLength(WRITE_ATTEMPTS);
+    expect((await app.request(`/api/v1/documents/${id}${q}`)).status).toBe(404);
+  });
+
+  it('answers a stale If-Match with 412 before reading anything', async () => {
+    const stale = await headOf();
+    await concurrentWrite();
+    const now = await headOf();
+    const query = vi.spyOn(TerminusStore.prototype, 'queryDocuments');
+    const get = vi.spyOn(TerminusStore.prototype, 'getDocument');
+    const res = await post(
+      `/api/v1/documents${q}`,
+      { message: 'Stale', documents: [{ '@type': 'LearningNeed', '@id': `LearningNeed/race-stale-${stamp}`, label: 'Stale', rationale: 'r' }] },
+      { 'If-Match': `"${stale}"` }
+    );
+    expect(res.status).toBe(412);
+    expect(await res.json()).toMatchObject({ error: 'precondition_failed', expected: stale, current: now });
+    // Identity resolution reads the registry on main; nothing reads the branch or a commit of it.
+    const refs = [...query.mock.contexts, ...get.mock.contexts].map((store) => (store as TerminusStore).ref);
+    expect(refs.filter((ref) => !('branch' in ref && ref.branch === 'main'))).toEqual([]);
+  });
+
+  it('answers a race lost under If-Match with 412 and does not run again', async () => {
+    const id = `LearningNeed/race-ifmatch-${stamp}`;
+    const head = await headOf();
+    let theirs: string | undefined;
+    const put = vi.spyOn(TerminusStore.prototype, 'putDocuments').mockImplementation(async function (this: TerminusStore, documents, opts) {
+      theirs = await concurrentWrite();
+      return real.putDocuments.call(this, documents, opts);
+    });
+    const res = await post(
+      `/api/v1/documents${q}`,
+      { message: 'Conditioned', documents: [{ '@type': 'LearningNeed', '@id': id, label: 'Conditioned', rationale: 'r' }] },
+      { 'If-Match': `"${head}"` }
+    );
+    expect(res.status).toBe(412);
+    expect(await res.json()).toMatchObject({ error: 'precondition_failed', expected: head, current: theirs });
+    expect(put).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('a request that reads more than once is answered at one commit (B1)', () => {

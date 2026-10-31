@@ -28,10 +28,17 @@ import { StoreError, type DocumentReader, type Store, type TerminusDocument } fr
  *      decision 5), or copied from a parent record (ADR-0057)
  *   4. invariants: every constraint, over the whole batch (422)
  *   5. the write: one PUT with create=true for the whole list, so it is one
- *      commit and fails together (platform checks X1, X2b, X5); If-Match
- *      honored (412). The caller's documents and the carried User land as
- *      one commit under the caller's reason, and nothing else: the graph
- *      stores no derived values (ADR-0056)
+ *      commit and fails together (platform checks X1, X2b, X5). The caller's
+ *      documents and the carried User land as one commit under the caller's
+ *      reason, and nothing else: the graph stores no derived values (ADR-0056)
+ *
+ * All of it at one commit (the deep review's B2): the branch head is captured
+ * first, every read of steps 2 to 4 is at that commit, and step 5 is
+ * conditioned on it, so the rules are checked on the state the write lands
+ * on. An If-Match that is not the head is a 412 before anything is read. A
+ * write without one that loses a race to another commit is run again, whole,
+ * on the new head, and answered 409 `branch_moved` when the branch keeps
+ * moving; with one, losing the race is the 412 it asked for.
  */
 
 export interface WriteOptions {
@@ -53,6 +60,9 @@ export interface WriteResult {
   /** The written documents' ids, in input order; Hash-keyed ids as the store minted them. */
   ids: string[];
 }
+
+/** Runs of a write without If-Match before a branch that keeps moving is answered 409 `branch_moved`. */
+export const WRITE_ATTEMPTS = 3;
 
 const keyOf = (type: string): { type: string; fields?: readonly string[] } | undefined =>
   (CLASS_KEY as Record<string, { type: string; fields?: readonly string[] }>)[type];
@@ -96,10 +106,33 @@ export function parseDocuments(inputs: unknown[]): TerminusDocument[] {
   return parsed;
 }
 
-/** Steps 2 to 5. */
+/** Steps 2 to 5, each run at the head it captured. */
 export async function writeDocuments(documents: TerminusDocument[], opts: WriteOptions): Promise<WriteResult> {
-  const { branch, who } = opts;
+  const { branch } = opts;
+  checkUnique(documents);
+  const moved = (current: string | undefined) =>
+    new ApiError(412, 'precondition_failed', `Branch ${branch.branch} has moved since commit ${opts.ifMatch}`, {
+      expected: opts.ifMatch,
+      current,
+    });
+  for (let attempt = 1; ; attempt++) {
+    const head = (await branch.head())?.id;
+    if (opts.ifMatch && opts.ifMatch !== head) throw moved(head);
+    try {
+      // A fresh copy each run: the pipeline fills fields in as it goes.
+      return await writeAt(structuredClone(documents), head, opts);
+    } catch (err) {
+      if (!(err instanceof StoreError && err.kind === 'version_mismatch')) throw err;
+      if (opts.ifMatch) throw moved((await branch.head())?.id);
+      if (attempt === WRITE_ATTEMPTS) {
+        throw new ApiError(409, 'branch_moved', `Branch ${branch.branch} moved during each of ${WRITE_ATTEMPTS} attempts at this write; retry`);
+      }
+    }
+  }
+}
 
+/** Ids and captures each appear once in a write. */
+function checkUnique(documents: TerminusDocument[]): void {
   const ids = new Set<string>();
   const captures = new Set<string>();
   for (const doc of documents) {
@@ -112,6 +145,16 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
       captures.add(doc['@capture']);
     }
   }
+}
+
+/**
+ * One run of steps 2 to 5 at `head`, the commit every read is at and the
+ * write is conditioned on. A branch with no commit yet is read and written
+ * unconditioned, as there is nothing to race.
+ */
+async function writeAt(documents: TerminusDocument[], head: string | undefined, opts: WriteOptions): Promise<WriteResult> {
+  const { branch, who } = opts;
+  const at = head ? branch.at({ commit: head }) : branch;
 
   // The attester before step 2: attestedBy is part of the key, so the
   // replace lookup must find the caller's own attestation. A value naming
@@ -121,7 +164,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   }
 
   // Step 2: what each document replaces, if anything.
-  const existing = await Promise.all(documents.map((doc) => findExisting(branch, doc)));
+  const existing = await Promise.all(documents.map((doc) => findExisting(at, doc)));
   const replacing = new Set<string>();
   existing.forEach((found, i) => {
     const doc = documents[i];
@@ -148,12 +191,12 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
       carryUser = true;
     }
   });
-  const copy = carryUser ? await userCopyFor(branch, who) : undefined;
+  const copy = carryUser ? await userCopyFor(branch.branch, at, who) : undefined;
 
   // The carried User is resolvable so createdBy passes constraint 0 on a
   // branch that does not hold it yet.
-  const ctx = createWriteContext(branch, documents, replacing, who.id, copy ? [copy] : []);
-  await fillAsOf(documents, existing, ctx, opts);
+  const ctx = createWriteContext(at, documents, replacing, who.id, copy ? [copy] : []);
+  await fillAsOf(documents, existing, ctx, head);
 
   // Step 4: invariants.
   if (opts.invariants !== 'skip') await checkInvariants(ctx);
@@ -161,25 +204,12 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   // Step 5: the write. The carried User first, then the caller's documents;
   // `ids` reports the caller's only.
   const carried = copy ? [copy] : [];
-  let result: { commit: string; ids: string[] };
-  try {
-    result = await branch.putDocuments([...carried, ...documents], {
-      author: who.id,
-      message: opts.message,
-      ifMatch: opts.ifMatch,
-      create: true,
-    });
-  } catch (err) {
-    if (err instanceof StoreError && err.kind === 'version_mismatch') {
-      const head = await branch.head();
-      throw new ApiError(412, 'precondition_failed', `Branch ${branch.branch} has moved since commit ${opts.ifMatch}`, {
-        expected: opts.ifMatch,
-        current: head?.id,
-      });
-    }
-    throw err;
-  }
-
+  const result = await branch.putDocuments([...carried, ...documents], {
+    author: who.id,
+    message: opts.message,
+    ifMatch: head,
+    create: true,
+  });
   return { commit: result.commit, ids: result.ids.slice(carried.length, carried.length + documents.length) };
 }
 
@@ -205,11 +235,8 @@ async function fillAsOf(
   documents: TerminusDocument[],
   existing: Array<TerminusDocument | undefined>,
   ctx: WriteContext,
-  opts: WriteOptions
+  head: string | undefined
 ): Promise<void> {
-  // With If-Match the write lands on that commit or not at all (412).
-  let head: Promise<string | undefined> | undefined;
-  const headId = () => (head ??= opts.ifMatch ? Promise.resolve(opts.ifMatch) : opts.branch.head().then((c) => c?.id));
   const parentOf = (doc: TerminusDocument): unknown => {
     const field = AS_OF_PARENT[doc['@type']];
     return field ? doc[field] : undefined;
@@ -223,9 +250,8 @@ async function fillAsOf(
       if (found.asOf !== undefined) doc.asOf = found.asOf;
       continue;
     }
-    const id = await headId();
-    if (id) {
-      doc.asOf = id;
+    if (head) {
+      doc.asOf = head;
       ctx.asOfFilled.add(doc);
     }
   }

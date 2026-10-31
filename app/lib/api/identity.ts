@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import type { User } from '@armature/types';
 import { ApiError } from './errors';
-import { createStore, StoreError, type Store, type TerminusDocument } from './store';
+import { createStore, StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
 
 /**
  * Identity resolution (architecture decision record ADR-0032).
@@ -132,13 +132,13 @@ export async function resolveAuthor(c: Context): Promise<string> {
 
 /**
  * The `User` document to write beside an artifact whose `createdBy` names it,
- * or undefined when the branch already holds it (ADR-0032 decision 5). `main`
+ * or undefined when the branch, read at `at`, already holds it (ADR-0032 decision 5). `main`
  * always holds it: that is where it was registered.
  */
-export async function userCopyFor(branchStore: Store, who: ResolvedUser): Promise<UserDocument | undefined> {
-  if (branchStore.branch === REGISTRY_BRANCH) return undefined;
+export async function userCopyFor(branch: string, at: DocumentReader, who: ResolvedUser): Promise<UserDocument | undefined> {
+  if (branch === REGISTRY_BRANCH) return undefined;
   try {
-    await branchStore.getDocument(who.id);
+    await at.getDocument(who.id);
     return undefined;
   } catch (err) {
     if (err instanceof StoreError && err.kind === 'not_found') return who.user;
