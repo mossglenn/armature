@@ -41,6 +41,11 @@ store, and leaves the choice to its plan. Four facts bear on it.
    construction stays the interface's contract (`createStore(ref)` per request); a file store may
    keep the workspace's in-memory index behind it.
 
+   > **Note (2026-10-31):** the interface is extracted (plan §14 step 1; ADR-0055, note of that
+   > date): `DocumentReader` is what the engine and the reads need, `Store` adds what the routes
+   > need, and `OperatorStore` what only the operator tools reach. A file store reports its
+   > refusals as a `StoreError` with the same store-neutral `kind`s, so no caller changes for it.
+
 2. **TerminusDB is hard to put on a person's machine** (checked 2026-10-28, plan §10). Its GitHub
    releases v12.0.6 to v12.1.0-rc1 carry no binaries; Linux has a Snap package; there is no
    Homebrew formula; Windows is supported only through WSL (Windows Subsystem for Linux) or a
