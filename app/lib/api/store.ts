@@ -132,7 +132,9 @@ export const isUnknownRef = (err: unknown): boolean =>
 /**
  * TerminusDB's error `@type`s by kind. A branch deleted after it was listed
  * answers a log read with `UnresolvableAbsoluteDescriptor` and a delete with
- * `BranchDoesNotExistError` (both HTTP 400; seen 2026-10-18).
+ * `BranchDoesNotExistError` (both HTTP 400; seen 2026-10-18); a branch
+ * created from a branch that does not exist, `OriginBranchDoesNotExist`, and
+ * from one that does, `BranchExistsError` (both 400; seen 2026-10-31).
  */
 const TERMINUS_KINDS: Record<string, StoreErrorKind> = {
   'api:DocumentNotFound': 'not_found',
@@ -143,6 +145,7 @@ const TERMINUS_KINDS: Record<string, StoreErrorKind> = {
   'api:BranchDoesNotExist': 'unknown_ref',
   'api:BranchDoesNotExistError': 'unknown_ref',
   'api:DocumentAccessImpossible': 'unknown_ref',
+  'api:OriginBranchDoesNotExist': 'unknown_ref',
   'api:BranchExistsError': 'exists',
   'api:DocumentIdAlreadyExists': 'exists',
   'api:SubmittedDocumentIdDoesNotHaveExpectedPrefix': 'id_prefix',

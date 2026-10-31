@@ -127,6 +127,13 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
   it('refuses to create a branch that already exists', async () => {
     const res = await post('/api/v1/branches', { name: SOURCE, from: { commit: forkCommit } });
     expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('branch_exists');
+  });
+
+  it('answers a branch from a branch that does not exist as an unknown ref, not as one that exists', async () => {
+    const res = await post('/api/v1/branches', { name: `${SOURCE}-orphan`, from: { branch: `no-such-branch-${stamp}` } });
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('unknown_ref');
   });
 
   it('lists branches with their heads', async () => {
