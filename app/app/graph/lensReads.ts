@@ -16,6 +16,8 @@ import type { viewerHub } from '@/lib/viewer';
 export interface LensOptions {
   branch?: string;
   ref?: string;
+  /** The commit the view's export was served from. */
+  commit?: string;
   since?: string;
   fullyAssessedAt?: number;
   overAssessedAbove?: number;
@@ -30,7 +32,10 @@ export async function lensReadsFor(
   options: LensOptions,
 ): Promise<LensResult> {
   if (!lens) return {};
-  const at = options.ref ? { ref: options.ref } : { branch: options.branch };
+  // At the export's commit when the view is of a branch, so the panels read the
+  // state the drawing shows (the deep review's B1); history and changes are
+  // read on the branch, the only place the hub serves them.
+  const at = options.ref ? { ref: options.ref } : options.commit ? { ref: options.commit } : { branch: options.branch };
   const failed = (what: string) => (err: unknown): LensResult => ({ error: `${what} could not be read${err instanceof Error && err.message ? ` (${err.message})` : ''}.` });
   switch (lens) {
     case 'coverage':

@@ -39,8 +39,8 @@ export default async function GraphPage({ searchParams }: { searchParams: Promis
   // The selected record's reads are not awaited: they stream to the view when
   // they land (a history over a long log takes seconds), so the page answers
   // in the time the export takes. The lens's reads shape the drawing, so they wait.
-  const reads = readsFor(hub, initial.select, { branch, ref, trace: initial.direction === 'trace' });
-  const lens = await lensReadsFor(hub, initial.lens, exported, { branch, ref, since: initial.since, fullyAssessedAt: initial.fullyAssessedAt, overAssessedAbove: initial.overAssessedAbove });
+  const reads = readsFor(hub, initial.select, { branch, ref, commit, trace: initial.direction === 'trace' });
+  const lens = await lensReadsFor(hub, initial.lens, exported, { branch, ref, commit, since: initial.since, fullyAssessedAt: initial.fullyAssessedAt, overAssessedAbove: initial.overAssessedAbove });
   // The changes lens draws the records deleted since the commit as ghosts, read from the export at that commit.
   const ghosts = lens.reads?.lens === 'changes' ? lens.reads.ghosts : [];
   const docs = ghosts.length ? [...exported, ...ghosts] : exported;
