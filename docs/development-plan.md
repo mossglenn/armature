@@ -1491,6 +1491,10 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   trailing newline, CRLF line endings and non-ASCII text are kept as sent (AJ2 to AJ4). The hub's
   history route returns it unchanged after a `POST /documents` (`app/lib/api/write.test.ts`, the
   trailer cases). ADR-0065 decision 5's push trailers rely on it.
+- *Verified (2026-10-31, check AM):* `/api/log` at `local/commit/<id>` lists from that commit back
+  (AM1); `/api/history` at a commit path is a 500 (AM2), so a document's history is read only at a
+  branch, and the hub proves an answer belongs to one head by reading the head before and after it
+  (`GET /documents/:type/:id/history`, 503 `branch_busy` after three moving reads).
 - *Named, not written:* AH (a native TerminusDB build a desktop program could ship beside
   itself) and AI (reproducing TerminusDB's Hash identifiers from a record's key fields) are named
   by `docs/workspace-hub-plan.md` and ADR-0066 but have no code yet. AH is no longer needed
