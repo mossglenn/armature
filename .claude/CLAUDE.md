@@ -78,8 +78,9 @@ app/lib/viewer.ts          # The viewer's client of the hub (ARMATURE_HUB_URL); 
 app/lib/graph/             # The Design Graph's pure modules (no React, no DOM), each tested; stages.ts is the visual language as data
 app/lib/operator/          # check.ts (the engine over a whole branch), repair.ts (every repair a marked commit through a transient branch)
 app/lib/api/               # The Armature API, the Hono app (app.ts, basePath /api/v1; never imports from next)
-  boundary.ts, version.ts  #   First: Host and Origin checks (ADR-0067 d7); then negotiate: REVISIONS mirrors docs/client-changes.md, every route under a CAPABILITY (ADR-0059)
-  store.ts                 #   The store adapter: the ONLY module that talks to TerminusDB; createStore(ref); a dropped read resent once, a write never
+  config.ts, role.ts       #   HubConfig per request (createApp, storeFor), the only env reader; remote_only
+  boundary.ts, version.ts  #   Then: Host and Origin checks (ADR-0067 d7); then negotiate: REVISIONS mirrors docs/client-changes.md, every route under a CAPABILITY (ADR-0059)
+  store.ts                 #   The store adapter: the ONLY module that talks to TerminusDB; routes reach it by storeFor; a dropped read resent once, a write never
   identity.ts, write.ts    #   The resolver → a User on main (ADR-0032); the one write pipeline: shape → attestedBy → 409 → createdBy and asOf → invariants → one commit
   http.ts, classes.ts, fragments.ts, errors.ts, memo.ts  # Conventions (?branch=|?ref=, ETag/If-Match); the class maps; parts by fragmentId; ApiError; reads kept by commit
   invariants/              #   The engine; index.ts maps each constraint number to its module
@@ -99,7 +100,7 @@ docs/                      # how-armature-works.md (the explainer), api.md (the 
 
 ### TerminusDB documentation
 
-Questions about what the store does are answered from the vendored docs in `docs/vendor/terminusdb/`, following the `terminusdb` skill. The installed client source under `scripts/node_modules/terminusdb` is authoritative for client behavior; the running container for server behavior; `docs/development-plan.md` §9 lists where the docs are known wrong. Re-run `node scripts/sync-terminusdb-docs.js` after a release; `VERSION.json` there records the last sync.
+Questions about what the store does are answered from the vendored docs in `docs/vendor/terminusdb/`, following the `terminusdb` skill. The installed client source under `scripts/node_modules/terminusdb` is authoritative for client behavior; the running container for server behavior; `docs/development-plan.md` §9 lists where the docs are known wrong.
 
 ---
 
