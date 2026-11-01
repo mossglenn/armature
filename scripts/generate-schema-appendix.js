@@ -87,8 +87,8 @@ const subdocIds = new Set(Object.values(classes).filter(isSubdoc).map((c) => c['
 const DOMAINS = [
   {
     label: 'Infrastructure',
-    description: 'Non-artifact types that underpin the design process: the user, and the abstract roots every record inherits.',
-    ids: ['User', 'DesignRecord', 'ArmatureDocument'],
+    description: 'Non-artifact types that underpin the design process: the user, the grants of authority recorded on main (ADR-0068), and the abstract roots every record inherits.',
+    ids: ['User', 'Grant', 'DesignRecord', 'ArmatureDocument'],
   },
   {
     label: 'Outside the Graph',
@@ -246,6 +246,7 @@ function renderEnum(id) {
 // ── Enum grouping ─────────────────────────────────────────────────────────────
 
 const ENUM_GROUPS = [
+  { label: 'Infrastructure', ids: ['GrantRole', 'GrantStatus'] },
   { label: 'Objectives', ids: ['BloomsLevel', 'ObjectiveState', 'ObjectiveRole', 'PrerequisiteType'] },
   { label: 'Outside the Graph', ids: ['ExternalSystem', 'AttachmentStore'] },
   { label: 'Assessment', ids: ['ItemType', 'ItemStatus'] },

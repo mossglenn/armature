@@ -148,6 +148,22 @@ export const VALID_AttestationVerdict = [
 
 export type AttestationVerdict = typeof VALID_AttestationVerdict[number];
 
+export const VALID_GrantRole = [
+  "Owner",
+  "Maintainer",
+  "Administrator",
+  "Relay",
+] as const;
+
+export type GrantRole = typeof VALID_GrantRole[number];
+
+export const VALID_GrantStatus = [
+  "Active",
+  "Revoked",
+] as const;
+
+export type GrantStatus = typeof VALID_GrantStatus[number];
+
 export const VALID_ExternalSystem = [
   "CASE",
   "QTI",
@@ -178,7 +194,7 @@ export interface TerminusDocument {
 }
 
 // ────────────────────────────────────────────────────────
-// Infrastructure — User, and the abstract roots every record inherits
+// Infrastructure — User, Grant, the abstract roots every record inherits, and the two embedded coordinates (ADR-0030)
 // ────────────────────────────────────────────────────────
 
 export interface User extends TerminusDocument {
@@ -186,6 +202,17 @@ export interface User extends TerminusDocument {
   externalId: string;
   email?: string;
   institution?: string;
+  issuer?: string;
+}
+
+export interface Grant extends TerminusDocument {
+  user: string;  // User @id
+  role: GrantRole;
+  branch?: string;
+  status: GrantStatus;
+  rationale?: string;
+  relayedUsers: string[];  // User @id[]
+  expires?: string;  // ISO 8601 datetime
 }
 
 /** @abstract */
@@ -411,6 +438,7 @@ export interface Attestation extends DesignRecord {
 /** Every class @id mapped to its @metadata.armature.category. */
 export const CLASS_CATEGORY = {
   User: "infrastructure",
+  Grant: "infrastructure",
   DesignRecord: "infrastructure",
   ArmatureDocument: "infrastructure",
   LearningEvidence: "artifact",
@@ -449,6 +477,7 @@ export type ClassCategory = typeof CLASS_CATEGORY[ClassName];
 /** Every class name mapped to its interface, so a client can type a read by the class it names (Phase 7, @armature/client). */
 export interface ClassMap {
   User: User;
+  Grant: Grant;
   DesignRecord: DesignRecord;
   ArmatureDocument: ArmatureDocument;
   LearningEvidence: LearningEvidence;
@@ -493,6 +522,7 @@ export const SUBDOCUMENT_CLASSES = [
 /** Every class @id mapped to its transitive @inherits ancestors, nearest first (ADR-0032; CLAUDE.md constraint 0). */
 export const CLASS_ANCESTORS = {
   User: [],
+  Grant: [],
   DesignRecord: [],
   ArmatureDocument: ["DesignRecord"],
   LearningEvidence: ["ArmatureDocument", "DesignRecord"],
@@ -528,6 +558,7 @@ export const CLASS_ANCESTORS = {
 /** Each class's @key strategy; Hash keys name the fields the id is derived from (ADR-0016, ADR-0024). */
 export const CLASS_KEY = {
   User: {"type":"Random"},
+  Grant: {"type":"Hash","fields":["user","role","branch"]},
   LearningMetric: {"type":"Random"},
   DescriptiveEvidence: {"type":"Random"},
   LearningDataset: {"type":"Random"},
@@ -575,6 +606,16 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     externalId: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
     email: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     institution: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    issuer: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+  },
+  Grant: {
+    user: {"type":"User","kind":"reference","optional":false,"many":false},
+    role: {"type":"GrantRole","kind":"enum","optional":false,"many":false},
+    branch: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    status: {"type":"GrantStatus","kind":"enum","optional":false,"many":false},
+    rationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    relayedUsers: {"type":"User","kind":"reference","optional":true,"many":true},
+    expires: {"type":"xsd:dateTime","kind":"primitive","optional":true,"many":false},
   },
   DesignRecord: {},
   ArmatureDocument: {
