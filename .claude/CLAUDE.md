@@ -25,9 +25,9 @@ The core insight: current instructional design tools capture *what was built* bu
 - **The viewer** is the Next.js app's pages (modules, the Coverage View, the Design Graph), a client of a hub over HTTP through `@armature/client` (`app/lib/viewer.ts`, `ARMATURE_HUB_URL`, default `http://localhost:3100`); no store credentials, reads only.
 - **The packages**: `@armature/types` (generated: interfaces, the schema as data, Zod schemas) and `@armature/client` (every route as a typed function), in an npm workspace with `app`; `scripts/` stays outside so the TerminusDB client resolves only there.
 - **Docker Compose** (`docker/`) runs the store alone by default; `--profile hub` adds the hub and the viewer, all on loopback; `--profile public` adds Caddy in front of the viewer, the only public container, refused while `TERMINUSDB_ADMIN_PASS` is unset or `admin`; `--profile workspace` a workspace hub on port 3101; the `operator` profile runs `scripts/` in a Node container. Two networks: `armature-store` (the store, the hubs, the operator) and `armature` (the hubs, the viewer, Caddy); a client beside an instance joins `armature`, calls `http://hub:3100` and never reaches the store. Its hubs set `ARMATURE_TRUST_NETWORK=1` (ADR-0067 decision 8). Settings live in `docker/.env`. `docs/deployment.md` is the administrator's guide.
-- **Identity** is resolved by `identity.ts` (ADR-0032). The built resolver, `header`, trusts `Armature-User: <externalId>`, so a hub under it stays on its server's loopback; every hub answers only loopback host names and `ARMATURE_ALLOWED_HOSTS`, and refuses unlisted remote web origins (`ARMATURE_ALLOWED_ORIGINS`; ADR-0067 decision 7). The seed registers `demo-designer@example.edu`. `app/.env.local` holds the `TERMINUS_*` variables, `ARMATURE_IDENTITY` and `ARMATURE_EXPORT_KEY`; the scripts read the same from the shell.
+- **Identity** is resolved by `identity.ts` (ADR-0032). The built resolver, `header`, trusts `Armature-User: <externalId>`, so a hub under it stays on its server's loopback; every hub answers only loopback host names and `ARMATURE_ALLOWED_HOSTS`, and refuses unlisted remote web origins (`ARMATURE_ALLOWED_ORIGINS`; ADR-0067 decision 7). `Armature-Agent` names a registered agent acting for that person: the agent is the author, the person's authority applies, and the hub appends `Armature-On-Behalf-Of` to the message and refuses that trailer from clients (ADR-0067 decisions 3 and 6; `trailers.ts`). **Authorization** (ADR-0068, built 2026-11-01; `authorization.ts`): a remote hub checks every write, merge, delete, grant and registration against the `Grant` documents in force on `main` (`grants.ts`), 403 `forbidden`; whoever creates a branch owns it, only a maintainer merges into `main`, an administrator grants; a branch with no owner stays writable while `GET /discover` says `ownerlessBranches: writable`; a workspace hub does not check. The seed registers `demo-designer@example.edu` as `Administrator` and `Maintainer` of every branch, and `demo-reviewer@example.edu` with nothing. `app/.env.local` holds the `TERMINUS_*` variables, `ARMATURE_IDENTITY` and `ARMATURE_EXPORT_KEY`; the scripts read the same from the shell.
 - **Export**: `GET /api/v1/export?branch=|ref=&profile=full|pseudonymous|institutional&slice=<name>` is the graph at a ref as one JSON-LD document with its reloadable schema (ADR-0031). There is no import route; re-import is operator work (ADR-0062).
-- **Accepted, built in part**: the workspace hub (ADR-0065; its role, `remote_only`, create and clone are built), its file-backed store (ADR-0066, Proposed), authentication beyond decision 7 (ADR-0067), authorization (ADR-0068). `docs/workspace-hub-plan.md` §14 is the build order; the ADRs' dated notes hold every later decision. Nothing changes for a client of the hub as built.
+- **Accepted, built in part**: the workspace hub (ADR-0065; its role, `remote_only`, create and clone are built), its file-backed store (ADR-0066, Proposed), authentication beyond decisions 3, 6, 7 and 8 (ADR-0067: the `oidc` resolver, services, relays, discovery's `identity`). Authorization (ADR-0068) is built except the migration window's close, its `oidc` rows and the workspace hub's warning at creation. `docs/workspace-hub-plan.md` §14 is the build order; the ADRs' dated notes hold every later decision. Nothing changes for a client of the hub as built.
 - **Clients**: CoQui (item review) is built in its own repository; Quiver (a local-first item manager) is paused until the workspace hub exists; `docs/demo-coverage.md` maps every built, planned and proposed client.
 - **Node.js** 22 in CI; later versions work.
 
@@ -43,18 +43,7 @@ The API is the boundary: plugins never talk to a store directly. A second role f
 
 ### Terms
 
-Used the same way in every document (`docs/deployment.md` and `docs/workspace-hub-plan.md` §2 have the same table):
-
-- **A server**: a machine. It runs processes; with Docker, containers. A container adds nothing to the vocabulary
-- **The schema**: the vocabulary, `schema/schema.json`, its types, fields and rules
-- **The API**: the contract at `/api/v1` (routes, envelopes, headers, error codes, rules; `docs/api.md`) and its implementation, the Hono app. A client is written against this and nothing else
-- **A store**: one TerminusDB database. The TerminusDB process holds any number; only the API talks to them
-- **A host**: one Node process running the API's code, `app/server.ts` or its container; invisible to clients
-- **A hub**: one host bound to one store (`TERMINUS_DB`): the address a client talks to, the thing that serves revisions, fills `asOf`, refuses a write. Every hub serves the same API; there can be many
-- **An instance**: a hub with its particular data; usually interchangeable with hub
-- **A client, or plugin**: any program that consumes the API. Never touches a store
-- **The viewer**: the Next.js pages, a client that only reads
-- **The workspace terms** (ADR-0065): remote hub, workspace hub, workspace, base, local commit, push, bring in `main`, deliver; `docs/workspace-hub-plan.md` §2 defines them, §9 says what a workspace hub refuses
+Used the same way in every document. The table is `docs/deployment.md` § "The terms" (`docs/workspace-hub-plan.md` §2 has the same): a server, the schema, the API, a store, a host, a hub, an instance, a client or plugin, the viewer; and the workspace terms of ADR-0065 (remote hub, workspace hub, workspace, base, local commit, push, bring in `main`, deliver), with §9 saying what a workspace hub refuses.
 
 ### Repository Structure
 
@@ -81,7 +70,8 @@ app/lib/api/               # The Armature API, the Hono app (app.ts, basePath /a
   config.ts, role.ts       #   HubConfig per request (createApp, storeFor), the only env reader; remote_only
   boundary.ts, version.ts  #   Then: Host and Origin checks (ADR-0067 d7); then negotiate: REVISIONS mirrors docs/client-changes.md, every route under a CAPABILITY (ADR-0059)
   store.ts                 #   The store adapter: the ONLY module that talks to TerminusDB; routes reach it by storeFor; a dropped read resent once, a write never
-  identity.ts, write.ts    #   The resolver → a User on main (ADR-0032); the one write pipeline: shape → attestedBy → 409 → createdBy and asOf → invariants → one commit
+  identity.ts, write.ts    #   The resolver → a User on main (ADR-0032), Armature-Agent → the agent as author; the one write pipeline: shape → attestedBy → 409 → createdBy and asOf → invariants → one commit, the hub's trailer appended
+  authorization.ts, grants.ts, trailers.ts  # Who may (ADR-0068 decision 4's table, 403); the hub's own grant writes and reads; the hub-written trailers, refused from clients
   http.ts, classes.ts, fragments.ts, errors.ts, memo.ts  # Conventions (?branch=|?ref=, ETag/If-Match); the class maps; parts by fragmentId; ApiError; reads kept by commit
   invariants/              #   The engine; index.ts maps each constraint number to its module
   intelligence/            #   coverage.ts (ADR-0029, computed on read), graph.ts (per-request cached reads at one ref)
@@ -115,9 +105,9 @@ The schema is the single source of truth. Read `schema/schema.json` before worki
 
 After any change to `schema/schema.json`, from the repository root: `npm run generate:types`, then `npm run check:types` (also in CI).
 
-The generator's header documents every mapping (xsd to TS, `Optional` to optional, `Set` and `List` to arrays, references to an id, subdocuments inline, enums to unions plus `VALID_*` arrays; in Zod, `@min_cardinality` to `.min(n)`, references as an id or `{ "@ref" }`, a Set or List without a minimum optional).
+The generator's header documents every mapping, TypeScript and Zod.
 
-To add a type: (1) update `schema.json` with an ADR, giving the class `@metadata.armature.category` (`infrastructure`, `fragment`, `artifact` or `relationship`; ADR-0027) and an explicit `@key` (ADR-0024); (2) run `generate:types` and `node scripts/generate-schema-appendix.js`; (3) commit `schema.json`, `types.ts`, `schemas.ts` and `SCHEMA_APPENDIX.md` together. Rules the store cannot express are a validator in `app/lib/api/invariants/` with a failing and a passing test. A class without a category fails generation. Before relying on a store behavior, add a lettered check to `scripts/platform_checks.js` and run it.
+To add a type: an ADR, then Workflow § "After schema changes", giving the class `@metadata.armature.category` (`infrastructure`, `fragment`, `artifact` or `relationship`; ADR-0027) and an explicit `@key` (ADR-0024). Rules the store cannot express are a validator in `app/lib/api/invariants/` with a failing and a passing test. A class without a category fails generation. Before relying on a store behavior, add a lettered check to `scripts/platform_checks.js` and run it.
 
 ### Key types and their roles
 
@@ -165,12 +155,14 @@ Enforced by the invariants engine on every write; `invariants/index.ts` maps eac
 18. `Attachment`: `revision` present when `store` is `Git` or `Lore` (`revision_required`); `contentHash` lower-case hexadecimal of the length `hashAlgorithm` implies for the IANA names the hub knows (`hash_malformed`); checked on an artifact or a fragment (ADR-0030)
 19. A `Fragment` carries text or at least one attachment (`empty_fragment`; ADR-0030)
 20. A `LearningDataset` has `producedBy` or an `externalRef` (`dataset_without_source`); a `LearningMetric` has `derivedFrom` or an `externalRef` (`metric_without_source`) (ADR-0063)
+21. A `Grant` lives on `main`, judged by the branch a write is for, so the operator's `put` on `main` passes (400 `grants_live_on_main`, before anything is read; ADR-0068 decision 2)
+22. A grant's holder suits its role: `Maintainer` and `Administrator` are persons, `Relay` an agent; `relayedUsers` only on a `Relay` grant, naming persons (`grant_holder_kind`, `relayed_users_not_relay`; ADR-0068 decision 2)
 
-Also in the API: the list route refuses a filter on any field targeting `User` (400 `person_filter_refused`, ADR-0021) and filters `Optional` and `Set` fields in the hub, since the store 500s on those templates (check Y). Decided, not built: a merge is checked before it commits, 422 (ADR-0025 decision 5, note).
+Also in the API: the list route refuses a filter on a `User` field of a class under `DesignRecord` (400 `person_filter_refused`, ADR-0021) and lists `Grant` by `user` (ADR-0068 decision 8); `Optional` and `Set` filters run in the hub (check Y). Decided, not built: a merge checked before it commits (ADR-0025 decision 5, note).
 
 ### Junction document pattern
 
-Relationships are first-class artifacts, not edges (ADR-0003). Every junction is named after both sides, carries the relationship-level data that makes it worth reifying, and follows the back-reference pattern: children carry the parent reference (ADR-0004). Every junction class is Hash-keyed over its ends, so a client never supplies its id and reaches it in a batch by `@capture` and `@ref` (ADR-0024).
+Relationships are first-class artifacts, not edges, named after both sides and Hash-keyed over them, so a client never supplies the id and reaches one in a batch by `@capture` and `@ref`; children carry the parent reference (ADR-0003, ADR-0004, ADR-0024; `docs/schema-guide.md` §7 has the patterns).
 
 ---
 
@@ -189,20 +181,7 @@ Relationships are first-class artifacts, not edges (ADR-0003). Every junction is
 
 ## ADRs to read first
 
-The index with every status is `schema/docs/adr/README.md`. Before working on the API or the schema, read:
-
-- **ADR-0002, ADR-0003, ADR-0004**: references not ownership; junctions for relationships with data; back-references on children
-- **ADR-0024**: client-supplied identifiers and replace semantics; Hash keys for junctions
-- **ADR-0025**: design process data lives in the commit graph (author and reason on every commit, reads at a ref, ETag and If-Match, merge, no history rewriting)
-- **ADR-0028**: attestation, a person's verdict as of a commit; staleness a read
-- **ADR-0029 and ADR-0056**: the coverage algorithm; nothing derived is stored
-- **ADR-0030 and ADR-0031**: external references and attachments; export profiles and slices
-- **ADR-0032**: identity resolution; `main` is the `User` registry; author from identity, never the body
-- **ADR-0054 and ADR-0055**: the API is a Hono app; one HTTP adapter to the store
-- **ADR-0057 and ADR-0058**: `asOf`; item statistics are metrics about the item
-- **ADR-0059**: capability negotiation per request (`Armature-Version`, `Armature-Capabilities`, `GET /discover`)
-- **ADR-0062**: operator repair outside the plugin API, as marked commits; no superuser mode, no raw query route
-- **ADR-0065 to ADR-0068**: the workspace hub, its store, authentication and authorization; accepted and not built except ADR-0067 decision 7; their dated notes hold the later decisions
+The index with every status and a one-line summary of each is `schema/docs/adr/README.md`. Before working on the API or the schema, read these from it: ADR-0002 to ADR-0004 (references, junctions, back-references), ADR-0024 (identifiers and replace), ADR-0025 (the commit graph is the design history), ADR-0028 (attestation), ADR-0029 and ADR-0056 (coverage, nothing derived stored), ADR-0030 and ADR-0031 (external references, attachments, export), ADR-0032 (identity), ADR-0054 and ADR-0055 (the Hono app, one store adapter), ADR-0057 and ADR-0058 (`asOf`, item statistics as metrics), ADR-0059 (capability negotiation), ADR-0062 (operator repair outside the API), ADR-0065 to ADR-0068 (the workspace hub, its store, authentication, authorization; their dated notes hold the later decisions).
 
 ---
 
@@ -215,7 +194,7 @@ The index with every status is `schema/docs/adr/README.md`. Before working on th
 4. Read `HISTORY.md` only for a session or decision `SESSION.md` points at, or when no ADR or document says why something is as it is
 
 ### Tests
-`npm test` in `app/` runs Vitest. The tests under `app/lib/api/` call the Hono app in-process against the TerminusDB container, which must be up with the seed loaded; they are the contract suite, which CI's `contract` job runs against a service container after seeding and the operator's `check`. Files run one at a time (the store has one commit graph); the global setup warms a cold store first. The Design Graph's modules are tested on a fixture and the seed; the pages in a browser by `app/e2e/graph.spec.ts` (`npm run test:e2e` after `build:hub` and `build`; CI's `viewer` job). **The rule:** a test is included unless it is very unlikely to show a real problem or very costly. The seed is a fixture the tests read (Module 1's sequences 1 and 2 are taken; two people are named).
+`npm test` in `app/` runs Vitest. The tests under `app/lib/api/` call the Hono app in-process against the TerminusDB container, which must be up with the seed loaded; they are the contract suite, which CI's `contract` job runs against a service container after seeding and the operator's `check`. Files run one at a time (the store has one commit graph); the global setup warms a cold store first. The Design Graph's modules are tested on a fixture and the seed; the pages in a browser by `app/e2e/graph.spec.ts` (`npm run test:e2e` after `build:hub` and `build`; CI's `viewer` job). **The rule:** a test is included unless it is very unlikely to show a real problem or very costly. The seed is a fixture the tests read (Module 1's sequences 1 and 2 are taken; two people are named; the designer holds the grants, the reviewer none). `authorization.test.ts` runs over a scratch database (its header says why), and every suite deletes its branches through the operator's `deleteScratchBranch`.
 
 ### Session end
 Say "update session" and follow `.claude/prompts/update-session.md`: the history entry first, then the state, then the budgets.
@@ -261,7 +240,7 @@ Say "update session" and follow `.claude/prompts/update-session.md`: the history
 - **Don't** write a per-type route or hand-write a request schema; type behavior is a validator in `invariants/`, request shape is the generated `schemas.ts`
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1`; responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter translates (ADR-0025 decision 7)
 - **Don't** expose or call reset, squash or rebase; history is never rewritten, a mistake is undone by a new commit, a branch is deleted only when another holds its head (ADR-0025 decision 6). Repairs the rules prevent are operator work, still as commits (ADR-0062); never a bypass header, a raw query route, or `invariants: 'skip'` from a route (a test reads the API's modules for it)
-- **Don't** take the commit author, `createdBy` or `attestedBy` from a request body; all three come from the resolved identity (constraint 15); `User` documents are created on `main` only (ADR-0032). When ADR-0067 and ADR-0068 are built the author may also be an agent acting for the caller or a relayed person under a `Relay` grant; never another person
+- **Don't** take the commit author, `createdBy` or `attestedBy` from a request body; all three come from the resolved identity (constraint 15); `User` documents are created on `main` only (ADR-0032). The author may also be a registered agent named in `Armature-Agent`, acting for the caller (ADR-0067 decision 3, built), or when relays are built a relayed person under a `Relay` grant; never another person
 - **Don't** add an import route or any write that bypasses the pipeline; reproducing an export is operator work through the adapter's operator-side methods (ADR-0031 decision 4, ADR-0062), the one exception a workspace hub's clone of its own remote (`workspace/clone.ts`)
 - **Don't** put bytes in the graph; an image, a file or an asset tree is an `Attachment` reference with a content hash and, for a versioned store, a revision (ADR-0030)
 - **Don't** store a derived value in the graph; coverage, alignment and any score are reads at a ref (ADR-0056); a judgment on record is a `DesignFinding` or an `Attestation` (ADR-0028); a measurement is a `LearningMetric` with a `subject` (ADR-0058)

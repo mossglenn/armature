@@ -15,6 +15,52 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-01 · Authorization: grants on `main`, branch ownership, 403 `forbidden`; agents acting for people
+
+**What changed.** A remote hub now decides what a resolved identity may do (ADR-0068, built in
+full under `header`; [the reference](api.md), Grants). Authority is a new document class, `Grant`
+(`user`, `role`: `Owner`, `Maintainer`, `Administrator` or `Relay`, `branch`, `status`,
+`rationale`, and for a relay `relayedUsers` and `expires`), written through the document routes on
+`main` only (**400** `grants_live_on_main` elsewhere, rule 21; rule 22 holds the holder's kind to
+the role) and never deleted: a revocation is the same key with `status: "Revoked"`. **Whoever
+creates a branch owns it:** `POST /branches` now needs an identity and writes the caller's `Owner`
+grant on `main` as a commit of its own before the branch exists, and `DELETE /branches/:name`
+revokes every grant naming the branch before it goes. **The check:** writing to or merging into a
+branch needs its owner or a maintainer of it or of every branch; into `main`, a maintainer of
+`main` or of every branch; deleting, the owner or a maintainer; granting `Maintainer` on a branch,
+its owner or an administrator; any other grant, an administrator; registering a person, an
+administrator, and an agent, any person. A refusal is **403** `forbidden` with `permission`
+(`write`, `merge`, `delete`, `grant`, `register`) and `branch`, `role` or `agent`. A branch with no
+owner stays open to every registered user while the migration window is open, which `GET
+/discover` reports under the new capability `armature/authorization` as `ownerlessBranches:
+"writable"`; a workspace hub does not authorize and lists no such capability. `GET /users/me`
+carries the caller's `grants` in force. `Grant` may be listed by `user`; design records still never
+by a person (`person_filter_refused`). The seed grants the designer `Administrator` and
+`Maintainer` of every branch, so a demonstration runs as before; the reviewer holds nothing.
+
+**Agents acting for people** (ADR-0067 decisions 3, 6 and 8). A request may carry
+`Armature-Agent: <agent externalId>` beside the person's `Armature-User`: the agent is the commit's
+author and `createdBy`, the person's grants decide the request, the person owns a branch the agent
+creates, and the hub appends `Armature-On-Behalf-Of: <person externalId>` to the message, which
+history returns byte for byte. An unregistered agent is **401** `unknown_agent`; a person named as
+the agent **400** `not_an_agent`; an agent's identifier as the credential **400** `not_a_person`. A
+message carrying a line that begins with `Armature-On-Behalf-Of` or `Armature-Relayed-By` is
+**400** `reserved_trailer`, on every write. Naming an agent directly in `Armature-User` still works
+under `header`, with no trailer, until push exists. `@armature/client` has an `agent` option, and
+`users.me()` returns the grants. The pseudonymous export rewrites `Grant.user`, `relayedUsers` and a
+handle prefix in `Grant.branch`. Riding today's revision.
+
+**What a client does.** Send `Armature-User` on `POST /branches`. Expect **403** `forbidden` on a
+write, merge, delete, grant or registration the caller may not make, and show who holds the grant
+rather than retrying as someone else; read `users.me().grants` to hide what would be refused. A
+tool that lets one person write to another's branch has that person's owner, or an administrator,
+write a `Maintainer` grant first. A tool with an AI agent moves it from `Armature-User` to the
+`agent` option, with the person in `user`. **CoQui:** its round coordinator owns the round's branch
+(the creator of `coqui-<roundId>`) and grants each reviewer `Maintainer` on it before the round
+opens; `main` takes a maintainer's merge; its outbox becomes a `Relay` grant when relays are built.
+**Quiver:** its drafter and lint agents send the owner in `Armature-User` and the agent in
+`Armature-Agent`; a workspace's owner is whoever created it on the remote.
+
 ## 2026-11-01 · Workspaces: create, clone, status
 
 **What changed.** A workspace hub serves three routes under a new capability,

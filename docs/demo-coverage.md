@@ -85,7 +85,7 @@ No single division of plugins holds: designer against administrator, or who inst
 | **Writes** | | | | | | | | | | | | | | | | | | | | | | | |
 | One write path with invariants<br>`generic writes · ADR-0024` | Fully 2 | Fully 2 | Over 8 | ● |  | ● | ● | ● |  | ○ | ○ | ● | ● |  | ○ | ● | ● |  |  |  |  |  |  |
 | Batch writes with If-Match<br>`batch · optimistic concurrency` | Partially 1 | Partially 1 | Fully 3 | ○ |  | ● |  |  |  |  |  | ○ | ○ |  |  | ● | ● |  |  |  |  |  |  |
-| Identity on every write *(Partial)*<br>`Armature-User · OIDC proposed, ADR-0067` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  | ○ |  |  | ○ | ○ | ○ |  |  | ○ |  |  |  |
+| Identity on every write *(Partial)*<br>`Armature-User · Armature-Agent · OIDC specified, ADR-0067` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  | ○ |  |  | ○ | ○ | ○ |  |  | ○ |  |  |  |
 | **Review** | | | | | | | | | | | | | | | | | | | | | | | |
 | Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 10 | ● | ○ | ○ | ● |  | ○ | ○ | ● | ● | ● |  | ● | ● | ● | ● |  | ○ | ○ | ○ | ● |
 | Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ● | ● | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |  | ○ | ○ |  |  | ○ |
@@ -104,11 +104,12 @@ No single division of plugins holds: designer against administrator, or who inst
 | **Toolkit and guards** | | | | | | | | | | | | | | | | | | | | | | | |
 | Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  |  |  |  | ● | ● |  |  | ● |  |  |  |  |  |  |  |  | ○ |
 | Typed client<br>`@armature/client` | Fully 2 | Fully 2 | Over 11 | ○ | ● | ● | ○ |  | ● | ● |  | ● | ● | ● | ● | ● | ● |  |  | ○ | ○ | ○ | ● |
-| Agent provenance<br>`agent User · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  | ● | ● |  |  |  |  |  |  |  |  |  |  |  |  |
+| Agent provenance<br>`agent User · Armature-On-Behalf-Of · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  | ● | ● |  |  |  |  |  |  |  |  |  |  |  |  |
 | No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  |  |  |  | ● | ● |  |  |  |  |  | ○ |  |  | ● |  |  | ○ |
 | Loopback boundary<br>`host_not_allowed · origin_not_allowed · ADR-0067 decision 7, built 2026-10-30` | Uncovered 0 | Uncovered 0 | Uncovered 0 | ○ | ○ | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Authorization<br>`Grant · 403 forbidden · ADR-0068, built 2026-11-01` | Partially 1 | Partially 1 | Partially 1 | ● |  | ○ |  |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |
 
-Totals over 25 capabilities (Quiver counted as built since 2026-10-30, so no planned tool remains and the first two scopes agree): built tools, Uncovered 8, Partially 7, Fully 10, Over 0; built and planned, Uncovered 8, Partially 7, Fully 10, Over 0; everything, Uncovered 1, Partially 1, Fully 9, Over 14.
+Totals over 26 capabilities (Quiver counted as built since 2026-10-30, so no planned tool remains and the first two scopes agree): built tools, Uncovered 8, Partially 8, Fully 10, Over 0; built and planned, Uncovered 8, Partially 8, Fully 10, Over 0; everything, Uncovered 1, Partially 2, Fully 9, Over 14.
 
 ## Gaps, and which proposed tool closes them
 
@@ -194,6 +195,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **One write path with invariants.** Replaces items by the id CoQui supplies.
 - ○ **Batch writes with If-Match.** Its outbox drains queued writes when the hub is reachable.
 - ● **Identity on every write.** Writes as the reviewer through Armature-User.
+- ● **Authorization.** The round coordinator creates `coqui-<roundId>` and so owns it, grants each reviewer `Maintainer` on it, and a maintainer of `main` merges the round; its outbox becomes a `Relay` grant when relays exist.
 - ● **Findings and notes, by fragment.** Opens and dismisses findings on one part of an item.
 - ● **Attestations that go stale.** Affirms an option; the viewer then shows it Current on the round branch.
 - ● **Coverage at any ref.** Narrative 2: under-assessed objectives surface while authoring.
@@ -236,7 +238,8 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ○ **Ordered module content.** Formative use in activities; may create a Module when an assessment has none.
 - ● **Export profiles and slices.** A workspace is cloned from GET /export; asks for an authoring slice. The text2qti exporter is milestone 4.
 - ● **Typed client.** First consumer of the client package.
-- ○ **Agent provenance.** AI drafting is built (`agent:quiver/drafter`, `agent:quiver/lint-1`); ADR-0067 decision 3's `Armature-Agent` form on acceptance.
+- ○ **Agent provenance.** AI drafting is built (`agent:quiver/drafter`, `agent:quiver/lint-1`); ADR-0067 decision 3's `Armature-Agent` form, built 2026-11-01, when Quiver resumes.
+- ○ **Authorization.** A workspace's owner is whoever created it on the remote; a push to a branch the owner may not write meets 403 `forbidden` (ADR-0068 decision 9).
 - ○ **Loopback boundary.** Its desktop shell sends `Origin: tauri://localhost`, a non-web origin the hub serves.
 
 ### MCP server (proposed)
@@ -258,6 +261,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **Discovery and capabilities.** The tool list is generated from /discover, so a missing capability is a missing tool.
 - ● **Typed client.** Built on @armature/client.
 - ● **Agent provenance.** Every write is marked as the agent's; acceptance is a person's endorsement.
+- ○ **Authorization.** In its local mode it writes as the agent for the person at the keyboard (`Armature-Agent`), under that person's grants; its remote mode reads only (ADR-0067 decision 10).
 - ● **No per-person aggregates.** Ask 'which reviewer declines most?' and the hub refuses, not the prompt.
 
 ### Storyline bridge (proposed)
