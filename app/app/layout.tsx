@@ -1,21 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { GeistMono } from "geist/font/mono";
+import { GeistSans } from "geist/font/sans";
 import Link from "next/link";
 import { Suspense } from "react";
 import { BranchPicker, type BranchChoice } from "./BranchPicker";
 import { viewerHub } from "@/lib/viewer";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
+// The Geist faces from the `geist` package's own files (next/font/local), so
+// `next build` needs no network; next/font/google fetched them at build time
+// (the deep review's build finding). Same CSS variables as before.
 export const metadata: Metadata = {
   title: "Armature",
   description: "Graph-based infrastructure for learning engineering: design intelligence from the artifact graph.",
@@ -45,7 +39,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}
+        className={`${GeistSans.variable} ${GeistMono.variable} antialiased font-sans`}
       >
         <nav className="flex h-12 items-center gap-5 border-b border-zinc-200 px-4 text-sm dark:border-zinc-800" aria-label="Armature">
           <Link href="/" className="font-semibold tracking-tight">Armature</Link>
