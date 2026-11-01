@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './api/app';
 import { CURRENT_REVISION } from './api/version';
 import { createStore } from './api/store';
-import { startHub, type RunningHub } from './hub';
+import { bindRefusal, startHub, type RunningHub } from './hub';
 
 const stamp = Date.now().toString(36);
 const BRANCH = `test-hub-${stamp}`;
@@ -112,5 +112,24 @@ describe('the hub as its own process', () => {
     expect((await fetch(`${other.url}/api/v1/discover`)).status).toBe(200);
     await other.close();
     await expect(fetch(`${other.url}/api/v1/discover`)).rejects.toThrow();
+  });
+});
+
+describe('where a hub under header may listen (ADR-0067 decision 8)', () => {
+  it('on loopback, always', () => {
+    for (const hostname of ['127.0.0.1', '127.0.1.1', 'localhost', '::1']) {
+      expect(bindRefusal({ hostname, identity: 'header', trustNetwork: false }), hostname).toBeUndefined();
+    }
+  });
+
+  it('elsewhere only when the network is declared the gate', () => {
+    for (const hostname of ['0.0.0.0', '::', '192.168.1.20']) {
+      expect(bindRefusal({ hostname, identity: 'header', trustNetwork: false }), hostname).toMatch(/ARMATURE_TRUST_NETWORK=1/);
+      expect(bindRefusal({ hostname, identity: 'header', trustNetwork: true }), hostname).toBeUndefined();
+    }
+  });
+
+  it('is no concern of a resolver that authenticates', () => {
+    expect(bindRefusal({ hostname: '0.0.0.0', identity: 'oidc', trustNetwork: false })).toBeUndefined();
   });
 });
