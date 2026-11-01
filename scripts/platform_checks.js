@@ -123,6 +123,12 @@
 //      back; /api/history at a commit path is a 500, so a document's history is read only at a
 //      branch and the hub proves its answer belongs to one head by reading the head around it
 //
+// A database the hub creates (the workspace hub plan's step 2), added 2026-11-01:
+//   AN. A workspace hub creates its own store when absent: GET /api/db/admin/<db> tells an absent
+//      database (404) from a present one (200); POST creates it once, and again is a 400 naming
+//      api:DatabaseAlreadyExists; a new database's main already holds one commit, an InitialCommit
+//      by `system` with the default context, so the first mirror of main is not its root
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -973,6 +979,25 @@ async function main() {
   r = await api("GET", `/api/history/admin/${DB}/local/commit/${amHead}?id=Artifact/aj&count=1`);
   record("AM2", r.status === 500 ? "PASS" : "INFO",
     `/api/history at a commit path: ${r.status} ${r.json?.["api:error"]?.["@type"] ?? ""} (500 expected; anything else means history can be pinned)`);
+
+  // AN: a database the hub creates. The workspace hub creates its local store on the first clone
+  // (adapter: ensureDatabase), so it must tell absent from present and survive creating twice.
+  const AN_DB = `${DB}_an`;
+  await api("DELETE", `/api/db/admin/${AN_DB}`);
+  r = await api("GET", `/api/db/admin/${AN_DB}`);
+  record("AN1", r.status === 404 ? "PASS" : "FAIL", `GET of an absent database: ${r.status} ${r.json?.["api:error"]?.["@type"] ?? ""} (404 expected)`);
+  r = await api("POST", `/api/db/admin/${AN_DB}`, { label: "AN", comment: "scratch", schema: true });
+  const anCreated = r.status;
+  r = await api("GET", `/api/db/admin/${AN_DB}`);
+  record("AN2", anCreated === 200 && r.status === 200 ? "PASS" : "FAIL", `create: ${anCreated}; GET after: ${r.status}`);
+  r = await api("POST", `/api/db/admin/${AN_DB}`, { label: "AN", comment: "scratch", schema: true });
+  const anType = r.json?.["api:error"]?.["@type"];
+  record("AN3", r.status === 400 && anType === "api:DatabaseAlreadyExists" ? "PASS" : "INFO", `create again: ${r.status} ${anType ?? short(r.json)}`);
+  r = await api("GET", `/api/log/admin/${AN_DB}/local/branch/main?count=1`);
+  const anFirst = r.json?.[0];
+  record("AN4", r.status === 200 && anFirst?.["@type"] === "InitialCommit" && anFirst?.author === "system" ? "PASS" : "INFO",
+    `a new database's main: /api/log ${r.status}, head ${anFirst?.["@type"] ?? "none"} by ${anFirst?.author ?? "-"}: ${JSON.stringify(anFirst?.message ?? null)}`);
+  await api("DELETE", `/api/db/admin/${AN_DB}`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
