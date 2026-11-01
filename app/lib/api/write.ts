@@ -1,8 +1,8 @@
 import { CLASS_FIELDS, CLASS_KEY, type FieldShape } from '@armature/types';
 import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
-import { hasAttestedBy, hasCreatedBy, isWritable } from './classes';
+import { hasAttestedBy, hasCreatedBy, isWritable, livesOnMain } from './classes';
 import { ApiError } from './errors';
-import { userCopyFor, type ResolvedUser } from './identity';
+import { REGISTRY_BRANCH, userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
 import { AS_OF_PARENT, AS_OF_REFILLED_ON_REPLACE, hasAsOf } from './invariants/asOf';
 import { StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
@@ -14,7 +14,9 @@ import { StoreError, type DocumentReader, type Store, type TerminusDocument } fr
  *
  *   1. shape: each document's @type is a writable class and the document
  *      matches its generated Zod (validation library) schema in
- *      app/lib/schemas.ts (400 invalid_document)
+ *      app/lib/schemas.ts (400 invalid_document); a class that lives on
+ *      main (`Grant`, constraint 21) is refused on any other branch (400
+ *      grants_live_on_main, ADR-0068 decision 2)
  *   2. identity: an id held by another type is a 409 (ADR-0024 decision 4);
  *      an existing document is found by @id, or for a Hash-keyed class by
  *      its key fields, so a replace is recognized either way. An omitted
@@ -110,6 +112,14 @@ export function parseDocuments(inputs: unknown[]): TerminusDocument[] {
 export async function writeDocuments(documents: TerminusDocument[], opts: WriteOptions): Promise<WriteResult> {
   const { branch } = opts;
   checkUnique(documents);
+  const onMain = documents.find((doc) => livesOnMain(doc['@type']));
+  if (onMain && branch.branch !== REGISTRY_BRANCH) {
+    throw new ApiError(
+      400,
+      'grants_live_on_main',
+      `${onMain['@type']} documents live on ${REGISTRY_BRANCH} only, whatever branch the work is on; write this one there (ADR-0068 decision 2)`
+    );
+  }
   const moved = (current: string | undefined) =>
     new ApiError(412, 'precondition_failed', `Branch ${branch.branch} has moved since commit ${opts.ifMatch}`, {
       expected: opts.ifMatch,
