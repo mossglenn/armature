@@ -1,5 +1,5 @@
-import { findUserByExternalId, registry, REGISTRY_BRANCH, type ResolvedUser } from '../api/identity';
-import { createOperatorStore, type Commit, type OperatorStore } from '../api/store';
+import { findUserByExternalId, REGISTRY_BRANCH, type ResolvedUser } from '../api/identity';
+import { createOperatorStore, createStore, type Commit, type OperatorStore } from '../api/store';
 import { parseDocuments, writeDocuments, type WriteResult } from '../api/write';
 
 /**
@@ -91,7 +91,7 @@ async function asOperatorCommit<T>(
  * registered, since a repair names who made it.
  */
 export async function operatorIdentity(externalId: string): Promise<ResolvedUser> {
-  const { user } = await findUserByExternalId(registry(), externalId);
+  const { user } = await findUserByExternalId(createStore({ branch: REGISTRY_BRANCH }), externalId);
   if (!user) {
     throw new OperatorError(`No User with externalId ${externalId} is registered on ${REGISTRY_BRANCH}; register through POST /api/v1/users first`);
   }

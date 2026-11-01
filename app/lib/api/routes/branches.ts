@@ -1,18 +1,9 @@
 import { Hono } from 'hono';
+import { storeFor } from '../config';
 import { ApiError } from '../errors';
 import { ifMatchFrom, readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { resolveAuthor } from '../identity';
-import {
-  createStore,
-  idFromIri,
-  isRecord,
-  isUnknownRef,
-  StoreError,
-  type Commit,
-  type Ref,
-  type Store,
-  type WitnessField,
-} from '../store';
+import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
 
 /**
  * /api/v1/branches (architecture decision record ADR-0025, decisions 4, 5, 6
@@ -194,7 +185,7 @@ function changeOf(entry: unknown): { id: string; op: ChangeOp } {
 }
 
 branches.get('/', async (c) => {
-  const store = createStore({ branch: 'main' });
+  const store = storeFor(c, { branch: 'main' });
   const names = await store.listBranches();
   // A branch deleted after the list was read is left out (see `gone`).
   const list = await Promise.all(
@@ -213,7 +204,7 @@ branches.post('/', async (c) => {
     throw new ApiError(400, 'bad_name', 'name must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$');
   }
   const from = parseFrom(body.from);
-  const store = createStore({ branch: 'main' });
+  const store = storeFor(c, { branch: 'main' });
   if ('commit' in from) await requireCommit(store, from.commit);
   try {
     await store.createBranch(name, from);
@@ -230,7 +221,7 @@ branches.post('/', async (c) => {
 
 branches.get('/:name', async (c) => {
   const { name } = c.req.param();
-  const head = await createStore({ branch: name }).head();
+  const head = await storeFor(c, { branch: name }).head();
   if (!head) throw new ApiError(404, 'not_found', `Branch ${name} has no commits`);
   setEtag(c, head.id);
   return c.json({ name, head: toHead(head) });
@@ -245,7 +236,7 @@ branches.post('/:name/merge', async (c) => {
   }
   if (sourceName === targetName) throw new ApiError(400, 'bad_request', 'A branch cannot be merged into itself');
 
-  const target = createStore({ branch: targetName });
+  const target = storeFor(c, { branch: targetName });
   const author = await resolveAuthor(c);
   const source = target.at({ branch: sourceName });
   const [targetHead, sourceHead] = await Promise.all([target.head(), source.head()]);
@@ -320,7 +311,7 @@ branches.delete('/:name', async (c) => {
   const { name } = c.req.param();
   if (name === 'main') throw new ApiError(400, 'protected_branch', 'main is never deleted (ADR-0025 decision 6)');
   await resolveAuthor(c);
-  const store = createStore({ branch: 'main' });
+  const store = storeFor(c, { branch: 'main' });
   const names = await store.listBranches();
   if (!names.includes(name)) throw new ApiError(404, 'unknown_ref', `No branch ${name}`);
   const target = store.at({ branch: name });
@@ -360,7 +351,7 @@ branches.get('/:name/changes', async (c) => {
   const { name } = c.req.param();
   const since = c.req.query('since');
   if (!since) throw new ApiError(400, 'since_required', 'Pass since=<commit>');
-  const store = createStore({ branch: name });
+  const store = storeFor(c, { branch: name });
   const [head] = await Promise.all([store.head(), requireCommit(store, since, 'since commit')]);
   if (!head) throw new ApiError(404, 'not_found', `Branch ${name} has no commits`);
   // Changes since a commit the branch never held would be a diff between two

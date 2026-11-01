@@ -144,6 +144,16 @@ describe('the adapter stays behind its interfaces (workspace hub plan §13)', ()
   it('no module of the API reaches the operator-side methods (ADR-0062)', () => {
     expect(sources.filter((s) => /\b(createOperatorStore|OperatorStore)\b/.test(s.text)).map((s) => s.file)).toEqual([]);
   });
+
+  // Two hubs in one process differ only if every setting comes from the
+  // request's configuration (config.ts), never from the environment directly.
+  it('no module of the API but the configuration reads the environment', () => {
+    expect(sources.filter((s) => s.file !== 'config.ts' && /\bprocess\.env\b/.test(s.text)).map((s) => s.file)).toEqual([]);
+  });
+
+  it('no module of the API makes a store but through the request\'s hub', () => {
+    expect(sources.filter((s) => s.file !== 'config.ts' && /\bcreateStore\(/.test(s.text)).map((s) => s.file)).toEqual([]);
+  });
 });
 
 describe('the deadline on every call (the deep review\'s H7)', () => {

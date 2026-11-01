@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { storeFor } from '../config';
 import { isKnownType } from '../classes';
 import { ApiError } from '../errors';
 import { intQuery, refFromQuery, setEtag, snapshot } from '../http';
@@ -15,7 +16,7 @@ import {
 } from '../intelligence/coverage';
 import { canonical, fragmentsOf } from '../fragments';
 import { Graph, bloomsRank, idsIn, otherReferences, summarize, type Summary } from '../intelligence/graph';
-import { createStore, type TerminusDocument } from '../store';
+import { type TerminusDocument } from '../store';
 
 /**
  * /api/v1/intelligence (plan §4 Phase 4; the paper's §4 as read endpoints).
@@ -59,7 +60,7 @@ import { createStore, type TerminusDocument } from '../store';
 export const intelligence = new Hono();
 
 async function graphAt(c: Context): Promise<Graph> {
-  const { at, commit } = await snapshot(createStore(refFromQuery(c)));
+  const { at, commit } = await snapshot(storeFor(c, refFromQuery(c)));
   return new Graph(at, commit);
 }
 

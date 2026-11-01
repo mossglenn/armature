@@ -11,11 +11,14 @@
  * `startHub` is separate from the entry file (`app/server.ts`) so a test can
  * start the server on an ephemeral port and compare its answers with
  * `app.request()`, and so the entry stays a few lines of environment reading.
- * Nothing here reads the environment: the port and host are arguments.
+ * Nothing here reads the environment: the port and host are arguments, and so
+ * is the configuration when a caller gives one, so a test can start a second
+ * hub on another store beside the first (docs/workspace-hub-plan.md §13).
  */
 import { serve } from '@hono/node-server';
 import type { AddressInfo } from 'node:net';
-import { app } from './api/app';
+import { app, createApp } from './api/app';
+import type { HubConfig } from './api/config';
 import { CURRENT_REVISION } from './api/version';
 
 export interface HubOptions {
@@ -28,6 +31,8 @@ export interface HubOptions {
    * compose file decides what the host publishes.
    */
   hostname?: string;
+  /** This hub's configuration; the environment's, read on every request, when absent. */
+  config?: HubConfig;
 }
 
 export interface RunningHub {
@@ -42,9 +47,10 @@ export interface RunningHub {
 }
 
 /** Starts the hub and resolves once it is listening. */
-export function startHub({ port, hostname = '127.0.0.1' }: HubOptions): Promise<RunningHub> {
+export function startHub({ port, hostname = '127.0.0.1', config }: HubOptions): Promise<RunningHub> {
+  const hub = config ? createApp(() => config) : app;
   return new Promise((resolve, reject) => {
-    const server = serve({ fetch: app.fetch, port, hostname }, (info: AddressInfo) => {
+    const server = serve({ fetch: hub.fetch, port, hostname }, (info: AddressInfo) => {
       const host = info.address === '0.0.0.0' || info.address === '::' ? 'localhost' : info.address;
       resolve({
         port: info.port,

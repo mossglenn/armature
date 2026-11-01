@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
+import { storeFor } from '../config';
 import { normalizeSchema } from '../export/exporter';
 import { refFromQuery, requireCommit, setEtag } from '../http';
-import { createStore } from '../store';
 import { discovery } from '../version';
 
 /**
@@ -21,7 +21,7 @@ discover.get('/discover', (c) => c.json(discovery()));
 
 discover.get('/schema', async (c) => {
   const ref = refFromQuery(c);
-  const store = createStore(ref);
+  const store = storeFor(c, ref);
   if ('commit' in ref) await requireCommit(store, ref.commit);
   const { entries, commit } = await store.getSchema();
   setEtag(c, commit);

@@ -249,7 +249,8 @@ export interface OperatorStore extends Store {
   createEmptyBranch(name: string): Promise<void>;
 }
 
-interface StoreConfig {
+/** Where a store is and how to reach it: one TerminusDB database. */
+export interface StoreConfig {
   url: string;
   user: string;
   pass: string;
@@ -259,9 +260,14 @@ interface StoreConfig {
   timeoutMs?: number;
 }
 
-function configFromEnv(): StoreConfig {
+/**
+ * The TERMINUS_* variables as a store's configuration; throws naming the first
+ * one unset. The default of the factories below, for the operator tools and the
+ * tests; a route's store takes its hub's configuration (`storeFor` in config.ts).
+ */
+export function storeConfigFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): StoreConfig {
   const need = (key: string): string => {
-    const value = process.env[key];
+    const value = env[key];
     if (!value) throw new Error(`${key} is not set`);
     return value;
   };
@@ -737,9 +743,9 @@ export class TerminusStore implements OperatorStore {
   }
 }
 
-/** A store for one request, bound to the ref the request resolved. */
-export function createStore(ref: Ref): Store {
-  return new TerminusStore(configFromEnv(), ref);
+/** A store bound to one ref, in the database the configuration names (the environment's by default). */
+export function createStore(ref: Ref, config: StoreConfig = storeConfigFromEnv()): Store {
+  return new TerminusStore(config, ref);
 }
 
 /**
@@ -747,6 +753,6 @@ export function createStore(ref: Ref): Store {
  * and the tests. No module under `app/lib/api/` calls this; a test reads them
  * for it.
  */
-export function createOperatorStore(ref: Ref): OperatorStore {
-  return new TerminusStore(configFromEnv(), ref);
+export function createOperatorStore(ref: Ref, config: StoreConfig = storeConfigFromEnv()): OperatorStore {
+  return new TerminusStore(config, ref);
 }

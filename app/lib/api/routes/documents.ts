@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { CLASS_FIELDS, type FieldShape } from '@armature/types';
+import { storeFor } from '../config';
 import { isKnownType, isWritable } from '../classes';
 import { ApiError } from '../errors';
 import {
@@ -14,7 +15,7 @@ import {
   setEtag,
 } from '../http';
 import { resolveUser } from '../identity';
-import { createStore, isRecord, type HistoryEntry, type Ref, type TerminusDocument } from '../store';
+import { isRecord, type HistoryEntry, type Ref, type TerminusDocument } from '../store';
 import { CommitMemo } from '../memo';
 import { parseDocuments, writeDocuments } from '../write';
 
@@ -99,7 +100,7 @@ documents.get('/:type', async (c) => {
   const { type } = c.req.param();
   if (!isKnownType(type)) throw new ApiError(404, 'unknown_type', `No type ${type}`);
   const ref = refFromQuery(c);
-  const store = createStore(ref);
+  const store = storeFor(c, ref);
   if ('commit' in ref) await requireCommit(store, ref.commit);
   const { template, inHub } = filtersFromQuery(type, c.req.query());
   const count = c.req.query('count') === undefined ? undefined : intQuery(c, 'count', 0);
@@ -122,7 +123,7 @@ documents.get('/:type/:id', async (c) => {
   if (!isKnownType(type)) throw new ApiError(404, 'unknown_type', `No type ${type}`);
   const docId = `${type}/${id}`;
   const ref = refFromQuery(c);
-  const store = createStore(ref);
+  const store = storeFor(c, ref);
   if ('commit' in ref) await requireCommit(store, ref.commit);
   const { document, commit } = await store.getDocument(docId);
   if (document['@type'] !== type) {
@@ -153,7 +154,7 @@ documents.put('/:type/:id', async (c) => {
 
   const who = await resolveUser(c);
   const { commit } = await writeDocuments([document], {
-    branch: createStore(ref),
+    branch: storeFor(c, ref),
     who,
     message: envelope.message,
     ifMatch: ifMatchFrom(c),
@@ -174,7 +175,7 @@ documents.post('/', async (c) => {
 
   const who = await resolveUser(c);
   const { commit, ids } = await writeDocuments(parsed, {
-    branch: createStore(ref),
+    branch: storeFor(c, ref),
     who,
     message: envelope.message,
     ifMatch: ifMatchFrom(c),
@@ -198,7 +199,7 @@ documents.get('/:type/:id/history', async (c) => {
   // review's B1). The store walks the branch's whole log for a document
   // touched rarely (seconds on a few hundred commits), so a proven answer is
   // kept by its head and served again while the head stands still.
-  const store = createStore({ branch });
+  const store = storeFor(c, { branch });
   const keyAt = (at: string) => CommitMemo.key(at, docId, start, count, diff);
   let served: { entries: HistoryEntry[]; head: string | undefined } | undefined;
   for (let attempt = 0; attempt < HISTORY_ATTEMPTS && !served; attempt++) {
@@ -241,7 +242,7 @@ documents.get('/:type/:id/diff', async (c) => {
   const to = c.req.query('to');
   if (!from || !to) throw new ApiError(400, 'range_required', 'Pass from=<commit> and to=<commit>');
   const docId = `${type}/${id}`;
-  const store = createStore({ branch: 'main' });
+  const store = storeFor(c, { branch: 'main' });
   await Promise.all([requireCommit(store, from, 'from commit'), requireCommit(store, to, 'to commit')]);
   const diff = await store.diff(from, to, docId);
   return c.json({ id: docId, from, to, diff });

@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { bareName, hubOf } from './config';
 import { ApiError } from './errors';
 
 /**
@@ -29,30 +30,18 @@ import { ApiError } from './errors';
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
-/** A host name as compared: lower case, without the trailing dot of a fully qualified name. */
-const bare = (name: string) => name.toLowerCase().replace(/\.$/, '');
-
 /** A loopback name: localhost, its IPv4 and IPv6 addresses, or a name under `.localhost` (RFC 6761). */
 const isLoopback = (name: string) => LOOPBACK.has(name) || name.endsWith('.localhost');
 
-/** A comma-separated setting, read on each request so a test or an operator can change it. */
-const setting = (name: string) =>
-  new Set(
-    (process.env[name] ?? '')
-      .split(',')
-      .map((entry) => bare(entry.trim()))
-      .filter(Boolean)
-  );
-
-export function hostAllowed(hostname: string): boolean {
-  const name = bare(hostname);
-  return isLoopback(name) || setting('ARMATURE_ALLOWED_HOSTS').has(name);
+/** Whether the hub answers to this host: loopback, or a name in `listed` (the hub's ARMATURE_ALLOWED_HOSTS). */
+export function hostAllowed(hostname: string, listed: ReadonlySet<string>): boolean {
+  const name = bareName(hostname);
+  return isLoopback(name) || listed.has(name);
 }
 
-const originListed = (origin: string) => setting('ARMATURE_ALLOWED_ORIGINS').has(bare(origin));
-
-export function originAllowed(origin: string): boolean {
-  if (originListed(origin)) return true;
+/** Whether the hub answers a page from this origin: one in `listed` (ARMATURE_ALLOWED_ORIGINS), a loopback one, or a non-web scheme. */
+export function originAllowed(origin: string, listed: ReadonlySet<string>): boolean {
+  if (listed.has(bareName(origin))) return true;
   if (origin === 'null') return false;
   let url: URL;
   try {
@@ -61,7 +50,7 @@ export function originAllowed(origin: string): boolean {
     return false;
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return true;
-  return isLoopback(bare(url.hostname));
+  return isLoopback(bareName(url.hostname));
 }
 
 /** What a listed origin's page may send, answered on a preflight. */
@@ -75,20 +64,21 @@ const PREFLIGHT = {
 const EXPOSED = 'ETag, Armature-Version';
 
 export const boundary: MiddlewareHandler = async (c, next) => {
+  const { allowedHosts, allowedOrigins } = hubOf(c);
   const { hostname } = new URL(c.req.url);
-  if (!hostAllowed(hostname)) {
+  if (!hostAllowed(hostname, allowedHosts)) {
     throw new ApiError(403, 'host_not_allowed', `This hub does not answer to the host ${hostname}; ARMATURE_ALLOWED_HOSTS names the hosts it answers besides loopback`, {
       host: hostname,
     });
   }
   const origin = c.req.header('Origin');
   if (origin === undefined) return next();
-  if (!originAllowed(origin)) {
+  if (!originAllowed(origin, allowedOrigins)) {
     throw new ApiError(403, 'origin_not_allowed', `This hub does not answer pages from ${origin}; ARMATURE_ALLOWED_ORIGINS names the web origins it serves`, {
       origin,
     });
   }
-  if (!originListed(origin)) return next();
+  if (!allowedOrigins.has(bareName(origin))) return next();
   if (c.req.method === 'OPTIONS') {
     return c.body(null, 204, { ...PREFLIGHT, 'Access-Control-Allow-Origin': origin, Vary: 'Origin' });
   }

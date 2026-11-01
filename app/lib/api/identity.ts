@@ -1,7 +1,8 @@
 import type { Context } from 'hono';
 import type { User } from '@armature/types';
 import { ApiError } from './errors';
-import { createStore, StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
+import { hubOf, storeFor } from './config';
+import { StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
 
 /**
  * Identity resolution (architecture decision record ADR-0032).
@@ -42,8 +43,7 @@ export const headerResolver: IdentityResolver = (c) => {
 
 const RESOLVERS: Record<string, IdentityResolver> = { header: headerResolver };
 
-export function configuredResolver(): IdentityResolver {
-  const name = process.env.ARMATURE_IDENTITY?.trim() || 'header';
+export function configuredResolver(name: string): IdentityResolver {
   const resolver = RESOLVERS[name];
   if (!resolver) {
     throw new Error(`ARMATURE_IDENTITY=${name} names no identity resolver (known: ${Object.keys(RESOLVERS).join(', ')})`);
@@ -60,9 +60,9 @@ export interface ResolvedUser {
   user: UserDocument;
 }
 
-/** The store bound to the registry branch. */
-export function registry(): Store {
-  return createStore({ branch: REGISTRY_BRANCH });
+/** The store bound to the registry branch of the request's hub. */
+export function registry(c: Context): Store {
+  return storeFor(c, { branch: REGISTRY_BRANCH });
 }
 
 /** The `User` with this externalId at the store's ref, and the commit read (check W1). */
@@ -83,11 +83,11 @@ export const mintUserId = (): string => `User/${crypto.randomUUID()}`;
  * claims; 401 `unknown_user` when nothing is registered and nothing can be.
  */
 export async function resolveUser(c: Context): Promise<ResolvedUser> {
-  const claims = await configuredResolver()(c);
+  const claims = await configuredResolver(hubOf(c).identity)(c);
   if (!claims) {
     throw new ApiError(401, 'identity_required', `No identity on the request: send ${USER_HEADER}: <externalId>`);
   }
-  const main = registry();
+  const main = registry(c);
   // Two passes: a concurrent registration of the same externalId makes the
   // insert fail on the head it read (If-Match) or on the id, and the second
   // lookup then finds the winner's document.
