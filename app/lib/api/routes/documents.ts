@@ -1,7 +1,8 @@
 import { Hono, type Context } from 'hono';
 import { CLASS_FIELDS, type FieldShape } from '@armature/types';
 import { storeFor } from '../config';
-import { isKnownType, isWritable } from '../classes';
+import { requireWrite } from '../authorization';
+import { inheritsFrom, isKnownType, isWritable } from '../classes';
 import { ApiError } from '../errors';
 import {
   boolQuery,
@@ -62,9 +63,12 @@ interface Filters {
  * store filters a required single-valued field by template query, but
  * answers one on an Optional enum or reference, or on a Set, with a 500
  * (platform check Y), so the hub lists and filters those, as `Graph.where`
- * does. A Set matches when it contains the value. A field naming a `User`
- * is refused: the API offers no enumeration of a person's work (ADR-0021
- * decision 3, the non-aggregation guard).
+ * does. A Set matches when it contains the value. A field naming a `User` on
+ * a design record is refused: the API offers no enumeration of a person's
+ * work (ADR-0021 decision 3, the non-aggregation guard). The guard covers the
+ * classes under `DesignRecord`, which hold every such field; `Grant`, outside
+ * it, is listed by `user`, so an administrator can see what one person holds
+ * (ADR-0068 decision 8).
  */
 function filtersFromQuery(type: string, query: Record<string, string>): Filters {
   const fields = fieldsOf(type);
@@ -75,7 +79,7 @@ function filtersFromQuery(type: string, query: Record<string, string>): Filters 
     if (!shape || shape.kind === 'subdocument') {
       throw new ApiError(400, 'unknown_field', `${type} has no filterable field ${key}`);
     }
-    if (shape.type === 'User') {
+    if (shape.type === 'User' && inheritsFrom(type, 'DesignRecord')) {
       throw new ApiError(400, 'person_filter_refused', `${key} names a person; the API does not list documents by who made them (ADR-0021)`);
     }
     const value = queryValue(key, raw, shape.type);
@@ -155,6 +159,7 @@ documents.put('/:type/:id', async (c) => {
   const [document] = parseDocuments([{ ...input, '@id': docId, '@type': type }]);
 
   const who = await resolveUser(c);
+  await requireWrite(c, who, ref.branch, [document]);
   const { commit } = await writeDocuments([document], {
     branch: storeFor(c, ref),
     who,
@@ -176,6 +181,7 @@ documents.post('/', async (c) => {
   const parsed = parseDocuments(inputs);
 
   const who = await resolveUser(c);
+  await requireWrite(c, who, ref.branch, parsed);
   const { commit, ids } = await writeDocuments(parsed, {
     branch: storeFor(c, ref),
     who,

@@ -14,6 +14,7 @@ import { configFromEnv } from './config';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from './store';
 import { writeDocuments } from './write';
 import { checkBranch } from '../operator/check';
+import { capabilitiesOf } from './version';
 import type { UserDocument } from './identity';
 
 const stamp = Date.now().toString(36);
@@ -96,6 +97,9 @@ describe('Grant documents (ADR-0068 decision 2; constraints 21 and 22)', () => {
     const every = await json(await write([grant({ user: REVIEWER, role: 'Maintainer' })], 'Maintainer of every branch'));
     expect(every.status).toBe(200);
     expect(every.body.ids[0]).not.toBe(grantId);
+    // Taken back at once: the permission tests below rely on the reviewer holding nothing.
+    const back = await json(await write([grant({ user: REVIEWER, role: 'Maintainer', status: 'Revoked', rationale: 'Only a key test' })], 'Revoked'));
+    expect(back.body.ids[0]).toBe(every.body.ids[0]);
   });
 
   it('refuses a client-supplied id: the key is the identity', async () => {
@@ -243,5 +247,108 @@ describe('branch ownership (ADR-0068 decision 3)', () => {
     await expect(writeDocuments([document], { branch: transient, who, message: 'x' })).rejects.toMatchObject({ code: 'grants_live_on_main' });
     const { ids } = await writeDocuments([document], { branch: transient, target: 'main', who, message: 'The first administrator, as the operator writes one' });
     expect(ids[0]).toMatch(/^Grant\//);
+  });
+});
+
+describe('permissions (ADR-0068 decisions 4, 7 and 8)', () => {
+  const asReviewer = { 'Content-Type': 'application/json', 'Armature-User': 'demo-reviewer@example.edu' };
+  const AGENT = `agent:test/authz-${stamp}`;
+  const asAgent = { 'Content-Type': 'application/json', 'Armature-User': AGENT };
+  const MINE = `test-authz-reviewers-${stamp}`;
+  const as = (headers: Record<string, string>) => (method: string, path: string, body?: unknown) =>
+    hub.request(`/api/v1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const reviewer = as(asReviewer);
+  const agent = as(asAgent);
+  const need = (id: string) => ({ message: 'A need', document: { label: 'Need', rationale: 'r' } });
+  const forbidden = async (res: Response, details: Record<string, unknown>) => {
+    const body = await res.json();
+    expect(res.status).toBe(403);
+    expect(body).toMatchObject({ error: 'forbidden', ...details });
+  };
+
+  it('refuses the reviewer, who holds no grant, everything but reading, creating a branch and registering an agent', async () => {
+    await forbidden(await reviewer('PUT', `/documents/LearningNeed/r1-${stamp}?branch=${BRANCH}`, need('r1')), { permission: 'write', branch: BRANCH });
+    await forbidden(await reviewer('POST', `/branches/${BRANCH}/merge`, { message: 'x', from: 'main' }), { permission: 'merge', branch: BRANCH });
+    await forbidden(await reviewer('DELETE', `/branches/${BRANCH}`), { permission: 'delete', branch: BRANCH });
+    await forbidden(await reviewer('PUT', `/documents/LearningNeed/r1-${stamp}`, need('r1')), { permission: 'write', branch: 'main' });
+    await forbidden(
+      await reviewer('POST', '/documents', { message: 'x', documents: [grant({ user: REVIEWER, role: 'Maintainer', branch: BRANCH })] }),
+      { permission: 'grant', role: 'Maintainer', branch: BRANCH }
+    );
+    await forbidden(
+      await reviewer('POST', '/users', { message: 'x', user: { displayName: 'Someone', externalId: `someone-${stamp}@example.edu` } }),
+      { permission: 'register', agent: false }
+    );
+    expect((await reviewer('GET', `/documents/LearningObjective?branch=${BRANCH}`)).status).toBe(200);
+    const registered = await json(await reviewer('POST', '/users', { message: 'A drafting agent', user: { displayName: 'Authz agent', externalId: AGENT } }));
+    expect(registered.status).toBe(201);
+  });
+
+  it("the branch's owner grants Maintainer on it, and the reviewer may then write; Administrator is beyond an owner", async () => {
+    expect((await write([grant({ user: REVIEWER, role: 'Maintainer', branch: BRANCH })], 'The reviewer may write this branch')).status).toBe(200);
+    expect((await reviewer('PUT', `/documents/LearningNeed/r1-${stamp}?branch=${BRANCH}`, need('r1'))).status).toBe(200);
+    // Owning a branch of their own, the reviewer grants Maintainer on it but nothing wider.
+    expect((await reviewer('POST', '/branches', { name: MINE })).status).toBe(201);
+    expect((await reviewer('POST', '/documents', { message: 'x', documents: [grant({ user: DESIGNER, role: 'Maintainer', branch: MINE })] })).status).toBe(200);
+    await forbidden(
+      await reviewer('POST', '/documents', { message: 'x', documents: [grant({ user: REVIEWER, role: 'Maintainer' })] }),
+      { permission: 'grant', role: 'Maintainer' }
+    );
+    await forbidden(
+      await reviewer('POST', '/documents', { message: 'x', documents: [grant({ user: REVIEWER, role: 'Administrator' })] }),
+      { permission: 'grant', role: 'Administrator' }
+    );
+    // The owner merges into and deletes their own branch.
+    expect((await reviewer('POST', `/branches/${MINE}/merge`, { message: 'Bring in the designer\'s branch', from: BRANCH })).status).toBe(200);
+    const SHORT = `${MINE}-short`;
+    expect((await reviewer('POST', '/branches', { name: SHORT })).status).toBe(201);
+    expect((await reviewer('DELETE', `/branches/${SHORT}`)).status).toBe(200);
+  });
+
+  it('an agent named directly, as header accepts it, owns the branch it creates and writes there, never to main', async () => {
+    const A = `test-authz-agent-${stamp}`;
+    expect((await agent('POST', '/branches', { name: A })).status).toBe(201);
+    expect((await agent('PUT', `/documents/LearningNeed/a1-${stamp}?branch=${A}`, need('a1'))).status).toBe(200);
+    await forbidden(await agent('PUT', `/documents/LearningNeed/a1-${stamp}`, need('a1')), { permission: 'write', branch: 'main' });
+    await forbidden(await agent('POST', '/users', { message: 'x', user: { displayName: 'Another', externalId: `agent:test/other-${stamp}` } }), {
+      permission: 'register',
+      agent: true,
+    });
+  });
+
+  it('a branch with no owner is writable by any registered User while the migration window is open, as discovery says', async () => {
+    const OWNERLESS = `test-authz-ownerless-${stamp}`;
+    await scratch('main').createBranch(OWNERLESS, { branch: 'main' });
+    expect((await reviewer('PUT', `/documents/LearningNeed/o1-${stamp}?branch=${OWNERLESS}`, need('o1'))).status).toBe(200);
+    const discover = (await json(await on('GET', '/discover'))).body;
+    expect(discover.capabilities['armature/authorization']).toEqual({ fallback: 'reject', ownerlessBranches: 'writable' });
+    expect(capabilitiesOf('workspace').map(([id]) => id)).not.toContain('armature/authorization');
+  });
+
+  it('a grant past its expiry is not in force; Maintainer of main opens main and its revocation closes it', async () => {
+    const E = `test-authz-expired-${stamp}`;
+    expect((await on('POST', '/branches', { name: E })).status).toBe(201);
+    const expired = grant({ user: REVIEWER, role: 'Maintainer', branch: E, expires: new Date(Date.now() - 60_000).toISOString() });
+    expect((await write([expired], 'A grant that has already expired')).status).toBe(200);
+    await forbidden(await reviewer('PUT', `/documents/LearningNeed/e1-${stamp}?branch=${E}`, need('e1')), { permission: 'write', branch: E });
+
+    expect((await write([grant({ user: REVIEWER, role: 'Maintainer' })], 'The reviewer maintains every branch')).status).toBe(200);
+    expect((await reviewer('PUT', `/documents/LearningNeed/m1-${stamp}`, need('m1'))).status).toBe(200);
+    const me = (await json(await reviewer('GET', '/users/me'))).body;
+    expect(me['@id']).toBe(REVIEWER);
+    expect(me.grants.map((g: TerminusDocument) => [g.role, g.branch ?? '*'])).toContainEqual(['Maintainer', '*']);
+    expect(me.grants.every((g: TerminusDocument) => g.status === 'Active')).toBe(true);
+    expect((await write([grant({ user: REVIEWER, role: 'Maintainer', status: 'Revoked', rationale: 'Enough' })], 'Revoked')).status).toBe(200);
+    await forbidden(await reviewer('PUT', `/documents/LearningNeed/m2-${stamp}`, need('m2')), { permission: 'write', branch: 'main' });
+  });
+
+  it('lists grants by person (decision 8) while a design record is still never listed by who made it (ADR-0021)', async () => {
+    const mine = await json(await on('GET', `/documents/Grant?user=${REVIEWER}`));
+    expect(mine.status).toBe(200);
+    expect(mine.body.length).toBeGreaterThan(0);
+    expect(mine.body.every((g: TerminusDocument) => g.user === REVIEWER)).toBe(true);
+    const refused = await json(await on('GET', `/documents/LearningNeed?createdBy=${DESIGNER}`));
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toBe('person_filter_refused');
   });
 });

@@ -1,16 +1,19 @@
 import { Hono } from 'hono';
+import { activeGrants, requirePermission } from '../authorization';
 import { storeFor } from '../config';
 import { ApiError } from '../errors';
 import { ifMatchFrom, readEnvelope, refFromQuery, requireCommit, setEtag } from '../http';
-import { findUserByExternalId, mintUserId, registry, resolveAuthor, resolveUser, type UserDocument } from '../identity';
+import { findUserByExternalId, isAgentExternalId, mintUserId, registry, resolveUser, type UserDocument } from '../identity';
 import { isRecord, StoreError } from '../store';
 
 /**
  * /api/v1/users (architecture decision record ADR-0032, decision 6).
  *
  *   GET  /?branch=|ref=    every User at a ref; ETag (entity tag) is the commit
- *   GET  /me               the User the request resolved to (401 otherwise)
- *   POST /                 { message, user }  register a User on main → 201
+ *   GET  /me               the User the request resolved to (401 otherwise), with
+ *                          the grants it holds (ADR-0068 decision 7)
+ *   POST /                 { message, user }  register a User on main → 201; a person
+ *                          by an administrator, an agent by any person (ADR-0068)
  *
  * Users are created on `main` only, the registry of record (decision 2), so
  * POST refuses branch= and ref=. One User by id is the generic
@@ -31,7 +34,8 @@ users.get('/', async (c) => {
 
 users.get('/me', async (c) => {
   const who = await resolveUser(c);
-  return c.json(who.user);
+  const grants = (await activeGrants(c)).filter((grant) => grant.user === who.id);
+  return c.json({ ...who.user, grants });
 });
 
 users.post('/', async (c) => {
@@ -70,7 +74,9 @@ users.post('/', async (c) => {
     id = input['@id'];
   }
 
-  const author = await resolveAuthor(c);
+  const who = await resolveUser(c);
+  await requirePermission(c, who, { permission: 'register', agent: isAgentExternalId(externalId) });
+  const author = who.id;
   const main = registry(c);
   const ifMatch = ifMatchFrom(c);
 

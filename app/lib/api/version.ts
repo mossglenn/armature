@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { hubOf, type HubConfig, type HubRole } from './config';
 import { ApiError } from './errors';
+import { AUTHORIZATION_SETTINGS } from './authorization';
 import { readOnlyBranches, remoteOnlyRoutes } from './role';
 
 /**
@@ -62,6 +63,8 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/export': { fallback: 'reject', routes: ['/api/v1/export'], settings: { profiles: ['full', 'pseudonymous', 'institutional'] } },
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema'], settings: {} },
   'armature/workspace': { fallback: 'reject', routes: ['/api/v1/workspace'], settings: { profile: 'full' }, roles: ['workspace'] },
+  /** The hub authorizes (ADR-0068 decision 7): a 403 `forbidden` is possible, and `GET /users/me` carries the caller's grants. No route of its own. */
+  'armature/authorization': { fallback: 'reject', routes: [], settings: AUTHORIZATION_SETTINGS, roles: ['remote'] },
 };
 
 /** The capabilities a hub of this role serves. */

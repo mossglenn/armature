@@ -25,7 +25,7 @@
  * lacks one. `discover()` asks a hub about itself first, when a caller wants
  * to know before its first write.
  */
-import type { ClassMap, ClassName, TerminusDocument, User } from '@armature/types';
+import type { ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
 export const CLIENT_REVISION = '2026-11-01';
@@ -561,9 +561,9 @@ export function createClient(options: ClientOptions) {
       list(opts: AtRef = {}) {
         return call<User[]>('/users', { query: at(opts) });
       },
-      /** `GET /users/me`: the user this client's identity resolves to. */
+      /** `GET /users/me`: the user this client's identity resolves to, with the grants it holds in force (ADR-0068 decision 7). */
       me() {
-        return call<User>('/users/me');
+        return call<User & { grants: Grant[] }>('/users/me');
       },
       /** `POST /users`: register a user on `main`; the caller must be registered. */
       register(opts: { message: string; user: RegisterUser }) {
