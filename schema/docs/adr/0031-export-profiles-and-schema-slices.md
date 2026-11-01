@@ -22,6 +22,14 @@ anticipated; ADR-0021 carries a dated note. Verified by `scripts/platform_checks
 > the same date; `docs/workspace-hub-plan.md` §4). It takes the `full` profile and the whole
 > graph until the clone's slice is settled (plan §16 question 4).
 
+> **Note (2026-11-01, authorization):** grants (ADR-0068) are documents on `main` and in the
+> `full` slice. The `pseudonymous` and `institutional` profiles rewrite `Grant.user` and
+> `Grant.relayedUsers` as every reference to a person, and one thing more: a `Grant.branch` that
+> begins with a registered person's handle (`<handle>_<name>`, a workspace branch, ADR-0065) has
+> the handle replaced by the person's token, since the handle is the external identifier's local
+> part. Free text is never rewritten, so the hub's own grant rationales name neither a branch
+> nor a person.
+
 ## Context
 
 The position paper's §5 and §6 (plan principles P7 and P8) want learning scientists to adopt

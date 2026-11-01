@@ -39,6 +39,8 @@ is modelled: an agent writes under its own name with the person's credential and
 and the hub writes `Armature-On-Behalf-Of` (ADR-0067 decision 3); an agent's own work reaches a
 remote only through a workspace hub (decision 10).
 
+> **Note (2026-11-01):** built: registering a person needs an `Administrator`, an agent any person; `GET /users/me` returns the caller's grants; `Armature-Agent` names the agent acting for the credential's person, the author, with the person in the commit's trailer (ADR-0068 decisions 4 and 7; ADR-0067 decision 3, Status notes of 2026-11-01).
+
 ## Context
 
 ADR-0015 decided what a `User` is (a participant in the design process, a domain document that

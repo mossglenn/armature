@@ -37,6 +37,8 @@ which the deferred section below leaves to a future resolver, is specified by AD
 same day); its consequence that no commit list is filtered by author or by the on-behalf-of trailer
 keeps this record's rule for commit messages too.
 
+> **Note (2026-11-01):** built: the list route refuses a filter on a `User`-typed field of a class under `DesignRecord` and answers one on `Grant.user` (ADR-0068 decision 8; `app/lib/api/routes/documents.ts`).
+
 ## Context
 
 Armature records who is responsible for each record entering the graph. `createdBy` is on `ArmatureDocument` and propagates to every inheriting type (ADR-0015). Proposed types that capture design activity — `DesignFinding` (ADR-0020) and extensions to `DesignNote` — will carry it too.

@@ -124,6 +124,10 @@ Three facts constrain the answer:
    > enforces: the person who creates a branch owns it, and only its owner, someone the owner
    > grants, or an agent acting for either may write to it.
 
+   > **Note (2026-11-01):** built on the remote: the creator's `Owner` grant written before the
+   > branch, the permission check on every write, merge and delete, 403 `forbidden` (ADR-0068,
+   > Status note of 2026-11-01). Push, which meets that refusal, is step 3.
+
    > **Note (2026-11-01), built:** `POST /workspace` creates `<handle>_<name>` on the remote
    > (`<handle>` the external identifier's local part) or takes `existing`, mirrors `main`'s schema
    > and `User` documents read at one remote commit, then loads the branch's export at its head into

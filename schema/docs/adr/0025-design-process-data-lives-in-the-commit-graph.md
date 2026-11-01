@@ -50,6 +50,8 @@ branch's owner or a maintainer; only a maintainer of `main` merges into it (ADR-
 Decision 6's branch deletion is the owner's or a maintainer's, revokes the branch's grants
 (ADR-0068), and is refused on a workspace hub with 400 `remote_only` (ADR-0065 decision 3).
 
+> **Note (2026-11-01):** built: creating a branch writes the creator's `Owner` grant on `main` as a commit of its own, so `POST /branches` needs an identity; who may write, merge and delete is checked (ADR-0068 decisions 3 and 4, Status note of 2026-11-01); the hub's first trailer, `Armature-On-Behalf-Of`, is written and refused from clients (ADR-0067 decisions 3 and 6).
+
 ## Context
 
 The position paper's third principle (plan §1 P3) promises version control modeled on Git:

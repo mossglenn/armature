@@ -17,6 +17,30 @@ appendix and `User`'s corrected schema documentation in one commit, and the test
 names. The two open questions below stand with their recommendations. The dated notes this Status
 promised are on ADR-0015, ADR-0021, ADR-0025, ADR-0032 and ADR-0065 (2026-10-30).
 
+**Note 2026-11-01, built** (`app/lib/api/authorization.ts`, `grants.ts`, `invariants/grant.ts`;
+`authorization.test.ts`): decisions 1 to 9 as they stand under `header`, in the plan's §14 order.
+Built: the `Grant` class with `relayedUsers`, `expires` and `User.issuer`, in one schema commit,
+with two API constraints, 21 (grants live on `main`; 400 `grants_live_on_main`, judged by the
+branch a write is for, so the operator's `put` on `main` passes) and 22 (the holder's kind suits
+the role, `grant_holder_kind`; `relayedUsers` only on a `Relay` grant, `relayed_users_not_relay`);
+the `Owner` grant written before a branch is created, so `POST /branches` needs an identity, and
+every grant naming a branch revoked before it is deleted, by the route and by the operator's
+scratch-branch deletion alike, as a marked commit; `check`'s two rules (`grant_without_branch`,
+`branch_without_owner`); the permission check with decision 4's table, 403 `forbidden` carrying
+`permission` (`write`, `merge`, `delete`, `grant`, `register`) and `branch`, `role` or `agent`,
+a grant in a batch judged as a grant and anything else as a write; the seed's two grants
+(decision 6); `GET /users/me` with the caller's grants in force and the capability
+`armature/authorization` (decision 7); the guard's scope by inheritance, so `Grant` lists by `user`
+(decision 8); nothing on a workspace hub (decision 9). The pseudonymous export rewrites a handle
+prefix in `Grant.branch` (ADR-0031, note). Chosen while building, open to overrule: `expires` is
+valid on every role, since the check costs nothing more, while `relayedUsers` stays `Relay`-only;
+an `Administrator` holding nothing else does not write, merge or delete, as the table says, and
+grants themselves first. **Not built:** the closing of decision 3's migration window, so a branch
+with no `Owner` stays writable, mergeable and deletable by any registered `User` and discovery
+says so (`ownerlessBranches: "writable"`); decision 4's two `oidc` rows and `not_registered`, which
+come with ADR-0067 decision 1; decision 9's warning at workspace creation, which comes with push
+(plan §14 step 3).
+
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065), built whole before its push
 (`docs/workspace-hub-plan.md` §14), since push's failures depend on ownership.
 
@@ -267,6 +291,14 @@ with grants.
 > **Note (2026-10-30):** accepted the same day with none of the above run, since nothing of this
 > ADR is built. "Before acceptance" reads as "before the build": the workspace hub plan's §14
 > places the whole ADR before its step 3, push, and these tests come with it.
+>
+> **Note (2026-11-01):** run, in `app/lib/api/authorization.test.ts` over a scratch database
+> loaded from the seed's export, since grants are written to `main`: every row of decision 4
+> failing and passing, decision 8's two tests, a merge into a branch and into `main` refused for
+> a non-maintainer and taken for one, a body naming another person as `attestedBy` refused
+> (constraint 15, `write.test.ts`) and an agent's credential or a person named as the agent
+> refused (ADR-0067 decision 3); the seed with its grants is checked by CI's `check` and by
+> `operator.test.ts`.
 
 ## Consequences
 

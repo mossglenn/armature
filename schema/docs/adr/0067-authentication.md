@@ -26,6 +26,22 @@ raw-socket case in `hub.test.ts`; the compose file sets `ARMATURE_ALLOWED_HOSTS=
 revision 2026-10-30. Building it corrected the Context and refined the decision (the notes
 beside each).
 
+**Note 2026-11-01, built:** decisions 3, 6 and the rest of 8, before push as the plan's §14
+orders (`app/lib/api/identity.ts`, `trailers.ts`; `authorization.test.ts`). `Armature-Agent`
+is read under every resolver: the credential's person is resolved first, then the agent, which
+must be a registered agent `User` (401 `unknown_agent`; 400 `not_an_agent` when it names a
+person, 400 `not_a_person` when the credential itself is an agent's); the agent is the commit's
+author and the `createdBy` of what it creates, its `User` copied onto the branch as any author's
+(ADR-0032 decision 5), the person's grants decide the operation (ADR-0068), the person owns a
+branch the agent creates, and the hub appends `Armature-On-Behalf-Of: <person externalId>` to
+the message, into an existing trailer block when the message ends in one. A message carrying a
+line that begins with either of the hub's trailers is 400 `reserved_trailer`, on every write
+envelope. `GET /users/me` under `Armature-Agent` answers the agent, who you write as. The
+compose file's preflight allows `Armature-Agent`; `@armature/client` has an `agent` option.
+Decision 10's refusal waits for push: until then a request naming an agent directly in
+`Armature-User` is accepted under `header`, as decision 8 says. The code names are chosen
+without a separate decision, open to overrule.
+
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065). Decision 7 is built first;
 decisions 3, 6 and 8, with the client's `agent` option, before the workspace hub's push; the rest
 (decisions 1, 2, 4, 5 and 9) before its release (`docs/workspace-hub-plan.md` §14).
