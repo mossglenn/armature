@@ -337,6 +337,31 @@ export interface ImpactReport {
   references: Array<{ id: string; type: string; label?: string; field: string; within?: unknown }>;
 }
 
+/** A workspace hub's record of one workspace (2026-11-01): the remote branch it cloned and the remote commit, its base. */
+export interface WorkspaceRecord {
+  branch: string;
+  remote: string;
+  /** The owner's `User` id on the remote, and external identifier. */
+  owner: string;
+  ownerExternalId: string;
+  /** The remote branch it started from, when the workspace hub created it; absent for a clone of an existing branch. */
+  from?: string;
+  base: string;
+  /** The local commit holding the clone. */
+  local: string;
+  clonedAt: string;
+}
+
+export interface WorkspaceStatus {
+  workspace: WorkspaceRecord;
+  /** The local head. */
+  head: string;
+  /** Local commits since the clone. */
+  localCommits: number;
+  /** The remote branch's head and whether it has moved since the base, or that the remote could not be reached. */
+  remote: { head: string; moved: boolean } | { reachable: false };
+}
+
 export type ExportProfile = 'full' | 'pseudonymous' | 'institutional';
 
 export interface ExportOptions extends AtRef {
@@ -594,6 +619,22 @@ export function createClient(options: ClientOptions) {
       /** `GET /intelligence/impact/:type/:id`: everything that references a document. */
       impact(type: ClassName, id: string, opts: AtRef = {}) {
         return call<ImpactReport>(`/intelligence/impact/${type}/${encodeURIComponent(localPart(type, id))}`, { query: at(opts) });
+      },
+    },
+
+    /** A workspace hub's routes (2026-11-01); a remote hub answers 400 `workspace_only`. */
+    workspace: {
+      /** `GET /workspace`: the workspaces this hub holds. */
+      list() {
+        return call<WorkspaceRecord[]>('/workspace');
+      },
+      /** `POST /workspace`: `{ name, from? }` creates `<handle>_<name>` on the remote and clones it; `{ existing }` clones a branch the remote has. */
+      create(opts: { name: string; from?: string } | { existing: string }) {
+        return call<WorkspaceRecord>('/workspace', { method: 'POST', body: opts });
+      },
+      /** `GET /workspace/:name/status`: the record, the local head, the local commits since the clone, and the remote's head. */
+      status(name: string) {
+        return call<WorkspaceStatus>(`/workspace/${encodeURIComponent(name)}/status`);
       },
     },
 

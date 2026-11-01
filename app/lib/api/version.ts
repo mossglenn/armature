@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
-import type { HubConfig } from './config';
+import { hubOf, type HubConfig, type HubRole } from './config';
 import { ApiError } from './errors';
 import { readOnlyBranches, remoteOnlyRoutes } from './role';
 
@@ -32,6 +32,8 @@ export interface Capability {
   routes: string[];
   /** What the behavior's parameters default to, for a client to read before relying on them. */
   settings: Record<string, unknown>;
+  /** The roles of hub that serve it, when not every role does (ADR-0065); a hub of another role neither lists nor accepts it. */
+  roles?: HubRole[];
 }
 
 /**
@@ -59,7 +61,12 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/intelligence.module-content': { fallback: 'reject', routes: ['/api/v1/intelligence/module-content'], settings: {} },
   'armature/export': { fallback: 'reject', routes: ['/api/v1/export'], settings: { profiles: ['full', 'pseudonymous', 'institutional'] } },
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema'], settings: {} },
+  'armature/workspace': { fallback: 'reject', routes: ['/api/v1/workspace'], settings: { profile: 'full' }, roles: ['workspace'] },
 };
+
+/** The capabilities a hub of this role serves. */
+export const capabilitiesOf = (role: HubRole): [string, Capability][] =>
+  Object.entries(CAPABILITIES).filter(([, cap]) => !cap.roles || cap.roles.includes(role));
 
 /**
  * The body of GET /api/v1/discover (ADR-0059 decision 6): the hub, not the
@@ -67,11 +74,12 @@ export const CAPABILITIES: Record<string, Capability> = {
  * what the role refuses (docs/workspace-hub-plan.md §3 and §9): the routes a
  * workspace hub answers `remote_only` under each capability (`remoteOnly`),
  * and the branches it serves only for reading (`readOnlyBranches`); both empty
- * on a remote hub.
+ * on a remote hub. A workspace hub also lists `armature/workspace`, its
+ * routes for creating, listing and reading the status of workspaces.
  */
 export function discovery(hub: HubConfig) {
   const capabilities: Record<string, Record<string, unknown>> = {};
-  for (const [id, cap] of Object.entries(CAPABILITIES)) {
+  for (const [id, cap] of capabilitiesOf(hub.role)) {
     capabilities[id] = { fallback: cap.fallback, ...cap.settings };
   }
   capabilities['armature/documents'].readOnlyBranches = readOnlyBranches(hub.role);
@@ -117,11 +125,12 @@ export const negotiate: MiddlewareHandler = async (c, next) => {
   const declared = c.req.header('Armature-Capabilities');
   if (declared) {
     const ids = declared.split(',').map((s) => s.trim()).filter(Boolean);
-    const unsupported = ids.filter((id) => !(id in CAPABILITIES));
+    const served = capabilitiesOf(hubOf(c).role).map(([id]) => id);
+    const unsupported = ids.filter((id) => !served.includes(id));
     if (unsupported.length) {
       throw new ApiError(400, 'unsupported_capability', `This hub does not support ${unsupported.join(', ')}`, {
         unsupported,
-        supported: Object.keys(CAPABILITIES),
+        supported: served,
       });
     }
   }

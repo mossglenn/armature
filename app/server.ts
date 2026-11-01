@@ -16,6 +16,8 @@
  *                                                            lib/api/role.ts)
  *   ARMATURE_REMOTE_URL                                      the remote hub's address, required when the
  *                                                            role is `workspace`
+ *   ARMATURE_WORKSPACE_DIR                                   the folder a workspace hub keeps its workspaces'
+ *                                                            records in, required when the role is `workspace`
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
  *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
  *                                                            the caller, so the hub stays on this machine
@@ -30,6 +32,7 @@
 import { configFromEnv } from './lib/api/config';
 import { loadEnvLocal } from './lib/envLocal';
 import { startHub } from './lib/hub';
+import { folderRecords } from './lib/workspaceFolder';
 
 async function main(): Promise<void> {
   loadEnvLocal();
@@ -40,9 +43,15 @@ async function main(): Promise<void> {
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new Error(`PORT must be a port number, not ${JSON.stringify(process.env.PORT)}`);
   }
-  const hub = await startHub({ port, hostname: process.env.HOST?.trim() || '127.0.0.1' });
+  // A remote hub reads its environment on every request; a workspace hub is
+  // configured once, with its records in a folder, which only a host can give.
+  const hub = await startHub({
+    port,
+    hostname: process.env.HOST?.trim() || '127.0.0.1',
+    ...(config.workspaceDir ? { config: { ...config, workspaces: folderRecords(config.workspaceDir) } } : {}),
+  });
   console.log(`Armature hub (revision ${hub.revision}) listening at ${hub.url}/api/v1`);
-  if (config.role === 'workspace') console.log(`  role: workspace, of the remote at ${config.remote}`);
+  if (config.role === 'workspace') console.log(`  role: workspace, of the remote at ${config.remote}; records in ${config.workspaceDir}`);
   console.log(`  store: ${process.env.TERMINUS_URL ?? '(TERMINUS_URL is not set)'} database ${process.env.TERMINUS_DB ?? '(TERMINUS_DB is not set)'}`);
 
   // Docker sends SIGTERM on `compose down`; close the listener so in-flight

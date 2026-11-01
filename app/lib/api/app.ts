@@ -37,6 +37,7 @@ import { documents } from './routes/documents';
 import { exportRoutes } from './routes/export';
 import { intelligence } from './routes/intelligence';
 import { users } from './routes/users';
+import { workspace } from './routes/workspace';
 import { isUnknownRef, StoreError } from './store';
 import { CURRENT_REVISION, negotiate } from './version';
 
@@ -81,6 +82,7 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
   app.route('/users', users);
   app.route('/intelligence', intelligence);
   app.route('/export', exportRoutes);
+  app.route('/workspace', workspace);
   app.route('/', discover);
 
   /**

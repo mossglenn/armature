@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import type { WorkspaceRecords } from './workspace/records';
 import { createStore, storeConfigFromEnv, type Ref, type Store, type StoreConfig } from './store';
 
 /**
@@ -26,6 +27,8 @@ export interface HubConfig {
   role: HubRole;
   /** The remote hub's address, ARMATURE_REMOTE_URL without a trailing slash; required, and only read, when the role is `workspace`. */
   remote?: string;
+  /** ARMATURE_WORKSPACE_DIR, the folder a workspace hub keeps its workspaces' records in; required, and only read, when the role is `workspace`. The host turns it into `workspaces`. */
+  workspaceDir?: string;
   /** The store, read when a route makes one, so a request that needs none (GET /discover) never requires the TERMINUS_* variables. */
   store: () => StoreConfig;
   /** The identity resolver's name (ADR-0032), ARMATURE_IDENTITY; `header` by default. */
@@ -34,6 +37,8 @@ export interface HubConfig {
   allowedHosts: ReadonlySet<string>;
   /** Web origins the hub serves, lower case (ADR-0067 decision 7). */
   allowedOrigins: ReadonlySet<string>;
+  /** A workspace hub's records of its workspaces (./workspace/records.ts); the host gives a folder, a test memory. */
+  workspaces?: WorkspaceRecords;
   /** The key the pseudonymous and institutional export profiles hash with (ADR-0031); absent, a random one per export. */
   exportKey?: string;
 }
@@ -73,10 +78,17 @@ function remoteUrl(raw: string | undefined): string {
   return value;
 }
 
+/** The folder for a workspace hub's records, as given; throws when absent. */
+function workspaceDir(raw: string | undefined): string {
+  const value = raw?.trim();
+  if (!value) throw new Error('ARMATURE_WORKSPACE_DIR is required when ARMATURE_ROLE=workspace');
+  return value;
+}
+
 /**
  * The hub's configuration from the environment (app/server.ts lists the
  * variables); throws on a role it does not know or a workspace hub without a
- * remote, which the entry reads once at startup so the hub never starts with one.
+ * remote or a folder, which the entry reads once at startup so the hub never starts with one.
  */
 export function configFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): HubConfig {
   const role = env.ARMATURE_ROLE?.trim() || 'remote';
@@ -85,7 +97,7 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
   }
   return {
     role: role as HubRole,
-    ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL) } : {}),
+    ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL), workspaceDir: workspaceDir(env.ARMATURE_WORKSPACE_DIR) } : {}),
     store: () => storeConfigFromEnv(env),
     identity: env.ARMATURE_IDENTITY?.trim() || 'header',
     allowedHosts: list(env.ARMATURE_ALLOWED_HOSTS),

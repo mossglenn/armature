@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { app } from './app';
 import { createStore } from './store';
-import { CAPABILITIES, CURRENT_REVISION, REVISIONS } from './version';
+import { CAPABILITIES, capabilitiesOf, CURRENT_REVISION, REVISIONS } from './version';
 
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
 const stamp = Date.now().toString(36);
@@ -82,7 +82,15 @@ describe('Armature-Capabilities (ADR-0059 decision 5)', () => {
     const body = await res.json();
     expect(body.error).toBe('unsupported_capability');
     expect(body.unsupported).toEqual(['edu.example.coqui/review-notes']);
-    expect(body.supported).toEqual(Object.keys(CAPABILITIES));
+    expect(body.supported).toEqual(capabilitiesOf('remote').map(([id]) => id));
+  });
+
+  it('refuses on a remote hub a capability only a workspace hub serves', async () => {
+    const res = await get('/api/v1/branches', { 'Armature-Capabilities': 'armature/workspace' });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.unsupported).toEqual(['armature/workspace']);
+    expect(body.supported).not.toContain('armature/workspace');
   });
 
   it('every route sits under a capability (a route added without one fails here)', () => {

@@ -9,6 +9,9 @@ import { isRecord, type Commit, type DocumentReader, type Ref, type Store } from
  * commit ids, and every write body is an envelope with a required `message`.
  */
 
+/** A branch name the hub accepts: no path separator, and never `.` or `..`, so it can also name a folder. */
+export const BRANCH_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+
 /** `?branch=` or `?ref=` (a commit id), never both; `main` when neither. */
 export function refFromQuery(c: Context): Ref {
   const branch = c.req.query('branch');
