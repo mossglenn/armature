@@ -306,6 +306,39 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     expect(body.changes).toEqual([{ id: DOC, op: 'insert' }]);
   });
 
+  it('counts a commit the branch received by a merge as part of its history', async () => {
+    // firstWrite is on SOURCE's log only; TARGET holds it through the merge of secondWrite.
+    const res = await app.request(`/api/v1/branches/${TARGET}/changes?since=${firstWrite}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('refuses changes since a commit the branch never held', async () => {
+    const other = `${SOURCE}-unrelated`;
+    expect((await post('/api/v1/branches', { name: other, from: { branch: 'main' } })).status).toBe(201);
+    try {
+      const { commit } = await (
+        await write(`/api/v1/documents/LearningNeed/unrelated-${stamp}?branch=${other}`, { message: 'Elsewhere', document: { label: 'Elsewhere', rationale: 'r' } })
+      ).json();
+      const res = await app.request(`/api/v1/branches/${TARGET}/changes?since=${commit}`);
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('not_an_ancestor');
+    } finally {
+      await createStore({ branch: 'main' }).deleteBranch(other).catch(() => undefined);
+    }
+  });
+
+  it('refuses a history longer than the hub walks rather than reading it as a shorter one', async () => {
+    const page = Array.from({ length: 100 }, (_, i) => ({ id: `fake${i}`, author: AUTHOR, message: 'm', timestamp: 0 }));
+    const log = vi.spyOn(TerminusStore.prototype, 'log').mockResolvedValue(page);
+    try {
+      const res = await app.request(`/api/v1/branches/${TARGET}/changes?since=${forkCommit}`);
+      expect(res.status).toBe(500);
+      expect((await res.json()).error).toBe('history_too_long');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it('refuses If-Match: *, which a branch head cannot express', async () => {
     const res = await write(
       `/api/v1/documents/${DOC}?branch=${SOURCE}`,

@@ -209,7 +209,7 @@ export interface Store extends DocumentReader {
     document: TerminusDocument & { '@id': string },
     opts: { author: string; message: string; ifMatch?: string }
   ): Promise<{ id: string; commit: string }>;
-  /** Commits on this branch, newest first. */
+  /** Commits from this branch's head, or from this commit, back; newest first. */
   log(opts?: { start?: number; count?: number }): Promise<Commit[]>;
   /** This branch's head commit. */
   head(): Promise<Commit | undefined>;
@@ -586,9 +586,9 @@ export class TerminusStore implements OperatorStore {
 
   // --- history -------------------------------------------------------------
 
-  /** Commits on this store's branch, newest first. */
+  /** At a branch or at a commit path (check AM1). */
   async log(opts: { start?: number; count?: number } = {}): Promise<Commit[]> {
-    const r = await this.request('GET', `/api/log/${this.refPath({ branch: this.branch })}`, {
+    const r = await this.request('GET', `/api/log/${this.refPath()}`, {
       query: { start: String(opts.start ?? 0), count: String(opts.count ?? 20) },
     });
     return (Array.isArray(r.body) ? r.body : []).map(toCommit);

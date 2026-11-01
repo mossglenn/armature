@@ -82,16 +82,49 @@ function mergeSourceOf(commit: Commit): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+const LOG_PAGE = 100;
+const LOG_PAGES = 50;
+
+/**
+ * Every commit from a branch's head or a commit back. The walk stops at
+ * LOG_PAGES pages; a history longer than that is refused as such, 500
+ * `history_too_long`, rather than read as a shorter one, which would make a
+ * merge report no common ancestor or a delete find no holder (the deep
+ * review's H3).
+ */
 async function fullLog(store: Store): Promise<Commit[]> {
-  const PAGE = 100;
-  const MAX_PAGES = 50;
   const all: Commit[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const commits = await store.log({ start: page * PAGE, count: PAGE });
+  for (let page = 0; page < LOG_PAGES; page++) {
+    const commits = await store.log({ start: page * LOG_PAGE, count: LOG_PAGE });
     all.push(...commits);
-    if (commits.length < PAGE) break;
+    if (commits.length < LOG_PAGE) return all;
   }
-  return all;
+  throw new ApiError(500, 'history_too_long', `The history is longer than the ${LOG_PAGE * LOG_PAGES} commits the hub walks`);
+}
+
+/**
+ * True when `commit` is in the history of `start` (a branch head or a
+ * commit): on its log, or brought in by a merge, whose commit names the merged
+ * source commit in its metadata (`mergeSourceOf`), followed into that commit's
+ * own log at its commit path (check AM1), and so on, so a commit that reached
+ * the branch through a review round's merge counts. Each merged commit is
+ * walked once.
+ */
+async function inHistory(commit: string, start: Store): Promise<boolean> {
+  const seen = new Set<string>();
+  const queue: Store[] = [start];
+  for (let next = queue.shift(); next; next = queue.shift()) {
+    for (const c of await fullLog(next)) {
+      if (c.id === commit) return true;
+      const merged = mergeSourceOf(c);
+      if (merged === commit) return true;
+      if (merged && !seen.has(merged)) {
+        seen.add(merged);
+        queue.push(start.at({ commit: merged }));
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -330,6 +363,12 @@ branches.get('/:name/changes', async (c) => {
   const store = createStore({ branch: name });
   const [head] = await Promise.all([store.head(), requireCommit(store, since, 'since commit')]);
   if (!head) throw new ApiError(404, 'not_found', `Branch ${name} has no commits`);
+  // Changes since a commit the branch never held would be a diff between two
+  // unrelated states labeled as its changes (the deep review's H3). Walked
+  // from the head read above, so the answer is about that head.
+  if (!(await inHistory(since, store.at({ commit: head.id })))) {
+    throw new ApiError(400, 'not_an_ancestor', `Commit ${since} is not in the history of branch ${name}`);
+  }
   const entries = await store.diff(since, head.id);
   const changes = (Array.isArray(entries) ? entries : []).map(changeOf).filter((change) => change.id);
   setEtag(c, head.id);
