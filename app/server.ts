@@ -23,6 +23,10 @@
  *                                                            the caller, so the hub stays on this machine
  *                                                            unless told otherwise; the container sets 0.0.0.0
  *                                                            and the compose file confines what is published
+ *   ARMATURE_TRUST_NETWORK                                   `1` lets a hub under `header` listen on an address
+ *                                                            other than loopback, saying a private network is
+ *                                                            the gate (ADR-0067 decision 8); the compose file
+ *                                                            sets it, the image does not
  *
  * On the host, `.env.local` in the working directory is read first, as Next.js
  * reads it, so the standalone hub and `next dev` reach the same store with the
@@ -31,7 +35,7 @@
  */
 import { configFromEnv } from './lib/api/config';
 import { loadEnvLocal } from './lib/envLocal';
-import { startHub } from './lib/hub';
+import { bindRefusal, startHub } from './lib/hub';
 import { folderRecords } from './lib/workspaceFolder';
 
 async function main(): Promise<void> {
@@ -45,9 +49,12 @@ async function main(): Promise<void> {
   }
   // A remote hub reads its environment on every request; a workspace hub is
   // configured once, with its records in a folder, which only a host can give.
+  const hostname = process.env.HOST?.trim() || '127.0.0.1';
+  const refusal = bindRefusal({ hostname, identity: config.identity, trustNetwork: process.env.ARMATURE_TRUST_NETWORK?.trim() === '1' });
+  if (refusal) throw new Error(refusal);
   const hub = await startHub({
     port,
-    hostname: process.env.HOST?.trim() || '127.0.0.1',
+    hostname,
     ...(config.workspaceDir ? { config: { ...config, workspaces: folderRecords(config.workspaceDir) } } : {}),
   });
   console.log(`Armature hub (revision ${hub.revision}) listening at ${hub.url}/api/v1`);

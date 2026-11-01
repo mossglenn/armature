@@ -46,6 +46,26 @@ export interface RunningHub {
   close: () => Promise<void>;
 }
 
+/** Interfaces only this machine reaches. */
+const LOOPBACK_BINDS = new Set(['localhost', '::1', '[::1]']);
+const isLoopbackBind = (hostname: string) => LOOPBACK_BINDS.has(hostname) || /^127\.\d+\.\d+\.\d+$/.test(hostname);
+
+/**
+ * Why a hub must not listen where asked, or undefined when it may (ADR-0067
+ * decision 8): the `header` resolver trusts whoever reaches the hub, so under
+ * it a hub binds only to loopback, unless `trustNetwork` says a private
+ * network is the gate, as a compose file's is. The compose file's services
+ * and CI's image check say so; the image itself does not, so an image run
+ * anywhere else still refuses.
+ */
+export function bindRefusal(opts: { hostname: string; identity: string; trustNetwork: boolean }): string | undefined {
+  if (opts.identity !== 'header' || isLoopbackBind(opts.hostname) || opts.trustNetwork) return undefined;
+  return (
+    `Refusing to listen on ${opts.hostname}: the header identity resolver trusts whoever reaches the hub, ` +
+    'so it listens on loopback unless ARMATURE_TRUST_NETWORK=1 says a private network is the gate (ADR-0067 decision 8)'
+  );
+}
+
 /** Starts the hub and resolves once it is listening. */
 export function startHub({ port, hostname = '127.0.0.1', config }: HubOptions): Promise<RunningHub> {
   const hub = config ? createApp(() => config) : app;
