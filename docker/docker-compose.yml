@@ -9,12 +9,22 @@
 #                                                 in front, the only container a visitor reaches
 #   docker compose run --rm operator node <script> one of scripts/ (load_schema.js, seed_data.js)
 #                                                 against the store, from a Node container
+#   docker compose --profile workspace up -d --build
+#                                                 a workspace hub (ADR-0065) on this machine, on
+#                                                 loopback port 3101, its workspaces in the store
+#                                                 here, cloned from ARMATURE_REMOTE_URL; with
+#                                                 `--profile hub` too, from the hub beside it
 #
-# The private network is named `armature`, whatever the checkout's directory, so a
-# client deployed beside the instance (CoQui for a demonstration) joins it from its
-# own compose file as an external network and calls the hub as http://hub:3100; its
-# public site is a file in docker/sites/, which Caddy imports (docs/deployment.md,
-# "A client on the same server"). Whatever joins this network can write as anyone.
+# Two private networks (ADR-0067 decision 8, note of 2026-10-30). The front one is
+# named `armature`, whatever the checkout's directory, so a client deployed beside the
+# instance (CoQui for a demonstration) joins it from its own compose file as an
+# external network and calls the hub as http://hub:3100; its public site is a file in
+# docker/sites/, which Caddy imports (docs/deployment.md, "A client on the same
+# server"). Whatever joins it can write as anyone, but cannot reach the store: the
+# store network, `armature-store`, is joined only by TerminusDB, the hubs and the
+# operator service. Every hub here runs the `header` resolver on a network it
+# trusts, so each says so (ARMATURE_TRUST_NETWORK=1); the image alone refuses to
+# listen beyond loopback under `header`.
 #
 # What the machine publishes, and to whom:
 #   caddy   80 and 443 everywhere     the public face (profile `public`): HTTPS for
@@ -31,8 +41,10 @@
 # running store to start: every request opens its own connection, and a store that is
 # not up yet answers as a 500 until it is. On any machine that is not a laptop, put
 # TERMINUSDB_ADMIN_PASS and ARMATURE_SITE in docker/.env (mode 600; Git ignores it),
-# which Compose reads on every command here; `admin` is the development default only. Every service
-# restarts with Docker (`unless-stopped`), so an instance survives a reboot.
+# which Compose reads on every command here; `admin` is the development default only,
+# and the `public` profile refuses to start Caddy while the password is unset or
+# `admin` (the public-guard service). Every service restarts with Docker
+# (`unless-stopped`), so an instance survives a reboot.
 services:
   terminusdb:
     image: terminusdb/terminusdb-server:v12.0.7
@@ -44,6 +56,7 @@ services:
     environment:
       - TERMINUSDB_ADMIN_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
       - TERMINUSDB_SERVER_NAME=${TERMINUSDB_SERVER_NAME:-localhost}
+    networks: [store]
 
   hub:
     build:
@@ -73,6 +86,10 @@ services:
       - ARMATURE_ALLOWED_ORIGINS=${ARMATURE_ALLOWED_ORIGINS:-}
       # Set it so pseudonymous exports name the same person the same way every time (ADR-0031).
       - ARMATURE_EXPORT_KEY=${ARMATURE_EXPORT_KEY:-}
+      # The hub listens on 0.0.0.0 inside its container; under `header` that is
+      # allowed only on a network declared the gate (ADR-0067 decision 8).
+      - ARMATURE_TRUST_NETWORK=1
+    networks: [default, store]
     depends_on:
       - terminusdb
 
@@ -115,7 +132,30 @@ services:
     environment:
       - ARMATURE_SITE=${ARMATURE_SITE:-localhost}
     depends_on:
-      - viewer
+      viewer:
+        condition: service_started
+      public-guard:
+        condition: service_completed_successfully
+
+  public-guard:
+    # Refuses the public profile a default password (ADR-0067 decision 8, note of
+    # 2026-10-30; review H8): Caddy, the only container a visitor reaches, starts
+    # only after this exits 0, so `up` fails, naming the variable, while
+    # TERMINUSDB_ADMIN_PASS is unset or `admin`. A check in the file itself
+    # (`${VAR:?}`) cannot do this: Compose evaluates it for every profile.
+    image: caddy:2.10.2-alpine
+    profiles: [public]
+    network_mode: none
+    environment:
+      - PASS=${TERMINUSDB_ADMIN_PASS:-}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ -z "$$PASS" ] || [ "$$PASS" = admin ]; then
+          echo 'The public profile needs TERMINUSDB_ADMIN_PASS in docker/.env, set to something other than admin' >&2
+          exit 1
+        fi
 
   operator:
     # The operator scripts (scripts/: wait_for_store, load_schema, seed_data), run in
@@ -136,15 +176,52 @@ services:
       - TERMINUS_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
       - TERMINUS_DB=${TERMINUS_DB:-armature}
     entrypoint: ["sh", "/repo/docker/operator-entrypoint.sh"]
+    networks: [store]
+    depends_on:
+      - terminusdb
+
+  workspace:
+    # A workspace hub (ADR-0065; docs/workspace-hub-plan.md §10): the same image in
+    # workspace mode, for developers and researchers. Its workspaces live in their
+    # own database in the store here (ARMATURE_WORKSPACE_DB, created on the first
+    # clone) and their records in a volume. It clones from ARMATURE_REMOTE_URL, the
+    # hub beside it by default (`--profile hub --profile workspace`); a remote
+    # elsewhere is named in docker/.env, and must answer to the name used (its
+    # ARMATURE_ALLOWED_HOSTS). Published on loopback only, like the hub.
+    build:
+      context: ..
+      dockerfile: docker/hub.Dockerfile
+    profiles: [workspace]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ARMATURE_WORKSPACE_PORT:-3101}:3100"
+    volumes:
+      - workspace-records:/workspaces
+    environment:
+      - TERMINUS_URL=http://terminusdb:6363
+      - TERMINUS_USER=admin
+      - TERMINUS_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
+      - TERMINUS_DB=${ARMATURE_WORKSPACE_DB:-workspace}
+      - ARMATURE_IDENTITY=header
+      - ARMATURE_ROLE=workspace
+      - ARMATURE_REMOTE_URL=${ARMATURE_REMOTE_URL:-http://hub:3100}
+      - ARMATURE_WORKSPACE_DIR=/workspaces
+      - ARMATURE_TRUST_NETWORK=1
+    networks: [default, store]
     depends_on:
       - terminusdb
 
 networks:
+  # The front network: the hubs, the viewer, Caddy, and any client beside the instance.
   default:
     name: armature
+  # The store network: TerminusDB, the hubs and the operator; nothing a visitor or a client reaches.
+  store:
+    name: armature-store
 
 volumes:
   terminusdb-data:
+  workspace-records:
   caddy-data:
   caddy-config:
   operator-modules:
