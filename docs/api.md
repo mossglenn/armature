@@ -1,6 +1,6 @@
 # Armature API reference
 
-This document describes every route of the Armature API (application programming interface) as built; [`client-changes.md`](client-changes.md) dates each addition (newest revision 2026-10-30). The code is the authority: routes are defined in `app/lib/api/routes/`, conventions in `app/lib/api/http.ts`, and error mapping in `app/lib/api/app.ts`. For the reasoning behind the design, see [How Armature Works](how-armature-works.md) Part III and the Architecture Decision Records (ADRs) cited below.
+This document describes every route of the Armature API (application programming interface) as built; [`client-changes.md`](client-changes.md) dates each addition (newest revision 2026-11-01). The code is the authority: routes are defined in `app/lib/api/routes/`, conventions in `app/lib/api/http.ts`, and error mapping in `app/lib/api/app.ts`. For the reasoning behind the design, see [How Armature Works](how-armature-works.md) Part III and the Architecture Decision Records (ADRs) cited below.
 
 ## Conventions
 
@@ -377,8 +377,10 @@ What this hub is, for a client that wants to know before its first write (ADR-00
 
 ```
 {
-  versions:     [ "2026-10-21", "2026-10-20", ... ],       // the revisions served, newest first
-  capabilities: { "armature/documents": { fallback: "reject", batchLimit: 500, historyCount: 20 },
+  role:         "remote",                                  // or "workspace" (since 2026-11-01)
+  versions:     [ "2026-11-01", "2026-10-31", ... ],       // the revisions served, newest first
+  capabilities: { "armature/documents": { fallback: "reject", batchLimit: 500, historyCount: 20, readOnlyBranches: [] },
+                  "armature/branches": { fallback: "reject", remoteOnly: [] },
                   "armature/intelligence.coverage": { fallback: "reject", fullyAssessedAt: 2, overAssessedAbove: 4 },
                   ... },                                   // each with its fallback and its settings
   schema:       { route: "/api/v1/schema" }
@@ -386,6 +388,8 @@ What this hub is, for a client that wants to know before its first write (ADR-00
 ```
 
 A capability's `fallback` says what a hub that lacks it does with a request that declares it: `reject` (refuse by name) or `ignore` (serve under core behavior). Every capability the hub defines is `reject`. The settings are the defaults of the behavior's parameters, so a client can read them rather than assume them.
+
+`role` is what kind of hub this is (ADR-0065; [workspace hub plan](workspace-hub-plan.md) §9). A **remote** hub is a hub as built. A **workspace** hub, `ARMATURE_ROLE=workspace` with the remote's address in `ARMATURE_REMOTE_URL`, is the same API on one person's machine; what changes the remote's shared state happens on the remote, so it refuses those routes with **400** `remote_only`, and they are listed under their capability's `remoteOnly` as `METHOD /api/v1/path`: `POST /branches`, `POST /branches/:name/merge` and `DELETE /branches/:name` under `armature/branches`, `POST /users` under `armature/users`. Its `main` is the remote's, mirrored, and listed in `armature/documents`'s `readOnlyBranches`: read as on any hub, a write to it is `remote_only`. It registers no one: an identity its mirror does not hold is **401** `unknown_user`, to be registered on the remote. On a remote hub both lists are empty.
 
 ### `GET /schema?branch=|ref=`
 
@@ -412,6 +416,7 @@ The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, cate
 | 400 | `not_an_ancestor` | A `since` commit the branch never held |
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
 | 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused`, `unknown_profile`, `unknown_slice` | Route-specific refusals |
+| 400 | `remote_only` | A route or a write a workspace hub leaves to its remote (Discovery: `role`) |
 | 401 | `identity_required`, `unknown_user` | No identity, or an unregistered one |
 | 403 | `host_not_allowed`, `origin_not_allowed` | A host name or a web origin this hub does not serve (Hosts and web origins) |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit |
