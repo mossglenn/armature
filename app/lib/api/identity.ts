@@ -77,16 +77,22 @@ export async function findUserByExternalId(
 /** A hub-minted `User` id for a registration (ADR-0032 decision 3). */
 export const mintUserId = (): string => `User/${crypto.randomUUID()}`;
 
+/** The claims the hub's resolver finds on the request; 401 `identity_required` when it finds none. */
+export async function requireClaims(c: Context): Promise<IdentityClaims> {
+  const claims = await configuredResolver(hubOf(c).identity)(c);
+  if (!claims) {
+    throw new ApiError(401, 'identity_required', `No identity on the request: send ${USER_HEADER}: <externalId>`);
+  }
+  return claims;
+}
+
 /**
  * Resolves the request to a registered `User`, registering one on `main`
  * when the claims carry a displayName. 401 `identity_required` with no
  * claims; 401 `unknown_user` when nothing is registered and nothing can be.
  */
 export async function resolveUser(c: Context): Promise<ResolvedUser> {
-  const claims = await configuredResolver(hubOf(c).identity)(c);
-  if (!claims) {
-    throw new ApiError(401, 'identity_required', `No identity on the request: send ${USER_HEADER}: <externalId>`);
-  }
+  const claims = await requireClaims(c);
   const main = registry(c);
   // Two passes: a concurrent registration of the same externalId makes the
   // insert fail on the head it read (If-Match) or on the id, and the second

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { storeFor } from '../config';
 import { ApiError } from '../errors';
-import { ifMatchFrom, readEnvelope, readJson, requireCommit, setEtag } from '../http';
+import { BRANCH_NAME, ifMatchFrom, readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { resolveAuthor } from '../identity';
 import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
 
@@ -22,8 +22,6 @@ import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, t
  * head is in another branch's log or is a merge commit's mergeSource there.
  */
 export const branches = new Hono();
-
-const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
 const toHead = (commit: Commit | undefined) =>
   commit
@@ -200,7 +198,7 @@ branches.get('/', async (c) => {
 branches.post('/', async (c) => {
   const body = await readJson(c);
   const name = body.name;
-  if (typeof name !== 'string' || !NAME.test(name)) {
+  if (typeof name !== 'string' || !BRANCH_NAME.test(name)) {
     throw new ApiError(400, 'bad_name', 'name must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$');
   }
   const from = parseFrom(body.from);

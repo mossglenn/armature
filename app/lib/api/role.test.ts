@@ -107,18 +107,21 @@ describe('the role from the environment', () => {
   it('is remote by default, and a remote hub reads no remote address', () => {
     expect(configFromEnv({ ARMATURE_REMOTE_URL: 'http://ignored' })).toMatchObject({ role: 'remote' });
     expect(configFromEnv({}).remote).toBeUndefined();
+    expect(configFromEnv({ ARMATURE_WORKSPACE_DIR: '/tmp/ignored' }).workspaceDir).toBeUndefined();
   });
 
   it('a workspace hub takes its remote without a trailing slash', () => {
-    expect(configFromEnv({ ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'https://api.example.org/' })).toMatchObject({
+    expect(configFromEnv({ ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'https://api.example.org/', ARMATURE_WORKSPACE_DIR: '/tmp/ws' })).toMatchObject({
       role: 'workspace',
       remote: 'https://api.example.org',
+      workspaceDir: '/tmp/ws',
     });
   });
 
-  it('refuses an unknown role, and a workspace hub with no remote or a remote that is not http', () => {
+  it('refuses an unknown role, and a workspace hub with no remote, a remote that is not http, or no folder', () => {
     expect(() => configFromEnv({ ARMATURE_ROLE: 'mirror' })).toThrow(/names no role/);
     expect(() => configFromEnv({ ARMATURE_ROLE: 'workspace' })).toThrow(/ARMATURE_REMOTE_URL is required/);
+    expect(() => configFromEnv({ ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'http://localhost:3100' })).toThrow(/ARMATURE_WORKSPACE_DIR is required/);
     expect(() => configFromEnv({ ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'hub:3100' })).toThrow(/not an http/);
     expect(() => configFromEnv({ ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'not a url' })).toThrow(/not a URL/);
   });

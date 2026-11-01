@@ -15,6 +15,31 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-01 · Workspaces: create, clone, status
+
+**What changed.** A workspace hub serves three routes under a new capability,
+`armature/workspace`, which only a workspace hub lists and accepts (a remote hub answers the routes
+with **400** `workspace_only` and refuses the capability by name). `POST /workspace` with
+`{ name, from? }` creates the branch `<handle>_<name>` on the remote from `from` (`main` by
+default; `<handle>` is the caller's external identifier before the `@`) and clones it; with
+`{ existing }` it clones a branch the remote already has. Either way the workspace hub first
+mirrors the remote's `main` (its schema and its `User` documents), then loads the branch's export
+at its head, the *base*, and answers **201** with the workspace's record: `branch`, `remote`,
+`owner`, `ownerExternalId`, `from` (when it created the branch), `base`, `local` (the local commit
+holding the clone) and `clonedAt`. `GET /workspace` lists the records. `GET
+/workspace/:name/status` answers the record, the local `head`, `localCommits` since the clone, and
+the remote branch's head with `moved`, or `{ reachable: false }` when the remote cannot be reached.
+A refusal from the remote comes back with the remote's own status and code and `remote: true`; a
+remote that cannot be reached is **502** `remote_unreachable`. A second workspace of the same
+branch is **409** `workspace_exists`. `@armature/client` has `workspace.list`, `create` and
+`status`. Riding today's revision.
+
+**What a client does.** Nothing, against a remote hub. A tool that offers workspaces checks for
+`armature/workspace` in `GET /discover`, creates or lists them here, and writes to the workspace's
+branch as to any branch; `main` stays read-only. Push, bring in and deliver are not routes a tool
+calls (ADR-0065 decision 7, note). **CoQui:** nothing. **Quiver:** the routes its workspace
+manager will call, once resumed.
+
 ## 2026-11-01 · A hub's role in discovery; `remote_only`
 
 **What changed.** A hub now has a role, `remote` (every hub so far) or `workspace`: the same

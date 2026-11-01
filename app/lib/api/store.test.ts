@@ -141,8 +141,12 @@ describe('the adapter stays behind its interfaces (workspace hub plan §13)', ()
     expect(sources.filter((s) => /\bTerminusStore\b/.test(s.text)).map((s) => s.file)).toEqual([]);
   });
 
-  it('no module of the API reaches the operator-side methods (ADR-0062)', () => {
-    expect(sources.filter((s) => /\b(createOperatorStore|OperatorStore)\b/.test(s.text)).map((s) => s.file)).toEqual([]);
+  // One exception, bounded in its own module: a workspace hub's clone reproduces
+  // its remote's export in its own store (ADR-0062 and ADR-0031, notes of 2026-11-01).
+  it('no module of the API reaches the operator-side methods but the clone (ADR-0062)', () => {
+    expect(sources.filter((s) => /\b(createOperatorStore|OperatorStore)\b/.test(s.text)).map((s) => s.file)).toEqual([
+      join('workspace', 'clone.ts'),
+    ]);
   });
 
   // Two hubs in one process differ only if every setting comes from the
