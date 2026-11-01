@@ -39,7 +39,7 @@ Through the design-intelligence reads under `/api/v1/intelligence/`, tools built
 
 ## Status
 
-As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-plan.md) are complete, except a standing hosted instance (deferred by decision: two ran and were destroyed), and Phase 8's Design Graph is built. The workspace hub and its prerequisites were accepted on 30 October 2026 and are not yet built (its store stays Proposed): [ADR-0065](schema/docs/adr/0065-workspace-hub.md) (the workspace hub), [ADR-0066](schema/docs/adr/0066-workspace-hub-store.md) (its store), [ADR-0067](schema/docs/adr/0067-authentication.md) (authentication) and [ADR-0068](schema/docs/adr/0068-authorization.md) (authorization). Built and on `main`:
+As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-plan.md) are complete, except a standing hosted instance (deferred by decision: two ran and were destroyed), and Phase 8's Design Graph is built. The workspace hub and its prerequisites were accepted on 30 October 2026; its first step is built (1 November: a hub's role, and creating and cloning workspaces), the rest not yet (its store stays Proposed): [ADR-0065](schema/docs/adr/0065-workspace-hub.md) (the workspace hub), [ADR-0066](schema/docs/adr/0066-workspace-hub-store.md) (its store), [ADR-0067](schema/docs/adr/0067-authentication.md) (authentication) and [ADR-0068](schema/docs/adr/0068-authorization.md) (authorization). Built and on `main`:
 
 - the schema (31 classes, 15 controlled vocabularies) with every accepted decision applied
 - a version-controlled API: reads at any branch or commit, history and differences per document, branches, three-way merges with conflict reports
@@ -54,7 +54,7 @@ As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-
 
 - the per-request version contract (ADR-0059): `Armature-Version` and `Armature-Capabilities` headers, `GET /discover` and `GET /schema`
 
-- an instance as three containers: the store, the hub (`docker/hub.Dockerfile`, the API bundled into one file and served by Node) and the viewer (`docker/viewer.Dockerfile`, the pages as a client of the hub); `docker compose --profile hub up` runs them on one private network on loopback, and `--profile public` adds Caddy as the only public container ([Running an instance](docs/deployment.md); Phase 7, 2026-10-21)
+- an instance as three containers: the store, the hub (`docker/hub.Dockerfile`, the API bundled into one file and served by Node) and the viewer (`docker/viewer.Dockerfile`, the pages as a client of the hub); `docker compose --profile hub up` runs them on loopback, and `--profile public` adds Caddy as the only public container ([Running an instance](docs/deployment.md); Phase 7, 2026-10-21); since 2026-11-01 on two private networks, the store's joined only by the store, the hubs and the operator, with `--profile workspace` adding a workspace hub
 
 **Next:** building the decisions above step by step (`docs/workspace-hub-plan.md` §14, the adapter interface first), and, before a writing client reaches a hub from elsewhere, authentication and authorization: the `oidc` resolver is specified in [ADR-0067](schema/docs/adr/0067-authentication.md) and what a resolved identity may do in [ADR-0068](schema/docs/adr/0068-authorization.md), both accepted 2026-10-30 and not yet built except ADR-0067's `Host` and `Origin` checks; an authenticating proxy is not the plan. A standing hosted instance is deferred by decision (the deployment was verified on a DigitalOcean Droplet on 2026-10-21, and again on 2026-10-26 with CoQui beside it; both destroyed by choice). Phase 6 closed on 2026-10-20 with the hub-managed attachment endpoints deferred until a client has a file to attach. The clients: **CoQui** (an assessment-item review tool, in its own repository) is built against this API; the viewer reads; **Quiver**, a local-first item manager, is built and paused (2026-10-30) as the first real test of the workspace hub ([the plan](docs/workspace-hub-plan.md); ADR-0065, accepted 2026-10-30); an MCP server ([plan](docs/mcp-server-plan.md)) and a Storyline bridge ([plan](docs/storyline-bridge-plan.md)) are planned. [Demo coverage](docs/demo-coverage.md) scores what each shows.
 
@@ -76,7 +76,7 @@ As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-
 | Use Armature as a research instrument for one study | [The research path](docs/research-path.md) |
 | Stand up an instance on a server, or understand what runs where | [Running an instance](docs/deployment.md) |
 | See which hub capabilities each client tool shows, and the gaps no demo shows | [Demo coverage](docs/demo-coverage.md) |
-| Run the hub on your own machine and push to a shared one (planned; ADR-0065, ADR-0067 and ADR-0068 accepted 2026-10-30, ADR-0066 Proposed) | [The workspace hub](docs/workspace-hub-plan.md) |
+| Run the hub on your own machine and push to a shared one (create and clone built 2026-11-01, push planned; ADR-0065, ADR-0067 and ADR-0068 accepted 2026-10-30, ADR-0066 Proposed) | [The workspace hub](docs/workspace-hub-plan.md); [running one](docs/deployment.md) |
 | Ask the graph from an MCP assistant (planned) | [The MCP server](docs/mcp-server-plan.md) |
 | Record Storyline builds in the graph and bring results back (planned) | [The Storyline bridge](docs/storyline-bridge-plan.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
@@ -119,7 +119,7 @@ cd app && npm run dev
 
 Then open <http://localhost:3000> for the viewer, or call the API directly at <http://localhost:3100/api/v1>.
 
-An instance runs store, hub and viewer as three containers on one private network, all on loopback (a hosted one adds Caddy for HTTPS with `--profile public`); the schema and seed are still loaded from the machine as in step 4, or through the `operator` service on a server without Node. [Running an instance](docs/deployment.md) is the administrator's guide:
+An instance runs store, hub and viewer as three containers on two private networks (a client beside it joins the front one and never reaches the store), all on loopback (a hosted one adds Caddy for HTTPS with `--profile public`); the schema and seed are still loaded from the machine as in step 4, or through the `operator` service on a server without Node. [Running an instance](docs/deployment.md) is the administrator's guide:
 
 ```bash
 cd docker && docker compose --profile hub up -d --build && cd ..
@@ -157,11 +157,15 @@ Writes need the `Armature-User` header carrying a registered user's external ide
 ```
 Plugins (CoQui, future tools)  →  Armature API (/api/v1)  →  TerminusDB
                                    this repository
+
+on one person's machine:  tools  →  a workspace hub (the same API)  →  its own store
+                                          └──clones from, and will push to──▶  a remote hub's /api/v1
 ```
 
 - **TerminusDB** stores the design graph as typed documents and keeps every change as a commit, with branches and merges built in.
 - **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). `app/server.ts` serves it as a standalone Node process, bundled into the container image `docker/hub.Dockerfile` builds (ADR-0026; Phase 7). A running API in front of a store is a **hub**: one address, `/api/v1`, that every client talks to.
 - **The Armature viewer** is the Next.js app's three read-only pages (`app/app/`: the Design Graph, the module index and the Coverage View), a client of a hub like any plugin: it reads over HTTP through `@armature/client` and knows only the hub's address; the browser never calls the hub.
+- **A hub has two roles** (ADR-0065): a **remote hub**, every hub on a server, and a **workspace hub**, the same code on one person's machine, which clones workspaces from a remote and leaves branch creation, merges and registration to it. Creating and cloning a workspace is built (2026-11-01); push, bring in and deliver follow (`docs/workspace-hub-plan.md` §14).
 - **Plugins never talk to the database directly.** The API is where the rules, identity and history are enforced.
 - **The schema is the single source of truth.** Type definitions, request validation and the schema appendix are generated from `schema/schema.json`.
 

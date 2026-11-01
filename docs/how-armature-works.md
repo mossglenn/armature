@@ -345,7 +345,9 @@ The vocabulary, used the same way everywhere in this document: a **server** is a
 
 The Next.js application is the viewer: Armature's own pages (Section 18). They call a hub exactly as a plugin does, through the same client library, so they cannot do anything a plugin could not, and they need nothing but the hub's address.
 
-The database, TerminusDB, runs in a Docker container (Docker is software that runs programs in isolated, reproducible environments called containers) defined in `docker/docker-compose.yml`, pinned to version 12.0.7. The same file can run the hub and the viewer beside it (`docker compose --profile hub up`), and with a web server in front for encrypted public access (`--profile public`, Caddy), which is how a hosted instance runs; locally the store alone runs in Docker and the API on the machine.
+The database, TerminusDB, runs in a Docker container (Docker is software that runs programs in isolated, reproducible environments called containers) defined in `docker/docker-compose.yml`, pinned to version 12.0.7. The same file can run the hub and the viewer beside it (`docker compose --profile hub up`), and with a web server in front for encrypted public access (`--profile public`, Caddy, which refuses to start while the database keeps its default password), which is how a hosted instance runs; locally the store alone runs in Docker and the API on the machine. Since 1 November 2026 the containers sit on two private networks: the database on one joined only by itself, the hubs and the operator's scripts, so the viewer, the web server and any client placed beside the instance reach the hub and never the database (ADR-0067 decision 8). A third profile, `--profile workspace`, runs a workspace hub beside them.
+
+A hub has one of two roles (ADR-0065). Every hub on a server is a **remote hub**, where branches are created, merged and deleted and people registered. A **workspace hub** is the same API on one person's machine: it holds workspaces cloned from one remote, serves the person's tools there, and refuses what makes history shared, saying so in `GET /discover` (Section 24.5).
 
 ### 10.2 Why a versioned address prefix
 
@@ -1308,6 +1310,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **Host** | One process running the API's code and giving it a network socket: the Node process in `app/server.ts`, or the container built from it. A server runs as many as it has ports for. Invisible to clients |
 | **Hub** | One host bound to one store: the address a client talks to. The relation of API to hub is that of a protocol to a server; every hub serves the same API, and there can be many hubs |
 | **Instance** | A hub with its particular data: the demonstration's seed course, or a study's own graph. Usually interchangeable with hub |
+| **Remote hub**, **workspace hub** | A hub's two roles (ADR-0065): a remote is a hub as built, where branches are created, merged and deleted and people registered; a workspace hub is the same API on one person's machine, holding workspaces cloned from one remote and leaving those operations to it (`remote_only`). Defined with the other workspace terms in `docs/workspace-hub-plan.md` §2 |
 | **Server** | A machine. It runs the processes, or the containers, that make up an instance |
 | **Store** | One TerminusDB database, with its own history, branches and people. The TerminusDB process holds any number |
 | **ICICLE** | The IEEE (Institute of Electrical and Electronics Engineers) Industry Connections Industry Consortium on Learning Engineering |

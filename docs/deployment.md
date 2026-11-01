@@ -17,21 +17,26 @@ Used the same way in every Armature document:
 | **Instance** | A hub with its particular data. Usually interchangeable with hub |
 | **Client**, **plugin** | Any program that consumes the API: the viewer, CoQui, an importer. Never touches a store |
 | **Viewer** | Armature's own pages (Next.js), a client that only reads |
+| **Remote hub**, **workspace hub** | A hub's two roles (ADR-0065): a remote is a hub as built, where branches are created, merged and deleted and people registered; a workspace hub is the same API on one person's machine, holding workspaces cloned from one remote and leaving those operations to it (400 `remote_only`). Every hub so far on a server is a remote; § "A workspace hub on this machine" runs the other |
+| **Workspace**, **base** | A branch on the remote, owned by one person and cloned to their workspace hub; the base is the remote commit it was cloned at. The rest of the workspace terms (local commit, push, bring in `main`, deliver) are defined in `docs/workspace-hub-plan.md` §2 |
 
 ## What runs
 
 ```
-                                  one server, one private network
-   ┌──────────────────────────────────────────────────────────────────────────────┐
-   │  caddy ──▶ viewer container ──reads──▶ hub container ──▶ terminusdb container │
-   │  (TLS)     (Next.js pages)             (Node, the API)    (the store server,   │
-   │                                                            holding the stores) │
-   └────┬───────────────┬──────────────────────────┬──────────────────────┬────────┘
-        │ :80, :443     │ :3000 loopback           │ :3100 loopback       │ :6363 loopback
-     readers        an operator's check      operators on the server   operator scripts
+                              one server, two private networks
+   ┌───────────────────────────── armature (the front) ──────────────────────────────┐
+   │  caddy ──▶ viewer container ──reads──▶ hub container ◀── a client beside it      │
+   │  (TLS)     (Next.js pages)             (Node, the API)                           │
+   └────┬───────────────┬─────────────────────────┬────────────────────────────────────┘
+        │               │          ┌──────────────┴──────── armature-store ───────────┐
+        │               │          │  hub container ──▶ terminusdb container           │
+        │               │          │                    (the store server and stores)  │
+        │               │          └──────────────┬──────────────────────┬────────────┘
+        │ :80, :443     │ :3000 loopback          │ :3100 loopback       │ :6363 loopback
+     readers        an operator's check     operators on the server   operator scripts
 ```
 
-Four containers from one compose file, in `docker/`:
+The containers, from one compose file in `docker/`:
 
 | Container | Image | What it is | Published on the server |
 |---|---|---|---|
@@ -39,8 +44,11 @@ Four containers from one compose file, in `docker/`:
 | `viewer` | `docker/viewer.Dockerfile` | The pages, built once (Next.js standalone output); reads the hub by its service name `http://hub:3100` | Port 3000 on loopback only |
 | `hub` | `docker/hub.Dockerfile` | The API as one Node process, bundled into one file; reaches the store as `http://terminusdb:6363` | Port 3100 on loopback only |
 | `terminusdb` | `terminusdb/terminusdb-server:v12.0.7` | The store server, with a named volume for its databases | Port 6363 on loopback only |
+| `workspace` | `docker/hub.Dockerfile` | A workspace hub (profile `workspace`; § "A workspace hub on this machine"): the hub's image in workspace mode, its workspaces in their own database in the store server and their records in a named volume | Port 3101 on loopback only |
 
-The private network is named `armature` (whatever the checkout's directory is called), so a client deployed beside the instance can join it (§ "A client on the same server"). Two profiles choose how many run. `--profile hub` runs the store, the hub and the viewer, all on loopback: an instance for the machine it runs on. `--profile public` adds Caddy: a hosted instance. A fifth service, `operator` (profile `operator`), is not a running container but a way to run the operator scripts on the private network (step 3). Every service restarts with Docker (`restart: unless-stopped`), so an instance comes back after a reboot.
+There are two private networks (ADR-0067 decision 8, note; built 2026-11-01). The front one is named `armature` (whatever the checkout's directory is called): the hubs, the viewer, Caddy, and a client deployed beside the instance join it (§ "A client on the same server"), and call the hub as `http://hub:3100`. The store network, `armature-store`, is joined only by TerminusDB, the hubs and the operator service, so nothing on the front network can reach the store. Profiles choose what runs. `--profile hub` runs the store, the hub and the viewer, all on loopback: an instance for the machine it runs on. `--profile public` adds Caddy: a hosted instance; it refuses to start Caddy while `TERMINUSDB_ADMIN_PASS` is unset or `admin` (a one-shot `public-guard` service Caddy waits on, so `up` fails naming the variable and nothing listens beyond the machine). `--profile workspace` adds a workspace hub. The `operator` service (profile `operator`) is not a running container but a way to run the operator scripts on the store network (step 3). Every service restarts with Docker (`restart: unless-stopped`), so an instance comes back after a reboot.
+
+Every hub here runs the `header` resolver inside its container on `0.0.0.0`, so the compose file sets `ARMATURE_TRUST_NETWORK=1` on each, saying a private network is the gate. The hub's image does not: run on its own, under `header`, it refuses to listen on anything but loopback (ADR-0067 decision 8). An instance started before 2026-11-01 upgrades in place: `docker compose --profile public up -d --build` with the newer file moves the store onto `armature-store` and keeps every document (rehearsed; § "A workspace hub on this machine").
 
 Each publication is a compose variable: `ARMATURE_VIEWER_BIND`, `ARMATURE_HUB_BIND`, `TERMINUSDB_BIND`, with `ARMATURE_HUB_PORT` and `ARMATURE_VIEWER_PORT` for the ports.
 
@@ -48,10 +56,10 @@ Each publication is a compose variable: `ARMATURE_VIEWER_BIND`, `ARMATURE_HUB_BI
 
 - **Readers** reach the viewer through Caddy. Its pages only read, and they carry no identity, so nothing a reader does reaches a writing route. The viewer is read-only by construction, not because the hub enforces it (see below). Caddy proxies the viewer only: `/api/v1/…` at the public address is the viewer's 404, not the hub.
 - **Operators on the server** reach the hub on loopback (`curl http://127.0.0.1:3100/api/v1/discover`, a client run on the server) and the store on loopback with its password. This is where the schema and data are loaded, users registered, and repairs made (see "Repair").
-- **Nobody else** reaches the hub or the store. The hub's identity resolver, `header`, trusts whatever `Armature-User` a request claims (ADR-0032), so a hub reachable from beyond the server would let anyone write as anyone. The loopback binding is the gate until an authenticating resolver exists: `oidc`, specified in ADR-0067 (accepted 2026-10-30; its `Host` and `Origin` checks built, the rest not yet). Under `header` the gap is also authorization: the hub does not yet decide what a resolved identity may do (ADR-0068, accepted 2026-10-30, not yet built). Anything else placed on the private network can write to the hub as anyone; keep that network to these containers and to a client you deploy beside them on purpose (§ "A client on the same server").
+- **Nobody else** reaches the hub or the store. The hub's identity resolver, `header`, trusts whatever `Armature-User` a request claims (ADR-0032), so a hub reachable from beyond the server would let anyone write as anyone. The loopback binding is the gate until an authenticating resolver exists: `oidc`, specified in ADR-0067 (accepted 2026-10-30; its `Host` and `Origin` checks built, the rest not yet). Under `header` the gap is also authorization: the hub does not yet decide what a resolved identity may do (ADR-0068, accepted 2026-10-30, not yet built). Anything else placed on the front network can write to the hub as anyone, though it cannot reach the store; keep that network to these containers and to a client you deploy beside them on purpose (§ "A client on the same server").
 - **No web page from elsewhere** reaches the hub, even one open in a browser on the server or on a laptop running a hub. The hub answers only loopback host names and those in `ARMATURE_ALLOWED_HOSTS` (the compose file sets `hub`, the name the viewer and a client beside the instance use), so a page that points its own domain at the machine is refused; and it refuses a request whose `Origin` is `null` or a remote web origin (`http` or `https` on a name that is not a loopback one) not in `ARMATURE_ALLOWED_ORIGINS`, empty by default (ADR-0067 decision 7, built 2026-10-30; `app/lib/api/boundary.ts`). A page served from the machine itself (a loopback origin) and a desktop shell (`tauri://localhost`) are served, as local programs the `header` resolver already trusts, but without CORS answers: only a listed origin gets the CORS headers that let a browser page read the hub's responses. A name anything calls the hub by goes in `ARMATURE_ALLOWED_HOSTS` in `docker/.env`; `hub` is always included.
 
-Set `TERMINUSDB_ADMIN_PASS` on any server that is not a laptop, in `docker/.env` (step 1). The compose default, `admin`, is for development only, and the hub and the operator scripts take the same value for their own connections.
+Set `TERMINUSDB_ADMIN_PASS` on any server that is not a laptop, in `docker/.env` (step 1). The compose default, `admin`, is for development only, and the hub and the operator scripts take the same value for their own connections. The `public` profile will not start Caddy without it.
 
 ## The steps
 
@@ -64,7 +72,7 @@ The server needs Docker with the Compose plugin and a checkout of this repositor
    ```
    Compose reads `docker/.env` on every command run in `docker/`, and Git ignores it (`.env*`). Keep the settings there rather than on the command line: a later `up` without them would recreate the hub with the development password, which the store refuses, and Caddy with the site `localhost`.
 2. **Bring up the containers.** In `docker/`: `docker compose --profile public up -d --build` (or `--profile hub` for an instance only the server itself reads, or before the domain resolves; see "The address" below). The hub and the viewer start before the store is ready; every request opens its own connection, so the hub answers 500 until the store is up and the viewer shows an error page until then.
-3. **Load the schema and the data** through the `operator` service, which runs the scripts in a throwaway Node 22 container on the private network, so the store keeps its loopback binding. In `docker/` (the password comes from `docker/.env`):
+3. **Load the schema and the data** through the `operator` service, which runs the scripts in a throwaway Node 22 container on the store network, so the store keeps its loopback binding. In `docker/` (the password comes from `docker/.env`):
    - `docker compose run --rm operator node wait_for_store.js`
    - `docker compose run --rm operator node load_schema.js`
    - `docker compose run --rm operator node seed_data.js` for the demonstration course, or a re-import of an export for real data (ADR-0031 decision 4; `docs/research-path.md` §6)
@@ -96,7 +104,7 @@ Each repair is made on a short-lived branch named `operator-…` and lands on it
 
 ## A client on the same server
 
-Added 2026-10-25, for a demonstration in which CoQui writes and the viewer shows what it wrote. A writing client can run on the instance's server without an identity system: it joins the private network, calls the hub by its service name, and is reachable from outside only through Caddy. The hub's `header` resolver still trusts its caller; what makes that safe is unchanged, since nothing outside the server can reach the hub. The client becomes the one component that decides who a person is: its own sign-in, or a fixed demonstration user, chooses the `Armature-User` it sends.
+Added 2026-10-25, for a demonstration in which CoQui writes and the viewer shows what it wrote. A writing client can run on the instance's server without an identity system: it joins the front network, calls the hub by its service name, is reachable from outside only through Caddy, and cannot reach the store. The hub's `header` resolver still trusts its caller; what makes that safe is unchanged, since nothing outside the server can reach the hub. The client becomes the one component that decides who a person is: its own sign-in, or a fixed demonstration user, chooses the `Armature-User` it sends.
 
 What the client brings, in its own repository (Armature's files never name it):
 
@@ -206,15 +214,41 @@ Decide what a project must keep separate (`docs/schema-guide.md` Part I says the
 
 A hub that serves several stores from one process is not built; until a deployment has more than a few, one hub container per store is simpler to reason about and to secure.
 
+## A workspace hub on this machine
+
+Added 2026-11-01, for developers and researchers (ADR-0065; `docs/workspace-hub-plan.md` §10). A designer's install will be a desktop program, at the plan's step 7. The `workspace` service is the hub's image in workspace mode: it clones workspaces from a remote and serves tools on loopback port 3101 (`ARMATURE_WORKSPACE_PORT`). Its workspaces live in their own database in the store server here (`ARMATURE_WORKSPACE_DB`, default `workspace`, created on the first clone), and each workspace's record, its remote and base, in the named volume `workspace-records`.
+
+- **Beside an instance,** to try the cycle on one machine: `docker compose --profile hub --profile workspace up -d --build`. The remote is the `hub` service by default (`ARMATURE_REMOTE_URL=http://hub:3100`).
+- **Against a remote elsewhere:** set `ARMATURE_REMOTE_URL` in `docker/.env` and run `docker compose --profile workspace up -d --build`. The remote must answer to the name in that address: it refuses any host name but loopback and its `ARMATURE_ALLOWED_HOSTS`, so a hub run on the laptop itself is not reachable from the container as `localhost` and needs a name it allows. Until the `oidc` resolver exists (ADR-0067), a remote on another machine cannot be trusted with the `header` resolver, so a remote elsewhere is a rehearsal arrangement only.
+
+Then, with a person the remote has registered:
+
+```
+curl -X POST http://127.0.0.1:3101/api/v1/workspace -H 'Content-Type: application/json' \
+  -H 'Armature-User: demo-designer@example.edu' -d '{"name":"chapter-2"}'
+```
+
+creates `demo-designer_chapter-2` on the remote and clones it; tools then write to that branch at `http://127.0.0.1:3101/api/v1`, and `GET /api/v1/workspace/demo-designer_chapter-2/status` shows the local commits since the clone (`docs/api.md`, Workspace). Push, bringing in `main` and delivery are not built yet (plan §14 steps 3 and 4).
+
+**Rehearsed on 2026-11-01** on a fresh Lima VM (Ubuntu 24.04, Docker 29.1 and Compose 2.40 from Ubuntu's packages):
+
+- The `public` profile with no `docker/.env`, and with the password `admin`, failed `up` with exit 1 and the guard's message, Caddy created but not running.
+- An instance on `main`'s compose file (`public`, seed loaded, `check` clean) was upgraded in place by `up -d --build` with the new file. The head and every document were unchanged, `check` was still clean, the store was on `armature-store` alone, the hub on both networks, and the viewer and Caddy on `armature`.
+- A client container on `armature`, and the viewer, reached the hub and could not resolve `terminusdb`. The hub's image run alone exited 1, refusing to listen on `0.0.0.0`.
+- With `--profile workspace` beside the instance, a workspace was created and cloned, a local write stayed off the remote, a write to `main` was `remote_only`, and status survived a restart of the container.
+- From the laptop only port 80 answered; 3000, 3100, 3101 and 6363 were closed.
+- After the VM was power-cycled every container came back and the workspace's status still answered.
+
+The runtimes beyond Docker Engine and Docker Desktop (Colima on macOS, Podman Desktop on Windows; plan §10) are not yet rehearsed with this profile.
+
 ## Development on a laptop
 
 `docker compose up -d` without a profile runs the store only. The hub then runs on the machine (`npm run build:hub && npm run start:hub` in `app/`, reading `app/.env.local`) and the viewer with `npm run dev`, pointed at it by `ARMATURE_HUB_URL` (default `http://localhost:3100`). The contract suite runs the API in-process against the store and never needs the hub or the viewer containers. `docker compose --profile hub up -d --build` runs the whole instance on loopback (the viewer at `http://localhost:3000`); `docker compose --profile hub rm -sf hub viewer` removes those two and leaves the store.
 
 ## What is not there yet
 
-- **Authentication.** Built: every hub checks `Host` and `Origin` (ADR-0067 decision 7, 2026-10-30; § "Who can do what"). Specified, not built: the rest of ADR-0067 (accepted 2026-10-30), decisions 1 to 6, 8 and 9: the `oidc` resolver verifying a bearer token against the issuer's published keys, native sign-in with PKCE for programs such as the workspace hub, agents acting for people (`Armature-Agent`, the person recorded in a trailer the hub writes), services authenticating as themselves, relay grants, `header` kept and bounded, and `GET /discover` saying how to authenticate. Until then the `header` resolver trusts the caller and writes happen on the server. A proxy that authenticates and sets `Armature-User` itself (Caddy could, with an identity provider) is a possible deployment of `header` behind a trusted network, which ADR-0067 lists under its alternatives and does not exclude; it is not the mechanism, since agents, relays and the on-behalf-of record need claims the hub itself sees and checks.
+- **Authentication.** Built: every hub checks `Host` and `Origin` (ADR-0067 decision 7, 2026-10-30; § "Who can do what"). Built 2026-11-01: decision 8's bound on `header`, a hub refusing to listen beyond loopback unless `ARMATURE_TRUST_NETWORK=1`, which the compose file sets. Specified, not built: the rest of ADR-0067 (accepted 2026-10-30), decisions 1 to 6, the rest of 8 (`header` reading `Armature-Agent`), and 9: the `oidc` resolver verifying a bearer token against the issuer's published keys, native sign-in with PKCE for programs such as the workspace hub, agents acting for people (`Armature-Agent`, the person recorded in a trailer the hub writes), services authenticating as themselves, relay grants, `header` kept and bounded, and `GET /discover` saying how to authenticate. Until then the `header` resolver trusts the caller and writes happen on the server. A proxy that authenticates and sets `Armature-User` itself (Caddy could, with an identity provider) is a possible deployment of `header` behind a trusted network, which ADR-0067 lists under its alternatives and does not exclude; it is not the mechanism, since agents, relays and the on-behalf-of record need claims the hub itself sees and checks.
 - **Authorization.** Not built; the hub does not yet decide what a resolved identity may do. ADR-0068 (accepted 2026-10-30, built before the workspace hub's push) specifies it: `Grant` documents on `main`, branch ownership, only a maintainer merging into `main`, and 403 `forbidden`. Amended the same day: under `oidc`, first sign-in registers a person only when `ARMATURE_OIDC_ADMIT` lists their identity provider or email domain, and a full export or the user list needs a maintainer of `main` or an administrator (ADR-0067 decision 1 and ADR-0068 decision 4, notes).
-- **Two networks and a required password.** Decided 2026-10-30 (ADR-0067 decision 8, note), not yet made: the store on a network joined only by TerminusDB, the hub and the operator service; the hub, the viewer, Caddy and a client deployed beside the instance on a second, so a client never reaches the store; and the `public` profile refusing to start while `TERMINUSDB_ADMIN_PASS` is unset. Planned with the workspace hub's compose profile, with the fresh-VM rehearsal.
 - **The hub published.** Decided 2026-10-30 (ADR-0067 decision 7, note), not yet made: `api.<ARMATURE_SITE>` proxied to the hub only when `ARMATURE_IDENTITY=oidc`, that name in `ARMATURE_ALLOWED_HOSTS`, the viewer holding a service credential, a liveness route and a store-backed readiness route for the health checks, and body and time limits at the proxy, stated here when built.
 - **An administrator's page.** Loading, repair and user edits are terminal commands with the store's password: the scripts, and the three operator tools of ADR-0062 in the hub's container (see "Repair"). A page over them would need authentication first and evidence of what administrators actually do, which the first deployment off a laptop is expected to provide (plan §6).
 - **A standing hosted instance.** One ran on a DigitalOcean Droplet on 2026-10-21, was verified from outside and was destroyed by choice; a second ran on 2026-10-26 with CoQui beside it (§ "A client on the same server") and was deleted after its checks; none is running. Standing one up again is the steps above; at the size used it costs $24 a month.
