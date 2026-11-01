@@ -15,6 +15,7 @@ import {
   setEtag,
 } from '../http';
 import { resolveUser } from '../identity';
+import { refuseMirrorWrite } from '../role';
 import { isRecord, type HistoryEntry, type Ref, type TerminusDocument } from '../store';
 import { CommitMemo } from '../memo';
 import { parseDocuments, writeDocuments } from '../write';
@@ -93,6 +94,7 @@ const matches = (doc: TerminusDocument, { field, many, value }: Filters['inHub']
 function writeRef(c: Context): Ref & { branch: string } {
   const ref = refFromQuery(c);
   if ('commit' in ref) throw new ApiError(400, 'write_at_commit', 'Writes go to a branch; a commit is read-only');
+  refuseMirrorWrite(c, ref.branch);
   return ref;
 }
 
