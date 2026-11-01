@@ -3,7 +3,7 @@ import { activeGrants, requirePermission } from '../authorization';
 import { storeFor } from '../config';
 import { ApiError } from '../errors';
 import { ifMatchFrom, readEnvelope, refFromQuery, requireCommit, setEtag } from '../http';
-import { findUserByExternalId, isAgentExternalId, mintUserId, registry, resolveUser, type UserDocument } from '../identity';
+import { commitMessage, findUserByExternalId, isAgentExternalId, mintUserId, registry, resolveUser, type UserDocument } from '../identity';
 import { isRecord, StoreError } from '../store';
 
 /**
@@ -107,7 +107,7 @@ users.post('/', async (c) => {
     try {
       const { commit } = await main.insertDocument(document, {
         author,
-        message: envelope.message,
+        message: commitMessage(who, envelope.message),
         ifMatch: ifMatch ?? (head || undefined),
       });
       setEtag(c, commit);

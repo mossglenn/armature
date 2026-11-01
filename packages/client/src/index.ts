@@ -37,6 +37,12 @@ export interface ClientOptions {
   baseUrl: string;
   /** The external identifier sent as `Armature-User` on every request; needed for writes. */
   user?: string;
+  /**
+   * A registered agent's external identifier (`agent:…`), sent as `Armature-Agent`: the
+   * agent is the author of what this client writes, acting for `user`, whose authority
+   * applies; the hub records the person in the commit (ADR-0067 decision 3, since 2026-11-01).
+   */
+  agent?: string;
   /** Replaces the global fetch: for a test, `(input, init) => app.request(input, init)`. */
   fetch?: FetchLike;
   /** Extra headers on every request. */
@@ -439,6 +445,7 @@ export function createClient(options: ClientOptions) {
     }
     const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
     if (options.user) headers['Armature-User'] = options.user;
+    if (options.agent) headers['Armature-Agent'] = options.agent;
     const version = options.version === undefined ? CLIENT_REVISION : options.version;
     if (version) headers['Armature-Version'] = version;
     if (options.capabilities?.length) headers['Armature-Capabilities'] = options.capabilities.join(', ');

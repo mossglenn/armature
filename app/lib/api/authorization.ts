@@ -3,7 +3,7 @@ import type { GrantRole } from '@armature/types';
 import { hubOf } from './config';
 import { ApiError } from './errors';
 import { grantsAt, isActive, type GrantDocument } from './grants';
-import { isAgentExternalId, registry, REGISTRY_BRANCH, type ResolvedUser } from './identity';
+import { isAgentExternalId, principalOf, registry, REGISTRY_BRANCH, type ResolvedUser } from './identity';
 import type { TerminusDocument } from './store';
 
 /**
@@ -29,7 +29,8 @@ import type { TerminusDocument } from './store';
  * 3's note is open, and `GET /discover` says so (`ownerlessBranches`). The
  * check runs on a remote hub under every resolver; a workspace hub does not
  * authorize (decision 9). The operator tools are outside the API and outside
- * this (ADR-0062).
+ * this (ADR-0062). An agent acting for a person may do what the person may
+ * (ADR-0067 decision 3): the person's grants are read, the agent's never.
  */
 export type Operation =
   | { permission: 'write'; branch: string }
@@ -95,10 +96,11 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
 /** Refuses with 403 `forbidden` when `who` may not perform `op` on this hub. */
 export async function requirePermission(c: Context, who: ResolvedUser, op: Operation): Promise<void> {
   if (hubOf(c).role !== 'remote') return; // decision 9: a workspace hub leaves authority to its remote
-  const why = refusal(who, op, await activeGrants(c));
+  const principal = principalOf(who);
+  const why = refusal(principal, op, await activeGrants(c));
   if (why === undefined) return;
   const { permission, ...rest } = op;
-  throw new ApiError(403, 'forbidden', `${who.user.externalId} may not: ${why} (ADR-0068 decision 4)`, { permission, ...rest });
+  throw new ApiError(403, 'forbidden', `${principal.user.externalId} may not: ${why} (ADR-0068 decision 4)`, { permission, ...rest });
 }
 
 /**

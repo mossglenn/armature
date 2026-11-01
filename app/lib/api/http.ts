@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { ApiError } from './errors';
 import { isRecord, type Commit, type DocumentReader, type Ref, type Store } from './store';
 
+import { refuseReservedTrailers } from './trailers';
 /**
  * Request and response conventions shared by the route groups (architecture
  * decision record ADR-0025): refs come from `?branch=` or `?ref=`,
@@ -135,5 +136,6 @@ export async function readEnvelope(c: Context): Promise<Record<string, unknown> 
   if (typeof message !== 'string' || !message.trim()) {
     throw new ApiError(400, 'message_required', 'Every write needs a message saying why (ADR-0025)');
   }
+  refuseReservedTrailers(message);
   return { ...body, message: message.trim() };
 }
