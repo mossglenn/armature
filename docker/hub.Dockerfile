@@ -32,6 +32,9 @@ FROM node:22-alpine
 ENV NODE_ENV=production PORT=3100 HOST=0.0.0.0 NODE_OPTIONS=--enable-source-maps
 WORKDIR /hub
 COPY --from=build /src/app/dist/server.mjs /src/app/dist/server.mjs.map /src/app/dist/operator.mjs /src/app/dist/operator.mjs.map ./
+# A workspace hub keeps its records here (ARMATURE_WORKSPACE_DIR in the compose
+# file's `workspace` service); a named volume takes this folder's owner.
+RUN mkdir /workspaces && chown node:node /workspaces
 USER node
 EXPOSE 3100
 # GET /discover needs no store, so it says whether the hub itself is up.

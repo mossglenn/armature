@@ -216,9 +216,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build the hub image
         run: docker build -f docker/hub.Dockerfile -t armature-hub .
-      - name: Start it and wait for GET /discover
+      - name: Run alone, it refuses to listen beyond loopback under header (ADR-0067 decision 8)
         run: |
-          docker run -d --name hub -p 3100:3100 armature-hub
+          if docker run --rm armature-hub > /tmp/refused.log 2>&1; then
+            echo "the image started without ARMATURE_TRUST_NETWORK"; cat /tmp/refused.log; exit 1
+          fi
+          cat /tmp/refused.log; grep -q 'ARMATURE_TRUST_NETWORK=1' /tmp/refused.log
+      - name: Start it and wait for GET /discover
+        # As the compose file runs it: on a network declared the gate.
+        run: |
+          docker run -d --name hub -e ARMATURE_TRUST_NETWORK=1 -p 3100:3100 armature-hub
           for i in $(seq 1 30); do
             if curl -sf http://localhost:3100/api/v1/discover > /tmp/discover.json; then
               echo "answered after ${i}s"; cat /tmp/discover.json; exit 0
