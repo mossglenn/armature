@@ -23,6 +23,18 @@ on a workspace hub, a desktop program rather than the hub's image; a workspace t
 repaired on the remote, where the registry and the rules of record are, and cloned again
 (`docs/workspace-hub-plan.md` §9 and §15). ADR-0068 keeps repair outside the API under `oidc` too.
 
+> **Note (2026-11-01):** one route reaches the operator-side methods: a workspace hub's
+> `POST /workspace` (the plan's step 2). A clone reproduces the remote's export in the workspace
+> hub's own store, which the write pipeline cannot do: it would refill `createdBy` and `asOf` and
+> refuse an `asOf` naming a remote commit the local store does not hold. The exception is bounded
+> and lives in one module, `app/lib/api/workspace/clone.ts`: only on a hub whose role is
+> `workspace`, only into that hub's own store, only from its configured remote's export, never
+> from a request body; `store.test.ts` fails if any other module of the API names the operator
+> methods. Two methods are added to them: `ensureDatabase`, since a workspace hub creates its own
+> store on the first clone and a person's machine has no operator (platform check AN), and
+> `deleteDatabase`, for the tests' scratch databases. Decided by Amos on 2026-11-01 over
+> replaying the export through the write pipeline and a loader outside the API.
+
 **Note 2026-10-22, built.** The three tools of decision 5 are `check`, `delete` and `put` in
 `app/lib/operator/`, with a command-line entry in `app/operator.ts`, tested in
 `app/lib/operator/operator.test.ts`. Three things differ from the text below, which is left as

@@ -27,7 +27,7 @@ The core insight: current instructional design tools capture *what was built* bu
 - **Docker Compose** (`docker/`) runs the store alone by default; `--profile hub` adds the hub and the viewer on one private network, `armature`, all on loopback; `--profile public` adds Caddy in front of the viewer, the only public container; the `operator` profile runs `scripts/` in a Node container. A client beside an instance joins the network and calls `http://hub:3100`. Settings live in `docker/.env`. `docs/deployment.md` is the administrator's guide.
 - **Identity** is resolved by `identity.ts` (ADR-0032). The built resolver, `header`, trusts `Armature-User: <externalId>`, so a hub under it stays on its server's loopback; every hub answers only loopback host names and `ARMATURE_ALLOWED_HOSTS`, and refuses unlisted remote web origins (`ARMATURE_ALLOWED_ORIGINS`; ADR-0067 decision 7). The seed registers `demo-designer@example.edu`. `app/.env.local` holds the `TERMINUS_*` variables, `ARMATURE_IDENTITY` and `ARMATURE_EXPORT_KEY`; the scripts read the same from the shell.
 - **Export**: `GET /api/v1/export?branch=|ref=&profile=full|pseudonymous|institutional&slice=<name>` is the graph at a ref as one JSON-LD document with its reloadable schema (ADR-0031). There is no import route; re-import is operator work (ADR-0062).
-- **Accepted, not built**: the workspace hub (ADR-0065), its file-backed store (ADR-0066, Proposed), authentication beyond decision 7 (ADR-0067), authorization (ADR-0068). `docs/workspace-hub-plan.md` §14 is the build order; the ADRs' dated notes hold every later decision. Nothing changes for a client of the hub as built.
+- **Accepted, built in part**: the workspace hub (ADR-0065; its role, `remote_only`, create and clone are built), its file-backed store (ADR-0066, Proposed), authentication beyond decision 7 (ADR-0067), authorization (ADR-0068). `docs/workspace-hub-plan.md` §14 is the build order; the ADRs' dated notes hold every later decision. Nothing changes for a client of the hub as built.
 - **Clients**: CoQui (item review) is built in its own repository; Quiver (a local-first item manager) is paused until the workspace hub exists; `docs/demo-coverage.md` maps every built, planned and proposed client.
 - **Node.js** 22 in CI; later versions work.
 
@@ -39,7 +39,7 @@ CoQui, Quiver, the MCP server ─┐
 the viewer (Next.js)          ─┘     one address, /api/v1
 ```
 
-The API is the boundary: plugins never talk to a store directly. A second role for the same code, the *workspace hub* on a person's machine pushing through a remote's `/api/v1`, is accepted and not built (ADR-0065).
+The API is the boundary: plugins never talk to a store directly. A second role for the same code, the *workspace hub* on a person's machine pushing through a remote's `/api/v1`, is accepted and built in part (ADR-0065).
 
 ### Terms
 
@@ -54,7 +54,7 @@ Used the same way in every document (`docs/deployment.md` and `docs/workspace-hu
 - **An instance**: a hub with its particular data; usually interchangeable with hub
 - **A client, or plugin**: any program that consumes the API. Never touches a store
 - **The viewer**: the Next.js pages, a client that only reads
-- **The workspace terms** (ADR-0065, not built; defined in `docs/workspace-hub-plan.md` §2): a **remote hub** is a hub as built, where workspaces are created, merged and deleted and `User`s registered; a **workspace hub** is the same API in workspace mode on one person's machine, serving tools on loopback as its owner, refusing branch creation, merge, deletion and registration (400 `remote_only`), authorizing nothing; a **workspace** is a branch on the remote, owned by one person, cloned to their workspace hub from the export at its head, **the base**; a **local commit**'s identifier is provisional until **push** replays it through `/api/v1` with `If-Match`; **bring in `main`** and **deliver** are the remote's merges in each direction, delivery needing a maintainer of `main`
+- **The workspace terms** (ADR-0065): remote hub, workspace hub, workspace, base, local commit, push, bring in `main`, deliver; `docs/workspace-hub-plan.md` §2 defines them, §9 says what a workspace hub refuses
 
 ### Repository Structure
 
@@ -86,7 +86,8 @@ app/lib/api/               # The Armature API, the Hono app (app.ts, basePath /a
   invariants/              #   The engine; index.ts maps each constraint number to its module
   intelligence/            #   coverage.ts (ADR-0029, computed on read), graph.ts (per-request cached reads at one ref)
   export/                  #   exporter.ts (slices, profiles, schema normalization), slices.json (a study's slice is an entry here)
-  routes/                  #   documents, branches, users, intelligence, export, discover; docs/api.md is their reference
+  routes/                  #   documents, branches, users, intelligence, export, discover, workspace; docs/api.md is their reference
+  workspace/               #   A workspace hub's clone (the one route-side use of the operator methods), its records, its remote client
   *.test.ts                #   The contract suite over app.request(): write (every constraint failing and passing), intelligence (both narratives), client, store, boundary, ...
 app/vitest.config.mts      # '@' alias; reads .env.local; files run one at a time
 docs/                      # how-armature-works.md (the explainer), api.md (the reference), schema-guide.md (for tool authors), client-changes.md (the revision list),
@@ -261,7 +262,7 @@ Say "update session" and follow `.claude/prompts/update-session.md`: the history
 - **Don't** let the store's `TerminusDB-Data-Version` header or its `branch:`/`commit:` prefixes into `/api/v1`; responses carry `ETag: "<commit-id>"`, writes accept `If-Match`, a stale match is 412; the adapter translates (ADR-0025 decision 7)
 - **Don't** expose or call reset, squash or rebase; history is never rewritten, a mistake is undone by a new commit, a branch is deleted only when another holds its head (ADR-0025 decision 6). Repairs the rules prevent are operator work, still as commits (ADR-0062); never a bypass header, a raw query route, or `invariants: 'skip'` from a route (a test reads the API's modules for it)
 - **Don't** take the commit author, `createdBy` or `attestedBy` from a request body; all three come from the resolved identity (constraint 15); `User` documents are created on `main` only (ADR-0032). When ADR-0067 and ADR-0068 are built the author may also be an agent acting for the caller or a relayed person under a `Relay` grant; never another person
-- **Don't** add an import route or any write that bypasses the pipeline; reproducing an export is operator work through the adapter's operator-side methods (ADR-0031 decision 4, ADR-0062)
+- **Don't** add an import route or any write that bypasses the pipeline; reproducing an export is operator work through the adapter's operator-side methods (ADR-0031 decision 4, ADR-0062), the one exception a workspace hub's clone of its own remote (`workspace/clone.ts`)
 - **Don't** put bytes in the graph; an image, a file or an asset tree is an `Attachment` reference with a content hash and, for a versioned store, a revision (ADR-0030)
 - **Don't** store a derived value in the graph; coverage, alignment and any score are reads at a ref (ADR-0056); a judgment on record is a `DesignFinding` or an `Attestation` (ADR-0028); a measurement is a `LearningMetric` with a `subject` (ADR-0058)
 - **Don't** use the store's `POST overwrite=true`, which merges values into a list rather than replacing (check X3a); the upsert is `PUT create=true` over a list
