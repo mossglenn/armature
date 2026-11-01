@@ -21,6 +21,7 @@
  * loopback boundary (ADR-0067 decision 7): `boundary` refuses a request from a
  * host or a web origin the hub does not serve, before anything else runs.
  */
+import { bodyLimit } from 'hono/body-limit';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { boundary } from './boundary';
@@ -34,12 +35,27 @@ import { users } from './routes/users';
 import { isUnknownRef, StoreError } from './store';
 import { CURRENT_REVISION, negotiate } from './version';
 
+/** The largest request body the hub reads. */
+export const MAX_BODY_BYTES = 10 * 1024 * 1024;
+
 export const app = new Hono().basePath('/api/v1');
 
 // The loopback boundary first (ADR-0067 decision 7): a request from a host or a
 // web origin the hub does not serve is refused before anything else reads it.
 app.use('*', boundary);
 app.use('*', negotiate);
+// A body is read whole before it is parsed, so its size is bounded before
+// anything reads it (the deep review's HTTP item 4): 10 MiB holds a batch of
+// 500 documents with room to spare.
+app.use(
+  '*',
+  bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: () => {
+      throw new ApiError(413, 'body_too_large', `A request body may be at most ${MAX_BODY_BYTES} bytes`);
+    },
+  })
+);
 
 app.route('/documents', documents);
 app.route('/branches', branches);

@@ -16,7 +16,7 @@
  * through the adapter.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { app } from './app';
+import { app, MAX_BODY_BYTES } from './app';
 import { createOperatorStore, createStore, isUnknownRef, TerminusStore } from './store';
 
 /** The seed's User and the header value that resolves to it (ADR-0032 decision 1). */
@@ -93,6 +93,19 @@ describe('GET /api/v1/documents/:type/:id', () => {
   it('returns 404 for a commit id that does not exist', async () => {
     const res = await app.request('/api/v1/documents/Module/how-ai-works?ref=nosuchcommit000');
     expect(res.status).toBe(404);
+  });
+});
+
+describe('limits on a request (the deep review\'s H7 and HTTP item 4)', () => {
+  it('refuses a body over the limit with 413 body_too_large, before reading it as JSON', async () => {
+    const body = JSON.stringify({ message: 'x'.repeat(MAX_BODY_BYTES), documents: [] });
+    const res = await app.request('/api/v1/documents?branch=main', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Armature-User': AUTHOR_EXTERNAL_ID },
+      body,
+    });
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toBe('body_too_large');
   });
 });
 
@@ -291,6 +304,16 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     const body = await res.json();
     expect(body.from).toBe(forkCommit);
     expect(body.changes).toEqual([{ id: DOC, op: 'insert' }]);
+  });
+
+  it('refuses If-Match: *, which a branch head cannot express', async () => {
+    const res = await write(
+      `/api/v1/documents/${DOC}?branch=${SOURCE}`,
+      { message: 'Any state', document: { label: 'Walkthrough need', rationale: 'Any' } },
+      { 'If-Match': '*' }
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('bad_if_match');
   });
 
   it('provokes a conflict and reports base, target and source values', async () => {

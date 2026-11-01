@@ -3,9 +3,11 @@ import { CLASS_FIELDS, type FieldShape } from '@armature/types';
 import { isKnownType, isWritable } from '../classes';
 import { ApiError } from '../errors';
 import {
+  boolQuery,
   branchFromQuery,
   ifMatchFrom,
   intQuery,
+  queryValue,
   readEnvelope,
   refFromQuery,
   requireCommit,
@@ -74,9 +76,7 @@ function filtersFromQuery(type: string, query: Record<string, string>): Filters 
     if (shape.type === 'User') {
       throw new ApiError(400, 'person_filter_refused', `${key} names a person; the API does not list documents by who made them (ADR-0021)`);
     }
-    let value: unknown = raw;
-    if (shape.type === 'xsd:boolean') value = raw === 'true';
-    else if (shape.type === 'xsd:integer' || shape.type === 'xsd:decimal') value = Number(raw);
+    const value = queryValue(key, raw, shape.type);
     if (shape.optional || shape.many) filters.inHub.push({ field: key, many: shape.many, value });
     else filters.template[key] = value;
   }
@@ -189,7 +189,7 @@ documents.get('/:type/:id/history', async (c) => {
   const branch = branchFromQuery(c);
   const start = intQuery(c, 'start', 0);
   const count = intQuery(c, 'count', 20);
-  const diff = c.req.query('diff') !== 'false';
+  const diff = boolQuery(c, 'diff', true);
   const docId = `${type}/${id}`;
   // The store reads history only at a branch (check AM2), so the head is
   // read around the answer: the same head before and after proves the answer

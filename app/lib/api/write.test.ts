@@ -783,6 +783,22 @@ describe('generic write path and invariants (Phase 3)', () => {
       expect((await get(`/api/v1/documents/Widget${q}`)).status).toBe(404);
     });
 
+    it('reads boolean and numeric query values only in their exact lexical forms', async () => {
+      const error = async (path: string) => {
+        const res = await get(path);
+        return res.status === 400 ? (await res.json()).error : res.status;
+      };
+      expect(await error(`/api/v1/documents/ItemInstance${q}&randomize=false`)).toBe(200);
+      expect(await error(`/api/v1/documents/ItemInstance${q}&randomize=yes`)).toBe('bad_query');
+      expect(await error(`/api/v1/documents/ItemInstance${q}&sequence=2`)).toBe(200);
+      expect(await error(`/api/v1/documents/ItemInstance${q}&sequence=1e1`)).toBe('bad_query');
+      expect(await error(`/api/v1/documents/ItemInstance${q}&sequence=two`)).toBe('bad_query');
+      expect(await error(`/api/v1/documents/LearningMetric${q}&value=0.38`)).toBe(200);
+      expect(await error(`/api/v1/documents/LearningMetric${q}&value=.38`)).toBe('bad_query');
+      expect(await error(`/api/v1/documents/LearningObjective${q}&count=1e1`)).toBe('bad_query');
+      expect(await error(`/api/v1/documents/${OBJECTIVE}/history${q}&diff=maybe`)).toBe('bad_query');
+    });
+
     // The store answers these with a 500 (platform check Y); the hub filters them.
     const idsOf = async (res: Response) => ((await res.json()) as Array<{ '@id': string }>).map((d) => d['@id']);
 

@@ -50,10 +50,18 @@ export function branchFromQuery(c: Context): string {
   return c.req.query('branch') || 'main';
 }
 
-/** `If-Match: "<commit>"` as a bare commit id; absent or `*` means unconditional. */
+/**
+ * `If-Match: "<commit>"` as a bare commit id; absent means no condition. HTTP
+ * reads `*` as "the resource exists", which a branch head cannot express, so
+ * it is refused rather than taken as no condition (the deep review's HTTP
+ * item 1).
+ */
 export function ifMatchFrom(c: Context): string | undefined {
   const raw = c.req.header('If-Match')?.trim();
-  if (!raw || raw === '*') return undefined;
+  if (!raw) return undefined;
+  if (raw === '*') {
+    throw new ApiError(400, 'bad_if_match', 'If-Match: * is not supported; send the commit you read, or no If-Match');
+  }
   const match = /^(?:W\/)?"?([^"\s]+)"?$/.exec(raw);
   if (!match) throw new ApiError(400, 'bad_if_match', 'If-Match must be a quoted commit id');
   return match[1];
@@ -63,14 +71,47 @@ export function setEtag(c: Context, commit: string | undefined): void {
   if (commit) c.header('ETag', `"${commit}"`);
 }
 
+/**
+ * Query values are read in their exact lexical forms (the deep review's HTTP
+ * item 2): digits for an integer, an optional sign and fraction for a decimal,
+ * `true` or `false` for a boolean. Anything else is 400 `bad_query`, never a
+ * coerced `NaN`, `false` or `10` from `1e1`.
+ */
+const LEXICAL = {
+  count: /^\d+$/,
+  integer: /^-?\d+$/,
+  decimal: /^-?\d+(?:\.\d+)?$/,
+};
+
 export function intQuery(c: Context, key: string, fallback: number): number {
   const raw = c.req.query(key);
   if (raw === undefined || raw === '') return fallback;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0) {
-    throw new ApiError(400, 'bad_query', `${key} must be a non-negative integer`);
+  if (!LEXICAL.count.test(raw)) throw new ApiError(400, 'bad_query', `${key} must be a non-negative integer`);
+  return Number(raw);
+}
+
+export function boolQuery(c: Context, key: string, fallback: boolean): boolean {
+  const raw = c.req.query(key);
+  if (raw === undefined || raw === '') return fallback;
+  return booleanValue(key, raw);
+}
+
+/** A `?field=` value for a field of this XSD type, in its exact lexical form. */
+export function queryValue(key: string, raw: string, xsdType: string): unknown {
+  if (xsdType === 'xsd:boolean') return booleanValue(key, raw);
+  if (xsdType === 'xsd:integer' || xsdType === 'xsd:decimal') {
+    if (!LEXICAL[xsdType === 'xsd:integer' ? 'integer' : 'decimal'].test(raw)) {
+      throw new ApiError(400, 'bad_query', `${key} must be ${xsdType === 'xsd:integer' ? 'an integer' : 'a decimal number'}`);
+    }
+    return Number(raw);
   }
-  return value;
+  return raw;
+}
+
+function booleanValue(key: string, raw: string): boolean {
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  throw new ApiError(400, 'bad_query', `${key} must be true or false`);
 }
 
 export async function readJson(c: Context): Promise<Record<string, unknown>> {
