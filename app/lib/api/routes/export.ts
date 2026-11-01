@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
+import { hubOf, storeFor } from '../config';
 import { ApiError } from '../errors';
 import { applyProfile, normalizeSchema, PROFILES, SLICES, selectSlice, unresolvedReferences, type Profile } from '../export/exporter';
 import { refFromQuery, setEtag, snapshot } from '../http';
-import { createStore } from '../store';
 
 /**
  * /api/v1/export (architecture decision record ADR-0031).
@@ -34,11 +34,11 @@ exportRoutes.get('/', async (c) => {
   if (!slice) throw new ApiError(400, 'unknown_slice', `slice must be one of ${Object.keys(SLICES).join(', ')}`);
 
   // The documents and the schema at one commit, the ETag (B1).
-  const { at, commit } = await snapshot(createStore(refFromQuery(c)));
+  const { at, commit } = await snapshot(storeFor(c, refFromQuery(c)));
   const all = (await at.allDocuments()).documents;
   const schema = normalizeSchema((await at.getSchema()).entries);
   const selected = selectSlice(all, slice);
-  const key = process.env.ARMATURE_EXPORT_KEY?.trim() || undefined;
+  const key = hubOf(c).exportKey;
   const { documents, pseudonyms } = await applyProfile(selected, profile, key);
   const unresolved = unresolvedReferences(documents);
 

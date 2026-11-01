@@ -7,8 +7,9 @@
  * they reach one.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { app } from './app';
+import { app, createApp } from './app';
 import { hostAllowed, originAllowed } from './boundary';
+import { configFromEnv } from './config';
 
 const saved = { hosts: process.env.ARMATURE_ALLOWED_HOSTS, origins: process.env.ARMATURE_ALLOWED_ORIGINS };
 afterEach(() => {
@@ -53,7 +54,13 @@ describe('Host', () => {
     expect((await discover('hub:3100')).status).toBe(200);
     expect((await discover('armature.example.org')).status).toBe(200);
     expect((await discover('attacker.example')).status).toBe(403);
-    expect(hostAllowed('HUB')).toBe(true);
+    expect(hostAllowed('HUB', configFromEnv().allowedHosts)).toBe(true);
+  });
+
+  it('is each app\'s own, so two hubs in one process answer different hosts', async () => {
+    const other = createApp(() => ({ ...configFromEnv(), allowedHosts: new Set(['hub']) }));
+    expect((await other.request('http://hub:3100/api/v1/discover')).status).toBe(200);
+    expect((await discover('hub:3100')).status).toBe(403);
   });
 });
 
@@ -109,10 +116,10 @@ describe('Origin', () => {
 
   it('decides an origin by its listing, its scheme and its host', () => {
     process.env.ARMATURE_ALLOWED_ORIGINS = 'https://coqui.example.org';
-    expect(originAllowed('https://coqui.example.org')).toBe(true);
-    expect(originAllowed('https://COQUI.example.org')).toBe(true);
-    expect(originAllowed('https://coqui.example.org.attacker.example')).toBe(false);
-    expect(originAllowed('chrome-extension://abcdef')).toBe(true);
-    expect(originAllowed('null')).toBe(false);
+    expect(originAllowed('https://coqui.example.org', configFromEnv().allowedOrigins)).toBe(true);
+    expect(originAllowed('https://COQUI.example.org', configFromEnv().allowedOrigins)).toBe(true);
+    expect(originAllowed('https://coqui.example.org.attacker.example', configFromEnv().allowedOrigins)).toBe(false);
+    expect(originAllowed('chrome-extension://abcdef', configFromEnv().allowedOrigins)).toBe(true);
+    expect(originAllowed('null', configFromEnv().allowedOrigins)).toBe(false);
   });
 });

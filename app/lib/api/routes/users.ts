@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
+import { storeFor } from '../config';
 import { ApiError } from '../errors';
 import { ifMatchFrom, readEnvelope, refFromQuery, requireCommit, setEtag } from '../http';
 import { findUserByExternalId, mintUserId, registry, resolveAuthor, resolveUser, type UserDocument } from '../identity';
-import { createStore, isRecord, StoreError } from '../store';
+import { isRecord, StoreError } from '../store';
 
 /**
  * /api/v1/users (architecture decision record ADR-0032, decision 6).
@@ -21,7 +22,7 @@ const USER_FIELDS = new Set(['@id', '@type', 'displayName', 'externalId', 'email
 
 users.get('/', async (c) => {
   const ref = refFromQuery(c);
-  const store = createStore(ref);
+  const store = storeFor(c, ref);
   if ('commit' in ref) await requireCommit(store, ref.commit);
   const { documents, commit } = await store.queryDocuments('User', {});
   setEtag(c, commit);
@@ -70,7 +71,7 @@ users.post('/', async (c) => {
   }
 
   const author = await resolveAuthor(c);
-  const main = registry();
+  const main = registry(c);
   const ifMatch = ifMatchFrom(c);
 
   // Two passes, as in resolveUser: a registration that loses a race on the
