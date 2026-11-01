@@ -241,6 +241,18 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > while `TERMINUSDB_ADMIN_PASS` is unset, instead of defaulting to `admin`. Both change how an
    > instance runs and get the fresh-VM rehearsal; planned with step 2's compose profile
    > (workspace hub plan §14). Review H8.
+   >
+   > **Note (2026-11-01), built in part:** a hub under `header` refuses to listen on an address
+   > other than loopback unless `ARMATURE_TRUST_NETWORK=1` (`bindRefusal` in `app/lib/hub.ts`,
+   > checked by `app/server.ts`); the compose file's `hub` and `workspace` services and CI's image
+   > check set it, the image does not, and CI checks that the image alone refuses. The two networks
+   > are `armature` (the front, its name kept so a client beside an instance joins it unchanged) and
+   > `armature-store`. The `public` profile's refusal is a one-shot `public-guard` service Caddy
+   > waits on, refusing an unset password and `admin`: Compose evaluates `${VAR:?}` for every
+   > profile, so a check in the file itself would stop the store-only default too, and a dependency
+   > marked `required: false` only warns. Rehearsed on a fresh VM, an upgrade in place from the
+   > earlier file included (`docs/deployment.md`, "A workspace hub on this machine"). `header`
+   > reading `Armature-Agent` comes with decision 3, before the plan's step 3.
 
 9. **Discovery says how to authenticate.** `GET /discover` names the resolver, the issuer and
    audience under `oidc`, and the headers a client may send (`Armature-Agent`, and
