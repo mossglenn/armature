@@ -1501,3 +1501,10 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   before ADR-0065's acceptance (its Verification), since under ADR-0066 the workspace hub's store
   is a folder of files; AI runs before the plan's step 6, the file-backed store (ADR-0066
   decision 6).
+
+**A database the hub creates** (2026-11-01)
+- *Verified (2026-11-01, check AN):* `GET /api/db/admin/<db>` answers 404 for an absent database
+  and 200 for a present one (AN1, AN2); creating one that exists is a 400 naming
+  `api:DatabaseAlreadyExists` (AN3); a new database's `main` already holds one `InitialCommit` by
+  `system` (AN4). The adapter's `ensureDatabase` relies on all four: a workspace hub creates its
+  own store on the first clone.
