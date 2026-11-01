@@ -389,11 +389,38 @@ What this hub is, for a client that wants to know before its first write (ADR-00
 
 A capability's `fallback` says what a hub that lacks it does with a request that declares it: `reject` (refuse by name) or `ignore` (serve under core behavior). Every capability the hub defines is `reject`. The settings are the defaults of the behavior's parameters, so a client can read them rather than assume them.
 
+A workspace hub also lists `armature/workspace` (Workspace), with its setting `profile`, the export profile a clone takes; a remote hub neither lists nor accepts it.
+
 `role` is what kind of hub this is (ADR-0065; [workspace hub plan](workspace-hub-plan.md) §9). A **remote** hub is a hub as built. A **workspace** hub, `ARMATURE_ROLE=workspace` with the remote's address in `ARMATURE_REMOTE_URL`, is the same API on one person's machine; what changes the remote's shared state happens on the remote, so it refuses those routes with **400** `remote_only`, and they are listed under their capability's `remoteOnly` as `METHOD /api/v1/path`: `POST /branches`, `POST /branches/:name/merge` and `DELETE /branches/:name` under `armature/branches`, `POST /users` under `armature/users`. Its `main` is the remote's, mirrored, and listed in `armature/documents`'s `readOnlyBranches`: read as on any hub, a write to it is `remote_only`. It registers no one: an identity its mirror does not hold is **401** `unknown_user`, to be registered on the remote. On a remote hub both lists are empty.
 
 ### `GET /schema?branch=|ref=`
 
 The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, categories and fields from the hub rather than from a copy of `schema.json`: `{ ref, schema: [ { "@type": "@context", ... }, { "@id": "LearningObjective", "@type": "Class", ... }, ... ] }`, with the commit in `ETag`. The entries are in the form the export carries and the store reloads (the store's own `@max_cardinality: "inf"` decoration removed; ADR-0031). Every class carries `@metadata.armature.category`.
+
+---
+
+## Workspace
+
+Served by a workspace hub only (ADR-0065; [workspace hub plan](workspace-hub-plan.md) §4), under `armature/workspace`, which only such a hub lists in `GET /discover` and accepts in `Armature-Capabilities`. A remote hub answers these routes with **400** `workspace_only`. Since 2026-11-01. The workspace hub calls its remote (`ARMATURE_REMOTE_URL`) as an ordinary client of `/api/v1`, acting as the caller; a refusal from the remote comes back with the remote's own status and code and `remote: true`, and a remote that cannot be reached is **502** `remote_unreachable`.
+
+A workspace's record: `{ branch, remote, owner, ownerExternalId, from?, base, local, clonedAt }`: the branch (the same name on the remote and here), the remote's address, the owner's `User` id on the remote and external identifier, the remote branch it started from when this hub created it, the remote commit cloned (the *base*), the local commit holding the clone, and when. Records are kept in the folder `ARMATURE_WORKSPACE_DIR` names, outside the store.
+
+### `GET /workspace`
+
+The workspaces this hub holds, their records, by branch name.
+
+### `POST /workspace`
+
+Needs an identity, which the remote resolves (an identity it does not know is its **401** `unknown_user`, with `remote: true`). Body, one of:
+
+- `{ name, from? }`: creates the branch `<handle>_<name>` on the remote from the branch `from` (`main` by default), then clones it. `<handle>` is the caller's external identifier before the `@`, in the characters a branch name allows: a naming convention, not ownership (ADR-0068). The branch name must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`, else **400** `bad_name`.
+- `{ existing }`: clones a branch the remote already has, as it is.
+
+Both first mirror the remote's `main` into this hub's `main` (its schema and every `User`, read at one remote commit; nothing is written when nothing changed), then load the branch's export at its head, `full` profile and the whole graph, into a local branch of the same name, its schema in one commit and its documents in a second. A local branch of that name with no record is an interrupted clone and is replaced when it holds only a clone's own commits; one with other work is **409** `branch_exists`. A workspace this hub already holds is **409** `workspace_exists`. Answers **201** with the record. If the remote branch was created and the clone then failed, retry with `{ existing }`.
+
+### `GET /workspace/:name/status`
+
+`{ workspace, head, localCommits, remote }`: the record, the local head, the number of local commits since the clone, and the remote branch's head with `moved` (whether it differs from the base), or `{ reachable: false }` when the remote cannot be reached. **404** `not_found` for a workspace this hub does not hold.
 
 ---
 
@@ -417,6 +444,7 @@ The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, cate
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
 | 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused`, `unknown_profile`, `unknown_slice` | Route-specific refusals |
 | 400 | `remote_only` | A route or a write a workspace hub leaves to its remote (Discovery: `role`) |
+| 400 | `workspace_only` | A workspace route on a remote hub (Workspace) |
 | 401 | `identity_required`, `unknown_user` | No identity, or an unregistered one |
 | 403 | `host_not_allowed`, `origin_not_allowed` | A host name or a web origin this hub does not serve (Hosts and web origins) |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit |
@@ -425,11 +453,13 @@ The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, cate
 | 409 | `merge_conflict`, `no_common_ancestor` | The merge cannot proceed |
 | 409 | `unmerged_branch`, `branch_moved` | Branch deletion refused; `branch_moved` also a write whose branch moved under each of its three runs (The write pipeline) |
 | 409 | `registration_conflict` | Concurrent user registration; retry |
+| 409 | `workspace_exists` | A workspace this hub already holds (Workspace) |
 | 412 | `precondition_failed` | The branch moved since the commit in `If-Match` |
 | 413 | `body_too_large` | A request body over 10 MiB |
 | 422 | `invariant_violation` | One or more rules broken (see `violations`) |
 | 500 | `store_unavailable` | The database rejected the configured credentials |
 | 500 | `store_error`, `internal_error` | An unexpected database or server error (details in the server log only) |
 | 500 | `history_too_long` | A history longer than the 5,000 commits the hub walks (the changes route, a merge, a branch delete) |
+| 502 | `remote_unreachable`, `remote_error` | A workspace hub could not reach its remote, or the remote answered without what the hub needed (Workspace) |
 | 503 | `branch_busy` | A document's history could not be read at one head; `Retry-After` |
 | 504 | `store_timeout` | The database did not answer within the hub's 30-second deadline; a write may have landed, so re-read before retrying |

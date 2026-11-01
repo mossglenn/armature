@@ -124,6 +124,15 @@ Three facts constrain the answer:
    > enforces: the person who creates a branch owns it, and only its owner, someone the owner
    > grants, or an agent acting for either may write to it.
 
+   > **Note (2026-11-01), built:** `POST /workspace` creates `<handle>_<name>` on the remote
+   > (`<handle>` the external identifier's local part) or takes `existing`, mirrors `main`'s schema
+   > and `User` documents read at one remote commit, then loads the branch's export at its head into
+   > a local branch of the same name, its schema taken from the export rather than a second read.
+   > The base and the rest of the record are in `<ARMATURE_WORKSPACE_DIR>/<branch>/workspace.json`,
+   > the plan's §10 layout, outside the store so that no commit message can stand in for it; the
+   > loading is the one route-side use of ADR-0062's operator methods (its note of this date).
+   > Decision 3's refusals and the role in `GET /discover` were built the same day (plan §14 step 2).
+
 3. **A workspace hub refuses what makes history shared.** Branch creation, merge, branch deletion
    and user registration are refused with 400 `remote_only`, naming the remote. Branch reads,
    document reads and writes on a workspace, history, diff, every intelligence read and export

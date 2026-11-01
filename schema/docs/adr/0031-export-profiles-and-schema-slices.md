@@ -16,6 +16,12 @@ reserved the number. Implements the export-time anonymization ADR-0021's deferre
 anticipated; ADR-0021 carries a dated note. Verified by `scripts/platform_checks.js` check AE
 (§Verification). Formats beyond JSON-LD are not offered (§Alternatives).
 
+> **Note (2026-11-01):** decision 4 holds for every client: there is still no import route. A
+> workspace hub's clone is the one place a route loads an export, its own remote's at a branch's
+> head into its own store, through the operator-side methods decision 4 names (ADR-0062, note of
+> the same date; `docs/workspace-hub-plan.md` §4). It takes the `full` profile and the whole
+> graph until the clone's slice is settled (plan §16 question 4).
+
 ## Context
 
 The position paper's §5 and §6 (plan principles P7 and P8) want learning scientists to adopt

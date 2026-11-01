@@ -1,6 +1,6 @@
 # @armature/client
 
-A thin typed client for the Armature API: every `/api/v1` route as a function, grouped as [the API reference](../../docs/api.md) groups them (`documents`, `branches`, `users`, `intelligence`, `export`). It adds nothing the routes do not have. What it carries so a plugin need not:
+A thin typed client for the Armature API: every `/api/v1` route as a function, grouped as [the API reference](../../docs/api.md) groups them (`documents`, `branches`, `users`, `intelligence`, `export`, and on a workspace hub `workspace`). It adds nothing the routes do not have. What it carries so a plugin need not:
 
 - the ref: `{ branch }` or `{ ref: '<commit-id>' }` on every read, `main` when neither;
 - the commit every response was served from or created, read from the `ETag` and returned as `commit`;
