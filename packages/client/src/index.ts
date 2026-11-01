@@ -28,7 +28,7 @@
 import type { ClassMap, ClassName, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-10-31';
+export const CLIENT_REVISION = '2026-11-01';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -61,6 +61,8 @@ export interface ClientOptions {
 
 /** The body of GET /discover: the hub, not the graph. */
 export interface Discovery {
+  /** A remote hub, or a workspace hub that leaves the routes in each capability's `remoteOnly` to its remote (2026-11-01). */
+  role: 'remote' | 'workspace';
   versions: string[];
   capabilities: Record<string, { fallback: 'ignore' | 'reject'; [setting: string]: unknown }>;
   schema: { route: string };

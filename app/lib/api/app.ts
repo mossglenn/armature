@@ -30,6 +30,7 @@ import { HTTPException } from 'hono/http-exception';
 import { boundary } from './boundary';
 import { configFromEnv, type HubConfig } from './config';
 import { ApiError } from './errors';
+import { guardRemoteOnly } from './role';
 import { branches } from './routes/branches';
 import { discover } from './routes/discover';
 import { documents } from './routes/documents';
@@ -71,6 +72,9 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
       },
     })
   );
+
+  // A workspace hub's refusals, ahead of the routes they refuse (./role.ts).
+  guardRemoteOnly(app);
 
   app.route('/documents', documents);
   app.route('/branches', branches);

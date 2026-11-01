@@ -12,6 +12,10 @@
  *   ARMATURE_ALLOWED_HOSTS, ARMATURE_ALLOWED_ORIGINS        optional, comma-separated: host names besides
  *                                                            loopback, and web origins, the hub serves
  *                                                            (ADR-0067 decision 7; lib/api/boundary.ts)
+ *   ARMATURE_ROLE                                            `remote` (default) or `workspace` (ADR-0065;
+ *                                                            lib/api/role.ts)
+ *   ARMATURE_REMOTE_URL                                      the remote hub's address, required when the
+ *                                                            role is `workspace`
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
  *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
  *                                                            the caller, so the hub stays on this machine
@@ -23,17 +27,22 @@
  * same file; a variable already set in the environment wins. The container
  * has no such file and takes everything from the environment.
  */
+import { configFromEnv } from './lib/api/config';
 import { loadEnvLocal } from './lib/envLocal';
 import { startHub } from './lib/hub';
 
 async function main(): Promise<void> {
   loadEnvLocal();
+  // Read on every request, so read once here too: a setting the hub cannot
+  // serve under stops it before it listens, not at each request.
+  const config = configFromEnv();
   const port = Number(process.env.PORT ?? 3100);
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new Error(`PORT must be a port number, not ${JSON.stringify(process.env.PORT)}`);
   }
   const hub = await startHub({ port, hostname: process.env.HOST?.trim() || '127.0.0.1' });
   console.log(`Armature hub (revision ${hub.revision}) listening at ${hub.url}/api/v1`);
+  if (config.role === 'workspace') console.log(`  role: workspace, of the remote at ${config.remote}`);
   console.log(`  store: ${process.env.TERMINUS_URL ?? '(TERMINUS_URL is not set)'} database ${process.env.TERMINUS_DB ?? '(TERMINUS_DB is not set)'}`);
 
   // Docker sends SIGTERM on `compose down`; close the listener so in-flight

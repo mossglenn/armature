@@ -1,5 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
+import type { HubConfig } from './config';
 import { ApiError } from './errors';
+import { readOnlyBranches, remoteOnlyRoutes } from './role';
 
 /**
  * The per-request version contract (architecture decision record ADR-0059).
@@ -18,7 +20,7 @@ import { ApiError } from './errors';
  * list against that file's headings. Revisions under /api/v1 are additive, so
  * a hub at the newest serves every earlier one.
  */
-export const REVISIONS = ['2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
+export const REVISIONS = ['2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
 
 export const CURRENT_REVISION = REVISIONS[0];
 const OLDEST_REVISION = REVISIONS[REVISIONS.length - 1];
@@ -59,13 +61,24 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema'], settings: {} },
 };
 
-/** The body of GET /api/v1/discover (ADR-0059 decision 6): the hub, not the graph; the same at every ref. */
-export function discovery() {
+/**
+ * The body of GET /api/v1/discover (ADR-0059 decision 6): the hub, not the
+ * graph; the same at every ref. Since 2026-11-01 it names the hub's role and
+ * what the role refuses (docs/workspace-hub-plan.md §3 and §9): the routes a
+ * workspace hub answers `remote_only` under each capability (`remoteOnly`),
+ * and the branches it serves only for reading (`readOnlyBranches`); both empty
+ * on a remote hub.
+ */
+export function discovery(hub: HubConfig) {
   const capabilities: Record<string, Record<string, unknown>> = {};
   for (const [id, cap] of Object.entries(CAPABILITIES)) {
     capabilities[id] = { fallback: cap.fallback, ...cap.settings };
   }
-  return { versions: [...REVISIONS], capabilities, schema: { route: '/api/v1/schema' } };
+  capabilities['armature/documents'].readOnlyBranches = readOnlyBranches(hub.role);
+  for (const id of ['armature/branches', 'armature/users']) {
+    capabilities[id].remoteOnly = remoteOnlyRoutes(hub.role, id);
+  }
+  return { role: hub.role, versions: [...REVISIONS], capabilities, schema: { route: '/api/v1/schema' } };
 }
 
 const isRevision = (value: string): value is (typeof REVISIONS)[number] =>

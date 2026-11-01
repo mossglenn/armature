@@ -94,6 +94,15 @@ export async function resolveUser(c: Context): Promise<ResolvedUser> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const { user, commit } = await findUserByExternalId(main, claims.externalId);
     if (user) return { id: user['@id'], user };
+    // A workspace hub's main is the remote's registry, mirrored: a person is
+    // registered on the remote, never here (docs/workspace-hub-plan.md §9).
+    if (hubOf(c).role === 'workspace') {
+      throw new ApiError(
+        401,
+        'unknown_user',
+        `No User is registered for ${claims.externalId} in this workspace hub's mirror of the remote; register on the remote`
+      );
+    }
     if (!claims.displayName) {
       throw new ApiError(
         401,

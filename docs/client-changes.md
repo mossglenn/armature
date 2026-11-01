@@ -15,6 +15,26 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-01 · A hub's role in discovery; `remote_only`
+
+**What changed.** A hub now has a role, `remote` (every hub so far) or `workspace`: the same
+API in workspace mode on one person's machine (ADR-0065; [workspace hub plan](workspace-hub-plan.md)
+§9, step 2). `GET /discover` names it in a new top-level `role`, and says what the role refuses:
+`armature/branches` and `armature/users` carry `remoteOnly`, the routes the hub answers with
+**400** `remote_only` (on a workspace hub: creating, merging and deleting a branch, and
+registering a user), and `armature/documents` carries `readOnlyBranches`, the branches it serves
+only for reading (on a workspace hub, `main`, the remote's mirrored; a write there is also
+`remote_only`). On a remote hub both lists are empty and nothing else changes. A workspace hub
+never registers a person: an unknown identity is **401** `unknown_user`, to be registered on the
+remote. `@armature/client`'s `Discovery` type has `role`, and `CLIENT_REVISION` is this revision.
+The workspace routes themselves (create, clone, status) come next; until then a workspace hub
+exists only in the tests.
+
+**What a client does.** Nothing, against a remote hub. A tool that may meet a workspace hub reads
+`role` and the two lists from `GET /discover` rather than assuming a route is served, and treats
+`remote_only` as "do this on the remote", never as a failure to retry. **CoQui:** nothing; it
+talks to a remote hub. **Quiver:** the code its workspace manager will branch on.
+
 ## 2026-10-31 · Stricter requests, deadlines and ancestry
 
 **What changed.** The deep review's confirmed small fixes (SESSION What's Next item 28), riding

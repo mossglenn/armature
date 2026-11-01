@@ -17,7 +17,15 @@ import { createStore, storeConfigFromEnv, type Ref, type Store, type StoreConfig
  * no route makes a store except through `storeFor`; a test reads the modules
  * for both.
  */
+/** A remote hub, as built, or a workspace hub on one person's machine (ADR-0065; ./role.ts). */
+export type HubRole = 'remote' | 'workspace';
+const ROLES: readonly HubRole[] = ['remote', 'workspace'];
+
 export interface HubConfig {
+  /** ARMATURE_ROLE; `remote` by default. */
+  role: HubRole;
+  /** The remote hub's address, ARMATURE_REMOTE_URL without a trailing slash; required, and only read, when the role is `workspace`. */
+  remote?: string;
   /** The store, read when a route makes one, so a request that needs none (GET /discover) never requires the TERMINUS_* variables. */
   store: () => StoreConfig;
   /** The identity resolver's name (ADR-0032), ARMATURE_IDENTITY; `header` by default. */
@@ -49,9 +57,35 @@ const list = (raw: string | undefined): ReadonlySet<string> =>
       .filter(Boolean)
   );
 
-/** The hub's configuration from the environment (app/server.ts lists the variables). */
+/** The remote's address as given: an http or https URL; throws otherwise. */
+function remoteUrl(raw: string | undefined): string {
+  const value = raw?.trim().replace(/\/+$/, '');
+  if (!value) throw new Error('ARMATURE_REMOTE_URL is required when ARMATURE_ROLE=workspace');
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`ARMATURE_REMOTE_URL=${value} is not a URL`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`ARMATURE_REMOTE_URL=${value} is not an http or https address`);
+  }
+  return value;
+}
+
+/**
+ * The hub's configuration from the environment (app/server.ts lists the
+ * variables); throws on a role it does not know or a workspace hub without a
+ * remote, which the entry reads once at startup so the hub never starts with one.
+ */
 export function configFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): HubConfig {
+  const role = env.ARMATURE_ROLE?.trim() || 'remote';
+  if (!(ROLES as readonly string[]).includes(role)) {
+    throw new Error(`ARMATURE_ROLE=${role} names no role (known: ${ROLES.join(', ')})`);
+  }
   return {
+    role: role as HubRole,
+    ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL) } : {}),
     store: () => storeConfigFromEnv(env),
     identity: env.ARMATURE_IDENTITY?.trim() || 'header',
     allowedHosts: list(env.ARMATURE_ALLOWED_HOSTS),
