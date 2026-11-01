@@ -6,6 +6,7 @@ import { validateAssessmentItem } from './assessmentItem';
 import { checkAttachments } from './attachments';
 import { validateAttestation } from './attestation';
 import { validateDesignFinding } from './designFinding';
+import { validateGrant } from './grant';
 import { checkFragmentRef } from './fragmentRef';
 import { validateItemInstance } from './itemInstance';
 import { validateLessonActivityLink, validateActivityItemLink, validateModuleContentLink } from './moduleContent';
@@ -50,6 +51,10 @@ import { checkReferences } from './references';
  *  19  a fragment has content     attachments.ts (text or at least one attachment; ADR-0030)
  *  20  an outcome names its source observations.ts (a dataset has producedBy or an externalRef; a metric
  *                                has derivedFrom or an externalRef; ADR-0063)
+ *  21  grants live on main       the write pipeline, 400 grants_live_on_main before anything is read
+ *                                (ADR-0068 decision 2)
+ *  22  a grant's holder suits its role grant.ts (Maintainer and Administrator by persons, Relay by agents;
+ *                                relayedUsers only on a Relay grant, naming persons; ADR-0068 decision 2)
  *
  * A validator sees the whole batch and the branch being written, never main
  * by default. Every violation is collected and reported at once as a 422.
@@ -115,6 +120,7 @@ const VALIDATORS: Record<string, Validator> = {
   ActivityItemLink: validateActivityItemLink,
   DesignFinding: validateDesignFinding,
   Attestation: validateAttestation,
+  Grant: validateGrant,
   LearningDataset: validateLearningDataset,
   LearningMetric: validateLearningMetric,
 };

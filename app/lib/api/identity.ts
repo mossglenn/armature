@@ -36,6 +36,11 @@ export const USER_HEADER = 'Armature-User';
 /** Where `User` documents are created and resolved (ADR-0032 decision 2). */
 export const REGISTRY_BRANCH = 'main';
 
+/** An agent is a `User` whose externalId begins with this (ADR-0032 decision 7). */
+export const AGENT_PREFIX = 'agent:';
+export const isAgentExternalId = (externalId: unknown): boolean =>
+  typeof externalId === 'string' && externalId.startsWith(AGENT_PREFIX);
+
 export const headerResolver: IdentityResolver = (c) => {
   const externalId = c.req.header(USER_HEADER)?.trim();
   return externalId ? { externalId } : undefined;

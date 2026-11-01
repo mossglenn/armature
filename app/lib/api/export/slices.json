@@ -1,7 +1,7 @@
 {
   "full": {
-    "description": "Every document at the ref: every design record (everything inheriting DesignRecord) and every User. The only slice that reproduces the graph when re-imported.",
-    "classes": ["DesignRecord", "User"]
+    "description": "Every document at the ref: every design record (everything inheriting DesignRecord), every User and every Grant (ADR-0068). The only slice that reproduces the graph when re-imported.",
+    "classes": ["DesignRecord", "User", "Grant"]
   },
   "outcomes-loop": {
     "description": "The position paper's needs-to-objectives-to-outcomes path (Narrative 1): evidence, needs and their links; objectives and prerequisites; items, their placements and assessments; the modules and course they sit in and the objectives modules declare; datasets and metrics. Leaves out activities, notes, findings and attestations. A metric whose subject is an activity is reported as unresolved.",
