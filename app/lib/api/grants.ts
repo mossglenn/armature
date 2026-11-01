@@ -1,5 +1,5 @@
 import type { Grant } from '@armature/types';
-import { REGISTRY_BRANCH, type ResolvedUser } from './identity';
+import { principalOf, REGISTRY_BRANCH, type ResolvedUser } from './identity';
 import type { DocumentReader, Store, TerminusDocument } from './store';
 import { writeDocuments } from './write';
 
@@ -30,13 +30,14 @@ export async function activeGrantsNaming(main: DocumentReader, branch: string): 
 
 /**
  * The `Owner` grant for the branch `who` is creating, as a commit of its own
- * on `main` (decision 3). Written before the branch exists: a crash between
+ * on `main` (decision 3): the person's, when an agent creates it for them
+ * (ADR-0067 decision 3). Written before the branch exists: a crash between
  * the two leaves a grant naming no branch, which the operator's `check`
  * reports and nothing can use, rather than a branch anyone may write.
  */
 export async function grantOwner(main: Store, who: ResolvedUser, branch: string): Promise<{ commit: string; id: string }> {
   // A Hash-keyed document has its id only once the store mints it (ADR-0024).
-  const owner = { '@type': 'Grant', user: who.id, role: 'Owner', branch, status: 'Active' } as unknown as TerminusDocument;
+  const owner = { '@type': 'Grant', user: principalOf(who).id, role: 'Owner', branch, status: 'Active' } as unknown as TerminusDocument;
   const { commit, ids } = await writeDocuments([owner], {
     branch: main,
     who,

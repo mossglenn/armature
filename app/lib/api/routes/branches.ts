@@ -4,7 +4,7 @@ import { ApiError } from '../errors';
 import { BRANCH_NAME, ifMatchFrom, readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { grantOwner, revokeGrantsNaming } from '../grants';
 import { requirePermission } from '../authorization';
-import { resolveUser } from '../identity';
+import { commitMessage, resolveUser } from '../identity';
 import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
 
 /**
@@ -271,7 +271,7 @@ branches.post('/:name/merge', async (c) => {
     base,
     source: sourceHead.id,
     author,
-    message: envelope.message,
+    message: commitMessage(who, envelope.message),
     metadata: mergeMetadata(sourceHead.id),
   });
   if (result.ok) {

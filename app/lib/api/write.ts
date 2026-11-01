@@ -2,7 +2,7 @@ import { CLASS_FIELDS, CLASS_KEY, type FieldShape } from '@armature/types';
 import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
 import { hasAttestedBy, hasCreatedBy, isWritable, livesOnMain } from './classes';
 import { ApiError } from './errors';
-import { REGISTRY_BRANCH, userCopyFor, type ResolvedUser } from './identity';
+import { commitMessage, REGISTRY_BRANCH, userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
 import { AS_OF_PARENT, AS_OF_REFILLED_ON_REPLACE, hasAsOf } from './invariants/asOf';
 import { StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
@@ -224,7 +224,7 @@ async function writeAt(documents: TerminusDocument[], head: string | undefined, 
   const carried = copy ? [copy] : [];
   const result = await branch.putDocuments([...carried, ...documents], {
     author: who.id,
-    message: opts.message,
+    message: commitMessage(who, opts.message),
     ifMatch: head,
     create: true,
   });

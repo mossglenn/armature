@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { User } from '@armature/types';
 import { ApiError } from './errors';
+import { ON_BEHALF_OF_TRAILER, withTrailer } from './trailers';
 import { hubOf, storeFor } from './config';
 import { StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
 
@@ -32,6 +33,8 @@ export interface IdentityClaims {
 export type IdentityResolver = (c: Context) => IdentityClaims | undefined | Promise<IdentityClaims | undefined>;
 
 export const USER_HEADER = 'Armature-User';
+/** Names the registered agent that acts for the person in `Armature-User` (ADR-0067 decision 3); read under every resolver (decision 8). */
+export const AGENT_HEADER = 'Armature-Agent';
 
 /** Where `User` documents are created and resolved (ADR-0032 decision 2). */
 export const REGISTRY_BRANCH = 'main';
@@ -75,6 +78,21 @@ export interface ResolvedUser {
   /** `User/<id>`: the commit author and the `createdBy` value. */
   id: string;
   user: UserDocument;
+  /**
+   * The person an agent acts for (ADR-0067 decision 3): the request's
+   * credential, when `Armature-Agent` names the author. Authority is theirs
+   * (ADR-0068), the agent is the author, and the commit says so in its
+   * `Armature-On-Behalf-Of` trailer. Absent when the caller acts as itself.
+   */
+  onBehalfOf?: { id: string; user: UserDocument };
+}
+
+/** Whose authority a request runs under: the person an agent acts for, else the caller. */
+export const principalOf = (who: ResolvedUser): { id: string; user: UserDocument } => who.onBehalfOf ?? who;
+
+/** The message as the hub commits it: the caller's, with the hub's own trailer when an agent acts for a person (ADR-0067 decisions 3 and 6). */
+export function commitMessage(who: ResolvedUser, message: string): string {
+  return who.onBehalfOf ? withTrailer(message, `${ON_BEHALF_OF_TRAILER}: ${who.onBehalfOf.user.externalId}`) : message;
 }
 
 /** The store bound to the registry branch of the request's hub. */
@@ -107,8 +125,26 @@ export async function requireClaims(c: Context): Promise<IdentityClaims> {
  * Resolves the request to a registered `User`, registering one on `main`
  * when the claims carry a displayName. 401 `identity_required` with no
  * claims; 401 `unknown_user` when nothing is registered and nothing can be.
+ * With `Armature-Agent`, the credential's person is resolved first and the
+ * agent second: the agent is the author, the person is `onBehalfOf`.
  */
 export async function resolveUser(c: Context): Promise<ResolvedUser> {
+  const person = await resolveCredential(c);
+  const agentExternalId = c.req.header(AGENT_HEADER)?.trim();
+  if (!agentExternalId) return person;
+  if (isAgentExternalId(person.user.externalId)) {
+    throw new ApiError(400, 'not_a_person', `${AGENT_HEADER} needs a person's credential in ${USER_HEADER}; ${person.user.externalId} is an agent`);
+  }
+  if (!isAgentExternalId(agentExternalId)) {
+    throw new ApiError(400, 'not_an_agent', `${AGENT_HEADER} names ${agentExternalId}, which is not an agent's externalId (agent:…)`);
+  }
+  const { user } = await findUserByExternalId(registry(c), agentExternalId);
+  if (!user) throw new ApiError(401, 'unknown_agent', `No agent User is registered for ${agentExternalId}; a person registers it with POST /api/v1/users`);
+  return { id: user['@id'], user, onBehalfOf: { id: person.id, user: person.user } };
+}
+
+/** The `User` the request's own credential resolves to. */
+async function resolveCredential(c: Context): Promise<ResolvedUser> {
   const claims = await requireClaims(c);
   const main = registry(c);
   // Two passes: a concurrent registration of the same externalId makes the

@@ -56,7 +56,7 @@ export function originAllowed(origin: string, listed: ReadonlySet<string>): bool
 /** What a listed origin's page may send, answered on a preflight. */
 const PREFLIGHT = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE',
-  'Access-Control-Allow-Headers': 'Content-Type, If-Match, Armature-User, Armature-Version, Armature-Capabilities',
+  'Access-Control-Allow-Headers': 'Content-Type, If-Match, Armature-User, Armature-Agent, Armature-Version, Armature-Capabilities',
   'Access-Control-Max-Age': '600',
 };
 

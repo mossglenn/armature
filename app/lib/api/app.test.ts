@@ -540,6 +540,10 @@ describe('users and identity resolution (ADR-0032)', () => {
   afterAll(async () => {
     const main = createOperatorStore({ branch: 'main' });
     for (const name of [EARLY, LATE]) await deleteScratchBranch(name, AS_OPERATOR).catch(() => undefined);
+    // A User holding grants cannot be deleted (the store keeps references whole), so the test's
+    // grants go first; the API never deletes a grant, the operator's cleanup of a fixture does.
+    const { documents: grants } = await main.queryDocuments('Grant', { user: REVIEWER_ID });
+    for (const grant of grants) await main.deleteDocument(grant['@id'], { author: AUTHOR, message: `Test cleanup: remove ${grant['@id']}` }).catch(() => undefined);
     for (const id of [REVIEWER_ID, agentId]) {
       if (id) await main.deleteDocument(id, { author: AUTHOR, message: `Test cleanup: remove ${id}` }).catch(() => undefined);
     }

@@ -15,6 +15,7 @@ import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from '
 import { writeDocuments } from './write';
 import { checkBranch } from '../operator/check';
 import { capabilitiesOf } from './version';
+import { createClient } from '@armature/client';
 import type { UserDocument } from './identity';
 
 const stamp = Date.now().toString(36);
@@ -259,7 +260,7 @@ describe('permissions (ADR-0068 decisions 4, 7 and 8)', () => {
     hub.request(`/api/v1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   const reviewer = as(asReviewer);
   const agent = as(asAgent);
-  const need = (id: string) => ({ message: 'A need', document: { label: 'Need', rationale: 'r' } });
+  const need = (label: string) => ({ message: 'A need', document: { label, rationale: 'r' } });
   const forbidden = async (res: Response, details: Record<string, unknown>) => {
     const body = await res.json();
     expect(res.status).toBe(403);
@@ -303,6 +304,16 @@ describe('permissions (ADR-0068 decisions 4, 7 and 8)', () => {
     const SHORT = `${MINE}-short`;
     expect((await reviewer('POST', '/branches', { name: SHORT })).status).toBe(201);
     expect((await reviewer('DELETE', `/branches/${SHORT}`)).status).toBe(200);
+  });
+
+  it('a merge into main needs a maintainer of main: refused for the reviewer, taken for the designer', async () => {
+    const M = `test-authz-to-main-${stamp}`;
+    expect((await on('POST', '/branches', { name: M })).status).toBe(201);
+    expect((await on('PUT', `/documents/LearningNeed/tm-${stamp}?branch=${M}`, need('tm'))).status).toBe(200);
+    await forbidden(await reviewer('POST', '/branches/main/merge', { message: 'Deliver', from: M }), { permission: 'merge', branch: 'main' });
+    const merged = await json(await on('POST', '/branches/main/merge', { message: 'Deliver', from: M }));
+    expect(merged.status).toBe(200);
+    expect(merged.body.upToDate).toBe(false);
   });
 
   it('an agent named directly, as header accepts it, owns the branch it creates and writes there, never to main', async () => {
@@ -350,5 +361,96 @@ describe('permissions (ADR-0068 decisions 4, 7 and 8)', () => {
     const refused = await json(await on('GET', `/documents/LearningNeed?createdBy=${DESIGNER}`));
     expect(refused.status).toBe(400);
     expect(refused.body.error).toBe('person_filter_refused');
+  });
+});
+
+describe('an agent acting for a person (ADR-0067 decisions 3, 6 and 8; ADR-0068 decisions 3 and 5)', () => {
+  const asAgentFor = (person: string) => ({ 'Content-Type': 'application/json', 'Armature-User': person, 'Armature-Agent': AGENT_EXTERNAL_ID });
+  const forDesigner = asAgentFor('demo-designer@example.edu');
+  const call = (headers: Record<string, string>) => (method: string, path: string, body?: unknown) =>
+    hub.request(`/api/v1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const doc = (label: string, message = 'Drafted by the agent') => ({ message, document: { label, rationale: 'r' } });
+  let agentUserId: string;
+
+  beforeAll(async () => {
+    agentUserId = (await json(await on('GET', `/documents/User?externalId=${encodeURIComponent(AGENT_EXTERNAL_ID)}`))).body[0]['@id'];
+  });
+
+  it('the agent is the author and createdBy; the person is named in the commit\'s trailer, byte for byte in history', async () => {
+    const id = `LearningNeed/by-agent-${stamp}`;
+    const res = await json(await call(forDesigner)('PUT', `/documents/${id}?branch=${BRANCH}`, doc('Drafted')));
+    expect(res.status).toBe(200);
+    const stored = (await json(await on('GET', `/documents/${id}?branch=${BRANCH}`))).body;
+    expect(stored.createdBy).toBe(agentUserId);
+    const head = (await json(await on('GET', `/branches/${BRANCH}`))).body.head;
+    expect(head.author).toBe(agentUserId);
+    expect(head.message).toBe('Drafted by the agent\n\nArmature-On-Behalf-Of: demo-designer@example.edu');
+    const history = (await json(await on('GET', `/documents/${id}/history?branch=${BRANCH}&diff=false`))).body;
+    expect(history.entries[0].message).toBe('Drafted by the agent\n\nArmature-On-Behalf-Of: demo-designer@example.edu');
+  });
+
+  it('joins an existing trailer block rather than starting a second paragraph', async () => {
+    const id = `LearningNeed/by-agent-co-${stamp}`;
+    const message = 'Dictated beside the designer\n\nCo-Authored-By: A Subject Expert';
+    expect((await call(forDesigner)('PUT', `/documents/${id}?branch=${BRANCH}`, doc('Dictated', message))).status).toBe(200);
+    const head = (await json(await on('GET', `/branches/${BRANCH}`))).body.head;
+    expect(head.message).toBe(`${message}\nArmature-On-Behalf-Of: demo-designer@example.edu`);
+  });
+
+  it("authority is the person's: the agent may do for the reviewer only what the reviewer may", async () => {
+    const forReviewer = asAgentFor('demo-reviewer@example.edu');
+    const E = `test-authz-agent-for-${stamp}`;
+    expect((await on('POST', '/branches', { name: E })).status).toBe(201); // the designer's
+    const refused = await json(await call(forReviewer)('PUT', `/documents/LearningNeed/af-${stamp}?branch=${E}`, doc('x')));
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({ error: 'forbidden', permission: 'write', branch: E });
+    expect(refused.body.message).toContain('demo-reviewer@example.edu');
+  });
+
+  it('a branch the agent creates for a person is owned by the person, in a commit the agent authored', async () => {
+    const B = `test-authz-agent-made-${stamp}`;
+    expect((await call(forDesigner)('POST', '/branches', { name: B })).status).toBe(201);
+    const owner = (await json(await on('GET', '/documents/Grant?role=Owner'))).body.find((g: TerminusDocument) => g.branch === B);
+    expect(owner).toMatchObject({ user: DESIGNER, status: 'Active' });
+    const head = (await json(await on('GET', '/branches/main'))).body.head;
+    expect(head.author).toBe(agentUserId);
+    expect(head.message).toContain('Armature-On-Behalf-Of: demo-designer@example.edu');
+  });
+
+  it("refuses the hub's own trailers from a client, on every write envelope (decision 6)", async () => {
+    for (const line of ['Armature-On-Behalf-Of: someone@example.edu', 'armature-relayed-by: agent:x']) {
+      const res = await json(await on('PUT', `/documents/LearningNeed/rt-${stamp}?branch=${BRANCH}`, doc('x', `Forged\n\n${line}`)));
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('reserved_trailer');
+    }
+    const merge = await json(await on('POST', `/branches/${BRANCH}/merge`, { message: `Merge\n\nArmature-On-Behalf-Of: x`, from: 'main' }));
+    expect(merge.body.error).toBe('reserved_trailer');
+    const register = await json(await on('POST', '/users', { message: 'Armature-Relayed-By: agent:x', user: { displayName: 'x', externalId: `x-${stamp}` } }));
+    expect(register.body.error).toBe('reserved_trailer');
+  });
+
+  it('refuses an unregistered agent, a person named as the agent, and an agent as the credential', async () => {
+    const unknown = await json(await call({ ...forDesigner, 'Armature-Agent': `agent:test/none-${stamp}` })('PUT', `/documents/LearningNeed/u-${stamp}?branch=${BRANCH}`, doc('x')));
+    expect(unknown.status).toBe(401);
+    expect(unknown.body.error).toBe('unknown_agent');
+    const person = await json(await call({ ...forDesigner, 'Armature-Agent': 'demo-reviewer@example.edu' })('PUT', `/documents/LearningNeed/u-${stamp}?branch=${BRANCH}`, doc('x')));
+    expect(person.status).toBe(400);
+    expect(person.body.error).toBe('not_an_agent');
+    const agentCredential = await json(await call(asAgentFor(AGENT_EXTERNAL_ID))('PUT', `/documents/LearningNeed/u-${stamp}?branch=${BRANCH}`, doc('x')));
+    expect(agentCredential.status).toBe(400);
+    expect(agentCredential.body.error).toBe('not_a_person');
+  });
+
+  it('@armature/client sends the agent with its agent option', async () => {
+    const client = createClient({
+      baseUrl: 'http://localhost',
+      user: 'demo-designer@example.edu',
+      agent: AGENT_EXTERNAL_ID,
+      fetch: (input, init) => hub.request(input, init),
+    });
+    const id = `client-agent-${stamp}`;
+    const { data } = await client.documents.put('LearningNeed', id, { branch: BRANCH, message: 'Through the client', document: { label: 'x', rationale: 'r' } });
+    expect(data.commit).toMatch(/^[a-z0-9]+$/);
+    expect((await json(await on('GET', `/documents/LearningNeed/${id}?branch=${BRANCH}`))).body.createdBy).toBe(agentUserId);
   });
 });
