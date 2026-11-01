@@ -26,6 +26,8 @@ none, but under the `oidc` resolver it verifies the signed token a person's iden
 issued (ADR-0067 decision 1), and an AI agent writing for a person is recorded as acting on their
 behalf (decision 3).
 
+> **Note (2026-11-01):** the fourth responsibility is built: the hub authorizes from `Grant` documents on `main` (ADR-0068, Status note of 2026-11-01), and `User`'s schema documentation is corrected.
+
 ## Context
 With ArmatureDocument established as the abstract base for all primary artifact types (ADR-0014), the path to authorship is clear: add a `createdBy` field to `ArmatureDocument` referencing a `User` type. The design question is where the lines are between three distinct systems: the external auth system (identity), TerminusDB (database access control), and Armature (design process participation).
 

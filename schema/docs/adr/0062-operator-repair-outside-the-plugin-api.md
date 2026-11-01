@@ -35,6 +35,15 @@ repaired on the remote, where the registry and the rules of record are, and clon
 > `deleteDatabase`, for the tests' scratch databases. Decided by Amos on 2026-11-01 over
 > replaying the export through the write pipeline and a loader outside the API.
 
+> **Note (2026-11-01, authorization):** three changes with ADR-0068. `delete --scratch-branch`
+> revokes the grants naming the branch before deleting it, as a marked commit on `main`, and so
+> takes `--as` (ADR-0068 decision 3). `check` gains two whole-store rules when `main` is checked
+> through a store that can list branches: a grant in force naming a branch the store lacks and a
+> branch with no `Owner` in force (ADR-0068 decision 3, note); the repair is `put` on the grant.
+> `put` writes a `Grant` on `main` through its transient branch, the pipeline told which branch
+> the write is for, which is how an instance's first administrator arrives (ADR-0068 decision 6).
+> The operator tools stay outside the permission check, as decision 4's table has it.
+
 **Note 2026-10-22, built.** The three tools of decision 5 are `check`, `delete` and `put` in
 `app/lib/operator/`, with a command-line entry in `app/operator.ts`, tested in
 `app/lib/operator/operator.test.ts`. Three things differ from the text below, which is left as
