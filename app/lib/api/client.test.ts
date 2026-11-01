@@ -246,3 +246,37 @@ describe('@armature/client over the app in-process', () => {
     expect(exported.data.documents.length).toBeGreaterThan(0);
   });
 });
+
+describe('a deadline and cancellation on every call', () => {
+  /** A hub that never answers, failing only when the call's signal aborts, as fetch does. */
+  const silent = (input: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+    });
+
+  it('rejects a call past its timeout with a TimeoutError', async () => {
+    const slow = createClient({ baseUrl: 'http://hub.localhost', fetch: silent, timeout: 20 });
+    await expect(slow.discover()).rejects.toMatchObject({ name: 'TimeoutError' });
+  });
+
+  it('rejects a call when its signal aborts, with or without a timeout', async () => {
+    const controller = new AbortController();
+    const cancelled = createClient({ baseUrl: 'http://hub.localhost', fetch: silent, signal: controller.signal, timeout: 60_000 });
+    const pending = cancelled.discover();
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('sends no signal when given neither', async () => {
+    let seen: AbortSignal | null | undefined = null;
+    const plain = createClient({
+      baseUrl: 'http://hub.localhost',
+      fetch: (input, init) => {
+        seen = init?.signal;
+        return app.request(input, init);
+      },
+    });
+    await plain.discover();
+    expect(seen).toBeUndefined();
+  });
+});

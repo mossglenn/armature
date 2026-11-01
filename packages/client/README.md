@@ -37,6 +37,12 @@ try {
 const hub = createClient({ baseUrl: 'http://hub.test', user: '…', fetch: (input, init) => app.request(input, init) });
 ```
 
+**Deadlines and cancellation.** `timeout` gives every call a deadline in milliseconds, its body included, after which it rejects with the fetch's `TimeoutError`; `signal` cancels every call when it aborts (`AbortError`). Both are client options, so for a signal per request (an incoming request's own, say) create a client per request. There is no default deadline and no retry. A write that timed out may have landed: re-read, or retry with `ifMatch`, rather than resend it blindly.
+
+```ts
+const hub = createClient({ baseUrl: process.env.ARMATURE_HUB_URL!, user: '…', timeout: 10_000, signal: request.signal });
+```
+
 **Installing it in another repository.** Neither package is published to a registry; another repository installs both by git reference, the types first, since the client takes them as a peer dependency (it uses the copy you install rather than fetching its own). With pnpm:
 
 ```sh
