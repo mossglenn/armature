@@ -7,8 +7,9 @@
  * the routes do not have. What it carries so a plugin need not: the ref as
  * `?branch=` or `?ref=`, the commit every response was served from (the ETag,
  * returned as `commit`), optimistic concurrency (`ifMatch` → If-Match), the
- * identity header, the write envelopes, and the hub's error body as a thrown
- * HubError with its stable code. Nothing here knows TerminusDB exists.
+ * identity header, the write envelopes, the hub's error body as a thrown
+ * HubError with its stable code, and a deadline and cancellation on every
+ * call (`timeout`, `signal`). Nothing here knows TerminusDB exists.
  *
  * The client takes a `fetch`, so a test can hand it a Hono app's `request`
  * and exercise every route in-process; the hub's own contract test does that
@@ -44,6 +45,18 @@ export interface ClientOptions {
   version?: string | null;
   /** Capability identifiers this caller relies on, sent as `Armature-Capabilities`; the hub refuses by name what it lacks. */
   capabilities?: string[];
+  /**
+   * Cancels every call this client makes when it aborts (a request's own
+   * signal, for one). A call cancelled so rejects with the fetch's `AbortError`.
+   * For a signal per request, create a client per request; it is one object.
+   */
+  signal?: AbortSignal;
+  /**
+   * Milliseconds each call may take, its body included, before it rejects with
+   * the fetch's `TimeoutError`; none by default. A write that times out may
+   * have landed: re-read, or retry with `ifMatch`, rather than resend blindly.
+   */
+  timeout?: number;
 }
 
 /** The body of GET /discover: the hub, not the graph. */
@@ -403,7 +416,11 @@ export function createClient(options: ClientOptions) {
     if (version) headers['Armature-Version'] = version;
     if (options.capabilities?.length) headers['Armature-Capabilities'] = options.capabilities.join(', ');
     if (ifMatch) headers['If-Match'] = `"${ifMatch}"`;
+    const signals = [options.signal, options.timeout !== undefined ? AbortSignal.timeout(options.timeout) : undefined].filter(
+      (s): s is AbortSignal => s !== undefined
+    );
     const init: RequestInit = { method, headers };
+    if (signals.length) init.signal = signals.length === 1 ? signals[0] : AbortSignal.any(signals);
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
