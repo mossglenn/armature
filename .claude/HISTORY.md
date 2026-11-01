@@ -6,6 +6,43 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-10-31 (step 1, the store adapter interface; the deep review's B1, B2 and small fixes; PRs #83 to #85)
+
+**Where things stood at the close.** **Phase 8; the workspace hub plan's step 1 built, with the deep review's B1, B2 and small fixes (2026-10-31; PRs #83 to #85 merged, CI green on `main` at `6fcb64f`).** The store adapter is three interfaces by role (`DocumentReader`, `Store`, `OperatorStore`) over one class, `TerminusStore`, its refusals reported by a store-neutral `kind` (ADR-0055 and ADR-0066, notes of 2026-10-31). A request that reads more than once is answered at one commit, and a write checks its rules at the head it captured and commits only onto it (ADR-0025 decisions 3 and 7, notes; revision 2026-10-31). The review's small confirmed fixes are in (What's Next item 28), except the merge route's head precondition, which waits on check AK. ADR-0065, 0067 and 0068 stay accepted and unbuilt apart from ADR-0067 decision 7; ADR-0066 stays Proposed until check AI runs. **Next: plan §14 step 2, workspace mode with TerminusDB as the test bed, with item 27's compose changes under one fresh-VM rehearsal (What's Next item 17).**
+
+### Done
+
+- **PR #83, plan §14 step 1, the adapter interface:** `app/lib/api/store.ts` exports `DocumentReader` (documents at one ref: what the engine, the intelligence reads, `check` and `discover` use; the six methods the plan named plus `getSchema`), `Store` (adding writes, history, branches and merge) and `OperatorStore` (adding the four operator methods, reached only through `createOperatorStore`); the class is `TerminusStore`. The engine's `WriteContext`, the `Graph`, `check` and `requireCommit` are typed against `DocumentReader`; `repair.ts` takes an `OperatorStore`. `StoreError.kind` (`not_found`, `version_mismatch`, `unknown_ref`, `exists`, `id_prefix`, `id_mismatch`, `other`; later `timeout`) replaced the 15 tests of TerminusDB error names outside the adapter. Guard tests in `store.test.ts`: no module under `app/lib/api/` but the adapter names the class or reaches the operator factory. A fix the probe found: `POST /branches` from a missing origin answered 409 `branch_exists` (the route's `/exist/i` matched `api:OriginBranchDoesNotExist`); now 404 `unknown_ref`, a fix since `api.md`'s error table promised it
+- **PR #84, B1 and B2:** `snapshot()` in `http.ts` resolves a branch to its head once for every intelligence read and the export; the history route reads the head before and after (equal heads prove the answer, history never being rewritten), three tries, then 503 `branch_busy` with `Retry-After: 1`; the Design Graph pages read their companion panels at the export's commit, and the Focus page re-reads its trace when it names another commit. The write pipeline captures the head, refuses a stale `If-Match` with 412 before any read, runs the lookup, the `User` copy, `asOf` and every rule at that commit and sends it as the store's data version; a write without `If-Match` that loses a race reruns whole on a fresh copy of its documents, up to three runs (`WRITE_ATTEMPTS`), then 409 `branch_moved`. Platform check AM. `app/lib/api/race.test.ts`, nine tests landing a real commit between two of a request's store calls; eight fail on the old code. Revision 2026-10-31 (`REVISIONS`, `CLIENT_REVISION`, `client-changes.md`)
+- **PR #85, item 28:** `If-Match: *` refused (400 `bad_if_match`); integer, decimal and boolean query values only in exact forms (400 `bad_query`); registration retried only on `version_mismatch` or `exists`; a 10 MiB body limit (`hono/body-limit`, 413 `body_too_large`); `since` on the changes route in the branch's history, its log or a merge followed transitively through `mergeSource` and logs read at commit paths (400 `not_an_ancestor`); the 5,000-commit walk throws 500 `history_too_long`; a 30-second deadline on every store call, the dropped-read resend inside it (504 `store_timeout`); `signal` and `timeout` options on `@armature/client`; Geist from the `geist` package (1.8.1, pinned), so `next build` needs no network. A second 2026-10-31 entry in `client-changes.md`, riding the revision
+- Tests 301 to 323; the review's banner records what of B1, B2, H3, H7 and the HTTP items is built
+
+### Session notes
+
+- Started from SESSION.md's hand-off: read `store.ts` whole and counted the importers' use of each method, which showed the error-name leak the plan had not counted; three questions (PR split, interface shape, error vocabulary), each answered as recommended
+- Before mapping errors by kind, probed the store for branch creation's error names, which found the `branch_exists` bug; the fix went in its own commit so the refactor commit changed no behavior
+- Before writing B1, probed whether history and log accept a commit path (history: 500; log: works), which shaped the history route and became check AM; two more questions (the write race, the history route), answered as recommended
+- The race tests were run against the old pipeline by stashing the source changes; one, the export's, passed there too because its hook fired after the documents were read, and was moved before them
+- Item 28 needed one decision (ancestry through merges); its six commits split three files by hunk, each commit typechecked alone with `git stash push --keep-index`, and the result compared byte for byte with the verified tree. Each PR merged on Amos's "confirm and merge", CI confirmed on `main`
+
+### Facts from 2026-10-31 worth keeping
+
+- **`/api/history` at a commit path is a 500; `/api/log` at one works**, listing from that commit back (platform check AM; `docs/development-plan.md` §9)
+- **The store's branch-creation errors:** an existing name is `api:BranchExistsError`, a missing origin branch `api:OriginBranchDoesNotExist`, a missing origin commit a 400 with no `@type` (all HTTP 400; probed 2026-10-31; home: `TERMINUS_KINDS` in `store.ts`)
+- **The importer counts SESSION.md carried** (26 modules, 15 by value) landed in PR #83 and its ADR notes; the fact is retired from the Notes
+- **`geist` 1.8.1** (2026-10-16) was the newest release older than two weeks on 2026-10-31; 1.8.2 and 1.9.0 were too new
+
+### Decisions taken
+
+- Step 1 and B1/B2 as two pull requests, the refactor with no behavior change first (Amos, 2026-10-31; plan §14 step 1, note)
+- The interface split by role, `DocumentReader` the subset a file store and Quiver's rules package need (Amos; ADR-0055 and ADR-0066, notes; plan §10)
+- Store refusals by a store-neutral `kind`, the store's own name kept for logs (Amos; ADR-0055, note)
+- A write without `If-Match` that loses a race reruns whole, up to three runs, then 409 `branch_moved` (Amos; ADR-0025 decision 7, note; `api.md`; `client-changes.md`)
+- The history route proves its answer by the head around it, three tries, then 503 `branch_busy` (Amos; ADR-0025 decision 3, note; check AM)
+- `since` counts as an ancestor on the branch's log or through a merge, followed transitively (Amos; `api.md` § changes; the review's banner)
+
+---
+
 ## 2026-10-30, night, later (the context files plan and its three steps; PRs #80 to #82)
 
 **Where things stood at the close.** **Phase 8; the workspace hub's decisions complete, nothing of it built; the context files split (2026-10-30, night; PRs #77 to #79 merged, CI green on `main` at `a14db1e`).** ADR-0065 (the workspace hub), ADR-0067 (authentication) and ADR-0068 (authorization) are accepted since 2026-10-30; ADR-0066 (the file-backed store) stays Proposed until platform check AI runs. Of all that, only ADR-0067 decision 7, the `Host` and `Origin` checks, is built. An outside agent's deep review of the repository (`docs/armature-deep-review-2026-10-30.md`) was checked and found accurate; its ten decisions are taken as dated notes on ADR-0025, 0065, 0066, 0067 and 0068, and its two confirmed code defects, B1 and B2, are folded into step 1. **Next: `docs/workspace-hub-plan.md` §14 step 1, the adapter interface extracted from `app/lib/api/store.ts`, with B1 and B2 (reads and writes pinned to one commit, with race tests) in its scope or right behind it.**
