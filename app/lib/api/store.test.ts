@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isDroppedConnection, isUnknownRef, StoreError, TerminusStore } from './store';
+import { isDroppedConnection, isUnknownRef, StoreError, TerminusStore, STORE_TIMEOUT_MS } from './store';
 
 // The adapter over a stubbed fetch: a connection the store closes under a
 // request (check AG) is retried once for a read and never for a write; the
@@ -143,5 +143,28 @@ describe('the adapter stays behind its interfaces (workspace hub plan §13)', ()
 
   it('no module of the API reaches the operator-side methods (ADR-0062)', () => {
     expect(sources.filter((s) => /\b(createOperatorStore|OperatorStore)\b/.test(s.text)).map((s) => s.file)).toEqual([]);
+  });
+});
+
+describe('the deadline on every call (the deep review\'s H7)', () => {
+  /** A fetch that never answers, failing only when its signal aborts, as fetch does. */
+  const stalled = () =>
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        })
+    );
+
+  it('fails a call the store does not answer in time as a timeout', async () => {
+    stalled();
+    const quick = new TerminusStore({ url: 'http://store.test', user: 'u', pass: 'p', org: 'admin', db: 'db', timeoutMs: 20 }, { branch: 'main' });
+    const err = await quick.getDocument('Module/m1').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(StoreError);
+    expect((err as StoreError).kind).toBe('timeout');
+  });
+
+  it('is thirty seconds unless a store is given another', () => {
+    expect(STORE_TIMEOUT_MS).toBe(30_000);
   });
 });
