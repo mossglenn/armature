@@ -149,6 +149,7 @@ const TERMINUS_KINDS: Record<string, StoreErrorKind> = {
   'api:DocumentAccessImpossible': 'unknown_ref',
   'api:OriginBranchDoesNotExist': 'unknown_ref',
   'api:BranchExistsError': 'exists',
+  'api:DatabaseAlreadyExists': 'exists',
   'api:DocumentIdAlreadyExists': 'exists',
   'api:SubmittedDocumentIdDoesNotHaveExpectedPrefix': 'id_prefix',
   'api:SubmittedIdDoesNotMatchGeneratedId': 'id_mismatch',
@@ -247,6 +248,10 @@ export interface OperatorStore extends Store {
   deleteDocument(id: string, opts: { author: string; message: string }): Promise<{ commit: string }>;
   /** A branch with no origin, empty of data and schema. */
   createEmptyBranch(name: string): Promise<void>;
+  /** Creates this store's database when it does not exist; true when it was created. */
+  ensureDatabase(): Promise<boolean>;
+  /** Deletes this store's database, every branch and commit in it; for the tests' scratch databases. */
+  deleteDatabase(): Promise<void>;
 }
 
 /** Where a store is and how to reach it: one TerminusDB database. */
@@ -677,6 +682,37 @@ export class TerminusStore implements OperatorStore {
       },
     });
     return r.body;
+  }
+
+  // --- the database --------------------------------------------------------
+
+  /**
+   * Operator-side (ADR-0062): a workspace hub creates its own store on the
+   * first clone, since a person's machine has no operator. A GET tells an
+   * absent database (404) from a present one, and a create that loses a race
+   * to another is `DatabaseAlreadyExists`, read as present (platform check AN).
+   * A new database's main holds one InitialCommit by `system` (AN4).
+   */
+  async ensureDatabase(): Promise<boolean> {
+    try {
+      await this.request('GET', `/api/db/${this.dbPath}`);
+      return false;
+    } catch (err) {
+      if (!(err instanceof StoreError && err.status === 404)) throw err;
+    }
+    try {
+      await this.request('POST', `/api/db/${this.dbPath}`, {
+        body: { label: this.config.db, comment: 'Created by an Armature hub', schema: true },
+      });
+      return true;
+    } catch (err) {
+      if (err instanceof StoreError && err.kind === 'exists') return false;
+      throw err;
+    }
+  }
+
+  async deleteDatabase(): Promise<void> {
+    await this.request('DELETE', `/api/db/${this.dbPath}`);
   }
 
   // --- branches ------------------------------------------------------------
