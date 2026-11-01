@@ -40,6 +40,9 @@
  *     Every record whose class carries createdBy names one of them: the
  *     reviewer the finding, the designer the rest. The API sets createdBy from
  *     the caller (ADR-0032); the seed writes the store directly and sets it
+ *   2 Grants (ADR-0068 decision 6): the designer as Administrator and as
+ *     Maintainer of every branch, so the demonstration and the tests run as
+ *     they did before authority was checked; the reviewer holds none
  *
  * Every rule the hub enforces holds over the seed: CI runs the operator's
  * `check` after seeding (ADR-0062).
@@ -715,6 +718,28 @@ const documents = [
     "confidence": "Medium",
     "status": "Open",
     "createdBy": id("User", "demo-reviewer"),
+  },
+
+  // -------------------------------------------------------------------------
+  // Grants (ADR-0068 decision 6)
+  // -------------------------------------------------------------------------
+
+  // The instance's first administrator comes from outside the API, here from
+  // the seed. Hash-keyed over (user, role, branch): the store mints the ids,
+  // and an absent branch means every branch.
+  {
+    "@type": "Grant",
+    "user": id("User", "demo-designer"),
+    "role": "Administrator",
+    "status": "Active",
+    "rationale": "The instance's first administrator, from the seed.",
+  },
+  {
+    "@type": "Grant",
+    "user": id("User", "demo-designer"),
+    "role": "Maintainer",
+    "status": "Active",
+    "rationale": "Maintains every branch, so the demonstration needs no further grants.",
   },
 
 ];

@@ -3,7 +3,8 @@ import { storeFor } from '../config';
 import { ApiError } from '../errors';
 import { BRANCH_NAME, ifMatchFrom, readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { grantOwner, revokeGrantsNaming } from '../grants';
-import { resolveAuthor, resolveUser } from '../identity';
+import { requirePermission } from '../authorization';
+import { resolveUser } from '../identity';
 import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
 
 /**
@@ -251,7 +252,9 @@ branches.post('/:name/merge', async (c) => {
   if (sourceName === targetName) throw new ApiError(400, 'bad_request', 'A branch cannot be merged into itself');
 
   const target = storeFor(c, { branch: targetName });
-  const author = await resolveAuthor(c);
+  const who = await resolveUser(c);
+  await requirePermission(c, who, { permission: 'merge', branch: targetName });
+  const author = who.id;
   const source = target.at({ branch: sourceName });
   const [targetHead, sourceHead] = await Promise.all([target.head(), source.head()]);
   if (!targetHead) throw new ApiError(404, 'not_found', `Branch ${targetName} has no commits`);
@@ -328,6 +331,7 @@ branches.delete('/:name', async (c) => {
   const store = storeFor(c, { branch: 'main' });
   const names = await store.listBranches();
   if (!names.includes(name)) throw new ApiError(404, 'unknown_ref', `No branch ${name}`);
+  await requirePermission(c, who, { permission: 'delete', branch: name });
   const target = store.at({ branch: name });
   const head = await target.head();
   const ifMatch = ifMatchFrom(c);

@@ -637,6 +637,21 @@ describe('users and identity resolution (ADR-0032)', () => {
     expect(listed).toContain(REVIEWER_ID);
   });
 
+  it("refuses the reviewer's write to the designer's branch until its owner grants Maintainer on it (ADR-0068 decision 4)", async () => {
+    const refused = await write(
+      `/api/v1/documents/${NEED}?branch=${EARLY}`,
+      { message: 'Too soon', document: { label: 'Carried need', rationale: 'ADR-0032 decision 5' } },
+      asReviewer
+    );
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: 'forbidden', permission: 'write', branch: EARLY });
+    const granted = await post('/api/v1/documents', {
+      message: 'The reviewer may write the early branch',
+      documents: [{ '@type': 'Grant', user: REVIEWER_ID, role: 'Maintainer', branch: EARLY, status: 'Active' }],
+    });
+    expect(granted.status).toBe(200);
+  });
+
   it('carries the User onto a branch forked before it existed, in the same commit as the write', async () => {
     const before = await get(`/api/v1/documents/User/test-reviewer-${stamp}?branch=${EARLY}`);
     expect(before.status).toBe(404);
@@ -663,6 +678,15 @@ describe('users and identity resolution (ADR-0032)', () => {
   it('merges the carried copy into a branch that already holds the User without conflict', async () => {
     const created = await post('/api/v1/branches', { name: LATE, from: { branch: 'main' } });
     expect(created.status).toBe(201);
+
+    const refused = await post(`/api/v1/branches/${LATE}/merge`, { message: 'Merge the carried write', from: EARLY }, asReviewer);
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: 'forbidden', permission: 'merge', branch: LATE });
+    const granted = await post('/api/v1/documents', {
+      message: 'The reviewer may merge into the late branch',
+      documents: [{ '@type': 'Grant', user: REVIEWER_ID, role: 'Maintainer', branch: LATE, status: 'Active' }],
+    });
+    expect(granted.status).toBe(200);
 
     const res = await post(`/api/v1/branches/${LATE}/merge`, { message: 'Merge the carried write', from: EARLY }, asReviewer);
     expect(res.status).toBe(200);
