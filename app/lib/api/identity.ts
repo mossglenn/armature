@@ -118,7 +118,9 @@ export async function resolveUser(c: Context): Promise<ResolvedUser> {
       });
       return { id, user: document };
     } catch (err) {
-      if (err instanceof StoreError && (err.kind === 'version_mismatch' || err.status === 400)) continue;
+      // Only the race: main moved under the insert, or the id was taken. Any
+      // other refusal is a fault to surface, not a reason to look again.
+      if (err instanceof StoreError && (err.kind === 'version_mismatch' || err.kind === 'exists')) continue;
       throw err;
     }
   }
