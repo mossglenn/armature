@@ -19,7 +19,8 @@ test('draws the seed in lifecycle columns', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/graph');
   await expect(page.getByRole('heading', { name: 'Design Graph' })).toBeVisible();
-  await expect(page.getByText('67 records')).toBeVisible();
+  // Every document at the ref, the two users and the seed's two grants included (ADR-0068 decision 6).
+  await expect(page.getByText('69 records')).toBeVisible();
   await expect(page.locator('.react-flow__node')).toHaveCount(39);
   await expect(page.locator('.react-flow__edge.gedge-junction')).toHaveCount(27);
   // The header in full, or in its short form with the name as its title when the fit is narrow.
