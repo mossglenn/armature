@@ -1,3 +1,4 @@
+import { activeGrantsNaming, revokeGrantsNaming } from '../api/grants';
 import { findUserByExternalId, REGISTRY_BRANCH, type ResolvedUser } from '../api/identity';
 import { createOperatorStore, createStore, type Commit, type OperatorStore } from '../api/store';
 import { parseDocuments, writeDocuments, type WriteResult } from '../api/write';
@@ -120,20 +121,38 @@ export async function deleteDocument(opts: { branch: string; id: string; as: str
   return { commit, before: base };
 }
 
+/** A scratch name: one with a scratch prefix, or a workspace branch `<handle>_<name>` whose name has one. */
+export const isScratchName = (name: string): boolean => {
+  const bare = name.includes('_') ? name.slice(name.indexOf('_') + 1) : name;
+  return SCRATCH_PREFIXES.some((p) => name.startsWith(p) || bare.startsWith(p));
+};
+
 /**
  * A scratch branch deleted (decision 7): only a name with a scratch prefix,
  * never a branch holding design work, which is process data to name rather
- * than delete. A branch deletion makes no commit; its commits stay readable by
- * id (check T2), so the head is returned for the record.
+ * than delete. The grants naming the branch are revoked first, as a marked
+ * commit on `main` by the operator (ADR-0068 decision 3: revoke, then
+ * delete), when there are any. The deletion itself makes no commit; the
+ * branch's commits stay readable by id (check T2), so the head is returned
+ * for the record.
  */
-export async function deleteScratchBranch(name: string): Promise<{ head?: Commit }> {
-  if (!SCRATCH_PREFIXES.some((p) => name.startsWith(p))) {
+export async function deleteScratchBranch(name: string, opts: { as: string }): Promise<{ head?: Commit; revoked: string[] }> {
+  if (!isScratchName(name)) {
     throw new OperatorError(`${name} is not a scratch branch (its name must start with ${SCRATCH_PREFIXES.join(', ')}); name an abandoned exploration, do not delete it`);
+  }
+  const who = await operatorIdentity(opts.as);
+  const main = createOperatorStore({ branch: REGISTRY_BRANCH });
+  let revoked: string[] = [];
+  if ((await activeGrantsNaming(main, name)).length) {
+    const message = 'Scratch branch deleted';
+    ({ result: { revoked } } = await asOperatorCommit(REGISTRY_BRANCH, who, message, { tool: 'delete', rulesSkipped: false }, (transient) =>
+      revokeGrantsNaming(who, name, message, { main, write: transient })
+    ));
   }
   const store = createOperatorStore({ branch: name });
   const head = await store.head();
   await store.deleteBranch(name);
-  return { head };
+  return { head, revoked };
 }
 
 /** What a commit made without the hub's rules says about itself (decision 4). */
@@ -162,7 +181,8 @@ export async function putDocuments(opts: {
     who,
     message,
     { tool: 'put', rulesSkipped: opts.unchecked === true },
-    (transient) => writeDocuments(documents, { branch: transient, who, message, invariants: opts.unchecked ? 'skip' : 'check' })
+    (transient) =>
+      writeDocuments(documents, { branch: transient, target: opts.branch, who, message, invariants: opts.unchecked ? 'skip' : 'check' })
   );
   // The ids as the transient write minted them; the commit is the target's.
   return { commit, ids: result.ids };

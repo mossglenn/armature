@@ -10,6 +10,8 @@
  *   (CLASS_ANCESTORS), so a new class with references is drawn without a change
  *   here. Fields whose target is a User are never drawn: nothing is drawn per
  *   person (ADR-0021); `createdBy` and `attestedBy` are text in the panel.
+ *   Only design records are drawn: a document outside DesignRecord (a User, a
+ *   Grant of authority, ADR-0068) is counted, never a node.
  * - A document in the schema's `relationship` category (ADR-0027) with two
  *   references to non-person records is a *junction* (ADR-0003) and becomes a
  *   labeled edge between them carrying the document; with one reference (an
@@ -101,6 +103,10 @@ export interface DeriveOptions {
 }
 
 const PERSON = 'User';
+
+/** Under DesignRecord (ADR-0017): what the graph draws. A User or a Grant is not. */
+const isDesignRecord = (cls: string): boolean =>
+  cls === 'DesignRecord' || ((CLASS_ANCESTORS as Record<string, readonly string[]>)[cls]?.includes('DesignRecord') ?? false);
 
 /** The local part of a document id: `AssessmentItem/bias-type-mc` → `bias-type-mc`. */
 export const localPart = (id: string): string => (id.includes('/') ? id.slice(id.indexOf('/') + 1) : id);
@@ -209,7 +215,7 @@ export function derive(docs: Doc[], options: DeriveOptions = {}): DerivedGraph {
   for (const doc of docs) {
     const cls = doc['@type'];
     counts.set(cls, (counts.get(cls) ?? 0) + 1);
-    if (cls === PERSON) continue;
+    if (!isDesignRecord(cls)) continue;
     const refs = references(doc).filter((r) => !isPersonField(r));
     for (const r of refs) {
       if (!byId.has(r.target)) {
@@ -254,7 +260,7 @@ export function derive(docs: Doc[], options: DeriveOptions = {}): DerivedGraph {
 
   for (const doc of docs) {
     const cls = doc['@type'];
-    if (cls === PERSON) continue;
+    if (!isDesignRecord(cls)) continue;
     const refs = references(doc).filter((r) => !isPersonField(r) && byId.has(r.target));
     const junction = isJunctionClass(cls);
 
@@ -294,7 +300,7 @@ export function derive(docs: Doc[], options: DeriveOptions = {}): DerivedGraph {
 /** The classes the documents contain, for a legend: name, count, category, stage. */
 export function classesIn(counts: Map<string, number>): Array<{ cls: string; count: number; category: string; stage: number }> {
   return [...counts]
-    .filter(([cls]) => cls !== PERSON)
+    .filter(([cls]) => isDesignRecord(cls))
     .map(([cls, count]) => ({
       cls,
       count,

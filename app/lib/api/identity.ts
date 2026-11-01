@@ -36,6 +36,18 @@ export const USER_HEADER = 'Armature-User';
 /** Where `User` documents are created and resolved (ADR-0032 decision 2). */
 export const REGISTRY_BRANCH = 'main';
 
+/**
+ * The short handle a workspace's branch name begins with (ADR-0065;
+ * docs/workspace-hub-plan.md §4): the external identifier's local part, in the
+ * characters a branch name allows. A naming convention, not ownership, which
+ * is a grant on the remote (ADR-0068). Because it identifies the person, the
+ * pseudonymous export rewrites it where a grant records such a branch name.
+ */
+export function handleOf(externalId: string): string {
+  const local = externalId.split('@')[0].replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[^A-Za-z0-9]+/, '');
+  return local || 'user';
+}
+
 /** An agent is a `User` whose externalId begins with this (ADR-0032 decision 7). */
 export const AGENT_PREFIX = 'agent:';
 export const isAgentExternalId = (externalId: unknown): boolean =>

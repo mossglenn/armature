@@ -45,6 +45,14 @@ import { StoreError, type DocumentReader, type Store, type TerminusDocument } fr
 
 export interface WriteOptions {
   branch: Store;
+  /**
+   * The branch this write is for, when `branch` is a transient one cut from
+   * it: the operator's repairs are made on an `operator-…` branch and applied
+   * onto their target (ADR-0062). The main-only rule (constraint 21) judges
+   * by it, so the first Administrator grant can come from the operator's
+   * `put` on `main` (ADR-0068 decision 6). Absent, `branch` is the target.
+   */
+  target?: string;
   who: ResolvedUser;
   message: string;
   ifMatch?: string;
@@ -113,7 +121,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   const { branch } = opts;
   checkUnique(documents);
   const onMain = documents.find((doc) => livesOnMain(doc['@type']));
-  if (onMain && branch.branch !== REGISTRY_BRANCH) {
+  if (onMain && (opts.target ?? branch.branch) !== REGISTRY_BRANCH) {
     throw new ApiError(
       400,
       'grants_live_on_main',

@@ -12,6 +12,9 @@ import type { Hono } from 'hono';
 import { app, createApp } from './app';
 import { configFromEnv } from './config';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from './store';
+import { writeDocuments } from './write';
+import { checkBranch } from '../operator/check';
+import type { UserDocument } from './identity';
 
 const stamp = Date.now().toString(36);
 const SCRATCH_DB = `${process.env.TERMINUS_DB}_authz_${stamp}`;
@@ -19,7 +22,7 @@ const DESIGNER = 'User/demo-designer';
 const REVIEWER = 'User/demo-reviewer';
 const AGENT_EXTERNAL_ID = `agent:test/relay-${stamp}`;
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
-const BRANCH = `authz-${stamp}`;
+const BRANCH = `test-authz-${stamp}`;
 
 let hub: Hono;
 const scratch = (branch: string) => createOperatorStore({ branch }, { ...storeConfigFromEnv(), db: SCRATCH_DB });
@@ -166,5 +169,79 @@ describe('Grant documents (ADR-0068 decision 2; constraints 21 and 22)', () => {
       expect(g.user).toMatch(/^User\/[0-9a-f]{32}$/);
       for (const u of (g.relayedUsers as string[] | undefined) ?? []) expect(u).toMatch(/^User\/[0-9a-f]{32}$/);
     }
+  });
+});
+
+describe('branch ownership (ADR-0068 decision 3)', () => {
+  const OWNED = `test-authz-owned-${stamp}`;
+  const mainHead = async () => (await json(await on('GET', '/branches/main'))).body.head;
+  const grantsNaming = async (branch: string): Promise<TerminusDocument[]> =>
+    (await json(await on('GET', '/documents/Grant'))).body.filter((g: TerminusDocument) => g.branch === branch);
+
+  it('needs an identity: creating a branch is a commit on main', async () => {
+    const res = await json(
+      await hub.request('/api/v1/branches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: OWNED }) })
+    );
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('identity_required');
+  });
+
+  it("writes the caller's Owner grant on main, in a commit of its own, before the branch exists", async () => {
+    const before = (await mainHead()).commit;
+    const res = await json(await on('POST', '/branches', { name: OWNED }));
+    expect(res.status).toBe(201);
+    const [owner] = await grantsNaming(OWNED);
+    expect(owner).toMatchObject({ user: DESIGNER, role: 'Owner', branch: OWNED, status: 'Active' });
+    const head = await mainHead();
+    expect(head.commit).not.toBe(before);
+    expect(head.author).toBe(DESIGNER);
+    expect(head.message).toContain(OWNED);
+    // Cut from main after the grant, the branch starts at the commit that records its owner.
+    expect(res.body.head.commit).toBe(head.commit);
+  });
+
+  it('writes nothing on main for a branch that exists or an origin that does not', async () => {
+    const before = (await mainHead()).commit;
+    expect((await json(await on('POST', '/branches', { name: OWNED }))).body.error).toBe('branch_exists');
+    expect((await json(await on('POST', '/branches', { name: `${OWNED}-b`, from: { branch: `no-such-${stamp}` } }))).body.error).toBe('unknown_ref');
+    expect((await mainHead()).commit).toBe(before);
+  });
+
+  it('revokes every grant naming the branch before deleting it', async () => {
+    expect((await write([grant({ user: REVIEWER, role: 'Maintainer', branch: OWNED })], 'A maintainer of the owned branch')).status).toBe(200);
+    const res = await json(await on('DELETE', `/branches/${OWNED}`));
+    expect(res.status).toBe(200);
+    expect(res.body.heldBy).toBe('main');
+    const after = await grantsNaming(OWNED);
+    expect(after.map((g) => [g.role, g.status, g.rationale]).sort()).toEqual([
+      ['Maintainer', 'Revoked', 'Branch deleted'],
+      ['Owner', 'Revoked', 'Branch deleted'],
+    ]);
+  });
+
+  it("the operator's check reports a grant in force naming no branch, and a branch with no owner, on main only", async () => {
+    const ORPHAN = `test-authz-orphan-${stamp}`;
+    const GHOST = `test-authz-ghost-${stamp}`;
+    await scratch('main').createBranch(ORPHAN, { branch: 'main' }); // around the route, so no Owner grant
+    const ghost = await json(await write([grant({ user: REVIEWER, role: 'Maintainer', branch: GHOST })], 'A grant on a branch that does not exist'));
+    expect(ghost.status).toBe(200);
+    const report = await checkBranch(scratch('main'));
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: 'grant_without_branch', id: ghost.body.ids[0], field: 'branch' }));
+    expect(report.violations).toContainEqual(expect.objectContaining({ code: 'branch_without_owner', index: -1, message: expect.stringContaining(ORPHAN) }));
+    expect(report.violations.filter((v) => v.code === 'branch_without_owner').map((v) => v.message)).not.toContainEqual(expect.stringContaining(BRANCH));
+    const atCommit = await checkBranch(scratch('main').at({ commit: report.commit }));
+    expect(atCommit.violations.filter((v) => v.code === 'grant_without_branch' || v.code === 'branch_without_owner')).toEqual([]);
+  });
+
+  it("takes a grant written on a transient branch for main, as the operator's put writes one (decision 6), and refuses it for the branch itself", async () => {
+    const me = (await json(await on('GET', '/users/me'))).body as UserDocument;
+    const who = { id: me['@id'], user: me };
+    const TRANSIENT = `operator-test-${stamp}`;
+    await scratch('main').createBranch(TRANSIENT, { branch: 'main' });
+    const transient = scratch(TRANSIENT);
+    const document = { '@type': 'Grant', user: REVIEWER, role: 'Administrator', status: 'Active' } as unknown as TerminusDocument;
+    await expect(writeDocuments([document], { branch: transient, who, message: 'x' })).rejects.toMatchObject({ code: 'grants_live_on_main' });
+    const { ids } = await writeDocuments([document], { branch: transient, target: 'main', who, message: 'The first administrator, as the operator writes one' });
+    expect(ids[0]).toMatch(/^Grant\//);
   });
 });

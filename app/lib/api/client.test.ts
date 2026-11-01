@@ -10,8 +10,10 @@
 import { CLIENT_REVISION, createClient, HubError } from '@armature/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './app';
-import { createStore } from './store';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 const stamp = Date.now().toString(36);
 const BRANCH = `test-client-${stamp}`;
 
@@ -29,7 +31,7 @@ describe('@armature/client over the app in-process', () => {
   afterAll(async () => {
     // The branch holds commits no other branch has, so the API refuses to
     // delete it; the adapter does, as the other suites' cleanup does.
-    await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+    await deleteScratchBranch(BRANCH, AS_OPERATOR).catch(() => undefined);
   });
 
   it('reads a list at main with the commit from the ETag, and the same list at that commit', async () => {
@@ -132,15 +134,15 @@ describe('@armature/client over the app in-process', () => {
 
   it('refuses a write without an identity', async () => {
     const anonymous = createClient({ baseUrl: 'http://hub.localhost', fetch: (input, init) => app.request(input, init) });
-    const err = await anonymous.branches.create(`anon-${stamp}`).catch((e) => e);
-    // Branch creation is not a commit and needs no identity; a write does.
-    expect(err).not.toBeInstanceOf(HubError);
+    const created = await anonymous.branches.create(`anon-${stamp}`).catch((e) => e);
+    // Creating a branch writes the caller's Owner grant on main (ADR-0068 decision 3), so it needs an identity as a write does.
+    expect(created).toBeInstanceOf(HubError);
+    expect(created.code).toBe('identity_required');
     const write = await anonymous.documents
       .put('DesignNote', `anon-${stamp}`, { branch: BRANCH, message: 'x', document: { label: 'x', rationale: 'x', subject: ['Module/how-ai-works'] } })
       .catch((e) => e);
     expect(write).toBeInstanceOf(HubError);
     expect(write.code).toBe('identity_required');
-    await createStore({ branch: 'main' }).deleteBranch(`anon-${stamp}`).catch(() => undefined);
   });
 
   it('lists branches, reads changes since a commit, merges and deletes', async () => {

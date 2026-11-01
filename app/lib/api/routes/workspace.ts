@@ -2,7 +2,9 @@ import { Hono, type Context } from 'hono';
 import { hubOf, storeFor } from '../config';
 import { ApiError } from '../errors';
 import { BRANCH_NAME, readJson } from '../http';
-import { requireClaims } from '../identity';
+import { handleOf, requireClaims } from '../identity';
+
+export { handleOf };
 import { cloneBranch, mirrorMain, type Owner } from '../workspace/clone';
 import type { WorkspaceRecord, WorkspaceRecords } from '../workspace/records';
 import { fromRemote, remoteClient } from '../workspace/remote';
@@ -39,16 +41,6 @@ function recordsOf(c: Context): WorkspaceRecords {
   const records = hubOf(c).workspaces;
   if (!records) throw new Error('This workspace hub was given no place for its records; app/server.ts gives it ARMATURE_WORKSPACE_DIR');
   return records;
-}
-
-/**
- * The short handle a workspace's branch name begins with: the external
- * identifier's local part, in the characters a branch name allows. A naming
- * convention, not ownership, which is a grant on the remote (ADR-0068).
- */
-export function handleOf(externalId: string): string {
-  const local = externalId.split('@')[0].replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[^A-Za-z0-9]+/, '');
-  return local || 'user';
 }
 
 workspace.get('/', async (c) => c.json(await recordsOf(c).list()));

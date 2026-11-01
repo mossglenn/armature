@@ -18,8 +18,10 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './app';
-import { createStore } from './store';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
 const stamp = Date.now().toString(36);
 const BRANCH = `test-intel-${stamp}`;
@@ -225,7 +227,7 @@ describe('on a scratch branch: alignment mismatches and Narrative 1', () => {
   });
 
   afterAll(async () => {
-    await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+    await deleteScratchBranch(BRANCH, AS_OPERATOR).catch(() => undefined);
   });
 
   it('reports an item whose level is below the objective it assesses', async () => {
@@ -544,8 +546,7 @@ describe('GET /api/v1/intelligence/attestations/:type/:id (Phase 5 exit criterio
   });
 
   afterAll(async () => {
-    const store = createStore({ branch: 'main' });
-    for (const name of [ROUND, TARGET]) await store.deleteBranch(name).catch(() => undefined);
+    for (const name of [ROUND, TARGET]) await deleteScratchBranch(name, AS_OPERATOR).catch(() => undefined);
   });
 
   it('reports every verdict Current after the merge, comparing against the round commit', async () => {
@@ -679,7 +680,7 @@ describe('GET /api/v1/intelligence/item-statistics (ADR-0058 decision 3)', () =>
   const STATS = `test-stats-${stamp}`;
 
   afterAll(async () => {
-    await createStore({ branch: 'main' }).deleteBranch(STATS).catch(() => undefined);
+    await deleteScratchBranch(STATS, AS_OPERATOR).catch(() => undefined);
   });
 
   it("groups the seed's item statistics by item, with the administration each came from", async () => {
@@ -767,7 +768,7 @@ describe('GET /api/v1/intelligence/module-content/:moduleId (ADR-0005)', () => {
   type Placed = { sequence?: number; link: string; activity: { id: string }; items: Array<{ item: { id: string } }> };
 
   afterAll(async () => {
-    await createStore({ branch: 'main' }).deleteBranch(CONTENT).catch(() => undefined);
+    await deleteScratchBranch(CONTENT, AS_OPERATOR).catch(() => undefined);
   });
 
   it("composes the seed's Module 1 in teaching order: an activity, then a lesson with its activities and their formative items", async () => {
