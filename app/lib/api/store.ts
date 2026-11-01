@@ -110,6 +110,8 @@ export type StoreErrorKind =
   | 'id_prefix'
   /** A client-supplied id disagrees with the one a Hash key derives. */
   | 'id_mismatch'
+  /** The store did not answer within the adapter's deadline; a write may have landed. */
+  | 'timeout'
   | 'other';
 
 /** A refusal from the store: its `kind`, and the store's own status, error name and body for logs. */
@@ -253,6 +255,8 @@ interface StoreConfig {
   pass: string;
   org: string;
   db: string;
+  /** STORE_TIMEOUT_MS unless given; the tests give a short one. */
+  timeoutMs?: number;
 }
 
 function configFromEnv(): StoreConfig {
@@ -330,6 +334,14 @@ interface RequestOptions {
 const DROPPED_CONNECTION_CODES = new Set(['UND_ERR_SOCKET', 'ECONNRESET']);
 const READ_RETRY_DELAY_MS = 50;
 
+/**
+ * Every call to the store, its one resend of a dropped read and its body
+ * included, ends within this deadline (the deep review's H7), so a stalled
+ * store fails a request rather than holding it open. Long enough for the
+ * slowest read the hub makes, a document's history over a long log (seconds).
+ */
+export const STORE_TIMEOUT_MS = 30_000;
+
 /** True when a fetch failed because the connection closed under it. */
 export function isDroppedConnection(err: unknown): boolean {
   const cause = err instanceof Error ? err.cause : undefined;
@@ -381,7 +393,8 @@ export class TerminusStore implements OperatorStore {
       Accept: 'application/json',
       ...options.headers,
     };
-    const init: RequestInit = { method, headers };
+    const deadline = this.config.timeoutMs ?? STORE_TIMEOUT_MS;
+    const init: RequestInit = { method, headers, signal: AbortSignal.timeout(deadline) };
     if (options.body !== undefined) {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(options.body);
@@ -391,13 +404,21 @@ export class TerminusStore implements OperatorStore {
       const res = await fetch(url, init);
       return { res, text: await res.text() };
     };
+    const timedOut = (err: unknown) =>
+      err instanceof Error && err.name === 'TimeoutError'
+        ? new StoreError(504, 'timeout', null, 'timeout')
+        : err;
     let sent: { res: Response; text: string };
     try {
-      sent = await send();
+      try {
+        sent = await send();
+      } catch (err) {
+        if (!read || !isDroppedConnection(err)) throw err;
+        await new Promise((resolve) => setTimeout(resolve, READ_RETRY_DELAY_MS));
+        sent = await send();
+      }
     } catch (err) {
-      if (!read || !isDroppedConnection(err)) throw err;
-      await new Promise((resolve) => setTimeout(resolve, READ_RETRY_DELAY_MS));
-      sent = await send();
+      throw timedOut(err);
     }
     const { res, text } = sent;
     let body: unknown = null;

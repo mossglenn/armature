@@ -93,6 +93,10 @@ app.onError((err, c) => {
       // a client-supplied id on one can only disagree with it.
       return c.json({ error: 'bad_id', message: 'This type derives its id from its key fields; omit @id and let the hub mint it' }, 400);
     }
+    if (err.kind === 'timeout') {
+      console.error(`The store did not answer within its deadline (${c.req.method} ${c.req.path})`);
+      return c.json({ error: 'store_timeout', message: 'The database did not answer in time; a write may have landed, so re-read before retrying' }, 504);
+    }
     if (isUnknownRef(err)) {
       return c.json({ error: 'unknown_ref', message: 'No such branch, commit or document' }, 404);
     }

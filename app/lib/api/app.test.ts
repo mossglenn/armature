@@ -17,7 +17,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { app, MAX_BODY_BYTES } from './app';
-import { createOperatorStore, createStore, isUnknownRef, TerminusStore } from './store';
+import { createOperatorStore, createStore, isUnknownRef, StoreError, TerminusStore } from './store';
 
 /** The seed's User and the header value that resolves to it (ADR-0032 decision 1). */
 const AUTHOR = 'User/demo-designer';
@@ -97,6 +97,17 @@ describe('GET /api/v1/documents/:type/:id', () => {
 });
 
 describe('limits on a request (the deep review\'s H7 and HTTP item 4)', () => {
+  it('answers a store that missed its deadline with 504 store_timeout', async () => {
+    const stalled = vi.spyOn(TerminusStore.prototype, 'getDocument').mockRejectedValue(new StoreError(504, 'timeout', null, 'timeout'));
+    try {
+      const res = await app.request('/api/v1/documents/Module/how-ai-works');
+      expect(res.status).toBe(504);
+      expect((await res.json()).error).toBe('store_timeout');
+    } finally {
+      stalled.mockRestore();
+    }
+  });
+
   it('refuses a body over the limit with 413 body_too_large, before reading it as JSON', async () => {
     const body = JSON.stringify({ message: 'x'.repeat(MAX_BODY_BYTES), documents: [] });
     const res = await app.request('/api/v1/documents?branch=main', {
