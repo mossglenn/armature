@@ -32,7 +32,7 @@ Every response that read from or wrote to the database carries the commit it was
 
 ### Optimistic concurrency: `If-Match`
 
-A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the branch is still at this commit." If anyone has committed to the branch since, the write is refused with **412** (`precondition_failed`), and the body carries `expected` and `current` commit identifiers. The token is the branch head, not a fingerprint of one document, so a 412 may mean someone changed a different document; re-read and retry. Without `If-Match`, a write is not conditioned on what the client read, but it is checked and committed at one commit: the hub conditions it on the head its rules were checked at, and if another commit lands in between, runs the whole write again on the new head, up to three runs, then answers **409** `branch_moved` with nothing written (since 2026-10-31; the deep review's B2). A stale `If-Match` is refused before the write's rules are checked, so its 412 comes before a `type_conflict` or an `invariant_violation`. `If-None-Match` is not supported.
+A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the branch is still at this commit." If anyone has committed to the branch since, the write is refused with **412** (`precondition_failed`), and the body carries `expected` and `current` commit identifiers. The token is the branch head, not a fingerprint of one document, so a 412 may mean someone changed a different document; re-read and retry. `If-Match: *` (HTTP's "the resource exists") is refused with 400 `bad_if_match`, since a branch head cannot express it (since 2026-10-31; it was read as no condition). Without `If-Match`, a write is not conditioned on what the client read, but it is checked and committed at one commit: the hub conditions it on the head its rules were checked at, and if another commit lands in between, runs the whole write again on the new head, up to three runs, then answers **409** `branch_moved` with nothing written (since 2026-10-31; the deep review's B2). A stale `If-Match` is refused before the write's rules are checked, so its 412 comes before a `type_conflict` or an `invariant_violation`. `If-None-Match` is not supported.
 
 ### Identity: `Armature-User`
 
@@ -46,7 +46,7 @@ Every request is checked before anything else (ADR-0067 decision 7, since revisi
 
 ### Write envelopes
 
-Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message and returned by the history route byte for byte, git-style trailers included (verified 2026-10-30, platform check AJ); no trailer is defined yet (ADR-0025 decision 2), and ADR-0065 and ADR-0067 (accepted 2026-10-30, not yet built) define the first. A write without one is a **400** `message_required`. The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation is not a commit and takes `{ name, from }` with no message.
+Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message and returned by the history route byte for byte, git-style trailers included (verified 2026-10-30, platform check AJ); no trailer is defined yet (ADR-0025 decision 2), and ADR-0065 and ADR-0067 (accepted 2026-10-30, not yet built) define the first. A write without one is a **400** `message_required`. A request body may be at most 10 MiB (10,485,760 bytes), checked before it is read; a larger one is a **413** `body_too_large` (since 2026-10-31). The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation is not a commit and takes `{ name, from }` with no message.
 
 ### Document identifiers
 
@@ -71,8 +71,8 @@ Lists the documents of a type at a ref, optionally filtered.
 | Query parameter | Meaning |
 |---|---|
 | `branch` or `ref` | The ref (see conventions) |
-| `<field>=<value>` | Keep documents whose field equals the value; for a multi-valued field, documents whose set contains it. Numbers and `true`/`false` are converted for numeric and boolean fields |
-| `count`, `skip` | Paging: at most `count` documents, after skipping `skip` |
+| `<field>=<value>` | Keep documents whose field equals the value; for a multi-valued field, documents whose set contains it. On a numeric or boolean field the value must be in its exact form: digits with an optional sign for an integer, and an optional fraction for a decimal (`0.38`, not `.38` or `1e1`), `true` or `false` for a boolean; anything else is 400 `bad_query` (since 2026-10-31) |
+| `count`, `skip` | Paging: at most `count` documents, after skipping `skip`; digits only, else 400 `bad_query` |
 
 Returns an array of documents. Unknown type: 404 `unknown_type`. A filter on a field the type does not have, or on an embedded part: 400 `unknown_field`. A filter on a field that names a person (`createdBy`): 400 `person_filter_refused`, because the API does not list documents by who made them (ADR-0021).
 
@@ -190,7 +190,7 @@ A commit an operator made outside this API (ADR-0062) carries `armature.operator
 
 ### `GET /branches/:name/changes?since=<commit>`
 
-The documents inserted, deleted or updated on the branch since a commit: `{ branch, from, to, changes: [ { id, op } ] }` where `op` is `insert`, `delete` or `update`.
+The documents inserted, deleted or updated on the branch since a commit: `{ branch, from, to, changes: [ { id, op } ] }` where `op` is `insert`, `delete` or `update`. `since` must be in the branch's history, read from `to`: on its log, or brought in by a merge (the merge commit's `mergeSource`, followed into the merged commit's own log, and so on); a commit the branch never held is a 400 `not_an_ancestor` (since 2026-10-31). The hub walks at most 5,000 commits of any one log; a longer history is a 500 `history_too_long`, never read as a shorter one (here, in a merge's base and in a branch delete's search for a holder).
 
 ### `DELETE /branches/:name`
 
@@ -408,7 +408,8 @@ The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, cate
 | 400 | `ambiguous_ref`, `branch_required`, `write_at_commit` | Misused `branch` / `ref` parameters |
 | 400 | `unsupported_version` | `Armature-Version` names a revision this hub does not serve (older, unknown, or newer on a write); `requested`, `supported` (ADR-0059) |
 | 400 | `unsupported_capability` | `Armature-Capabilities` names a feature this hub lacks; `unsupported`, `supported` (ADR-0059) |
-| 400 | `bad_if_match`, `bad_query`, `range_required`, `since_required` | Malformed headers or query parameters |
+| 400 | `bad_if_match`, `bad_query`, `range_required`, `since_required` | Malformed headers or query parameters, `If-Match: *` among them |
+| 400 | `not_an_ancestor` | A `since` commit the branch never held |
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
 | 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused`, `unknown_profile`, `unknown_slice` | Route-specific refusals |
 | 401 | `identity_required`, `unknown_user` | No identity, or an unregistered one |
@@ -420,7 +421,10 @@ The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, cate
 | 409 | `unmerged_branch`, `branch_moved` | Branch deletion refused; `branch_moved` also a write whose branch moved under each of its three runs (The write pipeline) |
 | 409 | `registration_conflict` | Concurrent user registration; retry |
 | 412 | `precondition_failed` | The branch moved since the commit in `If-Match` |
+| 413 | `body_too_large` | A request body over 10 MiB |
 | 422 | `invariant_violation` | One or more rules broken (see `violations`) |
 | 500 | `store_unavailable` | The database rejected the configured credentials |
 | 500 | `store_error`, `internal_error` | An unexpected database or server error (details in the server log only) |
+| 500 | `history_too_long` | A history longer than the 5,000 commits the hub walks (the changes route, a merge, a branch delete) |
 | 503 | `branch_busy` | A document's history could not be read at one head; `Retry-After` |
+| 504 | `store_timeout` | The database did not answer within the hub's 30-second deadline; a write may have landed, so re-read before retrying |

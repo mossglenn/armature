@@ -15,6 +15,28 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-10-31 · Stricter requests, deadlines and ancestry
+
+**What changed.** The deep review's confirmed small fixes (SESSION What's Next item 28), riding
+today's revision. `If-Match: *` is refused with **400** `bad_if_match` instead of being read as no
+condition. Numeric and boolean query values must be in their exact forms (digits, an optional
+sign and fraction, `true` or `false`); `?sequence=1e1`, `?randomize=yes`, `?count=1e1` and
+`?diff=maybe` are now **400** `bad_query` rather than coerced. A request body over 10 MiB is
+**413** `body_too_large`. `GET /branches/:name/changes?since=` requires `since` to be in the
+branch's history, its log or a merge into it followed back, else **400** `not_an_ancestor`. A
+history longer than the 5,000 commits the hub walks is **500** `history_too_long` (the changes
+route, a merge, a branch delete) instead of being read as a shorter one, which made a merge
+report `no_common_ancestor`. The hub gives up on the database after 30 seconds with **504**
+`store_timeout`. `@armature/client` takes `signal` and `timeout` options that apply to every call
+(no default deadline, no retry).
+
+**What a client does.** Send a commit in `If-Match`, or none. Send query values in their exact
+forms. Treat `store_timeout` on a write like a dropped connection: re-read before retrying, since
+the write may have landed. A changes read since a commit from another branch now fails rather
+than returning a diff between unrelated states. **CoQui:** nothing it sends today is refused;
+consider `timeout` on its client. **Quiver:** its bring-in reads changes since its base, which is
+on the workspace branch's log, so nothing changes.
+
 ## 2026-10-31 · Reads and writes at one commit
 
 **What changed.** A write is checked and committed at one commit (the deep review's B2). The
