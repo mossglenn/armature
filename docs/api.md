@@ -38,6 +38,10 @@ A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the bran
 
 Every route that changes data needs an identity (ADR-0032). Under the default `header` resolver, the request carries `Armature-User: <externalId>`, the external identifier of a registered `User` (the seed registers `demo-designer@example.edu`). The hub resolves it to a `User` document on `main`, records that user as the commit author, and sets `createdBy` on documents it creates. Missing header: **401** `identity_required`. Unregistered identifier: **401** `unknown_user`.
 
+Since 2026-11-01 a request may also carry `Armature-Agent: <agent externalId>`, a registered agent `User` (one whose `externalId` begins with `agent:`), under every resolver (ADR-0067 decisions 3 and 8). The person in `Armature-User` is resolved first and the agent second: the agent is the commit's author and the `createdBy` of what it creates, the person's authority decides the request (below), and the hub appends `Armature-On-Behalf-Of: <person externalId>` to the commit message. An agent that is not registered: **401** `unknown_agent`; a person named as the agent: **400** `not_an_agent`; an agent's identifier in `Armature-User` beside `Armature-Agent`: **400** `not_a_person`. A request naming an agent directly in `Armature-User` is still accepted under `header`, with no trailer, until push exists (ADR-0067 decision 10).
+
+**Authorization (ADR-0068, since 2026-11-01).** Once the identity is resolved, a remote hub checks that it may do what it asks, from the `Grant` documents in force on `main` (the Grants section), and refuses with **403** `forbidden`, naming the missing `permission` (`write`, `merge`, `delete`, `grant` or `register`) and, as it applies, the `branch`, the `role` or `agent`. An agent acting for a person may do what the person may. A workspace hub does not check; its remote does, at push (ADR-0068 decision 9). The capability `armature/authorization` in `GET /discover` says the hub authorizes.
+
 The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself. An `oidc` (OpenID Connect) resolver is specified in ADR-0067 (accepted 2026-10-30; its `Host` and `Origin` checks, the next section, are built, the rest not yet), a prerequisite of the workspace hub (ADR-0065, accepted the same day); until it is built, every writing client runs beside the hub.
 
 ### Hosts and web origins
@@ -46,7 +50,7 @@ Every request is checked before anything else (ADR-0067 decision 7, since revisi
 
 ### Write envelopes
 
-Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message and returned by the history route byte for byte, git-style trailers included (verified 2026-10-30, platform check AJ); no trailer is defined yet (ADR-0025 decision 2), and ADR-0065 and ADR-0067 (accepted 2026-10-30, not yet built) define the first. A write without one is a **400** `message_required`. A request body may be at most 10 MiB (10,485,760 bytes), checked before it is read; a larger one is a **413** `body_too_large` (since 2026-10-31). The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation is not a commit and takes `{ name, from }` with no message.
+Every write body is a JSON object with a required, non-empty `message`: the reason for the change, stored as the commit message and returned by the history route byte for byte, git-style trailers included (verified 2026-10-30, platform check AJ). Two trailers are the hub's own (ADR-0067 decision 6): it writes `Armature-On-Behalf-Of: <person>` when an agent acts for a person (Identity), reserves `Armature-Relayed-By` for relays (not yet built), and refuses a message carrying a line that begins with either, **400** `reserved_trailer`; every other trailer is the caller's claim, kept as sent (`Co-Authored-By: <name>` for someone who contributed without signing in; the workspace trailers of ADR-0065 decision 5 when push exists). A write without a message is a **400** `message_required`. A request body may be at most 10 MiB (10,485,760 bytes), checked before it is read; a larger one is a **413** `body_too_large` (since 2026-10-31). The other fields depend on the route: `{ message, document }`, `{ message, documents }`, `{ message, from }`, `{ message, user }`. Branch creation takes `{ name, from }` with no message; since 2026-11-01 it commits the caller's `Owner` grant on `main` under a message the hub writes, and so needs an identity (Branches).
 
 ### Document identifiers
 
@@ -74,7 +78,7 @@ Lists the documents of a type at a ref, optionally filtered.
 | `<field>=<value>` | Keep documents whose field equals the value; for a multi-valued field, documents whose set contains it. On a numeric or boolean field the value must be in its exact form: digits with an optional sign for an integer, and an optional fraction for a decimal (`0.38`, not `.38` or `1e1`), `true` or `false` for a boolean; anything else is 400 `bad_query` (since 2026-10-31) |
 | `count`, `skip` | Paging: at most `count` documents, after skipping `skip`; digits only, else 400 `bad_query` |
 
-Returns an array of documents. Unknown type: 404 `unknown_type`. A filter on a field the type does not have, or on an embedded part: 400 `unknown_field`. A filter on a field that names a person (`createdBy`): 400 `person_filter_refused`, because the API does not list documents by who made them (ADR-0021).
+Returns an array of documents. Unknown type: 404 `unknown_type`. A filter on a field the type does not have, or on an embedded part: 400 `unknown_field`. A filter on a field that names a person (`createdBy`) on a design record: 400 `person_filter_refused`, because the API does not list documents by who made them (ADR-0021); `Grant`, outside `DesignRecord`, is listed by `user` (ADR-0068 decision 8, since 2026-11-01).
 
 Filters on required single-valued fields are applied by the database (for example `/documents/Assessment?module=Module/how-ai-works`). The database cannot answer a filter on an optional enumerated or reference field, or on a multi-valued one (platform check Y), so the hub lists the type and applies those filters itself, then pages (for example `?assesses=`, `?generatedBy=`, `?bloomsLevel=`). The result is the same either way; the second form reads the whole type, which matters only for very large types.
 
@@ -121,13 +125,13 @@ The structural difference in one document between two commits, as TerminusDB's J
 
 ### The write pipeline
 
-`PUT /documents/:type/:id` and `POST /documents` run the same steps (`app/lib/api/write.ts`):
+`PUT /documents/:type/:id` and `POST /documents` run the same steps (`app/lib/api/write.ts`), after the permission check (Identity; ADR-0068): a document in the batch needs the right to write the branch, and a `Grant` the right to grant that role on that branch, else **403** `forbidden` before anything is read.
 
 1. **Shape.** Each document is checked against a validation schema generated from `schema/schema.json`: required fields, field kinds, allowed enum values, minimum set sizes, no unknown fields, every string non-empty and at most 10,000 characters. Failure: **400** `invalid_document` with an `issues` list (`{ index, path, message }` per problem).
 2. **Identity of the document.** An identifier held by another type: **409** `type_conflict`. An existing document (found by `@id`, or for a junction by its key fields) makes this write a replace. Before the lookup, an `Attestation` without `attestedBy` gets the resolved user, since the attester is part of its key: a re-attestation finds the caller's own record, never another person's.
 3. **Provenance.** `createdBy` is set to the resolved user on create and preserved on replace (a value in the body is ignored). On a branch that lacks the user's `User` document, a copy from `main` is written in the same commit. `asOf`, the commit a `LearningDataset`, `LearningMetric` or `DesignFinding` refers to (ADR-0057), is filled when the body omits it: on create, with the branch head the write starts from (the `If-Match` commit when one is sent); on replace, with the stored value, except for an `Attestation`, whose every write is a new verdict and takes the head again (ADR-0028 decision 5); on a metric with a `derivedFrom` dataset, with the dataset's value. A body may supply `asOf`, for example when importing historical results, and rule 13 checks it.
 4. **Rules.** Every invariant is checked against the branch as it will be after the write. Failure: **422** `invariant_violation` with every violation at once, as `violations: [ { code, id?, index, field?, message } ]`.
-5. **One commit**, authored by the resolved user with the request's message. Steps 2 to 4 read the branch at its head as the write began (the `If-Match` commit when one is sent, else **412** before step 2), and the commit is accepted only onto that head: when another lands first, a write with `If-Match` is a **412**, and one without runs steps 2 to 5 again on the new head, up to three runs, then **409** `branch_moved`.
+5. **One commit**, authored by the resolved user (the agent, under `Armature-Agent`) with the request's message, the hub's `Armature-On-Behalf-Of` trailer appended when an agent acted for a person. Steps 2 to 4 read the branch at its head as the write began (the `If-Match` commit when one is sent, else **412** before step 2), and the commit is accepted only onto that head: when another lands first, a write with `If-Match` is a **412**, and one without runs steps 2 to 5 again on the new head, up to three runs, then **409** `branch_moved`.
 
 The rules, numbered as in `.claude/CLAUDE.md`:
 
@@ -154,6 +158,8 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 18 | An `Attachment` is a verifiable coordinate: `revision` is present when `store` is `Git` or `Lore`, and `contentHash` is lower-case hexadecimal of the length `hashAlgorithm` implies for the algorithms the hub knows (`sha-256`, `sha-512`, `sha-384`, `sha-224`, `sha-1`, `md5`, `blake2b-256`, `blake2b-512`, `blake2s-256`, named as in the IANA Named Information Hash Algorithm Registry); an unknown algorithm is accepted unchecked. Checked on the artifact's `attachments` and on every fragment's (ADR-0030) | `revision_required`, `hash_malformed` |
 | 19 | A fragment carries `text` or at least one attachment (ADR-0030) | `empty_fragment` |
 | 20 | A `LearningDataset` names its source, `producedBy` or at least one `externalRef`; a `LearningMetric` names `derivedFrom` or at least one `externalRef` (ADR-0063) | `dataset_without_source`, `metric_without_source` |
+| 21 | A `Grant` lives on `main`, whatever branch the work is on; judged by the branch a write is for, so the operator's `put` on `main` passes (ADR-0068 decision 2) | 400 `grants_live_on_main`, before anything is read |
+| 22 | A grant's holder suits its role: `Maintainer` and `Administrator` are persons, `Relay` is an agent; `relayedUsers` appears only on a `Relay` grant and names persons (ADR-0068 decision 2) | `grant_holder_kind`, `relayed_users_not_relay` |
 
 Every `ArmatureDocument` may carry `externalRefs` (identifiers in other systems: `{ "@type": "ExternalRef", system, identifier, label? }`) and `attachments`; every fragment may carry `attachments` (`{ "@type": "Attachment", store, storeUri, contentHash, hashAlgorithm, revision?, path?, container?, mediaType?, byteSize?, role?, label? }`). Both are embedded subdocuments: send them inline, never store their nested `@id`, and expect the field to be absent on read when the set is empty. The hub checks their shape and rules 18 and 19; it does not fetch bytes or verify a hash in this phase (ADR-0030).
 
@@ -169,7 +175,7 @@ Every branch with its latest commit: `[ { name, head: { commit, author, message,
 
 ### `POST /branches`
 
-Creates a branch. Body: `{ "name": "...", "from": { "branch": "main" } }` or `{ "name": "...", "from": { "commit": "<commit-id>" } }`; `from` defaults to `main`. Names must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$` (400 `bad_name`). An existing name: 409 `branch_exists`; a `from` branch or commit that does not exist: 404 `unknown_ref`. Response **201**: `{ name, from, head }`. Branch creation is not a commit and needs no identity.
+Creates a branch. Body: `{ "name": "...", "from": { "branch": "main" } }` or `{ "name": "...", "from": { "commit": "<commit-id>" } }`; `from` defaults to `main`. Names must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$` (400 `bad_name`). An existing name: 409 `branch_exists`; a `from` branch or commit that does not exist: 404 `unknown_ref`. Response **201**: `{ name, from, head }`. Headers: `Armature-User` (required since 2026-11-01). Any registered user may create a branch, and whoever does owns it (ADR-0068 decision 3): before the branch exists the hub writes the caller's `Owner` grant on `main`, as a commit of its own, so a branch cut from `main` starts at the commit that records its owner. Under `Armature-Agent` the person owns it.
 
 ### `GET /branches/:name`
 
@@ -180,6 +186,7 @@ The branch's latest commit: `{ name, head }`, with the commit in `ETag`.
 Merges another branch into `:name` with the database's three-way merge (ADR-0025 decision 5). The merged state is not checked by the invariants engine, so two clean branches can merge into a rule violation (for example `duplicate_sequence`, when each gave a new placement the same sequence); the operator's `check` (ADR-0062) finds it, and running the rules on merge is an ask in `docs/workspace-hub-plan.md` §12. *Decided 2026-10-30, not yet built (ADR-0025 decision 5, note):* the merge will be checked before it commits and refused with 422 `invariant_violation`, the target unchanged, and a dry run will return the conflicts and violations without a commit; a `client-changes.md` entry will say so when it lands.
 
 - Headers: `Armature-User` (required).
+- Who may (ADR-0068 decision 4, since 2026-11-01): into a branch, its owner or a maintainer of it or of every branch; into `main`, a maintainer of `main` or of every branch; else **403** `forbidden` with `permission: "merge"`. A branch with no owner is open to any registered user while the migration window is open (Grants).
 - Body: `{ "message": "...", "from": "<source branch>" }`.
 - Success: `{ commit, base, source, target, upToDate: false }`. The merge commit records the merged source commit in its metadata (`armature.mergeSource`).
 
@@ -194,7 +201,7 @@ The documents inserted, deleted or updated on the branch since a commit: `{ bran
 
 ### `DELETE /branches/:name`
 
-Deletes a branch, under three rules (ADR-0025 decision 6, amended): `main` is never deleted (400 `protected_branch`); a branch is deleted only when another branch already holds its latest commit (otherwise 409 `unmerged_branch` with its `head`); there is no force option. Headers: `Armature-User` (required), `If-Match` (optional; 412 if the branch moved). If a commit lands during the check: 409 `branch_moved`. A branch already deleted, including by a concurrent request: 404 `unknown_ref`. Another branch deleted during the check is skipped as a holder. Response: `{ deleted, head, heldBy }`.
+Deletes a branch, under three rules (ADR-0025 decision 6, amended): `main` is never deleted (400 `protected_branch`); a branch is deleted only when another branch already holds its latest commit (otherwise 409 `unmerged_branch` with its `head`); there is no force option. Its owner, or a maintainer of it or of every branch, may delete it (**403** `forbidden`, `permission: "delete"`, otherwise; ADR-0068 decision 4). Before the branch goes, every grant naming it is revoked in one commit on `main` (decision 3), so a failure between the two never widens authority. Headers: `Armature-User` (required), `If-Match` (optional; 412 if the branch moved). If a commit lands during the check: 409 `branch_moved`. A branch already deleted, including by a concurrent request: 404 `unknown_ref`. Another branch deleted during the check is skipped as a holder. Response: `{ deleted, head, heldBy }`.
 
 There are no reset, squash or rebase routes: shared history is never rewritten.
 
@@ -208,17 +215,32 @@ Every `User` at a ref (`main` by default).
 
 ### `GET /users/me`
 
-The `User` this request resolves to, or the resolver's 401.
+The `User` this request resolves to, or the resolver's 401; since 2026-11-01 with `grants`, the caller's `Grant` documents in force (ADR-0068 decision 7), so a client can hide an action it would be refused. Under `Armature-Agent` it answers the agent, who the client writes as.
 
 ### `POST /users`
 
-Registers a user on `main`, the registry of record (ADR-0032). A `branch` or `ref` parameter is refused (400 `users_live_on_main`). The caller must be a registered user.
+Registers a user on `main`, the registry of record (ADR-0032). A `branch` or `ref` parameter is refused (400 `users_live_on_main`). The caller must be a registered user; since 2026-11-01 a person is registered by an `Administrator` and an agent by any person (**403** `forbidden`, `permission: "register"`, `agent: true | false`; ADR-0068 decision 4).
 
 - Body: `{ "message": "...", "user": { "displayName": "...", "externalId": "...", "email"?: "...", "institution"?: "...", "@id"?: "User/<id>" } }`. Unknown fields: 400 `unknown_field`.
 - Response **201**: `{ id, commit }`.
 - An `externalId` already registered: 409 `user_exists` (with its `id`). An `@id` held by another type: 409 `type_conflict`.
 
 AI agents are ordinary users whose `externalId` begins with `agent:` (for example `agent:coqui/item-drafter`), registered by a person. There are no routes to edit or delete a user.
+
+---
+
+## Grants
+
+Authority over the graph is recorded in the graph (ADR-0068, since 2026-11-01): a `Grant` is a document on `main`, written and read through the document routes like any other, so every change of authority is a commit with an author and a reason. Its fields: `user` (the holder), `role`, `branch` (absent means every branch), `status` (`Active` or `Revoked`), `rationale`, and on a `Relay` grant `relayedUsers` and `expires`. Its identifier derives from `user`, `role` and `branch`, so there is one current grant per holder, role and branch; revoking one is a replace with `status: "Revoked"`, never a delete, and a grant past `expires` is treated as revoked. Rules 21 and 22 (The write pipeline) hold a grant to `main` and the holder's kind to the role.
+
+| Role | What it allows |
+|---|---|
+| `Owner` | Written by the hub to whoever creates a branch: writing to it, merging into it, deleting it, and granting `Maintainer` on it. `main` has no owner |
+| `Maintainer` | Writing to and merging into the branch named, or every branch when `branch` is absent; a maintainer of `main` is who delivers a branch into shared history |
+| `Administrator` | Granting and revoking every role, and registering people. Held by persons |
+| `Relay` | A service delivering a person's earlier work with the person as author, bounded by `relayedUsers` and `expires` (ADR-0067 decision 5; not yet built). Held by agents |
+
+Who may write a grant: `Maintainer` on a branch, its owner or an administrator; anything else, an administrator (**403** `forbidden`, `permission: "grant"`). An instance's first administrator comes from the seed or the operator's `put` (ADR-0068 decision 6). A branch created before 2026-11-01, or around the API, has no owner: it stays writable, mergeable and deletable by any registered user while the migration window is open, which `GET /discover` reports as `ownerlessBranches: "writable"` under `armature/authorization`; an administrator assigns an owner by writing the grant. Grants are listed by holder, `GET /documents/Grant?user=User/<id>` (decision 8), and `GET /users/me` carries the caller's. The pseudonymous and institutional export profiles rewrite `user`, `relayedUsers`, and a handle prefix in `branch` (a workspace branch's `<handle>_`) to the person's token (ADR-0031).
 
 ---
 
@@ -389,7 +411,7 @@ What this hub is, for a client that wants to know before its first write (ADR-00
 
 A capability's `fallback` says what a hub that lacks it does with a request that declares it: `reject` (refuse by name) or `ignore` (serve under core behavior). Every capability the hub defines is `reject`. The settings are the defaults of the behavior's parameters, so a client can read them rather than assume them.
 
-A workspace hub also lists `armature/workspace` (Workspace), with its setting `profile`, the export profile a clone takes; a remote hub neither lists nor accepts it.
+A workspace hub also lists `armature/workspace` (Workspace), with its setting `profile`, the export profile a clone takes; a remote hub neither lists nor accepts it. A remote hub lists `armature/authorization` (Grants; since 2026-11-01): the hub authorizes, a **403** `forbidden` is possible, `GET /users/me` carries grants, and its one setting, `ownerlessBranches`, says whether a branch with no owner is still `writable`; a workspace hub, which does not authorize, lists it not.
 
 `role` is what kind of hub this is (ADR-0065; [workspace hub plan](workspace-hub-plan.md) §9). A **remote** hub is a hub as built. A **workspace** hub, `ARMATURE_ROLE=workspace` with the remote's address in `ARMATURE_REMOTE_URL`, is the same API on one person's machine; what changes the remote's shared state happens on the remote, so it refuses those routes with **400** `remote_only`, and they are listed under their capability's `remoteOnly` as `METHOD /api/v1/path`: `POST /branches`, `POST /branches/:name/merge` and `DELETE /branches/:name` under `armature/branches`, `POST /users` under `armature/users`. Its `main` is the remote's, mirrored, and listed in `armature/documents`'s `readOnlyBranches`: read as on any hub, a write to it is `remote_only`. It registers no one: an identity its mirror does not hold is **401** `unknown_user`, to be registered on the remote. On a remote hub both lists are empty.
 
@@ -443,9 +465,13 @@ Both first mirror the remote's `main` into this hub's `main` (its schema and eve
 | 400 | `not_an_ancestor` | A `since` commit the branch never held |
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
 | 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused`, `unknown_profile`, `unknown_slice` | Route-specific refusals |
+| 400 | `grants_live_on_main` | A `Grant` written to any branch but `main` (rule 21) |
+| 400 | `reserved_trailer` | A message carrying `Armature-On-Behalf-Of` or `Armature-Relayed-By`, which the hub writes itself (Write envelopes) |
+| 400 | `not_an_agent`, `not_a_person` | `Armature-Agent` names a person, or `Armature-User` names an agent beside it (Identity) |
 | 400 | `remote_only` | A route or a write a workspace hub leaves to its remote (Discovery: `role`) |
 | 400 | `workspace_only` | A workspace route on a remote hub (Workspace) |
-| 401 | `identity_required`, `unknown_user` | No identity, or an unregistered one |
+| 401 | `identity_required`, `unknown_user`, `unknown_agent` | No identity, an unregistered one, or an unregistered agent in `Armature-Agent` |
+| 403 | `forbidden` | The identity may not do this; `permission` and, as it applies, `branch`, `role` or `agent` (Grants; ADR-0068) |
 | 403 | `host_not_allowed`, `origin_not_allowed` | A host name or a web origin this hub does not serve (Hosts and web origins) |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit |
 | 409 | `type_conflict` | An identifier held by another type (rule 12) |
