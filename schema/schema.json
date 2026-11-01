@@ -323,6 +323,48 @@
     ]
   },
   {
+    "@type": "Enum",
+    "@id": "GrantRole",
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "GrantRole",
+        "@comment": "The authority a Grant confers (ADR-0068 decision 4). Owner: whoever created the branch, a person or an agent acting on its own; writes to it, merges into it, deletes it and grants Maintainer on it. Written by the hub when the branch is created, never asked for; main has no owner. Maintainer: writes to and merges into the branch named, or every branch when none is; a maintainer of main is who delivers a workspace or a review round into shared history. Administrator: grants and revokes every role, registers people, and reads what a maintainer of main may (a full export, the user list). Relay: lets a service deliver a person's earlier work with the person as author, bounded by relayedUsers and expires (ADR-0067 decision 5). Persons hold Maintainer and Administrator; agents hold Relay (API constraint 22). An instance that wants no gate grants each person Maintainer of every branch.",
+        "@values": {
+          "Owner": "",
+          "Maintainer": "",
+          "Administrator": "",
+          "Relay": ""
+        }
+      }
+    ],
+    "@value": [
+      "Owner",
+      "Maintainer",
+      "Administrator",
+      "Relay"
+    ]
+  },
+  {
+    "@type": "Enum",
+    "@id": "GrantStatus",
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "GrantStatus",
+        "@comment": "Whether a Grant is in force. Active: the authority holds, unless expires has passed. Revoked: withdrawn; the record stays, with its rationale, so who held authority at a commit is a read of main at that commit. Deliberately two values and never a delete (ADR-0068 decision 2).",
+        "@values": {
+          "Active": "",
+          "Revoked": ""
+        }
+      }
+    ],
+    "@value": [
+      "Active",
+      "Revoked"
+    ]
+  },
+  {
     "@type": "Class",
     "@id": "User",
     "@key": {
@@ -332,10 +374,11 @@
       {
         "@language": "en",
         "@label": "User",
-        "@comment": "A person or system agent who participates in the design process. Intentionally minimal — Armature does not manage authentication or access control. Those concerns belong to the external auth system (identity) and TerminusDB (database access). User is a domain document: it represents who someone is as a design process participant, not whether they are allowed to operate the database. externalId is the stable identifier from the auth system (e.g., OIDC sub claim) — the API resolves each request's identity to the User with this externalId on the main branch, the registry of record; User documents are created on main only, and agents are Users whose externalId begins with agent: (ADR-0032). email and institution make the record self-describing in exports and across deployments, where the original auth system may not be available. User does not inherit ArmatureDocument — it is infrastructure for the design process, not an instructional design artifact, and should not be a valid subject of a DesignNote (the API enforces this through the reference-class check, constraint 0). See ADR-0015, ADR-0032.",
+        "@comment": "A person or system agent who participates in the design process. Intentionally minimal. Armature issues no credentials: a person signs in with an outside identity provider, whose signed token the hub verifies under the oidc resolver (ADR-0067 decision 1), and a trusted header stands in for it on a loopback or private network (ADR-0032); what a resolved identity may do is decided by Grant documents on main (ADR-0068), and database access stays the hub's own connection to TerminusDB (ADR-0015). User is a domain document: it represents who someone is as a design process participant, not a login. externalId is the stable identifier from the identity provider (the OIDC sub claim) — the API resolves each request's identity to the User with this externalId on the main branch, the registry of record, qualified by issuer under oidc; User documents are created on main only, and agents are Users whose externalId begins with agent:, registered by a person (ADR-0032). An agent writes under its own name and the hub records in the commit message whom it acted for; a service delivers a person's earlier work only under a Relay grant; and no request body ever names another person as an author, a createdBy or an attestedBy (constraint 15; ADR-0067 decisions 3 and 5, ADR-0068 decision 5). email and institution make the record self-describing in exports and across deployments, where the original identity provider may not be available. User does not inherit ArmatureDocument — it is infrastructure for the design process, not an instructional design artifact, and should not be a valid subject of a DesignNote (the API enforces this through the reference-class check, constraint 0). See ADR-0015, ADR-0032, ADR-0067, ADR-0068.",
         "@properties": {
           "email": "The user's email address. Optional — may not be available in all deployments or for system agents. In many deployments this will match externalId, but the two serve different purposes: externalId is for machine resolution, email is for human-readable identity in UIs and exports.",
-          "institution": "The user's organizational affiliation. Makes the User record meaningful in exported graphs and collaborative contexts where participants come from different organizations."
+          "institution": "The user's organizational affiliation. Makes the User record meaningful in exported graphs and collaborative contexts where participants come from different organizations.",
+          "issuer": "The identity provider that vouches for this User: the token's iss claim under the oidc resolver, which resolves a request by (issuer, sub) so that externalId stays the bare sub and a second issuer, or a change of provider, needs no migration (ADR-0067 decision 1, note of 2026-10-30). Absent for a User registered under the header resolver, as the seed's are, and for an agent registered by a person."
         }
       }
     ],
@@ -349,10 +392,66 @@
       "@type": "Optional",
       "@class": "xsd:string"
     },
+    "issuer": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
     "@metadata": {
       "armature": {
         "category": "infrastructure"
       }
+    }
+  },
+  {
+    "@type": "Class",
+    "@id": "Grant",
+    "@key": {
+      "@type": "Hash",
+      "@fields": [
+        "user",
+        "role",
+        "branch"
+      ]
+    },
+    "@metadata": {
+      "armature": {
+        "category": "infrastructure"
+      }
+    },
+    "@documentation": [
+      {
+        "@language": "en",
+        "@label": "Grant",
+        "@comment": "One person's or agent's authority over the graph, recorded on main so that every change of authority is a commit with an author and a reason (ADR-0068). Infrastructure, outside DesignRecord as User is (ADR-0017): a grant is not a design decision and cannot be the subject of a note, a finding or an attestation. Identity is a Hash over user, role and branch, so there is one current grant per holder, role and branch (an Optional field in a Hash key, platform check AA); a client never supplies the @id. A grant is never deleted: revoking one is a replace with status Revoked and a rationale, and the history of who held authority, granted by whom and why, is main's commit history. The hub writes the Owner grant itself when a branch is created and revokes it when the branch is deleted (ADR-0068 decision 3); who may grant or revoke the other roles is decision 4; the first Administrator comes from the seed or the operator's put (decision 6). Grants live on main only, whatever branch a request touches, and are written through the generic document API there (API constraint 21). The list route may filter grants by user, since a grant is not design work: ADR-0021's guard covers the classes under DesignRecord (ADR-0068 decision 8). A workspace hub clones no grants and authorizes nothing; the remote refuses at push (decision 9). The pseudonymous export profile rewrites user and relayedUsers like every reference to a person (ADR-0031). API CONSTRAINTS: 0 (user and relayedUsers are Users), 21 (main only), 22 (the holder's kind suits the role; relayedUsers only on a Relay grant). See ADR-0067, ADR-0068.",
+        "@properties": {
+          "user": "The User who holds the authority: a person, or for Relay a service's agent User (an externalId beginning with agent:). Part of the key. The store checks it exists; the API checks it is a User (constraint 0) and that its kind suits the role (constraint 22).",
+          "role": "What is granted; see GrantRole. Part of the key.",
+          "branch": "The branch the grant is scoped to; absent means every branch, which is how an Administrator grant is written. Part of the key, so Maintainer of one branch and Maintainer of every branch are two grants. Names the branch, not its first commit: a recreated name inherits a stale grant only if deletion failed to revoke it, which the hub's order (revoke first, delete second) makes unlikely and the operator's check reports (ADR-0068 decision 3, note).",
+          "status": "Active or Revoked; see GrantStatus. A grant whose expires has passed is treated as Revoked without a replace.",
+          "rationale": "Why the authority was granted, or why it was withdrawn, in the grantor's words. Provisional free text (ADR-0010); the commit message carries the reason too, this field keeps it on the record.",
+          "relayedUsers": "On a Relay grant, the people the service may name as authors when it delivers their earlier work (ADR-0067 decision 5); absent means any registered person. Not part of the key, so narrowing a grant is a replace. API CONSTRAINT 22: present only on a Relay grant, and names persons.",
+          "expires": "The instant after which the grant is treated as Revoked, with no replace needed; absent means it holds until revoked. Not part of the key. Added so a compromised relay service is bounded to the period an administrator named (ADR-0068 decision 2, note); any role may carry it."
+        }
+      }
+    ],
+    "user": "User",
+    "role": "GrantRole",
+    "branch": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "status": "GrantStatus",
+    "rationale": {
+      "@type": "Optional",
+      "@class": "xsd:string"
+    },
+    "relayedUsers": {
+      "@type": "Set",
+      "@class": "User"
+    },
+    "expires": {
+      "@type": "Optional",
+      "@class": "xsd:dateTime"
     }
   },
   {

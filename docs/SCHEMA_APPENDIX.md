@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-10-31_
+_Schema snapshot · Generated 2026-11-01_
 
 ---
 
@@ -29,6 +29,17 @@ classDiagram
     +string externalId
     +string? email
     +string? institution
+    +string? issuer
+  }
+
+  class Grant {
+    +User user
+    +GrantRole role
+    +string? branch
+    +GrantStatus status
+    +string? rationale
+    +Set<User> relayedUsers
+    +dateTime? expires
   }
 
   class DesignRecord {
@@ -276,6 +287,8 @@ classDiagram
   ArmatureDocument <|-- Course : inherits
 
   %% Relationships (solid: reference; dotted: optional; diamond: embedded subdocument)
+  Grant --> User : user
+  Grant "0..*" --> User : relayedUsers
   ArmatureDocument ..> User : createdBy
   ArmatureDocument *-- ExternalRef : externalRefs
   ArmatureDocument *-- Attachment : attachments
@@ -323,12 +336,12 @@ classDiagram
 
 ## Infrastructure
 
-_Non-artifact types that underpin the design process: the user, and the abstract roots every record inherits._
+_Non-artifact types that underpin the design process: the user, the grants of authority recorded on main (ADR-0068), and the abstract roots every record inherits._
 
 ### `User`
 _category: infrastructure · key: Random_
 
-> A person or system agent who participates in the design process. Intentionally minimal — Armature does not manage authentication or access control. Those concerns belong to the external auth system (identity) and TerminusDB (database access). User is a domain document: it represents who someone is as a design process participant, not whether they are allowed to operate the database. externalId is the stable identifier from the auth system (e.g., OIDC sub claim) — the API resolves each request's identity to the User with this externalId on the main branch, the registry of record; User documents are created on main only, and agents are Users whose externalId begins with agent: (ADR-0032). email and institution make the record self-describing in exports and across deployments, where the original auth system may not be available. User does not inherit ArmatureDocument — it is infrastructure for the design process, not an instructional design artifact, and should not be a valid subject of a DesignNote (the API enforces this through the reference-class check, constraint 0). See ADR-0015, ADR-0032.
+> A person or system agent who participates in the design process. Intentionally minimal. Armature issues no credentials: a person signs in with an outside identity provider, whose signed token the hub verifies under the oidc resolver (ADR-0067 decision 1), and a trusted header stands in for it on a loopback or private network (ADR-0032); what a resolved identity may do is decided by Grant documents on main (ADR-0068), and database access stays the hub's own connection to TerminusDB (ADR-0015). User is a domain document: it represents who someone is as a design process participant, not a login. externalId is the stable identifier from the identity provider (the OIDC sub claim) — the API resolves each request's identity to the User with this externalId on the main branch, the registry of record, qualified by issuer under oidc; User documents are created on main only, and agents are Users whose externalId begins with agent:, registered by a person (ADR-0032). An agent writes under its own name and the hub records in the commit message whom it acted for; a service delivers a person's earlier work only under a Relay grant; and no request body ever names another person as an author, a createdBy or an attestedBy (constraint 15; ADR-0067 decisions 3 and 5, ADR-0068 decision 5). email and institution make the record self-describing in exports and across deployments, where the original identity provider may not be available. User does not inherit ArmatureDocument — it is infrastructure for the design process, not an instructional design artifact, and should not be a valid subject of a DesignNote (the API enforces this through the reference-class check, constraint 0). See ADR-0015, ADR-0032, ADR-0067, ADR-0068.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -336,6 +349,22 @@ _category: infrastructure · key: Random_
 | `externalId` | `string` | required |
 | `email` | `string?` | optional |
 | `institution` | `string?` | optional |
+| `issuer` | `string?` | optional |
+
+### `Grant`
+_category: infrastructure · key: Hash(user, role, branch)_
+
+> One person's or agent's authority over the graph, recorded on main so that every change of authority is a commit with an author and a reason (ADR-0068). Infrastructure, outside DesignRecord as User is (ADR-0017): a grant is not a design decision and cannot be the subject of a note, a finding or an attestation. Identity is a Hash over user, role and branch, so there is one current grant per holder, role and branch (an Optional field in a Hash key, platform check AA); a client never supplies the @id. A grant is never deleted: revoking one is a replace with status Revoked and a rationale, and the history of who held authority, granted by whom and why, is main's commit history. The hub writes the Owner grant itself when a branch is created and revokes it when the branch is deleted (ADR-0068 decision 3); who may grant or revoke the other roles is decision 4; the first Administrator comes from the seed or the operator's put (decision 6). Grants live on main only, whatever branch a request touches, and are written through the generic document API there (API constraint 21). The list route may filter grants by user, since a grant is not design work: ADR-0021's guard covers the classes under DesignRecord (ADR-0068 decision 8). A workspace hub clones no grants and authorizes nothing; the remote refuses at push (decision 9). The pseudonymous export profile rewrites user and relayedUsers like every reference to a person (ADR-0031). API CONSTRAINTS: 0 (user and relayedUsers are Users), 21 (main only), 22 (the holder's kind suits the role; relayedUsers only on a Relay grant). See ADR-0067, ADR-0068.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `user` | `User` | required |
+| `role` | `GrantRole` | required |
+| `branch` | `string?` | optional |
+| `status` | `GrantStatus` | required |
+| `rationale` | `string?` | optional |
+| `relayedUsers` | `Set<User>` | required |
+| `expires` | `dateTime?` | optional |
 
 ### `DesignRecord`
 _category: infrastructure · **abstract**_
@@ -710,6 +739,24 @@ _category: relationship · extends `DesignRecord` · key: Hash(subject, fragment
 ---
 
 ## Enumerations
+
+### Infrastructure
+
+### `GrantRole`
+
+> The authority a Grant confers (ADR-0068 decision 4). Owner: whoever created the branch, a person or an agent acting on its own; writes to it, merges into it, deletes it and grants Maintainer on it. Written by the hub when the branch is created, never asked for; main has no owner. Maintainer: writes to and merges into the branch named, or every branch when none is; a maintainer of main is who delivers a workspace or a review round into shared history. Administrator: grants and revokes every role, registers people, and reads what a maintainer of main may (a full export, the user list). Relay: lets a service deliver a person's earlier work with the person as author, bounded by relayedUsers and expires (ADR-0067 decision 5). Persons hold Maintainer and Administrator; agents hold Relay (API constraint 22). An instance that wants no gate grants each person Maintainer of every branch.
+
+- `Owner`
+- `Maintainer`
+- `Administrator`
+- `Relay`
+
+### `GrantStatus`
+
+> Whether a Grant is in force. Active: the authority holds, unless expires has passed. Revoked: withdrawn; the record stays, with its rationale, so who held authority at a commit is a read of main at that commit. Deliberately two values and never a delete (ADR-0068 decision 2).
+
+- `Active`
+- `Revoked`
 
 ### Objectives
 

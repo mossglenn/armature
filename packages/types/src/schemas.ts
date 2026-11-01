@@ -7,7 +7,7 @@
 // Phase 3). Shape only: cross-document rules live in the invariants engine.
 
 import { z } from 'zod';
-import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict, VALID_ExternalSystem, VALID_AttachmentStore } from './types';
+import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict, VALID_GrantRole, VALID_GrantStatus, VALID_ExternalSystem, VALID_AttachmentStore } from './types';
 
 /**
  * A reference to another document: its id, or { "@ref": "<capture>" } naming a
@@ -73,6 +73,20 @@ export const UserSchema = z.strictObject({
   externalId: z.string().min(1).max(10_000),
   email: z.string().min(1).max(10_000).optional(),
   institution: z.string().min(1).max(10_000).optional(),
+  issuer: z.string().min(1).max(10_000).optional(),
+});
+
+export const GrantSchema = z.strictObject({
+  '@id': z.string().min(1).optional(),
+  '@type': z.literal('Grant').optional(),
+  '@capture': z.string().min(1).optional(),
+  user: ReferenceSchema,
+  role: z.enum(VALID_GrantRole),
+  branch: z.string().min(1).max(10_000).optional(),
+  status: z.enum(VALID_GrantStatus),
+  rationale: z.string().min(1).max(10_000).optional(),
+  relayedUsers: z.array(ReferenceSchema).optional(),
+  expires: z.iso.datetime().optional(),
 });
 
 export const LearningMetricSchema = z.strictObject({
@@ -367,6 +381,7 @@ export const CourseSchema = z.strictObject({
 /** Every concrete document class by @id. */
 export const DOCUMENT_SCHEMAS = {
   User: UserSchema,
+  Grant: GrantSchema,
   LearningMetric: LearningMetricSchema,
   DescriptiveEvidence: DescriptiveEvidenceSchema,
   LearningDataset: LearningDatasetSchema,

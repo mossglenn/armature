@@ -50,7 +50,7 @@
  * --- Schema self-description (architecture decision record ADR-0027) ---
  *
  * Every class declares @metadata.armature.category, one of:
- *   infrastructure  User, DesignRecord, ArmatureDocument
+ *   infrastructure  User, Grant, DesignRecord, ArmatureDocument, ExternalRef, Attachment
  *   fragment        @subdocument classes: parts of an artifact (ADR-0033)
  *   artifact        primary instructional artifacts
  *   relationship    reified relationships (junction documents)
@@ -133,7 +133,7 @@ const SKIP_KEYS = new Set([
 
 /** Category emission order and the heading each group gets. */
 const CATEGORIES = [
-  ['infrastructure', 'Infrastructure — User, and the abstract roots every record inherits'],
+  ['infrastructure', 'Infrastructure — User, Grant, the abstract roots every record inherits, and the two embedded coordinates (ADR-0030)'],
   ['fragment',       'Fragments — subdocument parts of an artifact, returned inline (ADR-0033)'],
   ['artifact',       'Artifacts — primary instructional design documents'],
   ['relationship',   'Relationships — reified junction documents; no label / description / createdBy unless they inherit ArmatureDocument'],
