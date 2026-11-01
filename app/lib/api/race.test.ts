@@ -11,6 +11,9 @@ import { app } from './app';
 import { createStore, TerminusStore, type TerminusDocument } from './store';
 import { WRITE_ATTEMPTS } from './write';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 const AUTHOR = 'User/demo-designer';
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
 const stamp = Date.now().toString(36);
@@ -67,7 +70,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+  await deleteScratchBranch(BRANCH, AS_OPERATOR).catch(() => undefined);
 });
 
 describe('a write checks its rules on the state it lands on (B2)', () => {

@@ -9,8 +9,10 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './app';
-import { createStore } from './store';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 const AUTHOR = 'User/demo-designer';
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
 const stamp = Date.now().toString(36);
@@ -56,7 +58,7 @@ describe('generic write path and invariants (Phase 3)', () => {
   });
 
   afterAll(async () => {
-    await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+    await deleteScratchBranch(BRANCH, AS_OPERATOR).catch(() => undefined);
   });
 
   describe('shape: generated Zod schemas', () => {

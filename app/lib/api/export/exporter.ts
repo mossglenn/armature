@@ -1,5 +1,6 @@
 import { CLASS_ANCESTORS, CLASS_FIELDS, type FieldShape } from '@armature/types';
 import type { TerminusDocument } from '../store';
+import { handleOf } from '../identity';
 import slicesJson from './slices.json';
 
 /**
@@ -108,7 +109,10 @@ const hex = (bytes: ArrayBuffer): string =>
  * (hash-based message authentication code, SHA-256) of the `User` id under
  * `key`: the same key gives the same token in every export of a deployment,
  * so a corpus can be compared across time; without a key a random one is
- * minted for this export and the result says so.
+ * minted for this export and the result says so. A `Grant` names a branch,
+ * and a workspace branch begins with its owner's handle (`<handle>_<name>`,
+ * ADR-0065), so that prefix is rewritten to the person's token too (ADR-0068);
+ * a branch name that begins with no registered handle is left as it is.
  */
 export async function applyProfile(
   documents: TerminusDocument[],
@@ -129,6 +133,16 @@ export async function applyProfile(
     return token;
   };
 
+  // Handles by their owner, longest first so `ab_` is not taken for `a`'s.
+  const handles = documents
+    .filter((d) => d['@type'] === 'User' && typeof d.externalId === 'string')
+    .map((d) => ({ handle: handleOf(d.externalId as string), userId: d['@id'] }))
+    .sort((a, b) => b.handle.length - a.handle.length);
+  const rewriteBranch = async (branch: string): Promise<string> => {
+    const owner = handles.find(({ handle }) => branch.startsWith(`${handle}_`));
+    return owner ? `${await tokenFor(owner.userId)}${branch.slice(owner.handle.length)}` : branch;
+  };
+
   const out: TerminusDocument[] = [];
   for (const doc of documents) {
     if (doc['@type'] === 'User') {
@@ -146,6 +160,7 @@ export async function applyProfile(
         copy[field] = await Promise.all(value.map(async (v) => (typeof v === 'string' ? `User/${await tokenFor(v)}` : v)));
       }
     }
+    if (doc['@type'] === 'Grant' && typeof copy.branch === 'string') copy.branch = await rewriteBranch(copy.branch);
     out.push(copy);
   }
   return { documents: out, pseudonyms: key ? 'stable' : 'per-export' };

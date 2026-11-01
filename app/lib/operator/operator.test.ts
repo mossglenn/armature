@@ -18,6 +18,7 @@ import { deleteDocument, deleteScratchBranch, OperatorError, operatorMetadata, p
 const stamp = Date.now().toString(36);
 const BRANCH = `test-operator-${stamp}`;
 const OPERATOR = 'demo-designer@example.edu';
+const AS_OPERATOR = { as: OPERATOR };
 const OBJECTIVE = 'LearningObjective/distinguish-ai-approaches';
 const FINDING = `DesignFinding/operator-${stamp}`;
 
@@ -56,7 +57,7 @@ describe('a repair on a scratch branch', () => {
   });
 
   afterAll(async () => {
-    await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+    await deleteScratchBranch(BRANCH, AS_OPERATOR).catch(() => undefined);
   });
 
   it('refuses an operator who is not a registered User, a repair without a reason, and an empty write', async () => {
@@ -153,17 +154,52 @@ describe('a repair on a scratch branch', () => {
 
 describe('scratch branches', () => {
   it('refuses a branch without a scratch prefix, main above all', async () => {
-    await expect(deleteScratchBranch('main')).rejects.toBeInstanceOf(OperatorError);
-    await expect(deleteScratchBranch(`round-${stamp}`)).rejects.toBeInstanceOf(OperatorError);
+    await expect(deleteScratchBranch('main', AS_OPERATOR)).rejects.toBeInstanceOf(OperatorError);
+    await expect(deleteScratchBranch(`round-${stamp}`, AS_OPERATOR)).rejects.toBeInstanceOf(OperatorError);
+  });
+
+  it('revokes the grants naming a scratch branch before deleting it, as a marked commit on main (ADR-0068 decision 3)', async () => {
+    const name = `test-operator-owned-${stamp}`;
+    const created = await app.request('/api/v1/branches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Armature-User': OPERATOR },
+      body: JSON.stringify({ name }),
+    });
+    expect(created.status).toBe(201);
+    const main = createStore({ branch: 'main' });
+    const { revoked } = await deleteScratchBranch(name, AS_OPERATOR);
+    expect(revoked).toHaveLength(1);
+    const grant = (await main.getDocument(revoked[0])).document;
+    expect(grant).toMatchObject({ role: 'Owner', branch: name, status: 'Revoked' });
+    const head = await main.head();
+    expect(head?.metadata).toEqual(operatorMetadata({ tool: 'delete', rulesSkipped: false }));
+    expect(await main.listBranches()).not.toContain(name);
   });
 
   it('deletes a scratch branch and returns its head', async () => {
     const name = `test-operator-scratch-${stamp}`;
     const main = createStore({ branch: 'main' });
     await main.createBranch(name, { branch: 'main' });
-    const { head } = await deleteScratchBranch(name);
+    const { head, revoked } = await deleteScratchBranch(name, AS_OPERATOR);
+    expect(revoked).toEqual([]);
     expect(head?.id).toBe((await main.head())?.id);
     expect(await main.listBranches()).not.toContain(name);
+  });
+});
+
+describe('grants on main through put (ADR-0068 decision 6)', () => {
+  it('writes the first administrator on main through a transient branch, and revokes it the same way', async () => {
+    const grant = { '@type': 'Grant', user: 'User/demo-reviewer', role: 'Administrator', status: 'Active', rationale: `Operator test ${stamp}` };
+    const written = await putDocuments({ branch: 'main', documents: [grant], as: OPERATOR, reason: 'The first administrator' });
+    expect(written.ids[0]).toMatch(/^Grant\//);
+    const revoked = await putDocuments({
+      branch: 'main',
+      documents: [{ ...grant, status: 'Revoked', rationale: 'The test is over' }],
+      as: OPERATOR,
+      reason: 'Revoke the test administrator',
+    });
+    expect(revoked.ids[0]).toBe(written.ids[0]);
+    expect((await createStore({ branch: 'main' }).getDocument(written.ids[0])).document.status).toBe('Revoked');
   });
 });
 

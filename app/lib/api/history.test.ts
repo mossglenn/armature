@@ -6,8 +6,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './app';
 import { historyMemo } from './routes/documents';
-import { createStore } from './store';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
 const BRANCH = `test-history-${Date.now().toString(36)}`;
 const q = `?branch=${BRANCH}`;
@@ -30,7 +32,7 @@ describe('the history memo', () => {
   });
   // Through the adapter: the route deletes only a branch whose head another branch holds.
   afterAll(async () => {
-    await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+    await deleteScratchBranch(BRANCH, AS_OPERATOR).catch(() => undefined);
   });
 
   it('serves the same answer from memory while the head stands still, and a fresh one after a write', async () => {

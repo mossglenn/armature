@@ -11,8 +11,11 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { app } from './app';
 import { canonical } from './fragments';
-import { createOperatorStore, createStore, type TerminusDocument } from './store';
+import { createOperatorStore, type TerminusDocument } from './store';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 const stamp = Date.now().toString(36);
 const get = (path: string) => app.request(path);
 const json = async (path: string) => {
@@ -138,9 +141,9 @@ describe('GET /api/v1/export (ADR-0031)', () => {
   });
 
   describe('reproduction (Phase 6 exit criterion)', () => {
-    const BRANCH = `export-reimport-${stamp}`;
+    const BRANCH = `test-export-reimport-${stamp}`;
     afterAll(async () => {
-      await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+      await deleteScratchBranch(BRANCH, AS_OPERATOR).catch(() => undefined);
     });
 
     it('a full export at a commit, loaded into an empty branch, exports again as the same graph', async () => {

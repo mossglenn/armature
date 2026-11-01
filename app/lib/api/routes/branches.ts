@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { storeFor } from '../config';
 import { ApiError } from '../errors';
 import { BRANCH_NAME, ifMatchFrom, readEnvelope, readJson, requireCommit, setEtag } from '../http';
-import { resolveAuthor } from '../identity';
+import { grantOwner, revokeGrantsNaming } from '../grants';
+import { resolveAuthor, resolveUser } from '../identity';
 import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
 
 /**
@@ -10,7 +11,7 @@ import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, t
  * and 8).
  *
  *   GET  /                      every branch with its head commit
- *   POST /                      { name, from?: { branch } | { commit } }  → 201
+ *   POST /                      { name, from?: { branch } | { commit } }  → 201; the caller owns it
  *   GET  /:name                 the head commit
  *   POST /:name/merge           { message, from }  three-way merge; 409 on conflict
  *   GET  /:name/changes?since=  changed document ids since a commit
@@ -20,6 +21,12 @@ import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, t
  * 6). A branch deletion is the one mutation the store records nowhere, so
  * the hub allows it only when nothing leaves branch-reachable history: the
  * head is in another branch's log or is a merge commit's mergeSource there.
+ *
+ * Whoever creates a branch owns it (ADR-0068 decision 3): creation writes the
+ * caller's `Owner` grant on `main`, as a commit of its own, before the branch
+ * exists, and deletion revokes every grant naming the branch before the
+ * branch goes, so a failure between the two steps never widens authority
+ * (../grants.ts). Both therefore need an identity.
  */
 export const branches = new Hono();
 
@@ -202,11 +209,20 @@ branches.post('/', async (c) => {
     throw new ApiError(400, 'bad_name', 'name must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$');
   }
   const from = parseFrom(body.from);
+  const who = await resolveUser(c);
   const store = storeFor(c, { branch: 'main' });
   if ('commit' in from) await requireCommit(store, from.commit);
+  // Both checked before the grant is written, so the usual refusals write
+  // nothing on main; the store's own refusals below cover a race.
+  const names = await store.listBranches();
+  if (names.includes(name)) throw new ApiError(409, 'branch_exists', `Branch ${name} already exists`);
+  if ('branch' in from && !names.includes(from.branch)) throw new ApiError(404, 'unknown_ref', `No branch ${from.branch}`);
+  await grantOwner(store, who, name);
   try {
     await store.createBranch(name, from);
   } catch (err) {
+    // The grant is taken back, so no one owns a branch they did not make.
+    await revokeGrantsNaming(who, name, 'Branch not created', { main: store }).catch(() => undefined);
     if (err instanceof StoreError && err.kind === 'exists') {
       throw new ApiError(409, 'branch_exists', `Branch ${name} already exists`);
     }
@@ -308,7 +324,7 @@ branches.post('/:name/merge', async (c) => {
 branches.delete('/:name', async (c) => {
   const { name } = c.req.param();
   if (name === 'main') throw new ApiError(400, 'protected_branch', 'main is never deleted (ADR-0025 decision 6)');
-  await resolveAuthor(c);
+  const who = await resolveUser(c);
   const store = storeFor(c, { branch: 'main' });
   const names = await store.listBranches();
   if (!names.includes(name)) throw new ApiError(404, 'unknown_ref', `No branch ${name}`);
@@ -341,6 +357,9 @@ branches.delete('/:name', async (c) => {
       });
     }
   }
+  // Grants first, then the branch (ADR-0068 decision 3, note): a failure here
+  // leaves a branch nobody owns, which check reports, never one anyone may write.
+  await revokeGrantsNaming(who, name, 'Branch deleted', { main: store });
   await store.deleteBranch(name);
   return c.json({ deleted: name, head: head?.id ?? null, heldBy: heldBy ?? null });
 });

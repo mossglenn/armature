@@ -19,6 +19,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { app, MAX_BODY_BYTES } from './app';
 import { createOperatorStore, createStore, isUnknownRef, StoreError, TerminusStore } from './store';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 /** The seed's User and the header value that resolves to it (ADR-0032 decision 1). */
 const AUTHOR = 'User/demo-designer';
 const AUTHOR_EXTERNAL_ID = 'demo-designer@example.edu';
@@ -134,9 +137,8 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
   });
 
   afterAll(async () => {
-    const store = createStore({ branch: 'main' });
     for (const name of [SOURCE, TARGET]) {
-      await store.deleteBranch(name).catch(() => undefined);
+      await deleteScratchBranch(name, AS_OPERATOR).catch(() => undefined);
     }
   });
 
@@ -334,7 +336,7 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
       expect(res.status).toBe(400);
       expect((await res.json()).error).toBe('not_an_ancestor');
     } finally {
-      await createStore({ branch: 'main' }).deleteBranch(other).catch(() => undefined);
+      await deleteScratchBranch(other, AS_OPERATOR).catch(() => undefined);
     }
   });
 
@@ -484,8 +486,7 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
         expect((await res.json()).heldBy).toBe(HOLDER);
       } finally {
         spy.mockRestore();
-        const main = createStore({ branch: 'main' });
-        for (const name of [FORK, HOLDER]) await main.deleteBranch(name).catch(() => undefined);
+        for (const name of [FORK, HOLDER]) await deleteScratchBranch(name, AS_OPERATOR).catch(() => undefined);
       }
     });
 
@@ -538,7 +539,7 @@ describe('users and identity resolution (ADR-0032)', () => {
 
   afterAll(async () => {
     const main = createOperatorStore({ branch: 'main' });
-    for (const name of [EARLY, LATE]) await main.deleteBranch(name).catch(() => undefined);
+    for (const name of [EARLY, LATE]) await deleteScratchBranch(name, AS_OPERATOR).catch(() => undefined);
     for (const id of [REVIEWER_ID, agentId]) {
       if (id) await main.deleteDocument(id, { author: AUTHOR, message: `Test cleanup: remove ${id}` }).catch(() => undefined);
     }

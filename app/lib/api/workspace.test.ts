@@ -14,19 +14,22 @@ import { configFromEnv, type HubConfig } from './config';
 import { normalizeSchema } from './export/exporter';
 import { canonical } from './fragments';
 import { handleOf } from './routes/workspace';
-import { createOperatorStore, createStore, storeConfigFromEnv } from './store';
+import { createOperatorStore, storeConfigFromEnv } from './store';
 import { memoryRecords, type WorkspaceRecord } from './workspace/records';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 const stamp = Date.now().toString(36);
 const USER = 'demo-designer@example.edu';
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': USER };
 const LOCAL_DB = `${process.env.TERMINUS_DB}_ws_${stamp}`;
 
-const NAME = `ws-${stamp}`;
+const NAME = `test-ws-${stamp}`;
 const BRANCH = `${handleOf(USER)}_${NAME}`;
-const EXISTING = `ws-existing-${stamp}`;
-const UNFINISHED = `ws-unfinished-${stamp}`;
-const WORKED = `ws-worked-${stamp}`;
+const EXISTING = `test-ws-existing-${stamp}`;
+const UNFINISHED = `test-ws-unfinished-${stamp}`;
+const WORKED = `test-ws-worked-${stamp}`;
 const REMOTE_BRANCHES = [BRANCH, EXISTING, UNFINISHED, WORKED];
 
 let remote: RunningHub;
@@ -55,7 +58,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const name of REMOTE_BRANCHES) await createStore({ branch: 'main' }).deleteBranch(name).catch(() => undefined);
+  for (const name of REMOTE_BRANCHES) await deleteScratchBranch(name, AS_OPERATOR).catch(() => undefined);
   await localStore('main').deleteDatabase().catch(() => undefined);
   await remote?.close();
 });

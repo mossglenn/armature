@@ -8,9 +8,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { app } from './app';
-import { createStore } from './store';
 import { CAPABILITIES, capabilitiesOf, CURRENT_REVISION, REVISIONS } from './version';
 
+import { deleteScratchBranch } from '../operator/repair';
+
+const AS_OPERATOR = { as: 'demo-designer@example.edu' };
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
 const stamp = Date.now().toString(36);
 
@@ -59,7 +61,7 @@ describe('Armature-Version (ADR-0059 decision 3)', () => {
     expect(write.status).toBe(400);
     expect((await write.json()).error).toBe('unsupported_version');
     expect((await (await get('/api/v1/branches')).json()).map((b: { name: string }) => b.name)).not.toContain(name);
-    await createStore({ branch: 'main' }).deleteBranch(name).catch(() => undefined);
+    await deleteScratchBranch(name, AS_OPERATOR).catch(() => undefined);
   });
 
   it('the revisions are the dated entries of docs/client-changes.md, newest first', () => {

@@ -11,7 +11,7 @@ import { createClient, HubError } from '@armature/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from './api/app';
 import { CURRENT_REVISION } from './api/version';
-import { createStore } from './api/store';
+import { deleteScratchBranch } from './operator/repair';
 import { bindRefusal, startHub, type RunningHub } from './hub';
 
 const stamp = Date.now().toString(36);
@@ -29,7 +29,7 @@ describe('the hub as its own process', () => {
   });
 
   afterAll(async () => {
-    await createStore({ branch: 'main' }).deleteBranch(BRANCH).catch(() => undefined);
+    await deleteScratchBranch(BRANCH, { as: 'demo-designer@example.edu' }).catch(() => undefined);
     await running?.close();
   });
 

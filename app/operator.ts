@@ -32,7 +32,7 @@ const USAGE = `Usage: node operator.mjs <command> [options]
       Deletes one document as a commit by the operator's User. The store
       refuses a document another document references.
 
-  delete --scratch-branch <name>
+  delete --scratch-branch <name> --as <externalId>
       Deletes a branch whose name starts with test-, warmup-, anon-, future-
       or operator- (a repair's own, left by a crash). Its commits stay
       readable by id; the head is printed.
@@ -68,7 +68,8 @@ async function check(values: Record<string, unknown>): Promise<number> {
   }
   console.log(`${report.violations.length} violation(s):`);
   for (const v of report.violations) {
-    console.log(`  ${v.code}  ${v.id ?? `(document ${v.index})`}${v.field ? `  ${v.field}` : ''}\n    ${v.message}`);
+    const where = v.id ?? (v.index >= 0 ? `(document ${v.index})` : '(the branch list)');
+    console.log(`  ${v.code}  ${where}${v.field ? `  ${v.field}` : ''}\n    ${v.message}`);
   }
   return 1;
 }
@@ -77,7 +78,8 @@ async function remove(positionals: string[], values: Record<string, unknown>): P
   if (values['scratch-branch']) {
     if (positionals.length) throw new UsageError('delete --scratch-branch takes no document id');
     const name = String(values['scratch-branch']);
-    const { head } = await deleteScratchBranch(name);
+    const { head, revoked } = await deleteScratchBranch(name, { as: need(values.as as string | undefined, '--as') });
+    if (revoked.length) console.log(`Revoked ${revoked.length} grant(s) on ${name}`);
     console.log(`Deleted branch ${name}; its head ${head?.id ?? '(none)'} stays readable by id`);
     return 0;
   }

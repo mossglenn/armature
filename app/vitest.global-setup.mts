@@ -12,9 +12,9 @@
 // the store took. A failure here is reported, not thrown: the tests will fail
 // with a clearer message than this file could give.
 import { app } from './lib/api/app';
-import { createStore } from './lib/api/store';
 import { envLocal } from './vitest.env';
 
+import { deleteScratchBranch } from './lib/operator/repair';
 const PROBE_TIMEOUT_MS = 120_000;
 const POLL_MS = 1_000;
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
@@ -112,7 +112,7 @@ async function warmUp(): Promise<void> {
   } finally {
     // The branch holds a commit no other branch has, so the API refuses to
     // delete it; the tests' own cleanup goes through the adapter the same way.
-    await createStore({ branch: 'main' }).deleteBranch(branch).catch(() => undefined);
+    await deleteScratchBranch(branch, { as: 'demo-designer@example.edu' }).catch(() => undefined);
   }
 }
 
