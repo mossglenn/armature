@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import type { WorkspaceRecords } from './workspace/records';
+import { workspaceStore } from './workspace/store';
 import { createStore, storeConfigFromEnv, type Ref, type Store, type StoreConfig } from './store';
 
 /**
@@ -39,6 +40,8 @@ export interface HubConfig {
   allowedOrigins: ReadonlySet<string>;
   /** A workspace hub's records of its workspaces (./workspace/records.ts); the host gives a folder, a test memory. */
   workspaces?: WorkspaceRecords;
+  /** ARMATURE_SNAPSHOTS: how many remote commits a workspace holds as snapshots (plan §16 question 3); reads at the rest are forwarded. */
+  snapshotBudget: number;
   /** The key the pseudonymous and institutional export profiles hash with (ADR-0031); absent, a random one per export. */
   exportKey?: string;
 }
@@ -85,6 +88,15 @@ function workspaceDir(raw: string | undefined): string {
   return value;
 }
 
+/** The snapshot budget as given: a whole number of commits per workspace; 20 when unset (ADR-0066, Verification: measured on the seed). */
+export const DEFAULT_SNAPSHOT_BUDGET = 20;
+function snapshotBudget(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return DEFAULT_SNAPSHOT_BUDGET;
+  const value = Number(raw.trim());
+  if (!Number.isInteger(value) || value < 0) throw new Error(`ARMATURE_SNAPSHOTS=${raw} is not a whole number of commits`);
+  return value;
+}
+
 /**
  * The hub's configuration from the environment (app/server.ts lists the
  * variables); throws on a role it does not know or a workspace hub without a
@@ -99,6 +111,7 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
     role: role as HubRole,
     ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL), workspaceDir: workspaceDir(env.ARMATURE_WORKSPACE_DIR) } : {}),
     store: () => storeConfigFromEnv(env),
+    snapshotBudget: snapshotBudget(env.ARMATURE_SNAPSHOTS),
     identity: env.ARMATURE_IDENTITY?.trim() || 'header',
     allowedHosts: list(env.ARMATURE_ALLOWED_HOSTS),
     allowedOrigins: list(env.ARMATURE_ALLOWED_ORIGINS),
@@ -113,12 +126,24 @@ export function hubOf(c: Context): HubConfig {
   return hub;
 }
 
-/** A store for one request, bound to the ref it resolved, in the request's hub's database. */
+/**
+ * A store for one request, bound to the ref it resolved, in the request's
+ * hub's database. On a workspace hub a read this hub cannot serve is forwarded
+ * to the remote as the caller (plan §8), so the caller's external identifier
+ * travels with the store; under `header` that is the header as sent, and the
+ * remote resolves it again.
+ */
 export function storeFor(c: Context, ref: Ref): Store {
-  return storeOf(hubOf(c), ref);
+  return storeOf(hubOf(c), ref, c.req.header('Armature-User')?.trim() || undefined);
 }
 
-/** A store of a hub's own database, for work the hub does outside a request's context (a workspace hub's push). */
-export function storeOf(hub: HubConfig, ref: Ref): Store {
-  return createStore(ref, hub.store());
+/**
+ * A store of a hub's own database, for work the hub does outside a request's
+ * context (a workspace hub's push). On a workspace hub with records it is the
+ * workspace store (./workspace/store.ts), which answers remote commit
+ * identifiers too; a remote hub's is the adapter as it is.
+ */
+export function storeOf(hub: HubConfig, ref: Ref, as?: string): Store {
+  const store = createStore(ref, hub.store());
+  return hub.role === 'workspace' && hub.workspaces ? workspaceStore(hub, store, as) : store;
 }

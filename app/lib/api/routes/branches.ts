@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
-import { storeFor } from '../config';
+import { hubOf, storeFor } from '../config';
 import { ApiError } from '../errors';
 import { BRANCH_NAME, ifMatchFrom, intQuery, readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { grantOwner, revokeGrantsNaming } from '../grants';
 import { requirePermission } from '../authorization';
 import { commitMessage, resolveUser } from '../identity';
+import { isInternalBranch } from '../role';
 import { changesOf, idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type ConflictWitness, type Ref, type Store, type WitnessField } from '../store';
 import { checkBranch } from '../../operator/check';
 import type { Violation } from '../invariants';
@@ -182,7 +183,9 @@ async function gone<T>(read: Promise<T>): Promise<T | undefined> {
 
 branches.get('/', async (c) => {
   const store = storeFor(c, { branch: 'main' });
-  const names = await store.listBranches();
+  const role = hubOf(c).role;
+  // A workspace hub's snapshots of the remote (plan §8) are the clone's own, not branches a tool works on.
+  const names = (await store.listBranches()).filter((name) => !isInternalBranch(role, name));
   // A branch deleted after the list was read is left out (see `gone`).
   const list = await Promise.all(
     names.map(async (name) => {
@@ -445,7 +448,22 @@ branches.get('/:name/log', async (c) => {
   const store = storeFor(c, { branch: name });
   const head = await store.head();
   if (!head) throw new ApiError(404, 'not_found', `Branch ${name} has no commits`);
-  const commits = await store.at({ commit: head.id }).log({ start, count });
+  const at = store.at({ commit: head.id });
   setEtag(c, head.id);
-  return c.json({ branch: name, head: head.id, start, count, commits: commits.map(toHead) });
+  // On a workspace hub a workspace's log continues past the clone with the
+  // remote branch's log kept at the clone, from the base back (plan §16
+  // question 3), so history offline reaches the branch's beginning.
+  const kept = hubOf(c).role === 'workspace' ? await hubOf(c).workspaces?.getLog(name) : undefined;
+  if (!kept) {
+    const commits = await at.log({ start, count });
+    return c.json({ branch: name, head: head.id, start, count, commits: commits.map(toHead) });
+  }
+  const local: Commit[] = [];
+  for (let from = 0; ; from += LOG_PAGE) {
+    const page = await at.log({ start: from, count: LOG_PAGE });
+    local.push(...page);
+    if (page.length < LOG_PAGE) break;
+  }
+  const all = [...local.map(toHead), ...kept.commits];
+  return c.json({ branch: name, head: head.id, start, count, commits: all.slice(start, start + count) });
 });

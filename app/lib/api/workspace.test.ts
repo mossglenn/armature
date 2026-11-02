@@ -374,3 +374,175 @@ describe("a workspace is its owner's (plan §7; ADR-0068 decision 9)", () => {
     expect(designerPushes.body).toMatchObject({ error: 'forbidden', permission: 'push', owner: REVIEWER });
   });
 });
+
+describe('what the clone holds beyond the base: snapshots, remote identifiers, forwarding and the log (plan §8, §16 question 3; step 5)', () => {
+  const records = () => config.workspaces!;
+  const etag = (res: Response) => res.headers.get('ETag');
+  let attestation: { '@id': string; asOf: string };
+  let findingAsOf: string;
+  let datasetAsOf: string;
+  let held: string[];
+
+  beforeAll(async () => {
+    [attestation] = (await json(await on(app, 'GET', '/documents/Attestation?branch=main'))).body;
+    datasetAsOf = (await json(await on(app, 'GET', '/documents/LearningDataset/mod3-spring-pilot?branch=main'))).body.asOf;
+    findingAsOf = (await json(await on(app, 'GET', '/documents/DesignFinding/bias-objective-rests-on-one-item?branch=main'))).body.asOf;
+    held = [...new Set([attestation.asOf, datasetAsOf, findingAsOf])].sort();
+    expect(held.length).toBeGreaterThan(1); // the seed names at least two older commits
+  });
+
+  it('holds a snapshot of the remote at each commit a cloned record names, as branches of its own that are neither listed nor written', async () => {
+    const status = (await json(await on(workspace, 'GET', `/workspace/${BRANCH}/status`))).body;
+    expect(status.snapshots).toEqual({ budget: config.snapshotBudget, held: expect.arrayContaining(held), declined: [] });
+    expect([...status.snapshots.held].sort()).toEqual(held);
+    const branches = (await json(await on(workspace, 'GET', '/branches'))).body as Array<{ name: string }>;
+    expect(branches.map((b) => b.name).filter((n) => n.startsWith('at.'))).toEqual([]);
+    expect((await localStore('main').listBranches()).filter((n) => n.startsWith('at.')).sort()).toEqual(expect.arrayContaining(held.map((c) => `at.${c}`)));
+    const write = await json(await on(workspace, 'PUT', `/documents/LearningNeed/ws-snap-${stamp}?branch=at.${held[0]}`, { message: 'x', document: { label: 'x', rationale: 'r' } }));
+    expect(write.status).toBe(400);
+    expect(write.body.error).toBe('remote_only');
+  });
+
+  it('serves a read at a remote commit it holds under that identifier: documents, the schema, and the staleness read', async () => {
+    // The attestation's subject as it stood at the attestation's asOf (the attestation itself was written after that commit).
+    const at = attestation.asOf;
+    const ours = await on(workspace, 'GET', `/documents/AssessmentItem/bias-type-mc?ref=${at}`);
+    expect(ours.status).toBe(200);
+    expect(etag(ours)).toBe(`"${at}"`);
+    const theirs = await on(app, 'GET', `/documents/AssessmentItem/bias-type-mc?ref=${at}`);
+    expect(canonical(await ours.json())).toEqual(canonical(await theirs.json()));
+    expect((await on(workspace, 'GET', `/documents/${attestation['@id']}?ref=${at}`)).status).toBe(404); // not yet written then, there or here
+    const schema = await on(workspace, 'GET', `/schema?ref=${at}`);
+    expect(schema.status).toBe(200);
+    expect(etag(schema)).toBe(`"${at}"`);
+    expect((await schema.json()).ref).toBe(at);
+
+    // The attestation staleness read compares the subject at asOf with now (ADR-0028): offline, from the snapshot.
+    const offline = createApp(() => ({ ...config, remote: 'http://127.0.0.1:9' }));
+    const mine = (await json(await on(offline, 'GET', `/intelligence/attestations/AssessmentItem/bias-type-mc?branch=${BRANCH}`))).body;
+    const remote = (await json(await on(app, 'GET', `/intelligence/attestations/AssessmentItem/bias-type-mc?branch=${BRANCH}`))).body;
+    expect(mine.attestations.map((a: { id: string; state: string }) => [a.id, a.state])).toEqual(remote.attestations.map((a: { id: string; state: string }) => [a.id, a.state]));
+    expect(mine.attestations.length).toBeGreaterThan(0);
+  });
+
+  it('checks constraint 13 offline against a snapshot: a cloned finding is replaced keeping its asOf, a metric is written at the dataset\'s', async () => {
+    const offline = createApp(() => ({ ...config, remote: 'http://127.0.0.1:9' }));
+    const id = 'DesignFinding/bias-objective-rests-on-one-item';
+    const cloned = (await json(await on(offline, 'GET', `/documents/${id}?branch=${BRANCH}`))).body as Record<string, unknown>;
+    const fields = Object.fromEntries(Object.entries(cloned).filter(([k]) => !['@id', '@type', 'createdBy', 'asOf'].includes(k))) as { label: string };
+    const replaced = await json(await on(offline, 'PUT', `/documents/${id}?branch=${BRANCH}`, { message: 'Relabel the cloned finding offline', document: { ...fields, label: `${fields.label} (offline)` } }));
+    expect(replaced.status).toBe(200);
+    expect((await json(await on(offline, 'GET', `/documents/${id}?branch=${BRANCH}`))).body.asOf).toBe(findingAsOf);
+
+    const metric = `LearningMetric/ws-metric-${stamp}`;
+    const written = await json(
+      await on(offline, 'PUT', `/documents/${metric}?branch=${BRANCH}`, {
+        message: 'A metric written offline at the dataset\'s commit',
+        document: { label: 'Offline difficulty', source: 'test', collectedAt: '2026-05-15T09:00:00Z', subject: 'AssessmentItem/bias-type-mc', derivedFrom: 'LearningDataset/mod3-spring-pilot', unit: 'proportion correct', value: 0.5, asOf: datasetAsOf },
+      })
+    );
+    expect(written.status).toBe(200);
+    expect((await json(await on(offline, 'GET', `/documents/${metric}?branch=${BRANCH}`))).body.asOf).toBe(datasetAsOf);
+  });
+
+  it('forwards a read at a commit it does not hold to the remote when online, as the caller, and answers 404 remote_needed offline', async () => {
+    if (!(await records().get(EXISTING))) {
+      await on(app, 'POST', '/branches', { name: EXISTING });
+      expect((await create({ existing: EXISTING })).status).toBe(201);
+    }
+    const id = `LearningNeed/ws-forwarded-${stamp}`;
+    const theirs = await on(app, 'PUT', `/documents/${id}?branch=${EXISTING}`, { message: 'Written on the remote after the clone', document: { label: 'Forwarded', rationale: 'r' } });
+    expect(theirs.status).toBe(200);
+    const later = etag(theirs)!.replace(/"/g, '');
+
+    const ours = await on(workspace, 'GET', `/documents/${id}?ref=${later}`);
+    expect(ours.status).toBe(200);
+    expect(etag(ours)).toBe(`"${later}"`);
+    expect((await ours.json()).label).toBe('Forwarded');
+    // An intelligence read at that commit runs here over the remote's state: the same answer the remote gives.
+    const coverage = await on(workspace, 'GET', `/intelligence/coverage/how-ai-works?ref=${later}`);
+    expect(coverage.status).toBe(200);
+    expect(etag(coverage)).toBe(`"${later}"`);
+    expect(await coverage.json()).toEqual(await (await on(app, 'GET', `/intelligence/coverage/how-ai-works?ref=${later}`)).json());
+    // A write whose asOf names that commit is checked against the remote's state.
+    const finding = `DesignFinding/ws-forwarded-finding-${stamp}`;
+    const body = { message: 'A finding at a commit only the remote holds', document: { label: 'At a remote commit', finding: 'f', subject: ['LearningObjective/identify-ai-limitations'], status: 'Open', asOf: later } };
+    const checkedRemotely = await json(await on(workspace, 'PUT', `/documents/${finding}?branch=${BRANCH}`, body));
+    expect([checkedRemotely.status, checkedRemotely.body]).toEqual([200, expect.anything()]);
+
+    const offline = createApp(() => ({ ...config, remote: 'http://127.0.0.1:9' }));
+    const refused = await json(await on(offline, 'GET', `/documents/${id}?ref=${later}`));
+    expect(refused.status).toBe(404);
+    expect(refused.body).toMatchObject({ error: 'unknown_ref', remote_needed: true });
+    expect((await on(offline, 'GET', `/documents/AssessmentItem/bias-type-mc?ref=${attestation.asOf}`)).status).toBe(200); // a snapshot needs no remote
+    const unchecked = await json(await on(offline, 'PUT', `/documents/${finding}-2?branch=${BRANCH}`, body));
+    expect(unchecked.status).toBe(422);
+    expect(unchecked.body.violations.map((v: { code: string }) => v.code)).toEqual(['unknown_commit']);
+    const unknown = await json(await on(workspace, 'GET', `/documents/${id}?ref=nosuchcommit0000000000000000000`));
+    expect(unknown.status).toBe(404);
+    expect(unknown.body.remote_needed).toBeUndefined();
+  });
+
+  it('after a push, a pushed commit is read here by its remote identifier (ADR-0065 decision 5, note)', async () => {
+    const [first] = (await records().getPush(BRANCH))!.commits;
+    const res = await on(workspace, 'GET', `/documents/LearningNeed/ws-local-${stamp}?ref=${first.remote}`);
+    expect(res.status).toBe(200);
+    expect(etag(res)).toBe(`"${first.remote}"`);
+    expect((await res.json()).label).toBe('Offline');
+    expect((await on(workspace, 'GET', `/documents/LearningNeed/ws-local-${stamp}?ref=${first.local}`)).status).toBe(200);
+  });
+
+  it("continues a workspace's log past the clone with the remote's, from the base back", async () => {
+    const record = (await records().get(BRANCH))!;
+    const ours = (await json(await on(workspace, 'GET', `/branches/${BRANCH}/log?count=100`))).body;
+    const theirs = (await json(await on(app, 'GET', `/branches/${BRANCH}/log?count=100`))).body;
+    const clone = ours.commits.findIndex((c: { message: string }) => c.message.startsWith(`Schema of ${BRANCH} from `));
+    expect(clone).toBeGreaterThan(1); // local work, the clone's documents, then its schema
+    const from = theirs.commits.findIndex((c: { commit: string }) => c.commit === record.base);
+    expect(from).toBeGreaterThanOrEqual(0);
+    const expected = theirs.commits.slice(from).map((c: { commit: string }) => c.commit);
+    const tail = ours.commits.slice(clone + 1).map((c: { commit: string }) => c.commit);
+    expect(tail.slice(0, expected.length)).toEqual(expected.slice(0, tail.length));
+    expect(ours.commits[clone + 1]).toMatchObject({ commit: record.base, author: expect.any(String), message: expect.any(String) });
+    // The whole log from the base back, not one page: as long as the remote's when that fits a page, at least a page otherwise.
+    const kept = (await records().getLog(BRANCH))!.commits.length;
+    if (theirs.commits.length < 100) expect(kept).toBe(theirs.commits.length - from);
+    else expect(kept).toBeGreaterThanOrEqual(100 - from);
+  });
+
+  it('keeps the most-referenced commits within the budget, declines the rest and forwards reads at them; If-Match may name the base', async () => {
+    const budgeted = createApp(() => ({ ...config, snapshotBudget: 1 }));
+    const name = `test-ws-budget-${stamp}`;
+    const branch = `${handleOf(USER)}_${name}`;
+    REMOTE_BRANCHES.push(branch);
+    const made = await json(await on(budgeted, 'POST', '/workspace', { name }));
+    expect(made.status).toBe(201);
+    const byCount = new Map<string, number>();
+    for (const doc of (await json(await on(app, 'GET', `/export?ref=${made.body.base}`))).body.documents as Array<{ asOf?: string }>) {
+      if (doc.asOf) byCount.set(doc.asOf, (byCount.get(doc.asOf) ?? 0) + 1);
+    }
+    const most = [...byCount].sort((a, b) => b[1] - a[1])[0][0];
+    expect(made.body.snapshots).toEqual([
+      expect.objectContaining({ commit: most, held: true, references: byCount.get(most) }),
+      ...[...byCount.keys()].filter((c) => c !== most).map((c) => ({ commit: c, references: byCount.get(c), held: false, reason: 'budget' })),
+    ]);
+    const declined = [...byCount.keys()].find((c) => c !== most)!;
+    const forwarded = await on(budgeted, 'GET', `/documents/AssessmentItem/bias-type-mc?ref=${declined}`);
+    expect(forwarded.status).toBe(200);
+    expect(etag(forwarded)).toBe(`"${declined}"`);
+    expect((await forwarded.json())['@id']).toBe('AssessmentItem/bias-type-mc');
+
+    // The head is the clone's commit, whose remote counterpart is the base: either names it.
+    const put = (ifMatch: string) =>
+      budgeted.request(`/api/v1/documents/LearningNeed/ws-ifmatch-${stamp}?branch=${branch}`, {
+        method: 'PUT',
+        headers: { ...HEADERS, 'If-Match': `"${ifMatch}"` },
+        body: JSON.stringify({ message: 'With the remote identifier in If-Match', document: { label: 'x', rationale: 'r' } }),
+      });
+    const accepted = await put(made.body.base);
+    expect(accepted.status).toBe(200);
+    const stale = await json(await put(made.body.base));
+    expect(stale.status).toBe(412);
+    expect(stale.body).toMatchObject({ expected: made.body.base, current: etag(accepted)!.replace(/"/g, '') });
+  });
+});

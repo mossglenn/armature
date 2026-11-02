@@ -7,6 +7,7 @@ import { createOperatorStore, type TerminusDocument } from '../store';
 import { localCommitsSince, mappingOf } from './push';
 import { emptyPushTable, type PushedCommit, type WorkspaceRecord, type WorkspaceRecords } from './records';
 import { fromRemote, remoteClient } from './remote';
+import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
 
 /**
  * Bring in `main` and deliver (ADR-0065 decision 6 with its notes;
@@ -107,6 +108,9 @@ export async function bringIn(hub: HubConfig, records: WorkspaceRecords, record:
   const entry: PushedCommit = { local: localCommit, remote: merged.commit, parts: 0, broughtIn: true, pushedAt: new Date().toISOString() };
   table.commits.push(entry);
   await records.putPush(branch, table);
+  // A brought-in record may name an older commit this hub lacks (a dataset
+  // merged from main): its snapshot is taken now, as at the clone (plan §8).
+  await ensureSnapshots(hub, records, record, remote, documents, resolvableCommitsOf(record, table.commits));
   return {
     workspace: record,
     remoteHead: merged.commit,

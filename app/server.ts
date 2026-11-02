@@ -18,6 +18,8 @@
  *                                                            role is `workspace`
  *   ARMATURE_WORKSPACE_DIR                                   the folder a workspace hub keeps its workspaces'
  *                                                            records in, required when the role is `workspace`
+ *   ARMATURE_SNAPSHOTS                                       how many older remote commits a workspace holds
+ *                                                            as snapshots, 20 by default (plan §8)
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
  *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
  *                                                            the caller, so the hub stays on this machine

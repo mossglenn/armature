@@ -68,6 +68,52 @@ export interface PushTable {
 
 export const emptyPushTable = (): PushTable => ({ commits: [] });
 
+/**
+ * One remote commit a cloned or brought-in record names in `asOf` (plan §8;
+ * §16 question 3, decided 2026-10-30; ADR-0066 decision 2): held as the
+ * remote's full export at that commit, loaded into a local branch of the
+ * store (`./snapshots.ts`), or noted as beyond the budget, where a read at
+ * it is forwarded to the remote.
+ */
+export interface SnapshotRecord {
+  commit: string;
+  /** How many records of the workspace name it, which orders what the budget keeps. */
+  references: number;
+  held: boolean;
+  /** When held: how many documents the export carried, and when it was fetched. */
+  documents?: number;
+  fetchedAt?: string;
+  /** When not held: why, `budget` or the remote's refusal code. */
+  reason?: string;
+}
+
+export interface Snapshots {
+  commits: SnapshotRecord[];
+}
+
+export const emptySnapshots = (): Snapshots => ({ commits: [] });
+
+/** One entry of the remote branch's log, as `GET /branches/:name/log` lists it. */
+export interface RemoteLogEntry {
+  commit: string;
+  author: string;
+  message: string;
+  timestamp: number;
+}
+
+/**
+ * The remote branch's log at the clone, from the base back to the branch's
+ * beginning (plan §16 question 3, (c)), so that history offline reaches past
+ * the base and the commits a cloned record names have their author, message
+ * and time here.
+ */
+export interface RemoteLog {
+  /** The remote commit the log was read from: the base. */
+  head: string;
+  /** Newest first, the base first. */
+  commits: RemoteLogEntry[];
+}
+
 export interface WorkspaceRecords {
   get(branch: string): Promise<WorkspaceRecord | undefined>;
   list(): Promise<WorkspaceRecord[]>;
@@ -77,7 +123,13 @@ export interface WorkspaceRecords {
   getPush(branch: string): Promise<PushTable | undefined>;
   /** Writes the table whole, under the same durability as `put`. */
   putPush(branch: string, table: PushTable): Promise<void>;
-  /** Forgets a workspace: its record and its push table, after a delivery that deletes it. */
+  /** The snapshots a workspace holds or declined (`snapshots.json`); undefined before any was considered. */
+  getSnapshots(branch: string): Promise<Snapshots | undefined>;
+  putSnapshots(branch: string, snapshots: Snapshots): Promise<void>;
+  /** The remote branch's log kept at the clone (`log.json`); undefined when none was kept. */
+  getLog(branch: string): Promise<RemoteLog | undefined>;
+  putLog(branch: string, log: RemoteLog): Promise<void>;
+  /** Forgets a workspace: its record, its push table, its snapshots and its log, after a delivery that deletes it. */
   remove(branch: string): Promise<void>;
 }
 
@@ -85,6 +137,8 @@ export interface WorkspaceRecords {
 export function memoryRecords(): WorkspaceRecords {
   const held = new Map<string, WorkspaceRecord>();
   const tables = new Map<string, PushTable>();
+  const snapshots = new Map<string, Snapshots>();
+  const logs = new Map<string, RemoteLog>();
   return {
     async get(branch) {
       const record = held.get(branch);
@@ -103,9 +157,25 @@ export function memoryRecords(): WorkspaceRecords {
     async putPush(branch, table) {
       tables.set(branch, structuredClone(table));
     },
+    async getSnapshots(branch) {
+      const s = snapshots.get(branch);
+      return s && structuredClone(s);
+    },
+    async putSnapshots(branch, s) {
+      snapshots.set(branch, structuredClone(s));
+    },
+    async getLog(branch) {
+      const log = logs.get(branch);
+      return log && structuredClone(log);
+    },
+    async putLog(branch, log) {
+      logs.set(branch, structuredClone(log));
+    },
     async remove(branch) {
       held.delete(branch);
       tables.delete(branch);
+      snapshots.delete(branch);
+      logs.delete(branch);
     },
   };
 }

@@ -136,9 +136,11 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
       expected: opts.ifMatch,
       current,
     });
+  // On a workspace hub a client may hold the remote's identifier of a pushed commit (ADR-0065 decision 5, note).
+  const ifMatch = opts.ifMatch === undefined ? undefined : await branch.localCommit(opts.ifMatch);
   for (let attempt = 1; ; attempt++) {
     const head = (await branch.head())?.id;
-    if (opts.ifMatch && opts.ifMatch !== head) throw moved(head);
+    if (ifMatch && ifMatch !== head) throw moved(head);
     const state = { replacing: [] as string[] };
     try {
       // A fresh copy each run: the pipeline fills fields in as it goes.

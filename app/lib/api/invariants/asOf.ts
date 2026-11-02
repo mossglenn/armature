@@ -1,5 +1,6 @@
 import { CLASS_FIELDS } from '@armature/types';
-import { StoreError, type TerminusDocument } from '../store';
+import { ApiError } from '../errors';
+import { StoreError, type Commit, type DocumentReader, type TerminusDocument } from '../store';
 import type { Violation, WriteContext } from './index';
 
 /**
@@ -52,6 +53,21 @@ const AS_OF_SUBJECTS: Record<string, readonly string[]> = {
 const COMMIT_ID = /^[a-z0-9]+$/;
 
 /**
+ * A commit the store holds, or undefined. A workspace hub that does not hold
+ * the commit and cannot reach its remote answers 404 `unknown_ref` with
+ * `remote_needed` (workspace/store.ts); for a rule that is a commit it cannot
+ * confirm, reported as `unknown_commit` like any other.
+ */
+export async function heldCommit(store: DocumentReader, id: string): Promise<Commit | undefined> {
+  try {
+    return await store.getCommit(id);
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'unknown_ref') return undefined;
+    throw err;
+  }
+}
+
+/**
  * The commit a record's `asOf` names, when constraint 13 checks it and it is
  * a commit the store holds; undefined otherwise (absent, filled from the
  * head, or not a commit, which `checkAsOf` reports). Other rules that read
@@ -60,7 +76,7 @@ const COMMIT_ID = /^[a-z0-9]+$/;
 export async function checkedAsOf(doc: TerminusDocument, ctx: WriteContext): Promise<string | undefined> {
   const asOf = doc.asOf;
   if (typeof asOf !== 'string' || ctx.asOfFilled.has(doc) || !COMMIT_ID.test(asOf)) return undefined;
-  return (await ctx.branch.getCommit(asOf)) ? asOf : undefined;
+  return (await heldCommit(ctx.branch, asOf)) ? asOf : undefined;
 }
 
 export async function checkAsOf(doc: TerminusDocument, index: number, ctx: WriteContext): Promise<Violation[]> {
@@ -87,8 +103,8 @@ export async function checkAsOf(doc: TerminusDocument, index: number, ctx: Write
   }
 
   if (asOf === undefined || ctx.asOfFilled.has(doc)) return [];
-  if (typeof asOf !== 'string' || !COMMIT_ID.test(asOf) || !(await ctx.branch.getCommit(asOf))) {
-    return [violation('unknown_commit', 'asOf', `asOf names ${String(asOf)}, which is not a commit`)];
+  if (typeof asOf !== 'string' || !COMMIT_ID.test(asOf) || !(await heldCommit(ctx.branch, asOf))) {
+    return [violation('unknown_commit', 'asOf', `asOf names ${String(asOf)}, which is not a commit this hub can confirm`)];
   }
 
   const at = ctx.branch.at({ commit: asOf });

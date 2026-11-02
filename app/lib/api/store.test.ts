@@ -141,13 +141,15 @@ describe('the adapter stays behind its interfaces (workspace hub plan §13)', ()
     expect(sources.filter((s) => /\bTerminusStore\b/.test(s.text)).map((s) => s.file)).toEqual([]);
   });
 
-  // Two exceptions, each bounded in its own module: a workspace hub's clone
-  // reproduces its remote's export in its own store, and its bring-in the
-  // remote's merge of main (ADR-0062 and ADR-0031, notes of 2026-11-01).
-  it('no module of the API reaches the operator-side methods but the clone and the bring-in (ADR-0062)', () => {
+  // Three exceptions, each bounded in its own module: a workspace hub's clone
+  // reproduces its remote's export in its own store, its snapshots the
+  // remote's export at an older commit, and its bring-in the remote's merge
+  // of main (ADR-0062 and ADR-0031, notes of 2026-11-01 and 2026-11-02).
+  it('no module of the API reaches the operator-side methods but the clone, the snapshots and the bring-in (ADR-0062)', () => {
     expect(sources.filter((s) => /\b(createOperatorStore|OperatorStore)\b/.test(s.text)).map((s) => s.file).sort()).toEqual([
       join('workspace', 'bringIn.ts'),
       join('workspace', 'clone.ts'),
+      join('workspace', 'snapshots.ts'),
     ]);
   });
 
