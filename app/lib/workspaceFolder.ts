@@ -10,7 +10,7 @@
  * place, and the folder is flushed after the rename, so a crash leaves the old
  * record or the new one (ADR-0066 decision 2, note of 2026-10-30).
  */
-import { mkdir, open, readdir, readFile, rename } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BRANCH_NAME } from './api/http';
 import type { PushTable, WorkspaceRecord, WorkspaceRecords } from './api/workspace/records';
@@ -74,5 +74,10 @@ export function folderRecords(dir: string): WorkspaceRecords {
     put: (record) => writeJson(record.branch, RECORD, record),
     getPush: (branch) => readJson<PushTable>(branch, PUSH),
     putPush: (branch, table) => writeJson(branch, PUSH, table),
+    async remove(branch) {
+      if (!BRANCH_NAME.test(branch)) throw new Error(`Not a branch name: ${JSON.stringify(branch)}`);
+      await rm(join(dir, branch), { recursive: true, force: true });
+      await sync(dir, 'r').catch(() => undefined);
+    },
   };
 }

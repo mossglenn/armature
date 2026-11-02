@@ -420,6 +420,22 @@ export interface PushResult {
   upToDate: boolean;
 }
 
+/** `POST /workspace/:name/bring-in` (2026-11-01): the remote's merge of `main` into the workspace, read back as one local commit. */
+export interface BringInResult {
+  workspace: WorkspaceRecord;
+  remoteHead: string;
+  upToDate: boolean;
+  merge?: { base: string; source: string; target: string };
+  broughtIn?: { local: string; documents: number };
+}
+
+/** `POST /workspace/:name/deliver` (2026-11-01): the remote's merge of the workspace into `main`. */
+export interface DeliverResult {
+  workspace: WorkspaceRecord;
+  delivered: { commit: string; base: string; source: string; target: string; upToDate: boolean };
+  deleted: boolean;
+}
+
 export type ExportProfile = 'full' | 'pseudonymous' | 'institutional';
 
 export interface ExportOptions extends AtRef {
@@ -703,6 +719,14 @@ export function createClient(options: ClientOptions) {
       /** `POST /workspace/:name/push`: replays the unpushed local commits on the remote, as the owner (2026-11-01); 403, 412 or 422 as the remote gave it, with `pushed` and `at`. */
       push(name: string) {
         return call<PushResult>(`/workspace/${encodeURIComponent(name)}/push`, { method: 'POST' });
+      },
+      /** `POST /workspace/:name/bring-in`: the remote merges `main` into the workspace and the result is read back here; 409 `unpushed_commits` first, the remote's 409 `merge_conflict` or 422 as given. */
+      bringIn(name: string, opts: { message?: string } = {}) {
+        return call<BringInResult>(`/workspace/${encodeURIComponent(name)}/bring-in`, { method: 'POST', body: opts });
+      },
+      /** `POST /workspace/:name/deliver`: the remote merges the workspace into `main` after `main` was brought in cleanly (409 `bring_in_first`); `deleteWorkspace` removes it there and here. */
+      deliver(name: string, opts: { message: string; deleteWorkspace?: boolean }) {
+        return call<DeliverResult>(`/workspace/${encodeURIComponent(name)}/deliver`, { method: 'POST', body: opts });
       },
       /** `GET /workspace/:name/status`: the record, the local head, the local commits since the clone, and the remote's head. */
       status(name: string) {

@@ -6,10 +6,12 @@ import { hubOf, storeFor, type HubConfig } from '../config';
 import { ApiError } from '../errors';
 import { isActive, type GrantDocument } from '../grants';
 import { BRANCH_NAME, readJson } from '../http';
+import { isRecord } from '../store';
 import { handleOf, principalOf, requireClaims, resolveUser, type UserDocument } from '../identity';
 
 export { handleOf };
 import { cloneBranch, mirrorMain, type Owner } from '../workspace/clone';
+import { bringIn, deliver } from '../workspace/bringIn';
 import { localCommitsSince, pushWorkspace } from '../workspace/push';
 import type { WorkspaceRecord, WorkspaceRecords } from '../workspace/records';
 import { fromRemote, remoteClient } from '../workspace/remote';
@@ -31,9 +33,14 @@ import { fromRemote, remoteClient } from '../workspace/remote';
  *                             remote branch's head when the remote can be reached
  *   POST /:name/push          replays the unpushed local commits on the remote
  *                             (../workspace/push.ts); the owner's action
+ *   POST /:name/bring-in      { message? } the remote's merge of main into the
+ *                             workspace, read back as one local commit
+ *                             (../workspace/bringIn.ts); 409 unpushed_commits
+ *   POST /:name/deliver       { message, deleteWorkspace? } the remote's merge
+ *                             of the workspace into main, after main was
+ *                             brought in cleanly (409 bring_in_first)
  *
- * Bring in and deliver come at the plan's step 4. Push, bring in and deliver
- * are the desktop program's own actions rather than routes a tool may call
+ * Push, bring in and deliver are the desktop program's own actions rather than routes a tool may call
  * (ADR-0065 decision 7, note of 2026-10-30); until the program exists (plan
  * §14 step 7) the push route is the development entry and the `workspace`
  * compose profile's, on loopback under `header`, where any process already
@@ -160,17 +167,48 @@ workspace.get('/:name/status', async (c) => {
   return c.json({ workspace: record, head: head?.id, localCommits, pushed, unpushed: localCommits - pushed, remote });
 });
 
-workspace.post('/:name/push', async (c) => {
+/** The workspace, and the caller as its owner or an agent acting for them; anyone else is 403 naming the owner. */
+async function ownedWorkspace(c: Context, action: 'push' | 'bring-in' | 'deliver'): Promise<WorkspaceRecord> {
   const { name } = c.req.param();
   const record = await recordOf(c, name);
   const who = await resolveUser(c);
   const principal = principalOf(who);
   if (principal.id !== record.owner) {
-    throw new ApiError(403, 'forbidden', `${principal.user.externalId} may not push ${name}: this workspace is ${record.ownerExternalId}'s`, {
-      permission: 'push',
+    throw new ApiError(403, 'forbidden', `${principal.user.externalId} may not ${action} ${name}: this workspace is ${record.ownerExternalId}'s`, {
+      permission: action,
       branch: record.branch,
       owner: record.ownerExternalId,
     });
   }
+  return record;
+}
+
+workspace.post('/:name/push', async (c) => {
+  const record = await ownedWorkspace(c, 'push');
   return c.json(await pushWorkspace(hubOf(c), recordsOf(c), record));
+});
+
+workspace.post('/:name/bring-in', async (c) => {
+  const record = await ownedWorkspace(c, 'bring-in');
+  // The body is optional: a bare POST brings main in with the default message.
+  const raw = (await c.req.text()).trim();
+  let body: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      throw new ApiError(400, 'bad_request', 'The body must be a JSON object');
+    }
+    if (!isRecord(body)) throw new ApiError(400, 'bad_request', 'The body must be a JSON object');
+  }
+  if (body.message !== undefined && typeof body.message !== 'string') throw new ApiError(400, 'bad_request', 'message must be a string');
+  return c.json(await bringIn(hubOf(c), recordsOf(c), record, body.message as string | undefined));
+});
+
+workspace.post('/:name/deliver', async (c) => {
+  const record = await ownedWorkspace(c, 'deliver');
+  const body = await readJson(c);
+  if (typeof body.message !== 'string' || !body.message.trim()) throw new ApiError(400, 'message_required', 'A delivery needs a message saying why (ADR-0025)');
+  if (body.deleteWorkspace !== undefined && typeof body.deleteWorkspace !== 'boolean') throw new ApiError(400, 'bad_request', 'deleteWorkspace must be a boolean');
+  return c.json(await deliver(hubOf(c), recordsOf(c), record, { message: body.message.trim(), deleteWorkspace: body.deleteWorkspace === true }));
 });
