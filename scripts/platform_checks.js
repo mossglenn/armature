@@ -137,6 +137,13 @@
 //      a Hash key's fields; and what the store does above the hub's caps (2000 documents, a
 //      20 MiB body), which says whose limit the cap is
 //
+// A merge checked before it commits (ADR-0025 decision 5, note of 2026-10-30; the workspace hub
+// plan's step 4), added 2026-11-01:
+//   AK. Whether /api/apply honors a data-version precondition on the target branch, as a
+//      document write does (check M): with a stale `TerminusDB-Data-Version` the apply is
+//      refused and the target unchanged, with the head's token it lands; and the refusal's
+//      error type, so the adapter maps it as it maps a write's
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -1061,6 +1068,29 @@ async function main() {
   al = await alPost("AL4b", Array.from({ length: 1000 }, (_, i) => alBig(`al4b-${i}`, 20_000)));
   record("AL4b", "INFO", `1000 documents, ${(al.bytes / 1024 / 1024).toFixed(2)} MiB in one POST: ${al.status} ${al.status === 200 ? "" : errType(al)}, ${al.ms} ms (the 10 MiB limit is the hub's own)`);
   await api("DELETE", `/api/db/admin/${AL_DB}`);
+
+  // AK: does apply honor a data-version precondition on the target? The merge route applies a
+  // checked result onto the target and wants the target not to have moved since the check.
+  const akTargetHead = (await log("main", 1))?.[0]?.identifier;
+  r = await api("POST", `/api/branch/admin/${DB}/local/branch/ak-target`, { origin: `admin/${DB}/local/branch/main` });
+  r = await api("POST", `/api/branch/admin/${DB}/local/branch/ak-source`, { origin: `admin/${DB}/local/branch/main` });
+  r = await api("POST", at("branch/ak-source", commit("AK: a document on the source")), { "@type": "Artifact", "@id": "Artifact/ak-source", label: "ak" });
+  const akSourceHead = (await log("ak-source", 1))?.[0]?.identifier;
+  const akApply = (token) =>
+    api("POST", `/api/apply/admin/${DB}/local/branch/ak-target`, { before_commit: akTargetHead, after_commit: akSourceHead, commit_info: { author: "platform_checks", message: "AK apply" } }, token ? { "TerminusDB-Data-Version": token } : {});
+  const akOlder = (await log("main", 2))?.[1]?.identifier;
+  r = await akApply(`branch:${akOlder}`);
+  const akStaleStatus = r.status;
+  const akStaleType = errType(r);
+  const akTargetAfterStale = (await log("ak-target", 1))?.[0]?.identifier;
+  record("AK1", akStaleStatus !== 200 && akTargetAfterStale === akTargetHead ? "PASS" : "INFO",
+    `apply with a stale data-version token on the target: ${akStaleStatus} ${akStaleStatus === 200 ? "(landed: the header is ignored)" : akStaleType}; target head ${akTargetAfterStale === akTargetHead ? "unchanged" : "moved"}`);
+  r = await akApply(`branch:${akTargetHead}`);
+  const akTargetAfterFresh = (await log("ak-target", 1))?.[0]?.identifier;
+  record("AK2", r.status === 200 && akTargetAfterFresh !== akTargetHead ? "PASS" : "FAIL",
+    `apply with the head's token: ${r.status} ${r.status === 200 ? "" : errType(r)}; target head ${akTargetAfterFresh === akTargetHead ? "unchanged" : "moved to " + akTargetAfterFresh}`);
+  record("AK3", akStaleStatus === 412 && akStaleType === "api:DataVersionMismatch" ? "PASS" : "INFO",
+    `the stale token's refusal: ${akStaleStatus} ${akStaleType} (412 api:DataVersionMismatch is what a document write gives, check M)`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
