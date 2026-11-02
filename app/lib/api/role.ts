@@ -1,6 +1,7 @@
 import type { Context, Hono } from 'hono';
 import { hubOf, type HubRole } from './config';
 import { ApiError } from './errors';
+import { isSnapshotBranch } from './workspace/snapshots';
 
 /**
  * A hub's role (ADR-0065; docs/workspace-hub-plan.md §2 and §9).
@@ -40,12 +41,19 @@ export function guardRemoteOnly(app: Hono): void {
   }
 }
 
-/** Refuses a write to the mirror of `main` on a workspace hub. */
+/** Refuses a write to the mirror of `main`, or to a snapshot of the remote (plan §8), on a workspace hub. */
 export function refuseMirrorWrite(c: Context, branch: string): void {
-  if (branch === MIRROR_BRANCH && hubOf(c).role === 'workspace') {
+  if (hubOf(c).role !== 'workspace') return;
+  if (branch === MIRROR_BRANCH) {
     throw remoteOnly(`${MIRROR_BRANCH} is the remote's, mirrored here for reading; write on a workspace, and the remote's ${MIRROR_BRANCH} receives it by delivery`);
   }
+  if (isSnapshotBranch(branch)) {
+    throw remoteOnly(`${branch} is a snapshot of the remote at an older commit, kept for reading`);
+  }
 }
+
+/** Whether a branch is the clone's own, left out of `GET /branches` on a workspace hub. */
+export const isInternalBranch = (role: HubRole, name: string): boolean => role === 'workspace' && isSnapshotBranch(name);
 
 /** What `GET /discover` says a capability refuses: none on a remote, the table's on a workspace hub. */
 export function remoteOnlyRoutes(role: HubRole, capability: string): string[] {

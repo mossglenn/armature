@@ -70,7 +70,8 @@ const cloneMessage = (branch: string, remote: string, base: string) => `Clone ${
 /**
  * The remote branch's export at its head, loaded into a local branch of the
  * same name: its schema in one commit, its documents in a second. Returns the
- * remote commit cloned (the base) and the local commit holding it.
+ * remote commit cloned (the base), the local commit holding it, and the
+ * documents, which the snapshots read for the commits they name.
  *
  * A local branch of that name with no record is a clone that did not finish
  * (the record is written last): it is replaced when it holds nothing but a
@@ -81,7 +82,7 @@ export async function cloneBranch(
   remote: ArmatureClient,
   owner: Owner,
   branch: string
-): Promise<{ base: string; local: string }> {
+): Promise<{ base: string; local: string; documents: TerminusDocument[] }> {
   const exported = await fromRemote(hub, () => remote.export.read({ branch, profile: 'full' }));
   const base = exported.commit;
   if (!base) throw new ApiError(502, 'remote_error', `The remote answered the export of ${branch} without a commit`, { remote: true });
@@ -105,5 +106,5 @@ export async function cloneBranch(
   if (documents.length) {
     ({ commit } = await store.insertDocuments(documents, { author: owner.id, message: cloneMessage(branch, remoteUrl, base) }));
   }
-  return { base, local: commit };
+  return { base, local: commit, documents };
 }

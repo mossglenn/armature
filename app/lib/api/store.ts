@@ -231,6 +231,14 @@ export interface Store extends DocumentReader {
     document: TerminusDocument & { '@id': string },
     opts: { author: string; message: string; ifMatch?: string }
   ): Promise<{ id: string; commit: string }>;
+  /**
+   * A commit identifier as this store names it: on a workspace hub a remote
+   * commit's local counterpart when the hub holds one (ADR-0065 decision 5,
+   * note of 2026-11-01: after a push, either identifier), any other as given.
+   * The write pipeline passes `If-Match` through it before comparing it with
+   * the head.
+   */
+  localCommit(id: string): Promise<string>;
   /** Commits from this branch's head, or from this commit, back; newest first. */
   log(opts?: { start?: number; count?: number }): Promise<Commit[]>;
   /** This branch's head commit. */
@@ -393,6 +401,11 @@ export class TerminusStore implements OperatorStore {
 
   at(ref: Ref): TerminusStore {
     return new TerminusStore(this.config, ref);
+  }
+
+  /** The adapter names commits as the store does. */
+  async localCommit(id: string): Promise<string> {
+    return id;
   }
 
   get branch(): string {

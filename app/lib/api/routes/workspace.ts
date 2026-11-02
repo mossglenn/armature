@@ -15,6 +15,7 @@ import { bringIn, deliver } from '../workspace/bringIn';
 import { localCommitsSince, pushWorkspace } from '../workspace/push';
 import type { WorkspaceRecord, WorkspaceRecords } from '../workspace/records';
 import { fromRemote, remoteClient } from '../workspace/remote';
+import { ensureSnapshots, fetchRemoteLog, resolvableCommitsOf } from '../workspace/snapshots';
 
 /**
  * /api/v1/workspace, served by a workspace hub only (ADR-0065;
@@ -29,7 +30,8 @@ import { fromRemote, remoteClient } from '../workspace/remote';
  *                             record, and a `warning` when the remote says the
  *                             owner may not write the branch (ADR-0068 decision 9)
  *   GET  /:name/status        the record, the local head, the local commits
- *                             since the clone and how many are pushed, and the
+ *                             since the clone and how many are pushed, the
+ *                             snapshots held and declined (plan §8), and the
  *                             remote branch's head when the remote can be reached
  *   POST /:name/push          replays the unpushed local commits on the remote
  *                             (../workspace/push.ts); the owner's action
@@ -122,7 +124,7 @@ workspace.post('/', async (c) => {
   if (typeof name === 'string') await fromRemote(hub, () => remote.branches.create(branch, { branch: start }));
   // A branch this hub just created is the owner's (ADR-0068 decision 3); an existing one may not be.
   const warning = typeof existing === 'string' ? await writeWarning(hub, remote, me.data as UserDocument & { grants?: Grant[] }, branch) : undefined;
-  const { base, local } = await cloneBranch(hub, remote, owner, branch);
+  const { base, local, documents } = await cloneBranch(hub, remote, owner, branch);
 
   const record: WorkspaceRecord = {
     branch,
@@ -135,7 +137,13 @@ workspace.post('/', async (c) => {
     clonedAt: new Date().toISOString(),
   };
   await records.put(record);
-  return c.json({ ...record, ...(warning ? { warning } : {}) }, 201);
+  // What the clone holds beyond the base (plan §8, §16 question 3): the
+  // remote's log back to the branch's beginning, and the state at each older
+  // commit a cloned record names. After the record, so an interruption here
+  // leaves a workspace whose next bring-in completes them.
+  await records.putLog(branch, await fetchRemoteLog(hub, remote, branch, base));
+  const snapshots = await ensureSnapshots(hub, records, record, remote, documents, resolvableCommitsOf(record, []));
+  return c.json({ ...record, snapshots: snapshots.commits, ...(warning ? { warning } : {}) }, 201);
 });
 
 async function recordOf(c: Context, name: string): Promise<WorkspaceRecord> {
@@ -154,6 +162,7 @@ workspace.get('/:name/status', async (c) => {
   const table = await recordsOf(c).getPush(record.branch);
   const pushed = table?.commits.length ?? 0;
   const lastKnown = table?.commits.at(-1)?.remote ?? record.base;
+  const snapshots = (await recordsOf(c).getSnapshots(record.branch))?.commits ?? [];
 
   let remote: { head: string; moved: boolean } | { reachable: false };
   try {
@@ -164,7 +173,15 @@ workspace.get('/:name/status', async (c) => {
     if (err instanceof ApiError && err.code === 'remote_unreachable') remote = { reachable: false };
     else throw err;
   }
-  return c.json({ workspace: record, head: head?.id, localCommits, pushed, unpushed: localCommits - pushed, remote });
+  return c.json({
+    workspace: record,
+    head: head?.id,
+    localCommits,
+    pushed,
+    unpushed: localCommits - pushed,
+    snapshots: { budget: hub.snapshotBudget, held: snapshots.filter((s) => s.held).map((s) => s.commit), declined: snapshots.filter((s) => !s.held) },
+    remote,
+  });
 });
 
 /** The workspace, and the caller as its owner or an agent acting for them; anyone else is 403 naming the owner. */

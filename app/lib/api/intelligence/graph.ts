@@ -1,6 +1,7 @@
 import { CLASS_FIELDS, VALID_BloomsLevel, type FieldShape } from '@armature/types';
 import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
 import { inheritsFrom } from '../classes';
+import { heldCommit } from '../invariants/asOf';
 import { StoreError, type DocumentReader, type TerminusDocument } from '../store';
 
 /**
@@ -66,7 +67,7 @@ export class Graph {
     let p = this.past.get(key);
     if (!p) {
       p = (async () => {
-        if (!/^[a-z0-9]+$/.test(commitId) || !(await this.store.getCommit(commitId))) return undefined;
+        if (!/^[a-z0-9]+$/.test(commitId) || !(await heldCommit(this.store, commitId))) return undefined;
         try {
           return (await this.store.at({ commit: commitId }).getDocument(id)).document;
         } catch (err) {

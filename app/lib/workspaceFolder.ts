@@ -1,8 +1,10 @@
 /**
  * A workspace hub's records in a folder (docs/workspace-hub-plan.md §10):
  * `<dir>/<branch>/workspace.json`, one folder per workspace, and beside it
- * `push.json`, the push table, since the plan's step 3; the commit files join
- * them at step 6. The host side of `WorkspaceRecords`
+ * `push.json`, the push table, since the plan's step 3, `snapshots.json`, the
+ * remote commits held as snapshots or declined, and `log.json`, the remote
+ * branch's log at the clone, since step 5; the commit files join them at
+ * step 6. The host side of `WorkspaceRecords`
  * (`lib/api/workspace/records.ts`): the API never touches a file, so it stays
  * host-neutral, and `server.ts` hands it this.
  *
@@ -13,10 +15,12 @@
 import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BRANCH_NAME } from './api/http';
-import type { PushTable, WorkspaceRecord, WorkspaceRecords } from './api/workspace/records';
+import type { PushTable, RemoteLog, Snapshots, WorkspaceRecord, WorkspaceRecords } from './api/workspace/records';
 
 const RECORD = 'workspace.json';
 const PUSH = 'push.json';
+const SNAPSHOTS = 'snapshots.json';
+const LOG = 'log.json';
 
 /** Flushes a file or a folder to disk. */
 async function sync(path: string, flags: string): Promise<void> {
@@ -74,6 +78,10 @@ export function folderRecords(dir: string): WorkspaceRecords {
     put: (record) => writeJson(record.branch, RECORD, record),
     getPush: (branch) => readJson<PushTable>(branch, PUSH),
     putPush: (branch, table) => writeJson(branch, PUSH, table),
+    getSnapshots: (branch) => readJson<Snapshots>(branch, SNAPSHOTS),
+    putSnapshots: (branch, snapshots) => writeJson(branch, SNAPSHOTS, snapshots),
+    getLog: (branch) => readJson<RemoteLog>(branch, LOG),
+    putLog: (branch, log) => writeJson(branch, LOG, log),
     async remove(branch) {
       if (!BRANCH_NAME.test(branch)) throw new Error(`Not a branch name: ${JSON.stringify(branch)}`);
       await rm(join(dir, branch), { recursive: true, force: true });
