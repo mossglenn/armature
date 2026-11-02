@@ -39,7 +39,7 @@ Through the design-intelligence reads under `/api/v1/intelligence/`, tools built
 
 ## Status
 
-As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-plan.md) are complete, except a standing hosted instance (deferred by decision: two ran and were destroyed), and Phase 8's Design Graph is built. The workspace hub and its prerequisites were accepted on 30 October 2026; its first step is built (1 November: a hub's role, and creating and cloning workspaces), and so is authorization (1 November: grants on `main`, branch ownership, 403 `forbidden`, agents acting for people); push and the signed-token resolver are not yet (its store stays Proposed): [ADR-0065](schema/docs/adr/0065-workspace-hub.md) (the workspace hub), [ADR-0066](schema/docs/adr/0066-workspace-hub-store.md) (its store), [ADR-0067](schema/docs/adr/0067-authentication.md) (authentication) and [ADR-0068](schema/docs/adr/0068-authorization.md) (authorization). Built and on `main`:
+As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-plan.md) are complete, except a standing hosted instance (deferred by decision: two ran and were destroyed), and Phase 8's Design Graph is built. The workspace hub and its prerequisites were accepted on 30 October 2026; its first step is built (1 November: a hub's role, and creating and cloning workspaces), and so is authorization (1 November: grants on `main`, branch ownership, 403 `forbidden`, agents acting for people); push is built too (1 November, evening: a workspace hub replays its local commits through the remote's own API, with the time the work was done kept in the commit message); bringing in `main`, delivery and the signed-token resolver are not yet (its store stays Proposed): [ADR-0065](schema/docs/adr/0065-workspace-hub.md) (the workspace hub), [ADR-0066](schema/docs/adr/0066-workspace-hub-store.md) (its store), [ADR-0067](schema/docs/adr/0067-authentication.md) (authentication) and [ADR-0068](schema/docs/adr/0068-authorization.md) (authorization). Built and on `main`:
 
 - the schema (31 classes, 15 controlled vocabularies) with every accepted decision applied
 - a version-controlled API: reads at any branch or commit, history and differences per document, branches, three-way merges with conflict reports
@@ -48,7 +48,7 @@ As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-
 - the seven design-intelligence reads (coverage, alignment, trace, impact, attestation staleness, item statistics and a module's content in teaching order) and a read-only Coverage View page that shows each item's statistics beside the coverage it counts toward, and the module's activities in order
 - the Design Graph (`/graph`, 2026-10-22): every record on a branch at a commit drawn in lifecycle columns, every relationship a labeled edge, derived in the viewer from the schema as data; filters, search, selection with its fields, annotations (attestations with their state), references and history, neighbors, upstream, downstream or the hub's trace lit in place, every view a URL; the Focus page (`/graph/<Type>/<id>`), one record's trace drawn the same way, linked from every record on the Coverage View; and the Walkthrough (`?walk=1`), Narrative 1 in ten steps from a result back to the evidence, with coverage read at the commit the cohort met and what changed since ([the visual language](docs/visual-language.md); [the plan](docs/graph-view-plan.md) for lenses and figure export); a Playwright smoke test drives all of it in CI
 - external references and attachments on every artifact and part (ADR-0030), an export of the graph at a commit under a profile and a slice (ADR-0031), and one administration's results in the seed so the outcomes-to-design walk runs on `main` (ADR-0063)
-- 296 tests (Vitest), run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
+- 407 tests (Vitest), run by CI against a TerminusDB service container on every push and pull request (the contract suite, Phase 7's first piece, 2026-10-21)
 
 - `@armature/types` and `@armature/client`, installable packages a plugin builds on: the schema as TypeScript and every route as a typed function (Phase 7, 2026-10-21)
 
@@ -76,7 +76,7 @@ As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-
 | Use Armature as a research instrument for one study | [The research path](docs/research-path.md) |
 | Stand up an instance on a server, or understand what runs where | [Running an instance](docs/deployment.md) |
 | See which hub capabilities each client tool shows, and the gaps no demo shows | [Demo coverage](docs/demo-coverage.md) |
-| Run the hub on your own machine and push to a shared one (create and clone built 2026-11-01, authorization built the same day, push planned; ADR-0065, ADR-0067 and ADR-0068 accepted 2026-10-30, ADR-0066 Proposed) | [The workspace hub](docs/workspace-hub-plan.md); [running one](docs/deployment.md) |
+| Run the hub on your own machine and push to a shared one (create, clone and push built 2026-11-01, authorization the same day; bringing in and delivery planned; ADR-0065, ADR-0067 and ADR-0068 accepted 2026-10-30, ADR-0066 Proposed) | [The workspace hub](docs/workspace-hub-plan.md); [running one](docs/deployment.md) |
 | Ask the graph from an MCP assistant (planned) | [The MCP server](docs/mcp-server-plan.md) |
 | Record Storyline builds in the graph and bring results back (planned) | [The Storyline bridge](docs/storyline-bridge-plan.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
@@ -159,13 +159,13 @@ Plugins (CoQui, future tools)  →  Armature API (/api/v1)  →  TerminusDB
                                    this repository
 
 on one person's machine:  tools  →  a workspace hub (the same API)  →  its own store
-                                          └──clones from, and will push to──▶  a remote hub's /api/v1
+                                          └──clones from and pushes to──▶  a remote hub's /api/v1
 ```
 
 - **TerminusDB** stores the design graph as typed documents and keeps every change as a commit, with branches and merges built in.
 - **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). `app/server.ts` serves it as a standalone Node process, bundled into the container image `docker/hub.Dockerfile` builds (ADR-0026; Phase 7). A running API in front of a store is a **hub**: one address, `/api/v1`, that every client talks to.
 - **The Armature viewer** is the Next.js app's three read-only pages (`app/app/`: the Design Graph, the module index and the Coverage View), a client of a hub like any plugin: it reads over HTTP through `@armature/client` and knows only the hub's address; the browser never calls the hub.
-- **A hub has two roles** (ADR-0065): a **remote hub**, every hub on a server, and a **workspace hub**, the same code on one person's machine, which clones workspaces from a remote and leaves branch creation, merges and registration to it. Creating and cloning a workspace is built (2026-11-01); push, bring in and deliver follow (`docs/workspace-hub-plan.md` §14).
+- **A hub has two roles** (ADR-0065): a **remote hub**, every hub on a server, and a **workspace hub**, the same code on one person's machine, which clones workspaces from a remote and leaves branch creation, merges and registration to it. Creating, cloning and pushing a workspace are built (2026-11-01); bring in and deliver follow (`docs/workspace-hub-plan.md` §14).
 - **Plugins never talk to the database directly.** The API is where the rules, identity and history are enforced.
 - **The schema is the single source of truth.** Type definitions, request validation and the schema appendix are generated from `schema/schema.json`.
 

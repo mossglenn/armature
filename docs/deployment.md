@@ -228,7 +228,7 @@ curl -X POST http://127.0.0.1:3101/api/v1/workspace -H 'Content-Type: applicatio
   -H 'Armature-User: demo-designer@example.edu' -d '{"name":"chapter-2"}'
 ```
 
-creates `demo-designer_chapter-2` on the remote and clones it; tools then write to that branch at `http://127.0.0.1:3101/api/v1`, and `GET /api/v1/workspace/demo-designer_chapter-2/status` shows the local commits since the clone (`docs/api.md`, Workspace). Push, bringing in `main` and delivery are not built yet (plan §14 steps 3 and 4).
+creates `demo-designer_chapter-2` on the remote and clones it; tools then write to that branch at `http://127.0.0.1:3101/api/v1`, and `GET /api/v1/workspace/demo-designer_chapter-2/status` shows the local commits since the clone and how many are pushed, and `POST /api/v1/workspace/demo-designer_chapter-2/push`, as the same person, replays the local commits on the remote (`docs/api.md`, Workspace; built 2026-11-01). Bringing in `main` and delivery are not built yet (plan §14 step 4).
 
 **Rehearsed on 2026-11-01** on a fresh Lima VM (Ubuntu 24.04, Docker 29.1 and Compose 2.40 from Ubuntu's packages):
 

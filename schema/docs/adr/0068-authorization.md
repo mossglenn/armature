@@ -41,6 +41,9 @@ says so (`ownerlessBranches: "writable"`); decision 4's two `oidc` rows and `not
 come with ADR-0067 decision 1; decision 9's warning at workspace creation, which comes with push
 (plan §14 step 3).
 
+**Note 2026-11-01 (evening), built:** decision 9's warning at workspace creation, with push (the
+note beside it); the migration window's close and the `oidc` rows remain.
+
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065), built whole before its push
 (`docs/workspace-hub-plan.md` §14), since push's failures depend on ownership.
 
@@ -228,6 +231,14 @@ answers for, and not for another person, who never consented.
    `Maintainer` grant, or to carry its content into a workspace of their own. The warning is a
    feature the workspace hub builds with push (plan §14 step 3); until then a person learns at
    push.
+
+   > **Note (2026-11-01), built:** `routes/workspace.ts`, on a clone of an existing branch (a
+   > branch the hub created is the caller's own): the owner's grants from `GET /users/me` and
+   > the branch's from `GET /documents/Grant?branch=`, judged by `refusal`, the remote's own rule,
+   > with the window taken as open, as `GET /discover` says today; the record answered with
+   > `warning: { code: "forbidden", message, holders }`, `holders` the branch's owner and
+   > maintainers. A workspace hub also keeps each workspace to its owner (ADR-0065 decision 7,
+   > note), which is a rule about whose work it holds, not authority over the graph.
 
 ## Alternatives considered
 

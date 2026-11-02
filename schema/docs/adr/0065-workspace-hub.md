@@ -19,6 +19,10 @@ interface) first. ADR-0066, its store, stays Proposed until check AI runs. The d
 Status promised are on ADR-0025, ADR-0026, ADR-0032, ADR-0055, ADR-0059 and ADR-0062 (2026-10-30),
 and plan §2's terms are in CLAUDE.md's table.
 
+**Note 2026-11-01 (evening), built:** push, plan §14 step 3: decision 5 with its notes, decision
+4's warning and decision 7's owner-only rule, with platform check AL first; the notes beside each
+decision say what was built and the one interim choice (how push is driven before the program).
+
 **Note 2026-10-29:** the store decision 8 leaves open is ADR-0066 (Proposed): a folder of files
 behind an adapter interface, with TerminusDB as the test bed while steps 2 to 5 are built.
 
@@ -160,6 +164,11 @@ Three facts constrain the answer:
    > grant, or copy their work elsewhere; the refusal, if it comes, is the remote's at push.
    > ADR-0068 decision 9 records the same from the remote's side.
 
+   > **Note (2026-11-01), built:** the warning, on a clone of an existing branch (a branch this
+   > hub created is the owner's): `POST /workspace` answers the record with
+   > `warning: { code: "forbidden", message, holders }`, from the owner's grants and the branch's,
+   > judged by the remote's own rule; the workspace is made either way (`routes/workspace.ts`).
+
 5. **Push is replay through the remote's API.** Each local commit since the last push becomes one
    `POST /documents` on the remote, in order, with `If-Match` naming the remote commit the
    previous replay produced (the base, for the first). The workspace hub keeps a table from each
@@ -197,6 +206,20 @@ Three facts constrain the answer:
    > beside the commit files, never a field in them, with an in-flight marker written before each
    > request; a push interrupted after the remote accepted a part recovers by reading the branch's
    > log for the trailers above (ADR-0066 decision 2, note; review B4).
+
+   > **Note (2026-11-01), built:** `app/lib/api/workspace/push.ts` and `split.ts`, `push.json`
+   > beside the record, through the same host-given interface as `workspace.json`; the trailers
+   > as above, the hub-written `Armature-On-Behalf-Of` of a local commit removed before the
+   > replay and written again by the remote; a commit an agent made replayed as the agent acting
+   > for the owner (`Armature-Agent`); the three failures with `pushed` and `at`, a 412 with what
+   > `moved`; an in-flight part settled from the remote's log; a `User` copy the local pipeline
+   > carried onto the branch not replayed, since the remote carries its own; the store's nested
+   > ids left out, a part's identity being its `fragmentId` (ADR-0033). Platform check AL set the
+   > part limit at the hub's own cap, 500 documents and 10 MiB: the store takes both in under a
+   > second and more above them, and resolves a `@ref` before its `@capture` and inside a Hash
+   > key's fields. Not built: a read on the workspace hub at a pushed commit by its remote
+   > identifier ("after a push, reads ... accept either identifier"), which comes with the
+   > clone's snapshots (plan §14 step 5), where remote commits enter the local store's vocabulary.
 
 6. **Delivery is the remote's merge, driven from the workspace hub.** With nothing left to push,
    the workspace hub asks the remote to merge `main` into the workspace (`POST /branches/<ws>/
@@ -257,6 +280,17 @@ Three facts constrain the answer:
    > that needs a narrower grant than the owner's own, or a workspace hub serving more than one
    > person, which decision 1 rules out. Review B6; the two names are chosen without a separate
    > decision, open to overrule.
+
+   > **Note (2026-11-01), built, with one interim choice:** a workspace is written and pushed by
+   > its owner, or by an agent acting for its owner, and a request as anyone else is 403
+   > `forbidden` naming the owner (`authorization.ts`, the one rule a workspace hub applies). Push
+   > is driven by `POST /workspace/:name/push` until the desktop program exists (Amos,
+   > 2026-11-01): a workspace hub runs on loopback under `header`, where any process already
+   > writes as the owner and the remote credential is that same header, so the route exposes
+   > nothing the per-launch secret will not close at step 7, when the route is withdrawn from
+   > the capability or gated by a secret only the program holds; whether the `workspace` compose
+   > profile keeps an entry for pushing, having no program in front of it, is decided then. The
+   > secret and the program's own actions stay as decided.
 
 8. **The store under a workspace hub is a choice behind the adapter.** TerminusDB as a process
    beside the hub and a file-backed store are both admissible. Decisions 3 and 6 limit what the

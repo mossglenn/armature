@@ -42,6 +42,10 @@ Decision 10's refusal waits for push: until then a request naming an agent direc
 `Armature-User` is accepted under `header`, as decision 8 says. The code names are chosen
 without a separate decision, open to overrule.
 
+**Note 2026-11-01 (evening), built:** decision 10's refusal, with push (the note beside it): an
+agent as the credential itself reads and never writes on a remote hub, 403 `forbidden` with
+`credential`; a workspace hub's push replays an agent's commit as the agent acting for the owner.
+
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065). Decision 7 is built first;
 decisions 3, 6 and 8, with the client's `agent` option, before the workspace hub's push; the rest
 (decisions 1, 2, 4, 5 and 9) before its release (`docs/workspace-hub-plan.md` §14).
@@ -306,6 +310,11 @@ plugin, outside the browser engine, so an origin rule does not touch it.
     author and the person in the trailer. Either would be an amendment here and a new row in
     ADR-0068's table; the two-client test applies (Development Principle 6). A hosted assistant
     that only reads needs none of this and is served today under decision 4.
+
+    > **Note (2026-11-01), built:** `authorization.ts`, before the grants are read, on every
+    > operation a remote hub checks, branch creation included (`permission: "create"`), 403
+    > `forbidden` with `credential` naming the agent; reads and `GET /users/me` stay open
+    > (`authorization.test.ts`). The push's form is ADR-0065 decision 5's note of the same day.
 
 ## Alternatives considered
 
