@@ -34,8 +34,10 @@ export interface PushedCommit {
   local: string;
   /** The remote commit holding the local commit's state: the last part's, when it was split. */
   remote: string;
-  /** How many requests the commit was replayed as (ADR-0065 decision 5, note of 2026-10-30: the split rule). */
+  /** How many requests the commit was replayed as (ADR-0065 decision 5, note of 2026-10-30: the split rule); 0 for a commit brought in from the remote. */
   parts: number;
+  /** The commit came the other way: the remote's merge of `main` into the workspace, recorded here as one local commit (plan §4, bring in). */
+  broughtIn?: true;
   /** When the last part landed, ISO 8601. */
   pushedAt: string;
 }
@@ -75,6 +77,8 @@ export interface WorkspaceRecords {
   getPush(branch: string): Promise<PushTable | undefined>;
   /** Writes the table whole, under the same durability as `put`. */
   putPush(branch: string, table: PushTable): Promise<void>;
+  /** Forgets a workspace: its record and its push table, after a delivery that deletes it. */
+  remove(branch: string): Promise<void>;
 }
 
 /** Records held in memory, for the tests and for a hub that need not outlive its process. */
@@ -98,6 +102,10 @@ export function memoryRecords(): WorkspaceRecords {
     },
     async putPush(branch, table) {
       tables.set(branch, structuredClone(table));
+    },
+    async remove(branch) {
+      held.delete(branch);
+      tables.delete(branch);
     },
   };
 }
