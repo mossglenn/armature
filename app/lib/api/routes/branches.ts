@@ -5,7 +5,7 @@ import { BRANCH_NAME, ifMatchFrom, intQuery, readEnvelope, readJson, requireComm
 import { grantOwner, revokeGrantsNaming } from '../grants';
 import { requirePermission } from '../authorization';
 import { commitMessage, resolveUser } from '../identity';
-import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
+import { changesOf, idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
 
 /**
  * /api/v1/branches (architecture decision record ADR-0025, decisions 4, 5, 6
@@ -177,19 +177,6 @@ async function gone<T>(read: Promise<T>): Promise<T | undefined> {
   }
 }
 
-type ChangeOp = 'insert' | 'delete' | 'update';
-
-function idOf(value: unknown): string {
-  return isRecord(value) && typeof value['@id'] === 'string' ? value['@id'] : '';
-}
-
-/** One entry of a branch-level diff → the document id and what happened to it (check R1). */
-function changeOf(entry: unknown): { id: string; op: ChangeOp } {
-  const e = isRecord(entry) ? entry : {};
-  if (e['@op'] === 'Insert') return { id: idOf(e['@insert']), op: 'insert' };
-  if (e['@op'] === 'Delete') return { id: idOf(e['@delete']), op: 'delete' };
-  return { id: idOf(e), op: 'update' };
-}
 
 branches.get('/', async (c) => {
   const store = storeFor(c, { branch: 'main' });
@@ -382,8 +369,7 @@ branches.get('/:name/changes', async (c) => {
   if (!(await inHistory(since, store.at({ commit: head.id })))) {
     throw new ApiError(400, 'not_an_ancestor', `Commit ${since} is not in the history of branch ${name}`);
   }
-  const entries = await store.diff(since, head.id);
-  const changes = (Array.isArray(entries) ? entries : []).map(changeOf).filter((change) => change.id);
+  const changes = changesOf(await store.diff(since, head.id));
   setEtag(c, head.id);
   return c.json({ branch: name, from: since, to: head.id, changes });
 });

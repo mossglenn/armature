@@ -113,6 +113,26 @@ describe('a write checks its rules on the state it lands on (B2)', () => {
     expect((await json(`/api/v1/documents/${id}${q}`)).asOf).toBe(theirs);
   });
 
+  it('answers 409 document_moved, never an overwrite, when the commit it lost to changed a document it replaces (ADR-0025 decision 7, note)', async () => {
+    const id = `LearningActivity/race-a-${stamp}`;
+    const put = vi.spyOn(TerminusStore.prototype, 'putDocuments').mockImplementation(async function (this: TerminusStore, documents, opts) {
+      if (put.mock.calls.length === 1) await concurrentWrite([{ '@type': 'LearningActivity', '@id': id, label: 'Theirs', targets: [OBJECTIVE] }]);
+      return real.putDocuments.call(this, documents, opts);
+    });
+    const res = await post(`/api/v1/documents${q}`, {
+      message: 'Mine, unconditioned',
+      documents: [{ '@type': 'LearningActivity', '@id': id, label: 'Mine', targets: [OBJECTIVE] }],
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe('document_moved');
+    expect(body.documents).toEqual([id]);
+    expect(body.current).toBe(await headOf());
+    // The first run reached the store and lost; there was no second.
+    expect(put).toHaveBeenCalledTimes(1);
+    expect((await json(`/api/v1/documents/${id}${q}`)).label).toBe('Theirs');
+  });
+
   it(`answers 409 branch_moved when the branch moves under each of ${WRITE_ATTEMPTS} runs, and writes nothing`, async () => {
     const id = `LearningNeed/race-moved-${stamp}`;
     const put = vi.spyOn(TerminusStore.prototype, 'putDocuments').mockImplementation(async function (this: TerminusStore, documents, opts) {
