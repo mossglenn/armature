@@ -6,7 +6,8 @@ on 7 and 8 October 2026, pull requests #1 to #10; 5 on 18 October; 6 on 20 Octob
 Design Graph pull requests 1 to 4 are built (22 and 23 October); PR 5 waits for a paper or a
 larger store. ADR-0065 to ADR-0068 (the workspace hub, its store, authentication, authorization)
 were proposed on 28 and 29 October; ADR-0065, ADR-0067 and ADR-0068 were accepted on 30 October
-after verification, none yet built; ADR-0066 stays Proposed.
+after verification, and ADR-0066 on 2 November once check AI ran; the workspace cycle is built
+since 1 November, the file-backed store not yet.
 `.claude/SESSION.md` tracks day-to-day state against this plan. **Last reconciled with the code:**
 2026-10-30.
 
@@ -958,7 +959,7 @@ The decision records this plan reserved or produced, in number order, with their
 | 0062 | Operator repair is a commit outside the plugin API | 7 (the toolkit), or on the first repair that needs it | Accepted and implemented 2026-10-22 (proposed 2026-10-20) | Gives 0024 decision 5 its meaning; 0025 decision 6 holds for operators; three tools (`check`, `delete`, `put --unchecked`) reusing the adapter and the invariants engine in-process; no superuser mode and no raw query route on `/api/v1` (§8) |
 | 0064 | `ActivityGroup` is `Lesson` | Decided 2026-10-22, outside a phase | Accepted and implemented 2026-10-22 | Renames the class and its two junctions (`ModuleLessonLink`, `LessonActivityLink`); constraints 3, 4 and 6 keep their numbers; the module-content read says `kind: "lesson"`; annotates 0003 and 0005 |
 | 0065 | The workspace hub | After Phase 8 (`docs/workspace-hub-plan.md`) | Accepted 2026-10-30 (proposed 2026-10-28, verified 2026-10-30); not yet built | The hub's own code in a second mode on a person's machine; workspaces are branches created on the remote, cloned from its export and pushed back through its API; branches, merges and Users stay on the remote; passed the two-client test on Quiver, the Storyline bridge and the MCP server |
-| 0066 | The workspace hub's store | With 0065 (plan step 6) | Proposed 2026-10-29 | A folder of files behind an adapter interface, TerminusDB the test bed meanwhile; amends 0055 decision 1 on acceptance; names TerminusDB's JSON patch as the diff route's format (decision 5) and check AI for Hash identifiers (decision 6) |
+| 0066 | The workspace hub's store | With 0065 (plan step 6) | Accepted 2026-11-02 (proposed 2026-10-29); built in part | A folder of files behind an adapter interface, TerminusDB the test bed meanwhile; amends 0055 decision 1; names TerminusDB's JSON patch as the diff route's format (decision 5); by check AI (2026-11-02) the store computes Hash identifiers rather than mapping them (decision 6) |
 | 0067 | Authentication | Prerequisite of 0065 (plan §14) | Accepted 2026-10-30 (proposed 2026-10-29); decision 7 built 2026-10-30, the rest not yet; decision 10 added 2026-10-30 | The `oidc` resolver, agents acting for people with a hub-written `Armature-On-Behalf-Of` trailer, services and relays; decision 7 is the loopback boundary (`app/lib/api/boundary.ts`, 403 `host_not_allowed` and `origin_not_allowed`); decision 10 confines an agent's own writes to a workspace hub |
 | 0068 | Authorization | Prerequisite of 0065, built whole before its push (plan §14) | Accepted 2026-10-30 (proposed 2026-10-29); not yet built; decision 9 added 2026-10-30 | `Grant` documents on `main`, branch ownership, only a maintainer merges into `main`, 403 `forbidden`; adds one class, so it lands with a schema change; decision 9: a workspace hub does not authorize, the remote refuses at push |
 

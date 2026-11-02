@@ -15,7 +15,7 @@
 Accepted (2026-10-30, with ADR-0067 and ADR-0068; Amos's decision after the alignment review of
 that day). Proposed 2026-10-28; verified 2026-10-30 (§Verification). Nothing of the workspace hub
 is built yet: implementation follows `docs/workspace-hub-plan.md` §14, step 1 (the adapter
-interface) first. ADR-0066, its store, stays Proposed until check AI runs. The dated notes this
+interface) first. ADR-0066, its store, was accepted on 2026-11-02 once check AI ran. The dated notes this
 Status promised are on ADR-0025, ADR-0026, ADR-0032, ADR-0055, ADR-0059 and ADR-0062 (2026-10-30),
 and plan §2's terms are in CLAUDE.md's table.
 
@@ -23,7 +23,7 @@ and plan §2's terms are in CLAUDE.md's table.
 4's warning and decision 7's owner-only rule, with platform check AL first; the notes beside each
 decision say what was built and the one interim choice (how push is driven before the program).
 
-**Note 2026-10-29:** the store decision 8 leaves open is ADR-0066 (Proposed): a folder of files
+**Note 2026-10-29:** the store decision 8 leaves open is ADR-0066 (Proposed; accepted 2026-11-02): a folder of files
 behind an adapter interface, with TerminusDB as the test bed while steps 2 to 5 are built.
 
 **Note 2026-10-29, decided before acceptance:** one remote per workspace hub, as decision 1 says
@@ -308,7 +308,7 @@ Three facts constrain the answer:
    store must do (no merge, no branch creation): documents at the head, a log of local commits,
    reads at those commits and at the base. The plan compares the two; this ADR does not choose.
 
-   > **Later change (2026-10-29):** ADR-0066 (Proposed) makes the choice: the file-backed store,
+   > **Later change (2026-10-29):** ADR-0066 (accepted 2026-11-02) makes the choice: the file-backed store,
    > with TerminusDB first as the test bed, and whether TerminusDB stays a second local store
    > decided once the file-backed store exists.
 

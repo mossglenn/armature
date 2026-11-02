@@ -118,6 +118,13 @@ on the read path, and two things to re-verify at every server release.
    the caller supplied one; and parsing error bodies into a typed error that carries the server's
    `@type` and fields. Nothing else under `app/lib/api/` builds a store URL or reads a store error
    body.
+
+   > **Later change (2026-11-02):** amended by ADR-0066, accepted that day: the adapter is an
+   > interface (`DocumentReader`, `Store`, `OperatorStore`, extracted 2026-10-31, the note above)
+   > with one implementation per store. `TerminusStore` stays the only module that talks to
+   > TerminusDB, and decisions 2 to 7 hold for it unchanged. A workspace hub's store is a folder
+   > of files (ADR-0066 decision 2), built at the workspace hub plan's step 6.
+
 2. **Request-scoped by construction.** The adapter is created per request from the resolved ref
    and identity and holds no state beyond them. No module-level instance holds a branch, ref or
    header. This replaces the plan's `getClient({ branch?, ref? })` wording; the shape is the same,
