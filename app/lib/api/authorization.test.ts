@@ -316,15 +316,19 @@ describe('permissions (ADR-0068 decisions 4, 7 and 8)', () => {
     expect(merged.body.upToDate).toBe(false);
   });
 
-  it('an agent named directly, as header accepts it, owns the branch it creates and writes there, never to main', async () => {
+  it('an agent as the credential itself reads but never writes to a remote hub (ADR-0067 decision 10)', async () => {
     const A = `test-authz-agent-${stamp}`;
-    expect((await agent('POST', '/branches', { name: A })).status).toBe(201);
-    expect((await agent('PUT', `/documents/LearningNeed/a1-${stamp}?branch=${A}`, need('a1'))).status).toBe(200);
-    await forbidden(await agent('PUT', `/documents/LearningNeed/a1-${stamp}`, need('a1')), { permission: 'write', branch: 'main' });
+    await forbidden(await agent('POST', '/branches', { name: A }), { permission: 'create', branch: A, credential: AGENT });
+    await forbidden(await agent('PUT', `/documents/LearningNeed/a1-${stamp}?branch=${BRANCH}`, need('a1')), { permission: 'write', branch: BRANCH, credential: AGENT });
+    await forbidden(await agent('PUT', `/documents/LearningNeed/a1-${stamp}`, need('a1')), { permission: 'write', branch: 'main', credential: AGENT });
     await forbidden(await agent('POST', '/users', { message: 'x', user: { displayName: 'Another', externalId: `agent:test/other-${stamp}` } }), {
       permission: 'register',
       agent: true,
+      credential: AGENT,
     });
+    expect((await agent('GET', `/documents/LearningObjective?branch=${BRANCH}`)).status).toBe(200);
+    expect((await json(await agent('GET', '/users/me'))).body.externalId).toBe(AGENT);
+    expect((await on('GET', `/branches/${A}`)).status).toBe(404);
   });
 
   it('a branch with no owner is writable by any registered User while the migration window is open, as discovery says', async () => {
