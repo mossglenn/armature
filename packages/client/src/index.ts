@@ -177,6 +177,16 @@ export interface ChangesResult {
   changes: Array<{ id: string; op: 'insert' | 'delete' | 'update' }>;
 }
 
+export interface LogResult {
+  branch: string;
+  /** The head the page was read at, also the `ETag`. */
+  head: string;
+  start: number;
+  count: number;
+  /** Newest first, each in the head's form, `message` as stored with its trailers. */
+  commits: Commit[];
+}
+
 export interface RegisterUser {
   '@id'?: string;
   displayName: string;
@@ -556,6 +566,10 @@ export function createClient(options: ClientOptions) {
       /** `GET /branches/:name/changes?since=`: documents inserted, deleted or updated since a commit. */
       changes(name: string, since: string) {
         return call<ChangesResult>(`/branches/${encodeURIComponent(name)}/changes`, { query: { since } });
+      },
+      /** `GET /branches/:name/log?start=&count=`: the branch's commits newest first, paged (20, at most 100), read at the head the result names. */
+      log(name: string, opts: { start?: number; count?: number } = {}) {
+        return call<LogResult>(`/branches/${encodeURIComponent(name)}/log`, { query: opts });
       },
       /** `DELETE /branches/:name`: only when another branch holds its head (409 `unmerged_branch` otherwise). */
       delete(name: string) {

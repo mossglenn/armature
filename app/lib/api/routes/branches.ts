@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { storeFor } from '../config';
 import { ApiError } from '../errors';
-import { BRANCH_NAME, ifMatchFrom, readEnvelope, readJson, requireCommit, setEtag } from '../http';
+import { BRANCH_NAME, ifMatchFrom, intQuery, readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { grantOwner, revokeGrantsNaming } from '../grants';
 import { requirePermission } from '../authorization';
 import { commitMessage, resolveUser } from '../identity';
@@ -16,6 +16,7 @@ import { idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, t
  *   GET  /:name                 the head commit
  *   POST /:name/merge           { message, from }  three-way merge; 409 on conflict
  *   GET  /:name/changes?since=  changed document ids since a commit
+ *   GET  /:name/log?start=&count=  the branch's commits, newest first, paged, read at its head
  *   DELETE /:name               only when another branch holds the head; 409 otherwise
  *
  * No reset, squash or rebase: shared history is never rewritten (decision
@@ -385,4 +386,26 @@ branches.get('/:name/changes', async (c) => {
   const changes = (Array.isArray(entries) ? entries : []).map(changeOf).filter((change) => change.id);
   setEtag(c, head.id);
   return c.json({ branch: name, from: since, to: head.id, changes });
+});
+
+/**
+ * The branch's commits, newest first (the workspace hub plan's §12, item 19;
+ * ADR-0025 decision 8). The head is resolved first and the log read from its
+ * commit path (platform check AM1), so a commit landing mid-read changes
+ * nothing and the ETag names the head every entry is under (the deep
+ * review's B1). A page is at most one store page. Messages are as stored,
+ * trailers included (check AJ): a workspace hub's push recovery reads its own
+ * `Armature-Workspace-Commit` trailers here (ADR-0066 decision 2, note).
+ */
+branches.get('/:name/log', async (c) => {
+  const { name } = c.req.param();
+  const start = intQuery(c, 'start', 0);
+  const count = intQuery(c, 'count', 20);
+  if (count > LOG_PAGE) throw new ApiError(400, 'bad_query', `count is at most ${LOG_PAGE}`);
+  const store = storeFor(c, { branch: name });
+  const head = await store.head();
+  if (!head) throw new ApiError(404, 'not_found', `Branch ${name} has no commits`);
+  const commits = await store.at({ commit: head.id }).log({ start, count });
+  setEtag(c, head.id);
+  return c.json({ branch: name, head: head.id, start, count, commits: commits.map(toHead) });
 });
