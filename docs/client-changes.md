@@ -15,6 +15,29 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-02 · A workspace hub answers remote commit identifiers: snapshots, forwarding, the log past the clone
+
+**What changed.** On a workspace hub (ADR-0065; [the reference](api.md), Workspace) a commit
+identifier of the remote now works wherever a commit works. A clone holds, beyond the base, the
+remote's state at each older commit a cloned record names in `asOf` (a snapshot: the remote's
+full export at that commit, loaded into the hub's own store; most-referenced first within
+`ARMATURE_SNAPSHOTS`, 20 by default) and the remote branch's log back to its beginning. A read
+at `?ref=` naming the base, a pushed or brought-in commit, or a held snapshot is served here under
+that identifier (`ETag` is the identifier asked for); one naming a commit this hub does not hold
+is forwarded to the remote when it can be reached, read-only and as the caller, and is **404**
+`unknown_ref` with `remote_needed: true` when it cannot. `If-Match` may name the remote identifier
+of the head's counterpart. Constraints 13 and 16 and the attestation staleness read therefore
+work offline against the snapshots, and `GET /branches/:name/log` on a workspace continues past the
+clone with the remote's entries. `POST /workspace` answers `snapshots` and `GET
+/workspace/:name/status` adds `snapshots: { budget, held, declined }`. The clone's snapshot
+branches, `at.<commit>`, are left out of `GET /branches` and refuse writes (`remote_only`).
+Nothing changes on a remote hub.
+
+**What a client does differently.** A tool beside a workspace hub may keep using the commit
+identifiers it read from the remote, or that a push answered, without translating; offline it
+expects `remote_needed` on a read at a commit the clone does not hold, and `unknown_commit` on a
+write whose `asOf` names one. **CoQui:** nothing; CoQui talks to a remote hub.
+
 ## 2026-11-01 · Authorization: grants on `main`, branch ownership, 403 `forbidden`; agents acting for people
 
 **What changed.** A remote hub now decides what a resolved identity may do (ADR-0068, built in

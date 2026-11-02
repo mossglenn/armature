@@ -37,6 +37,9 @@ repaired on the remote, where the registry and the rules of record are, and clon
 > store on the first clone and a person's machine has no operator (platform check AN), and
 > `deleteDatabase`, for the tests' scratch databases. Decided by Amos on 2026-11-01 over
 > replaying the export through the write pipeline and a loader outside the API.
+> *2026-11-02, a third module, `workspace/snapshots.ts`:* a snapshot reproduces the remote's
+> export at an older commit a cloned record names (plan §8), under the same bounds;
+> `store.test.ts` names all three.
 
 > **Note (2026-11-01, authorization):** three changes with ADR-0068. `delete --scratch-branch`
 > revokes the grants naming the branch before deleting it, as a marked commit on `main`, and so
