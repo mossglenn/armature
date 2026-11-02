@@ -28,11 +28,13 @@ import type { TerminusDocument } from './store';
  * registered User, as before this decision: the migration window of decision
  * 3's note is open, and `GET /discover` says so (`ownerlessBranches`). The
  * check runs on a remote hub under every resolver; a workspace hub does not
- * authorize (decision 9). The operator tools are outside the API and outside
+ * authorize (decision 9). On a remote hub an agent's own credential may read
+ * and never write (ADR-0067 decision 10). The operator tools are outside the API and outside
  * this (ADR-0062). An agent acting for a person may do what the person may
  * (ADR-0067 decision 3): the person's grants are read, the agent's never.
  */
 export type Operation =
+  | { permission: 'create'; branch: string }
   | { permission: 'write'; branch: string }
   | { permission: 'merge'; branch: string }
   | { permission: 'delete'; branch: string }
@@ -68,6 +70,8 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
   const ownerless = (branch: string): boolean => !grants.some((grant) => grant.role === 'Owner' && grant.branch === branch);
 
   switch (op.permission) {
+    case 'create':
+      return undefined; // any registered User; whoever creates a branch owns it (decision 3)
     case 'write':
     case 'merge': {
       const verb = op.permission === 'write' ? 'write to' : 'merge into';
@@ -96,10 +100,21 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
 /** Refuses with 403 `forbidden` when `who` may not perform `op` on this hub. */
 export async function requirePermission(c: Context, who: ResolvedUser, op: Operation): Promise<void> {
   if (hubOf(c).role !== 'remote') return; // decision 9: a workspace hub leaves authority to its remote
+  const { permission, ...rest } = op;
+  // ADR-0067 decision 10: an agent's own work reaches a remote hub only as a
+  // workspace hub's push, acting for a person; an agent as the credential
+  // itself may read, never write.
+  if (isAgentExternalId(who.user.externalId) && !who.onBehalfOf) {
+    throw new ApiError(
+      403,
+      'forbidden',
+      `${who.user.externalId} is an agent; an agent's own work reaches a remote hub only through a workspace hub's push, acting for a person (ADR-0067 decision 10)`,
+      { permission, ...rest, credential: who.user.externalId }
+    );
+  }
   const principal = principalOf(who);
   const why = refusal(principal, op, await activeGrants(c));
   if (why === undefined) return;
-  const { permission, ...rest } = op;
   throw new ApiError(403, 'forbidden', `${principal.user.externalId} may not: ${why} (ADR-0068 decision 4)`, { permission, ...rest });
 }
 

@@ -199,6 +199,7 @@ branches.post('/', async (c) => {
   }
   const from = parseFrom(body.from);
   const who = await resolveUser(c);
+  await requirePermission(c, who, { permission: 'create', branch: name });
   const store = storeFor(c, { branch: 'main' });
   if ('commit' in from) await requireCommit(store, from.commit);
   // Both checked before the grant is written, so the usual refusals write
