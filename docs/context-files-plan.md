@@ -44,7 +44,7 @@ The cost is not only tokens. A session that needs the next step spends a round f
 
 **`.claude/HISTORY.md`, the log, no budget, never read by default.** One entry per session, newest first, made from the three records each session leaves today: the Current Phase paragraph, the What's Done section and the Recent Sessions bullets, merged, with that session's "facts worth carrying forward" and the decisions taken, each with its ADR or pull request. `CLAUDE.md` says when to read it: when a What's Next item cites a past session, or when a session must reconstruct why something is as it is and no ADR says.
 
-**`CLAUDE.md`, the rules and the map, budget 32 KB.**
+**`CLAUDE.md`, the rules and the map, budget 32 KB.** *Raised to 42 KB on 2026-11-01 (Amos): the 32 KB pass left 0.2 KB free, and the rules the workspace hub adds need room; the move-not-shorten rule stands.*
 - *Repository Structure*: one line per entry, what it is and where its rules are, no dates and no pull request numbers; a file whose story matters has an ADR or a document, and the line names it.
 - *Stack* and *Accepted, not yet built*: each bullet what is true now in two or three sentences; the build order is plan §14 and the decisions are the ADR notes, both pointed at, not restated.
 - *ADR Reference*: the handful to read before touching the API or the schema, one line each; `schema/docs/adr/README.md` is the index and is named as such.
