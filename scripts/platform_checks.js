@@ -129,6 +129,14 @@
 //      api:DatabaseAlreadyExists; a new database's main already holds one commit, an InitialCommit
 //      by `system` with the default context, so the first mirror of main is not its root
 //
+// What one write request holds (ADR-0065 decision 5's split rule; the workspace hub plan's
+// step 3, push), added 2026-11-01:
+//   AL. The store takes the hub's maximum batch, 500 documents and a body near 10 MiB, in one
+//      request and one commit, and how long each takes against the push's 60-second remote
+//      timeout; @capture and @ref resolve within one list whatever their order, including inside
+//      a Hash key's fields; and what the store does above the hub's caps (2000 documents, a
+//      20 MiB body), which says whose limit the cap is
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -998,6 +1006,61 @@ async function main() {
   record("AN4", r.status === 200 && anFirst?.["@type"] === "InitialCommit" && anFirst?.author === "system" ? "PASS" : "INFO",
     `a new database's main: /api/log ${r.status}, head ${anFirst?.["@type"] ?? "none"} by ${anFirst?.author ?? "-"}: ${JSON.stringify(anFirst?.message ?? null)}`);
   await api("DELETE", `/api/db/admin/${AN_DB}`);
+
+  // AL: what one document-write request holds (ADR-0065 decision 5, note of 2026-10-30: the split
+  // rule). The hub caps a batch at 500 documents and a body at 10 MiB; a push replays a local
+  // commit as such requests, so the store must take the hub's maximum in one request and one
+  // commit, in a time the push's 60-second remote timeout holds, resolving @capture and @ref
+  // within the request. Its own database, so the sizes do not slow the checks after it.
+  const AL_DB = `${DB}_al`;
+  await api("DELETE", `/api/db/admin/${AL_DB}`);
+  await api("POST", `/api/db/admin/${AL_DB}`, { label: "AL", comment: "scratch", schema: true });
+  r = await api("POST", `/api/document/admin/${AL_DB}?graph_type=schema&full_replace=true&${commit("AL schema")}`, schema);
+  if (r.status !== 200) throw new Error(`AL schema load: ${r.status} ${short(r.json)}`);
+  const alLog = async (count) => (await api("GET", `/api/log/admin/${AL_DB}/local/branch/main?count=${count}`)).json;
+  const alPost = async (label, body) => {
+    const t0 = performance.now();
+    const res = await api("POST", `/api/document/admin/${AL_DB}?${commit(label)}`, body);
+    const ms = Math.round(performance.now() - t0);
+    const ids = Array.isArray(res.json) ? res.json.length : null;
+    const head = (await alLog(1))?.[0];
+    return { ...res, ms, bytes: Buffer.byteLength(JSON.stringify(body)), ids, committed: head?.message === label };
+  };
+  const alWord = (n) => `al ${n}`;
+  const alBig = (n, size) => ({ "@type": "Artifact", "@id": `Artifact/${n}`, label: "x".repeat(size) });
+
+  // AL1: the hub's cap, 500 small documents, in one request and one commit.
+  let al = await alPost("AL1", Array.from({ length: 500 }, (_, i) => ({ "@type": "Artifact", "@id": `Artifact/al1-${i}`, label: alWord(i) })));
+  record("AL1", al.status === 200 && al.ids === 500 && al.committed ? "PASS" : "FAIL",
+    `500 documents in one POST: ${al.status}, ${al.ids ?? "no"} ids returned, ${al.bytes} bytes, ${al.ms} ms${al.committed ? ", one commit" : ", not the head's commit"}`);
+
+  // AL2: @capture and @ref within one list. (a) the referrer listed before what it names; (b) a
+  // @ref inside a Hash key's fields, as a junction's are; both at the hub's cap, 250 + 250.
+  const al2Refs = Array.from({ length: 250 }, (_, i) => ({ "@type": "Holder", "@id": `Holder/al2-${i}`, one: { "@ref": `al2-${i}` } }));
+  const al2Caps = Array.from({ length: 250 }, (_, i) => ({ "@type": "Artifact", "@capture": `al2-${i}`, label: alWord(i) }));
+  al = await alPost("AL2a", [...al2Refs, ...al2Caps]);
+  r = await api("GET", `/api/document/admin/${AL_DB}?id=Holder/al2-7`);
+  record("AL2a", al.status === 200 && al.ids === 500 && typeof r.json?.one === "string" && r.json.one.startsWith("Artifact/") ? "PASS" : "INFO",
+    `250 @ref documents listed before the 250 @capture ones they name: ${al.status} ${al.status === 200 ? "" : errType(al)}, ${al.ms} ms; Holder/al2-7.one ${short(r.json?.one)}`);
+  const al3Caps = Array.from({ length: 250 }, (_, i) => ({ "@type": "Artifact", "@capture": `al3-${i}`, label: alWord(i) }));
+  const al3Links = Array.from({ length: 249 }, (_, i) => ({ "@type": "Link", a: { "@ref": `al3-${i}` }, b: { "@ref": `al3-${i + 1}` }, note: alWord(i) }));
+  al = await alPost("AL2b", [...al3Caps, ...al3Links]);
+  r = await api("GET", `/api/document/admin/${AL_DB}?type=Link&as_list=true`);
+  const al2bLinks = Array.isArray(r.json) ? r.json.filter((l) => l.note === alWord(3)) : [];
+  record("AL2b", al.status === 200 && al.ids === 499 && al2bLinks.length === 1 && al2bLinks[0]?.["@id"]?.startsWith("Link/") && al2bLinks[0]?.a?.startsWith("Artifact/") ? "PASS" : "INFO",
+    `249 Hash-keyed Links whose key fields are @refs to 250 captured Artifacts: ${al.status} ${al.status === 200 ? "" : errType(al)}, ${al.ids ?? "no"} ids, ${al.ms} ms; the Link with note "${alWord(3)}": ${short(al2bLinks[0])}`);
+
+  // AL3: a body near the hub's 10 MiB limit: 500 documents of 20,000 characters each.
+  al = await alPost("AL3", Array.from({ length: 500 }, (_, i) => alBig(`al3-${i}`, 20_000)));
+  record("AL3", al.status === 200 && al.ids === 500 && al.committed ? "PASS" : "FAIL",
+    `500 documents, ${(al.bytes / 1024 / 1024).toFixed(2)} MiB in one POST: ${al.status} ${al.status === 200 ? "" : errType(al)}, ${al.ms} ms${al.committed ? ", one commit" : ""}`);
+
+  // AL4: above the hub's caps, for information: whose limit is it. 2000 small documents; a 20 MiB body.
+  al = await alPost("AL4a", Array.from({ length: 2000 }, (_, i) => ({ "@type": "Artifact", "@id": `Artifact/al4-${i}`, label: alWord(i) })));
+  record("AL4a", "INFO", `2000 documents in one POST: ${al.status} ${al.status === 200 ? "" : errType(al)}, ${al.ids ?? "no"} ids, ${al.ms} ms (the 500 cap is the hub's own, from docs/api.md)`);
+  al = await alPost("AL4b", Array.from({ length: 1000 }, (_, i) => alBig(`al4b-${i}`, 20_000)));
+  record("AL4b", "INFO", `1000 documents, ${(al.bytes / 1024 / 1024).toFixed(2)} MiB in one POST: ${al.status} ${al.status === 200 ? "" : errType(al)}, ${al.ms} ms (the 10 MiB limit is the hub's own)`);
+  await api("DELETE", `/api/db/admin/${AL_DB}`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
