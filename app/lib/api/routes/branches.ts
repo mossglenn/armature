@@ -5,7 +5,9 @@ import { BRANCH_NAME, ifMatchFrom, intQuery, readEnvelope, readJson, requireComm
 import { grantOwner, revokeGrantsNaming } from '../grants';
 import { requirePermission } from '../authorization';
 import { commitMessage, resolveUser } from '../identity';
-import { changesOf, idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type Ref, type Store, type WitnessField } from '../store';
+import { changesOf, idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type ConflictWitness, type Ref, type Store, type WitnessField } from '../store';
+import { checkBranch } from '../../operator/check';
+import type { Violation } from '../invariants';
 
 /**
  * /api/v1/branches (architecture decision record ADR-0025, decisions 4, 5, 6
@@ -14,7 +16,7 @@ import { changesOf, idFromIri, isRecord, isUnknownRef, StoreError, type Commit, 
  *   GET  /                      every branch with its head commit
  *   POST /                      { name, from?: { branch } | { commit } }  → 201; the caller owns it
  *   GET  /:name                 the head commit
- *   POST /:name/merge           { message, from }  three-way merge; 409 on conflict
+ *   POST /:name/merge           { message, from, dryRun? }  three-way merge, checked before it commits; 409 on conflict, 422 on a rule; If-Match pins the target
  *   GET  /:name/changes?since=  changed document ids since a commit
  *   GET  /:name/log?start=&count=  the branch's commits, newest first, paged, read at its head
  *   DELETE /:name               only when another branch holds the head; 409 otherwise
@@ -231,51 +233,15 @@ branches.get('/:name', async (c) => {
   return c.json({ name, head: toHead(head) });
 });
 
-branches.post('/:name/merge', async (c) => {
-  const { name: targetName } = c.req.param();
-  const envelope = await readEnvelope(c);
-  const sourceName = envelope.from;
-  if (typeof sourceName !== 'string' || !sourceName) {
-    throw new ApiError(400, 'bad_request', 'from must name the branch to merge');
-  }
-  if (sourceName === targetName) throw new ApiError(400, 'bad_request', 'A branch cannot be merged into itself');
-
-  const target = storeFor(c, { branch: targetName });
-  const who = await resolveUser(c);
-  await requirePermission(c, who, { permission: 'merge', branch: targetName });
-  const author = who.id;
-  const source = target.at({ branch: sourceName });
-  const [targetHead, sourceHead] = await Promise.all([target.head(), source.head()]);
-  if (!targetHead) throw new ApiError(404, 'not_found', `Branch ${targetName} has no commits`);
-  if (!sourceHead) throw new ApiError(404, 'not_found', `Branch ${sourceName} has no commits`);
-
-  const base = await mergeBase(target, source);
-  if (!base) throw new ApiError(409, 'no_common_ancestor', `${sourceName} and ${targetName} share no commit`);
-  if (base === sourceHead.id) {
-    setEtag(c, targetHead.id);
-    return c.json({ commit: targetHead.id, base, source: sourceHead.id, target: targetHead.id, upToDate: true });
-  }
-
-  const result = await target.apply(targetName, {
-    base,
-    source: sourceHead.id,
-    author,
-    message: commitMessage(who, envelope.message),
-    metadata: mergeMetadata(sourceHead.id),
-  });
-  if (result.ok) {
-    setEtag(c, result.commit);
-    return c.json({ commit: result.commit, base, source: sourceHead.id, target: targetHead.id, upToDate: false });
-  }
-
+/** The conflicts of a failed apply, each with the source's value read from the source head. */
+async function conflictsOf(witnesses: ConflictWitness[], atSource: Store): Promise<MergeConflict[]> {
   // A per-field witness carries the base and target values; the source value
   // is read from the source head so the client sees all three sides (decision
   // 5). An InsertConflict witness means both sides inserted the same id with
   // different content (check W2d, ADR-0032 decision 8); it names the document
   // and no field.
-  const atSource = target.at({ commit: sourceHead.id });
-  const conflicts: MergeConflict[] = await Promise.all(
-    result.witnesses.flatMap((witness): Promise<MergeConflict>[] => {
+  return Promise.all(
+    witnesses.flatMap((witness): Promise<MergeConflict>[] => {
       if (witness['@op'] === 'InsertConflict') {
         return [Promise.resolve({ id: idFromIri(String(witness['@id_already_exists'] ?? '')), op: 'InsertConflict' as const })];
       }
@@ -294,12 +260,99 @@ branches.post('/:name/merge', async (c) => {
         });
     })
   );
-  throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflicts.length} field(s)`, {
+}
+
+/**
+ * A merge is checked before it commits (decision 5, note of 2026-10-30; the
+ * deep review's B3): the source is applied onto a transient branch cut at the
+ * target's head, the operator's repair pattern (ADR-0062), the invariants
+ * engine runs over the whole result, and only a result that breaks no rule
+ * is applied onto the target, so two clean branches can no longer merge into
+ * a violation. The transient branch is deleted on every outcome. `apply`
+ * ignores a data-version precondition (platform check AK), so the target's
+ * head is read again just before the second apply and a branch that moved is
+ * 409 `branch_moved`; the residual window is one request wide, as a branch
+ * delete's is. With `dryRun`, the conflicts and the violations are returned
+ * and nothing is committed. `If-Match` pins the target head the caller
+ * inspected (the review's H3).
+ */
+branches.post('/:name/merge', async (c) => {
+  const { name: targetName } = c.req.param();
+  const envelope = await readEnvelope(c);
+  const sourceName = envelope.from;
+  if (typeof sourceName !== 'string' || !sourceName) {
+    throw new ApiError(400, 'bad_request', 'from must name the branch to merge');
+  }
+  if (sourceName === targetName) throw new ApiError(400, 'bad_request', 'A branch cannot be merged into itself');
+  const dryRun = envelope.dryRun === true;
+  if (envelope.dryRun !== undefined && typeof envelope.dryRun !== 'boolean') throw new ApiError(400, 'bad_request', 'dryRun must be a boolean');
+
+  const target = storeFor(c, { branch: targetName });
+  const who = await resolveUser(c);
+  await requirePermission(c, who, { permission: 'merge', branch: targetName });
+  const author = who.id;
+  const source = target.at({ branch: sourceName });
+  const [targetHead, sourceHead] = await Promise.all([target.head(), source.head()]);
+  if (!targetHead) throw new ApiError(404, 'not_found', `Branch ${targetName} has no commits`);
+  if (!sourceHead) throw new ApiError(404, 'not_found', `Branch ${sourceName} has no commits`);
+  const ifMatch = ifMatchFrom(c);
+  if (ifMatch && ifMatch !== targetHead.id) {
+    throw new ApiError(412, 'precondition_failed', `Branch ${targetName} has moved since commit ${ifMatch}`, { expected: ifMatch, current: targetHead.id });
+  }
+
+  const base = await mergeBase(target, source);
+  if (!base) throw new ApiError(409, 'no_common_ancestor', `${sourceName} and ${targetName} share no commit`);
+  const sides = { base, source: sourceHead.id, target: targetHead.id };
+  if (base === sourceHead.id) {
+    setEtag(c, targetHead.id);
+    return c.json({ commit: targetHead.id, ...sides, upToDate: true, ...(dryRun ? { dryRun: true, conflicts: [], violations: [] } : {}) });
+  }
+
+  // The check, on a transient branch cut at the target's head.
+  const transientName = `operator-merge-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
+  await target.createBranch(transientName, { commit: targetHead.id });
+  let conflicts: MergeConflict[] = [];
+  let violations: Violation[] = [];
+  try {
+    const tried = await target.apply(transientName, { base, source: sourceHead.id, author, message: 'merge check' });
+    if (!tried.ok) conflicts = await conflictsOf(tried.witnesses, target.at({ commit: sourceHead.id }));
+    else violations = (await checkBranch(target.at({ branch: transientName }))).violations;
+  } finally {
+    await target.deleteBranch(transientName).catch(() => undefined);
+  }
+  if (dryRun) {
+    setEtag(c, targetHead.id);
+    return c.json({ ...sides, upToDate: false, dryRun: true, conflicts, violations });
+  }
+  if (conflicts.length) {
+    throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflicts.length} field(s)`, { ...sides, conflicts });
+  }
+  if (violations.length) {
+    throw new ApiError(422, 'invariant_violation', `Merging ${sourceName} into ${targetName} would break ${violations.length} rule(s); ${targetName} is unchanged`, {
+      ...sides,
+      violations,
+    });
+  }
+
+  // The checked result lands only on the head it was checked against (check AK: apply takes no precondition).
+  const now = await target.head();
+  if (now?.id !== targetHead.id) {
+    throw new ApiError(409, 'branch_moved', `Branch ${targetName} received commit ${now?.id} during the merge check; retry`, { checked: targetHead.id, current: now?.id });
+  }
+  const result = await target.apply(targetName, {
     base,
     source: sourceHead.id,
-    target: targetHead.id,
-    conflicts,
+    author,
+    message: commitMessage(who, envelope.message),
+    metadata: mergeMetadata(sourceHead.id),
   });
+  if (!result.ok) {
+    // The one-request window: a commit landed between the read above and the apply.
+    const conflictsNow = await conflictsOf(result.witnesses, target.at({ commit: sourceHead.id }));
+    throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflictsNow.length} field(s)`, { ...sides, conflicts: conflictsNow });
+  }
+  setEtag(c, result.commit);
+  return c.json({ commit: result.commit, ...sides, upToDate: false });
 });
 
 /**

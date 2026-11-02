@@ -42,7 +42,17 @@ beforeAll(async () => {
   const main = scratch('main');
   await main.ensureDatabase();
   await main.replaceSchema(exported.schema, { author: DESIGNER, message: 'The seed schema, for the authorization suite' });
-  await main.insertDocuments(exported.documents, { author: DESIGNER, message: 'The seed, for the authorization suite' });
+  // Two commits, so that every asOf names a commit this copy holds (constraint 13; the
+  // merge route checks the whole branch since 2026-11-01): the undated records first,
+  // then the dated ones with their asOf naming that commit, where their subjects exist.
+  const { commit: undated } = await main.insertDocuments(
+    exported.documents.filter((doc) => doc.asOf === undefined),
+    { author: DESIGNER, message: 'The seed, for the authorization suite' }
+  );
+  await main.insertDocuments(
+    exported.documents.filter((doc) => doc.asOf !== undefined).map((doc) => ({ ...doc, asOf: undated })),
+    { author: DESIGNER, message: "The seed's dated records, for the authorization suite" }
+  );
   hub = createApp(() => ({ ...configFromEnv(), store: () => ({ ...storeConfigFromEnv(), db: SCRATCH_DB }) }));
 });
 
