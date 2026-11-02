@@ -12,10 +12,10 @@ import { ApiError } from '../errors';
 /** Each call to the remote ends within this; a full export of a large bank is the slowest, so longer than the store's 30 seconds. */
 export const REMOTE_TIMEOUT_MS = 60_000;
 
-/** A client of this hub's remote, acting as `externalId`. */
-export function remoteClient(hub: HubConfig, externalId: string): ArmatureClient {
+/** A client of this hub's remote, acting as `externalId`; with `agent`, as that agent acting for them (ADR-0067 decision 3). */
+export function remoteClient(hub: HubConfig, externalId: string, agent?: string): ArmatureClient {
   if (!hub.remote) throw new Error('This hub has no remote; ARMATURE_REMOTE_URL names it when ARMATURE_ROLE=workspace');
-  return createClient({ baseUrl: hub.remote, user: externalId, timeout: REMOTE_TIMEOUT_MS });
+  return createClient({ baseUrl: hub.remote, user: externalId, ...(agent ? { agent } : {}), timeout: REMOTE_TIMEOUT_MS });
 }
 
 /**
