@@ -145,6 +145,23 @@ store, and leaves the choice to its plan. Four facts bear on it.
    > the same day: a provisional id and its referrers travel in one request as `@capture` and
    > `@ref`, or the remote's id is written into the next part before it is sent. Review B5.
 
+   > **Note (2026-11-02):** check AI ran and the first branch holds: the id is computable. The
+   > store builds the Lexical string of the key, each value as a full IRI for a reference (under
+   > the context's `@base`) or an enum value (under `@schema`, as `GrantRole/Owner`), a string or
+   > an integer as itself, an absent `Optional` as the literal `+none+`, joined with `+` and
+   > percent-encoded except for the unreserved characters and `!$&'()*,;=@` (UTF-8 bytes,
+   > upper-case hexadecimal); the Hash id is the class name, `/`, and the lower-case hexadecimal
+   > SHA-256 of that string (AI1 to AI3: an absent field in the middle and at the end, an empty
+   > string, every ASCII punctuation character, non-ASCII text, a negative integer, two
+   > references). The same formula reproduced the seed's ids by hand the same day for
+   > `ModuleObjective`, `ItemInstance`, `Attestation` and both forms of `Grant`, with and without a
+   > `branch`; the two-store contract test (Verification) is where that comparison lives in code.
+   > So the file-backed store mints the same ids as the remote and a push maps nothing but
+   > commits; Quiver's provisional ids become unnecessary when it moves onto that store. The
+   > mapping in ADR-0065 decision 5's note stays written down as the fallback for a key form the
+   > check did not cover: a Set in a key is order-independent and, empty, hashes as `+none+`
+   > (AI4); no Armature key holds one.
+
 ## Alternatives considered
 
 - **TerminusDB beside the hub, for everyone** (a container, or its executable as a sidecar of a
@@ -174,11 +191,12 @@ store, and leaves the choice to its plan. Four facts bear on it.
 
 ## Verification
 
-None yet. Before acceptance, or before step 6 at the latest:
+Check AI is done (2026-11-02); the other two run before step 6 at the latest:
 
 - **Check AI** in `scripts/platform_checks.js`: whether TerminusDB's Hash identifiers can be
   computed from the key fields, compared against the ids the store minted on the seed. Its result
-  chooses between decision 6's two branches.
+  chooses between decision 6's two branches. *Done 2026-11-02: computable (AI1 to AI4); the first
+  branch holds; decision 6, note.*
 - **The two-store contract test** on the seed: the invariants engine and every intelligence read
   over the TerminusDB adapter and the file-backed store, with the same answers, at the base and at
   each local commit.
@@ -206,5 +224,7 @@ None yet. Before acceptance, or before step 6 at the latest:
 - State lives in memory while a workspace is open, which bounds a workspace's size; the bound is
   measured, not assumed (Verification), and crossing it is a trigger for Dolt.
 - Quiver's folder becomes the workspace hub's store with three differences (plan §11); its
-  provisional junction ids are decision 6's second branch already built.
+  provisional junction ids are decision 6's second branch already built. *Since 2026-11-02 (check
+  AI) the first branch holds: the store mints the remote's ids itself, and the provisional ids are
+  unnecessary once Quiver runs over it.*
 - Nothing changes for a remote hub, which keeps TerminusDB and the adapter as written.

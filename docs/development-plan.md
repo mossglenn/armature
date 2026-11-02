@@ -1467,6 +1467,13 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   AA2, AA3); a second insert of the same key fields is `DocumentIdAlreadyExists` (AA4); `PUT
   create=true` with no `@id` replaces in place, with every optional key field absent too (AA5).
   ADR-0028's key relies on it.
+- *Verified (2026-11-02, check AI):* a Hash id is computable from the key fields. The store builds
+  the Lexical string of the key, each value as a full IRI for a reference (under `@base`) or an
+  enum value (under `@schema`), a string or an integer as itself, an absent `Optional` as the
+  literal `+none+`, joined with `+` and percent-encoded except for the unreserved characters and
+  `!$&'()*,;=@` (AI1); the id is the class name, `/`, and the lower-case hexadecimal SHA-256 of
+  that string (AI2, AI3). A Set in a key is order-independent and, empty, hashes as `+none+`
+  (AI4); no Armature key holds one. ADR-0066 decision 6's first branch relies on it.
 - Turtle and RDF/XML content negotiation appear under enterprise-labeled pages; treat JSON and
   JSON-LD as the guaranteed export formats until verified.
 

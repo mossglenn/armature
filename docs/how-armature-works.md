@@ -236,7 +236,7 @@ ADRs are never deleted. When a decision is overturned, the old ADR is marked "Su
 
 ### 8.2 Verify the platform before relying on it
 
-A recurring discipline is that no decision relies on a database behavior until that behavior has been demonstrated. The script `scripts/platform_checks.js` creates a temporary scratch database, runs a lettered series of probes (A to AJ), prints PASS, FAIL or INFO with the evidence, and deletes the scratch database. When an ADR depends on a behavior, it cites the check letter.
+A recurring discipline is that no decision relies on a database behavior until that behavior has been demonstrated. The script `scripts/platform_checks.js` creates a temporary scratch database, runs a lettered series of probes (A to AN), prints PASS, FAIL or INFO with the evidence, and deletes the scratch database. When an ADR depends on a behavior, it cites the check letter.
 
 This discipline has paid off repeatedly. Check L, run in October 2026, found that TerminusDB checks that a referenced document *exists* but not that it is of the declared *type*: a field meant to hold an objective would accept a user record. Several earlier ADRs had assumed otherwise. The finding led to the first rule in the invariants engine (Section 13). Checks P and Q found that the TerminusDB documentation copied into the repository (the "vendored" documentation) described the merge conflict report and the direction of the rebase operation (which replays commits onto another branch) incorrectly. Check X found that one write mode merged old and new values instead of replacing them, so Armature never uses it.
 
@@ -1070,7 +1070,7 @@ Adding a new type is therefore one edit to the schema (with its category and key
 
 ### 21.3 Platform checks
 
-`scripts/platform_checks.js` runs the lettered probes (A to AJ) described in Section 8.2 against a scratch database it creates and deletes. It never touches the Armature database.
+`scripts/platform_checks.js` runs the lettered probes (A to AN) described in Section 8.2 against a scratch database it creates and deletes. It never touches the Armature database.
 
 ### 21.4 Tests and continuous integration
 
