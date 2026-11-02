@@ -372,10 +372,38 @@ export interface WorkspaceStatus {
   workspace: WorkspaceRecord;
   /** The local head. */
   head: string;
-  /** Local commits since the clone. */
+  /** Local commits since the clone, and how many of them are pushed (2026-11-01). */
   localCommits: number;
-  /** The remote branch's head and whether it has moved since the base, or that the remote could not be reached. */
+  pushed: number;
+  unpushed: number;
+  /** The remote branch's head and whether it has moved since the last commit this hub pushed (the base before any push), or that the remote could not be reached. */
   remote: { head: string; moved: boolean } | { reachable: false };
+}
+
+/** What `POST /workspace` adds to the record when the remote says the owner may not write the branch (ADR-0068 decision 9; 2026-11-01). */
+export interface WorkspaceWarning {
+  code: 'forbidden';
+  message: string;
+  /** The `User` ids holding `Owner` or `Maintainer` of the branch on the remote. */
+  holders: string[];
+}
+
+/** One local commit replayed on the remote by a push (ADR-0065 decision 5; 2026-11-01). */
+export interface PushedCommit {
+  local: string;
+  /** The remote commit holding the local commit's state: the last part's when it was split. */
+  remote: string;
+  parts: number;
+  pushedAt: string;
+}
+
+export interface PushResult {
+  workspace: WorkspaceRecord;
+  /** The local commits this push replayed, oldest first. */
+  pushed: PushedCommit[];
+  /** The remote branch's head after the push. */
+  remoteHead: string;
+  upToDate: boolean;
 }
 
 export type ExportProfile = 'full' | 'pseudonymous' | 'institutional';
@@ -649,9 +677,13 @@ export function createClient(options: ClientOptions) {
       list() {
         return call<WorkspaceRecord[]>('/workspace');
       },
-      /** `POST /workspace`: `{ name, from? }` creates `<handle>_<name>` on the remote and clones it; `{ existing }` clones a branch the remote has. */
+      /** `POST /workspace`: `{ name, from? }` creates `<handle>_<name>` on the remote and clones it; `{ existing }` clones a branch the remote has, with a `warning` when its owner may not write it there. */
       create(opts: { name: string; from?: string } | { existing: string }) {
-        return call<WorkspaceRecord>('/workspace', { method: 'POST', body: opts });
+        return call<WorkspaceRecord & { warning?: WorkspaceWarning }>('/workspace', { method: 'POST', body: opts });
+      },
+      /** `POST /workspace/:name/push`: replays the unpushed local commits on the remote, as the owner (2026-11-01); 403, 412 or 422 as the remote gave it, with `pushed` and `at`. */
+      push(name: string) {
+        return call<PushResult>(`/workspace/${encodeURIComponent(name)}/push`, { method: 'POST' });
       },
       /** `GET /workspace/:name/status`: the record, the local head, the local commits since the clone, and the remote's head. */
       status(name: string) {

@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { GrantRole } from '@armature/types';
-import { hubOf } from './config';
+import { hubOf, type HubConfig } from './config';
 import { ApiError } from './errors';
 import { grantsAt, isActive, type GrantDocument } from './grants';
 import { isAgentExternalId, principalOf, registry, REGISTRY_BRANCH, type ResolvedUser } from './identity';
@@ -28,8 +28,9 @@ import type { TerminusDocument } from './store';
  * registered User, as before this decision: the migration window of decision
  * 3's note is open, and `GET /discover` says so (`ownerlessBranches`). The
  * check runs on a remote hub under every resolver; a workspace hub does not
- * authorize (decision 9). On a remote hub an agent's own credential may read
- * and never write (ADR-0067 decision 10). The operator tools are outside the API and outside
+ * authorize (decision 9), it only keeps each workspace to its owner (below).
+ * On a remote hub an agent's own credential may read and never write
+ * (ADR-0067 decision 10). The operator tools are outside the API and outside
  * this (ADR-0062). An agent acting for a person may do what the person may
  * (ADR-0067 decision 3): the person's grants are read, the agent's never.
  */
@@ -99,7 +100,8 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
 
 /** Refuses with 403 `forbidden` when `who` may not perform `op` on this hub. */
 export async function requirePermission(c: Context, who: ResolvedUser, op: Operation): Promise<void> {
-  if (hubOf(c).role !== 'remote') return; // decision 9: a workspace hub leaves authority to its remote
+  const hub = hubOf(c);
+  if (hub.role !== 'remote') return requireWorkspaceOwner(hub, who, op); // decision 9: a workspace hub leaves authority to its remote
   const { permission, ...rest } = op;
   // ADR-0067 decision 10: an agent's own work reaches a remote hub only as a
   // workspace hub's push, acting for a person; an agent as the credential
@@ -116,6 +118,26 @@ export async function requirePermission(c: Context, who: ResolvedUser, op: Opera
   const why = refusal(principal, op, await activeGrants(c));
   if (why === undefined) return;
   throw new ApiError(403, 'forbidden', `${principal.user.externalId} may not: ${why} (ADR-0068 decision 4)`, { permission, ...rest });
+}
+
+/**
+ * A workspace hub's one rule (docs/workspace-hub-plan.md §7, decided
+ * 2026-11-01): a workspace is written by its owner, or by an agent acting for
+ * its owner; a request as anyone else is 403 `forbidden` naming the owner. A
+ * branch with no workspace record (a scratch branch) is open, as the hub
+ * holds one person's work and no grants.
+ */
+async function requireWorkspaceOwner(hub: HubConfig, who: ResolvedUser, op: Operation): Promise<void> {
+  if (!('branch' in op) || op.branch === undefined) return;
+  const record = await hub.workspaces?.get(op.branch);
+  const principal = principalOf(who);
+  if (!record || principal.id === record.owner) return;
+  const { permission, ...rest } = op;
+  throw new ApiError(403, 'forbidden', `${principal.user.externalId} may not ${permission} ${op.branch}: this workspace is ${record.ownerExternalId}'s`, {
+    permission,
+    ...rest,
+    owner: record.ownerExternalId,
+  });
 }
 
 /**

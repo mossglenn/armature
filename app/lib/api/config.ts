@@ -115,5 +115,10 @@ export function hubOf(c: Context): HubConfig {
 
 /** A store for one request, bound to the ref it resolved, in the request's hub's database. */
 export function storeFor(c: Context, ref: Ref): Store {
-  return createStore(ref, hubOf(c).store());
+  return storeOf(hubOf(c), ref);
+}
+
+/** A store of a hub's own database, for work the hub does outside a request's context (a workspace hub's push). */
+export function storeOf(hub: HubConfig, ref: Ref): Store {
+  return createStore(ref, hub.store());
 }

@@ -42,3 +42,34 @@ export function refuseReservedTrailers(message: string): void {
     }
   }
 }
+
+/**
+ * The trailers a workspace hub's push writes (ADR-0065 decision 5): the
+ * pusher's claims, kept as sent and never refused. A push also removes the
+ * hub-written lines above from a local message before it replays it, since
+ * the local hub wrote them and the remote writes its own.
+ */
+export const WORKSPACE_COMMIT_TRAILER = 'Armature-Workspace-Commit';
+export const AUTHORED_AT_TRAILER = 'Armature-Authored-At';
+export const WORKSPACE_PART_TRAILER = 'Armature-Workspace-Part';
+
+/** The value of the last `name: value` line in the message, or undefined; CRLF accepted (platform check AJ3). */
+export function trailerValue(message: string, name: string): string | undefined {
+  const prefix = `${name.toLowerCase()}:`;
+  let value: string | undefined;
+  for (const line of message.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.toLowerCase().startsWith(prefix)) value = trimmed.slice(prefix.length).trim();
+  }
+  return value;
+}
+
+/** The message with every line that is a trailer named in `names` removed, and no trailing blank lines. */
+export function withoutTrailers(message: string, names: readonly string[]): string {
+  const prefixes = names.map((name) => `${name.toLowerCase()}:`);
+  return message
+    .split('\n')
+    .filter((line) => !prefixes.some((prefix) => line.trim().toLowerCase().startsWith(prefix)))
+    .join('\n')
+    .replace(/\s+$/, '');
+}
