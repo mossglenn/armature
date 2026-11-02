@@ -1,26 +1,31 @@
 # ADR-0066: The Workspace Hub's Store Is a Folder of Files, Behind an Adapter Interface
 
 > **In brief.** This decision answers: what holds the data when the hub runs on a person's own
-> machine as a workspace hub (ADR-0065)? The proposed answer is a folder of plain files that the
+> machine as a workspace hub (ADR-0065)? The answer is a folder of plain files that the
 > hub itself reads and writes, so that installing Armature on a designer's computer, Windows
 > included, is one install with nothing running beside it. The database the shared hub uses,
 > TerminusDB, serves first as the test bed while the workspace hub is built. Once the folder works,
 > a second decision settles whether developers and researchers keep TerminusDB as their local store.
-> It is proposed, not built, and takes effect only if ADR-0065 is accepted.
+> It was proposed on 29 October 2026 and accepted on 2 November 2026, once platform check AI showed
+> that the store's identifiers can be computed; the interface and the test bed are built, the
+> folder itself is not.
 
 ## Status
 
-Proposed (2026-10-29). Nothing is built on it.
+Accepted (2026-11-02, Amos's decision once check AI ran; proposed 2026-10-29). Built in part:
+decision 1, the interface (2026-10-31); decision 3 in force, steps 2 to 4 built on TerminusDB;
+decision 5 named in the reference; decision 2's `push.json`. The folder, decision 2's commit files
+and lock, is plan §14 step 6; decision 4 waits on it; decision 6's first branch holds (its note).
 
 It depends on ADR-0065: a store for the workspace hub matters only if there is a workspace hub. It
 answers ADR-0065 decision 8, which leaves the store open, and `docs/workspace-hub-plan.md` §16
-questions 2 and 11. On acceptance it would amend:
+questions 2 and 11. It amends:
 
 - **ADR-0055 decision 1** ("one HTTP adapter"): the adapter becomes an interface with one
   implementation per store. The TerminusDB adapter stays the only module that talks to TerminusDB,
   and ADR-0055's decisions 2 to 7 hold for it unchanged.
 
-ADR-0055 gets a dated note pointing here when this one is accepted.
+ADR-0055 decision 1 and ADR-0065 decision 8 carry dated notes pointing here (2026-11-02).
 
 ## Context
 
