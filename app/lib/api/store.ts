@@ -88,6 +88,25 @@ function dataVersionHeader(ifMatch: string | undefined): Record<string, string> 
  * a `terminusdb:///<db>/data/` base. A value that is not such an IRI is
  * returned unchanged.
  */
+export type ChangeOp = 'insert' | 'delete' | 'update';
+
+/**
+ * A branch-level diff (`diff` with no document) as the documents it touched:
+ * an `@op: Insert` or `Delete` entry names the whole document, anything else
+ * is a patch keyed by `@id` (platform check R1).
+ */
+export function changesOf(entries: unknown): Array<{ id: string; op: ChangeOp }> {
+  const idOf = (value: unknown): string => (isRecord(value) && typeof value['@id'] === 'string' ? value['@id'] : '');
+  return (Array.isArray(entries) ? entries : [])
+    .map((entry): { id: string; op: ChangeOp } => {
+      const e = isRecord(entry) ? entry : {};
+      if (e['@op'] === 'Insert') return { id: idOf(e['@insert']), op: 'insert' };
+      if (e['@op'] === 'Delete') return { id: idOf(e['@delete']), op: 'delete' };
+      return { id: idOf(e), op: 'update' };
+    })
+    .filter((change) => change.id);
+}
+
 export function idFromIri(iri: string): string {
   return iri.replace(/^[a-z][a-z0-9+.-]*:\/\/.*?\/data\//i, '');
 }

@@ -5,7 +5,7 @@ import { ApiError } from './errors';
 import { commitMessage, REGISTRY_BRANCH, userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
 import { AS_OF_PARENT, AS_OF_REFILLED_ON_REPLACE, hasAsOf } from './invariants/asOf';
-import { StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
+import { changesOf, StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
 
 /**
  * The generic write path (plan §4 Phase 3; architecture decision records
@@ -39,8 +39,11 @@ import { StoreError, type DocumentReader, type Store, type TerminusDocument } fr
  * conditioned on it, so the rules are checked on the state the write lands
  * on. An If-Match that is not the head is a 412 before anything is read. A
  * write without one that loses a race to another commit is run again, whole,
- * on the new head, and answered 409 `branch_moved` when the branch keeps
- * moving; with one, losing the race is the 412 it asked for.
+ * on the new head, unless the commit it lost to changed a document this
+ * write replaces, which is 409 `document_moved` rather than a silent
+ * overwrite (decision 7, note of 2026-11-01), and answered 409 `branch_moved`
+ * when the branch keeps moving; with one, losing the race is the 412 it
+ * asked for.
  */
 
 export interface WriteOptions {
@@ -136,12 +139,30 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   for (let attempt = 1; ; attempt++) {
     const head = (await branch.head())?.id;
     if (opts.ifMatch && opts.ifMatch !== head) throw moved(head);
+    const state = { replacing: [] as string[] };
     try {
       // A fresh copy each run: the pipeline fills fields in as it goes.
-      return await writeAt(structuredClone(documents), head, opts);
+      return await writeAt(structuredClone(documents), head, opts, state);
     } catch (err) {
       if (!(err instanceof StoreError && err.kind === 'version_mismatch')) throw err;
       if (opts.ifMatch) throw moved((await branch.head())?.id);
+      // The race is lost at the document, not only the branch, when the commit
+      // that won changed something this write replaces: a rerun would overwrite
+      // it with no one told. The caller reads again and decides (ADR-0025
+      // decision 7, note of 2026-11-01).
+      const current = (await branch.head())?.id;
+      if (head && current && state.replacing.length) {
+        const changed = new Set(changesOf(await branch.diff(head, current)).map((change) => change.id));
+        const clash = state.replacing.filter((id) => changed.has(id));
+        if (clash.length) {
+          throw new ApiError(
+            409,
+            'document_moved',
+            `${clash.join(', ')} changed on branch ${branch.branch} since commit ${head}, which this write would have overwritten; read again, then write with If-Match`,
+            { documents: clash, checked: head, current }
+          );
+        }
+      }
       if (attempt === WRITE_ATTEMPTS) {
         throw new ApiError(409, 'branch_moved', `Branch ${branch.branch} moved during each of ${WRITE_ATTEMPTS} attempts at this write; retry`);
       }
@@ -170,7 +191,7 @@ function checkUnique(documents: TerminusDocument[]): void {
  * write is conditioned on. A branch with no commit yet is read and written
  * unconditioned, as there is nothing to race.
  */
-async function writeAt(documents: TerminusDocument[], head: string | undefined, opts: WriteOptions): Promise<WriteResult> {
+async function writeAt(documents: TerminusDocument[], head: string | undefined, opts: WriteOptions, state: { replacing: string[] }): Promise<WriteResult> {
   const { branch, who } = opts;
   const at = head ? branch.at({ commit: head }) : branch;
 
@@ -195,6 +216,7 @@ async function writeAt(documents: TerminusDocument[], head: string | undefined, 
     }
     replacing.add(found['@id']);
   });
+  state.replacing = [...replacing];
 
   // Step 3: provenance.
   let carryUser = documents.some((doc) => hasAttestedBy(doc['@type']) && doc.attestedBy === who.id);
