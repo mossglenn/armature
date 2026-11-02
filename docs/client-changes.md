@@ -73,6 +73,21 @@ rerun that overwrites them (ADR-0025 decision 7, note). `@armature/client` has `
 and `branches.log()`. Riding today's revision ([the reference](api.md), Workspace and Optimistic
 concurrency; `docs/workspace-hub-plan.md` §5).
 
+**Bring in and deliver, the workspace hub's step 4, and the merge checked before it commits**
+(same day, night): `POST /branches/:name/merge` now applies the source onto a transient branch
+cut at the target's head and runs every rule over the result before anything lands, so a merge
+whose result would break a rule is **422** `invariant_violation` with `violations`, the target
+unchanged (ADR-0025 decision 5, note; the gap of 2026-10-26 is closed); `dryRun: true` answers
+**200** with `conflicts` and `violations` and commits nothing; `If-Match` pins the target head
+(**412**); a target that moved during the check is **409** `branch_moved`. On a workspace hub,
+`POST /workspace/:name/bring-in` is the remote's merge of `main` into the workspace, read back as
+one local commit (**409** `unpushed_commits` first; the remote's conflict as given), and
+`POST /workspace/:name/deliver` the remote's merge of the workspace into `main` after `main` was
+brought in cleanly (**409** `bring_in_first`), with `deleteWorkspace` to remove it there and here.
+`@armature/client`: `branches.merge()` takes `dryRun` and `ifMatch`, `MergeResult` gains the
+dry-run fields, `workspace.bringIn()` and `workspace.deliver()`. Riding today's revision ([the
+reference](api.md), Branches and Workspace; `docs/workspace-hub-plan.md` §4 and §6).
+
 **What a client does.** Send `Armature-User` on `POST /branches`. Expect **403** `forbidden` on a
 write, merge, delete, grant or registration the caller may not make, and show who holds the grant
 rather than retrying as someone else; read `users.me().grants` to hide what would be refused. A
@@ -84,9 +99,12 @@ opens; `main` takes a maintainer's merge; its outbox becomes a `Relay` grant whe
 A tool that named an agent directly in `Armature-User` to write now sends the `agent` option with
 a person in `user`, or writes through a workspace hub. A tool that replaces documents without
 `If-Match` handles **409** `document_moved` as it would a 412: read the document again, then write
-with `If-Match`; one that sends `If-Match` never sees it. **CoQui:** its outbox replaces items by
-id; where it sends no `If-Match`, a `document_moved` means another reviewer's edit to the same item
-landed first, to be shown, not overwritten.
+with `If-Match`; one that sends `If-Match` never sees it. A tool that merges expects **422** from
+the merge route as it does from a write, and may preview with `dryRun`. **CoQui:** its outbox
+replaces items by id; where it sends no `If-Match`, a `document_moved` means another reviewer's
+edit to the same item landed first, to be shown, not overwritten; a round's merge into `main` may
+now be refused for a rule the round's items break together, which the dry run shows before the
+round closes.
 **Quiver:** its drafter and lint agents send the owner in `Armature-User` and the agent in
 `Armature-Agent`; a workspace's owner is whoever created it on the remote.
 
