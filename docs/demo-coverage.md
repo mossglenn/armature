@@ -1,6 +1,6 @@
 # Demo coverage
 
-**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30 · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
+**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built) · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
 
 **How to read it.** Capabilities run down the side and tools across the top, grouped by who is in the loop (interactive, agent, batch, gate; § Kinds of plugin). ● means the tool's demo *shows* the capability; ○ means the tool *uses* it without making it the point. Each row gets the hub's own coverage verdict (ADR-0029's default thresholds), counting only ● for the tools in scope: Uncovered is 0, Partially is 1, Fully is 2 to 4, Over is 5 or more. Three verdict columns give the three scopes: built tools only, built and planned, and everything including the proposed tools. *Partial* marks a hub capability that is not finished.
 
@@ -107,7 +107,7 @@ No single division of plugins holds: designer against administrator, or who inst
 | Agent provenance<br>`agent User · Armature-On-Behalf-Of · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  | ● | ● |  |  |  |  |  |  |  |  |  |  |  |  |
 | No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  |  |  |  | ● | ● |  |  |  |  |  | ○ |  |  | ● |  |  | ○ |
 | Loopback boundary<br>`host_not_allowed · origin_not_allowed · ADR-0067 decision 7, built 2026-10-30` | Uncovered 0 | Uncovered 0 | Uncovered 0 | ○ | ○ | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Authorization<br>`Grant · 403 forbidden · ADR-0068, built 2026-11-01` | Partially 1 | Partially 1 | Partially 1 | ● |  | ○ |  |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Authorization<br>`Grant · 403 forbidden · ADR-0068, built 2026-11-01` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |
 
 Totals over 26 capabilities (Quiver counted as built since 2026-10-30, so no planned tool remains and the first two scopes agree): built tools, Uncovered 8, Partially 8, Fully 10, Over 0; built and planned, Uncovered 8, Partially 8, Fully 10, Over 0; everything, Uncovered 1, Partially 2, Fully 9, Over 14.
 
@@ -239,7 +239,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **Export profiles and slices.** A workspace is cloned from GET /export; asks for an authoring slice. The text2qti exporter is milestone 4.
 - ● **Typed client.** First consumer of the client package.
 - ○ **Agent provenance.** AI drafting is built (`agent:quiver/drafter`, `agent:quiver/lint-1`); ADR-0067 decision 3's `Armature-Agent` form, built 2026-11-01, when Quiver resumes.
-- ○ **Authorization.** A workspace's owner is whoever created it on the remote; a push to a branch the owner may not write meets 403 `forbidden` (ADR-0068 decision 9).
+- ● **Authorization.** A workspace's owner is whoever created it on the remote; a push to a branch the owner may not write meets 403 `forbidden`, and the workspace hub warns at creation (ADR-0068 decision 9; push built 2026-11-01, so the demo shows it).
 - ○ **Loopback boundary.** Its desktop shell sends `Origin: tauri://localhost`, a non-web origin the hub serves.
 
 ### MCP server (proposed)

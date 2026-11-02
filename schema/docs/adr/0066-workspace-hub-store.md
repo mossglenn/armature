@@ -106,6 +106,12 @@ store, and leaves the choice to its plan. Four facts bear on it.
    > directory flushed; the branch head advances only after the commit file is durable. The
    > review's alternative, a SQLite journal, was declined as more machinery than one writer and
    > one folder need. Review B4 (`docs/armature-deep-review-2026-10-30.md`).
+   >
+   > **Note (2026-11-01), built in part:** `push.json` as the note above says, written whole
+   > under a temporary name, flushed and renamed (`app/lib/workspaceFolder.ts`), with the
+   > in-flight marker and the recovery from the remote log's trailers (`workspace/push.ts`,
+   > `GET /branches/:name/log`), over TerminusDB as the test bed (decision 3); the commit files
+   > and the lock wait for step 6.
 
 3. **TerminusDB is the test bed first.** The plan's steps 2 to 5 (workspace mode, push, bring in
    and deliver, the subject snapshots) are built with TerminusDB as the local store, since its

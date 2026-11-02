@@ -1508,3 +1508,11 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   `api:DatabaseAlreadyExists` (AN3); a new database's `main` already holds one `InitialCommit` by
   `system` (AN4). The adapter's `ensureDatabase` relies on all four: a workspace hub creates its
   own store on the first clone.
+
+**What one write request holds** (2026-11-01)
+- *Verified (2026-11-01, check AL):* one document write takes 500 documents in 0.2 s (AL1) and
+  9.6 MiB in 0.9 s (AL3), each as one request and one commit, and more above the hub's caps,
+  2000 documents and 19 MiB (AL4), so the batch cap of 500 and the 10 MiB body limit are the
+  hub's own; a `@ref` listed before its `@capture` resolves (AL2a), as does one inside a Hash
+  key's fields (AL2b). The push's split rule uses the hub's cap as its part limit
+  (`app/lib/api/workspace/split.ts`).

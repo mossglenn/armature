@@ -253,6 +253,16 @@ Phase 2's routes land (ADR-0054 consequences).
    > the 412 it asked for. So a write's rules are checked on the state it lands on, which "every
    > write" in CLAUDE.md's constraint list always claimed. Race tests: `app/lib/api/race.test.ts`.
 
+   > **Note (2026-11-01):** the rerun stops short of a silent overwrite. A write without
+   > `If-Match` that loses its race to a commit which changed a document it replaces is answered
+   > 409 `document_moved` (`documents`, `checked`, `current`) instead of run again, so a concurrent
+   > edit of the same record is never undone with no one told; a race over other documents still
+   > reruns. Chosen over requiring `If-Match` on every replace (the deep review's B2, last
+   > sentence), which would have moved the retry the hub does into every client and taxed every
+   > single-writer branch; a client wanting branch-level strictness sends the header (Amos,
+   > 2026-11-01, on the session's recommendation). The diff between the two heads is the one
+   > extra read, on a lost race only. `race.test.ts`.
+
 8. **History, changes and diff are read routes over the store's endpoints.** A document's
    history returns the commits that touched it, newest first, each with commit id, author,
    message, timestamp and the structural diff. A branch's changes since a commit are the changed
@@ -260,6 +270,12 @@ Phase 2's routes land (ADR-0054 consequences).
    document's diff between two commits is the store's structural diff. List fields diff
    positionally in the store, so fragment-aware diffing stays in the plugin (ADR-0023, CoQui's
    conclusion).
+
+   > **Note (2026-11-01):** a fourth read route, `GET /branches/:name/log`: the branch's commits
+   > newest first, paged, read at the head the `ETag` names (platform check AM1), messages as
+   > stored with their trailers. Asked by the workspace hub plan's §12 for a clone's history, the
+   > research path's process reads and push recovery, which reads it for the hub's own
+   > `Armature-Workspace-Commit` trailers (ADR-0066 decision 2, note).
 
 9. **Write requests carry the reason in a JSON envelope.** A `/api/v1` write body is an object
    with a required `message` and the operation's own fields: `{ message, document }` for a

@@ -50,6 +50,29 @@ under `header`, with no trailer, until push exists. `@armature/client` has an `a
 `users.me()` returns the grants. The pseudonymous export rewrites `Grant.user`, `relayedUsers` and a
 handle prefix in `Grant.branch`. Riding today's revision.
 
+**A branch's commit log** (same day, later): `GET /branches/:name/log?start=&count=` lists a
+branch's commits newest first, paged by 20 up to 100, each in the head's form, read at the head
+`ETag` names, messages as stored with their trailers ([the reference](api.md), Branches). The
+workspace hub plan's §12 asked for it: a clone's history list, the research path's process reads,
+and push recovery after a crash. `@armature/client` has `branches.log()`. Riding today's revision.
+
+**Push, the workspace hub's step 3** (same day, evening): `POST /workspace/:name/push` replays a
+workspace's local commits on its remote as the owner, through the remote's own `POST /documents`
+with `If-Match`, each message ending in `Armature-Workspace-Commit` and `Armature-Authored-At`
+(and `Armature-Workspace-Part` when a commit was split across requests), every `asOf` rewritten
+from the local commit to the remote one, a commit by an agent sent as the agent acting for the
+owner; it stops with the remote's **403**, **412** or **422**, carrying `pushed` and `at`, and a
+412 says what `moved`. `POST /workspace` with `existing` adds a `warning` when the remote would
+refuse the owner's push (ADR-0068 decision 9), and status carries `pushed` and `unpushed`. On a
+workspace hub a workspace is written and pushed by its owner alone (**403** `forbidden` with
+`owner`). **On a remote hub an agent as the credential itself no longer writes** (**403**
+`forbidden` with `credential`; ADR-0067 decision 10, now built): it reads, and its own work
+arrives as a workspace hub's push. **A write without `If-Match` that loses its race to a commit
+changing a document it replaces is now 409 `document_moved`**, with the documents, rather than a
+rerun that overwrites them (ADR-0025 decision 7, note). `@armature/client` has `workspace.push()`
+and `branches.log()`. Riding today's revision ([the reference](api.md), Workspace and Optimistic
+concurrency; `docs/workspace-hub-plan.md` §5).
+
 **What a client does.** Send `Armature-User` on `POST /branches`. Expect **403** `forbidden` on a
 write, merge, delete, grant or registration the caller may not make, and show who holds the grant
 rather than retrying as someone else; read `users.me().grants` to hide what would be refused. A
@@ -58,6 +81,12 @@ write a `Maintainer` grant first. A tool with an AI agent moves it from `Armatur
 `agent` option, with the person in `user`. **CoQui:** its round coordinator owns the round's branch
 (the creator of `coqui-<roundId>`) and grants each reviewer `Maintainer` on it before the round
 opens; `main` takes a maintainer's merge; its outbox becomes a `Relay` grant when relays are built.
+A tool that named an agent directly in `Armature-User` to write now sends the `agent` option with
+a person in `user`, or writes through a workspace hub. A tool that replaces documents without
+`If-Match` handles **409** `document_moved` as it would a 412: read the document again, then write
+with `If-Match`; one that sends `If-Match` never sees it. **CoQui:** its outbox replaces items by
+id; where it sends no `If-Match`, a `document_moved` means another reviewer's edit to the same item
+landed first, to be shown, not overwritten.
 **Quiver:** its drafter and lint agents send the owner in `Armature-User` and the agent in
 `Armature-Agent`; a workspace's owner is whoever created it on the remote.
 
