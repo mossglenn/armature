@@ -144,9 +144,21 @@
 //      refused and the target unchanged, with the head's token it lands; and the refusal's
 //      error type, so the adapter maps it as it maps a write's
 //
+// Hash identifiers reproduced (ADR-0066 decision 6; the workspace hub plan's step 6), added
+// 2026-11-02:
+//   AI. Whether the id the store mints for a Hash-keyed document can be computed from its key
+//      fields. A Lexical twin of the same key shows the string the store builds: each value as a
+//      full IRI for a reference or an enum, a string or an integer as itself, an absent Optional
+//      as the literal `+none+`, joined with `+`, percent-encoded except for the unreserved
+//      characters and `!$&'()*,;=@`; the Hash id is the lower-case hexadecimal SHA-256 of that
+//      string. Tried with special characters, non-ASCII text, an empty string, an absent field in
+//      the middle and at the end, a negative integer, two references (X1's Link) and, for
+//      information, a Set in a key (order-independent; empty, it is `+none+` too)
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
+import { createHash } from "node:crypto";
 import net from "node:net";
 
 const URL  = process.env.TERMINUS_URL  || "http://localhost:6363";
@@ -1091,6 +1103,60 @@ async function main() {
     `apply with the head's token: ${r.status} ${r.status === 200 ? "" : errType(r)}; target head ${akTargetAfterFresh === akTargetHead ? "unchanged" : "moved to " + akTargetAfterFresh}`);
   record("AK3", akStaleStatus === 412 && akStaleType === "api:DataVersionMismatch" ? "PASS" : "INFO",
     `the stale token's refusal: ${akStaleStatus} ${akStaleType} (412 api:DataVersionMismatch is what a document write gives, check M)`);
+
+  // AI: can a Hash id be computed from the key fields (ADR-0066 decision 6)? The docs say a Hash
+  // key is "generated in the same way as Lexical except that values are first hashed", so a
+  // Lexical twin of the same key shows the exact string, and SHA-256 of it is compared with the
+  // Hash id. The forms Armature's keys hold: references, an enum (Grant.role), strings
+  // (fragmentId, claimRef, branch), Optional fields absent (Attestation, Grant). Integers, a
+  // negative number and a Set are included so the fact is complete for a future key.
+  const aiBase = "terminusdb:///pc/data/", aiSchema = "terminusdb:///pc/schema#";
+  const aiKeep = /[A-Za-z0-9!$&'()*,\-.;=@_~]/;
+  const aiEncode = (s) => Array.from(new TextEncoder().encode(String(s)))
+    .map((b) => (b < 128 && aiKeep.test(String.fromCharCode(b)) ? String.fromCharCode(b) : `%${b.toString(16).toUpperCase().padStart(2, "0")}`)).join("");
+  const aiString = (values) => values.map((v) => (v === undefined ? "+none+" : aiEncode(v))).join("+");
+  const aiHash = (values) => createHash("sha256").update(aiString(values), "utf8").digest("hex");
+  const aiFields = { a: "Artifact", tone: "Tone", memo: { "@type": "Optional", "@class": "xsd:string" }, n: "xsd:integer" };
+  r = await api("POST", docs(`graph_type=schema&${commit("ai: Hash and Lexical twins")}`), [
+    { "@type": "Class", "@id": "Keyed", "@key": { "@type": "Hash", "@fields": ["a", "tone", "memo", "n"] }, ...aiFields },
+    { "@type": "Class", "@id": "KeyedLex", "@key": { "@type": "Lexical", "@fields": ["a", "tone", "memo", "n"] }, ...aiFields },
+    { "@type": "Class", "@id": "Tail", "@key": { "@type": "Hash", "@fields": ["a", "memo"] }, a: "Artifact", memo: { "@type": "Optional", "@class": "xsd:string" } },
+    { "@type": "Class", "@id": "KeyedSet", "@key": { "@type": "Hash", "@fields": ["a", "tags"] }, a: "Artifact", tags: { "@type": "Set", "@class": "xsd:string" } },
+  ]);
+  if (r.status !== 200) record("AI", "FAIL", `schema for the Hash and Lexical twins: ${r.status} ${errType(r)}`);
+  else {
+    await api("POST", docs(commit("ai fixture")), { "@type": "Artifact", "@id": "Artifact/ai-a", label: "ai" });
+    const aiRef = `${aiBase}Artifact/ai-a`, aiTone = `${aiSchema}Tone/Warm`;
+    const aiCases = {
+      full: { memo: "m", n: 3 }, absentMiddle: { n: 3 }, empty: { memo: "", n: 3 },
+      punctuation: { memo: " !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", n: 3 },
+      nonAscii: { memo: "café ñ 日本 😀", n: 3 }, negative: { memo: "m", n: -7 },
+    };
+    const aiIdOf = (j) => (Array.isArray(j) ? String(j[0]).replace(aiBase, "") : `${short(j)}`);
+    const aiLexMiss = [], aiHashMiss = [];
+    for (const [name, c] of Object.entries(aiCases)) {
+      const values = [aiRef, aiTone, c.memo, c.n];
+      const lex = await api("POST", docs(commit(`ai lexical ${name}`)), { "@type": "KeyedLex", a: "Artifact/ai-a", tone: "Warm", ...c });
+      const hashed = await api("POST", docs(commit(`ai hash ${name}`)), { "@type": "Keyed", a: "Artifact/ai-a", tone: "Warm", ...c });
+      if (aiIdOf(lex.json) !== `KeyedLex/${aiString(values)}`) aiLexMiss.push(`${name}: ${aiIdOf(lex.json)} (expected ${aiString(values)})`);
+      if (aiIdOf(hashed.json) !== `Keyed/${aiHash(values)}`) aiHashMiss.push(`${name}: ${aiIdOf(hashed.json)} (expected ${aiHash(values)})`);
+    }
+    record("AI1", aiLexMiss.length === 0 ? "PASS" : "FAIL",
+      `a Lexical id is the key values joined with "+", a reference and an enum as full IRIs, an absent Optional as "+none+", percent-encoded except unreserved characters and !$&'()*,;=@: ${aiLexMiss.length === 0 ? `all ${Object.keys(aiCases).length} cases` : aiLexMiss.join("; ")}`);
+    record("AI2", aiHashMiss.length === 0 ? "PASS" : "FAIL",
+      `a Hash id is the lower-case hexadecimal SHA-256 of that same string: ${aiHashMiss.length === 0 ? `all ${Object.keys(aiCases).length} cases` : aiHashMiss.join("; ")}`);
+    r = await api("POST", docs(commit("ai tail absent")), { "@type": "Tail", a: "Artifact/ai-a" });
+    const aiTail = aiIdOf(r.json), aiTailWant = `Tail/${aiHash([aiRef, undefined])}`;
+    const aiLink = links[0];
+    const aiLinkWant = aiLink ? `Link/${aiHash([`${aiBase}${aiLink.a}`, `${aiBase}${aiLink.b}`])}` : undefined;
+    record("AI3", aiTail === aiTailWant && aiLink?.["@id"] === aiLinkWant ? "PASS" : "FAIL",
+      `an absent Optional at the end hashes as "+none+" too (${aiTail}); X1's Link over two references matches (${aiLink?.["@id"]} vs ${aiLinkWant})`);
+    const aiSet = {};
+    for (const tags of [["x"], ["x", "y"], ["y", "x"], []]) { r = await api("POST", docs(commit("ai set")), { "@type": "KeyedSet", a: "Artifact/ai-a", tags }); aiSet[JSON.stringify(tags)] = r.status === 200 ? aiIdOf(r.json) : `${r.status} ${errType(r)}`; }
+    const aiSetOne = aiSet['["x"]'] === `KeyedSet/${aiHash([aiRef, "x"])}`;
+    const aiSetTwo = ["+", ",", ""].some((j) => aiSet['["x","y"]'] === `KeyedSet/${aiHash([aiRef, ["x", "y"].join(j)])}`);
+    record("AI4", "INFO", `a Set in a key (no Armature key has one): one element hashes as the element (${aiSetOne}); two elements in either order are one id (${aiSet['["y","x"]']}); the two-element string reproduced by a plain join: ${aiSetTwo}; an empty Set hashes as "+none+", the absent Optional's form (${aiSet["[]"] === `KeyedSet/${aiHash([aiRef, undefined])}`})`);
+  }
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
