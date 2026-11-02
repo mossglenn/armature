@@ -240,6 +240,17 @@ Three facts constrain the answer:
    > refusal, and may run the engine over the local result first as a preview, as plan §6 foresaw.
    > Review B3.
 
+   > **Note (2026-11-01), built:** `app/lib/api/workspace/bringIn.ts`, `POST /workspace/:name/
+   > bring-in` and `/deliver`. Bringing in needs nothing unpushed and sends `If-Match` naming the
+   > last commit this hub pushed; the remote's conflict report and its 422 come back as given;
+   > a clean merge is read back (the documents it changed, at the merge commit) and written into
+   > the local branch as one commit the push table maps to the merge commit, outside the pipeline
+   > (the second route-side use of the operator methods, ADR-0062, note). Delivery needs nothing
+   > unpushed and a dry run showing `main` brought in cleanly (409 `bring_in_first` otherwise),
+   > merges with the person's message, and with `deleteWorkspace` deletes the branch on the
+   > remote and the workspace here. The review is the program's, as plan §6 says; the local
+   > preview is not built. `cycle.test.ts`.
+
 7. **Tools reach a workspace hub on loopback, as its owner.** The `header` resolver serves, and
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the
    remote. Writes by an agent identity are refused until the remote can tell an agent's push from

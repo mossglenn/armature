@@ -30,7 +30,10 @@ repaired on the remote, where the registry and the rules of record are, and clon
 > and lives in one module, `app/lib/api/workspace/clone.ts`: only on a hub whose role is
 > `workspace`, only into that hub's own store, only from its configured remote's export, never
 > from a request body; `store.test.ts` fails if any other module of the API names the operator
-> methods. Two methods are added to them: `ensureDatabase`, since a workspace hub creates its own
+> methods. *Later the same day, a second such module, `workspace/bringIn.ts`:* a bring-in writes
+> the documents the remote's merge of `main` changed into the local branch as one commit, read
+> from the remote at the merge commit, which the remote already checked; the same bounds, and
+> `store.test.ts` names both modules. Two methods are added to them: `ensureDatabase`, since a workspace hub creates its own
 > store on the first clone and a person's machine has no operator (platform check AN), and
 > `deleteDatabase`, for the tests' scratch databases. Decided by Amos on 2026-11-01 over
 > replaying the export through the write pipeline and a loader outside the API.

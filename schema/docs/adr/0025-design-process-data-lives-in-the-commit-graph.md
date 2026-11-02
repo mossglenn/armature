@@ -205,6 +205,18 @@ Phase 2's routes land (ADR-0054 consequences).
    > and 8 showed that a clean merge need not be a valid one. Review B3
    > (`docs/armature-deep-review-2026-10-30.md`).
 
+   > **Note (2026-11-01), built:** `routes/branches.ts`. Platform check AK answered the open
+   > question: `apply` ignores a data-version precondition (a stale token lands), so the hub
+   > compares the target head before and after the check and refuses a moved target with 409
+   > `branch_moved`, the residual window one request wide, as the operator's repair and a branch
+   > delete already accept. The transient branch is `operator-merge-<stamp>`, under the prefix the
+   > operator's scratch-branch deletion knows, deleted on every outcome. `dryRun: true` in the
+   > body answers 200 with the conflicts and the violations and commits nothing; `If-Match` pins
+   > the target head (the review's H3). The engine runs as the operator's `check` runs it, over
+   > the whole result at the transient head, which on the seed takes under a second; a large
+   > branch will want the engine scoped to the documents the merge changed, when one shows the
+   > cost. `app.test.ts` and `cycle.test.ts`.
+
 6. **Shared history is never rewritten.** The hub exposes no reset, squash or rebase, on any
    branch, and does not call them. Rebase changes commit identifiers (Q2), and a pinned id would
    then name a commit no branch reaches. Reads at a commit id still work after a rebase or a

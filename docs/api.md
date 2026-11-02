@@ -183,12 +183,14 @@ The branch's latest commit: `{ name, head }`, with the commit in `ETag`.
 
 ### `POST /branches/:name/merge`
 
-Merges another branch into `:name` with the database's three-way merge (ADR-0025 decision 5). The merged state is not checked by the invariants engine, so two clean branches can merge into a rule violation (for example `duplicate_sequence`, when each gave a new placement the same sequence); the operator's `check` (ADR-0062) finds it, and running the rules on merge is an ask in `docs/workspace-hub-plan.md` §12. *Decided 2026-10-30, not yet built (ADR-0025 decision 5, note):* the merge will be checked before it commits and refused with 422 `invariant_violation`, the target unchanged, and a dry run will return the conflicts and violations without a commit; a `client-changes.md` entry will say so when it lands.
+Merges another branch into `:name` with the database's three-way merge (ADR-0025 decision 5), **checked before it commits** (since 2026-11-01; decision 5's note of 2026-10-30): the source is applied onto a transient branch cut at the target's head, the invariants engine runs over the whole result, and only a result that breaks no rule is applied onto the target, so two clean branches can no longer merge into a violation such as `duplicate_sequence`. A result that breaks a rule is **422** `invariant_violation` with `violations`, `base`, `source` and `target`, the target unchanged. The transient branch (`operator-merge-…`) is deleted on every outcome; one left by a crash is reported by the operator's `check` and deleted by its scratch-branch deletion. The store's `apply` takes no precondition (platform check AK), so the target's head is read again just before the merge lands and a branch that moved meanwhile is **409** `branch_moved`; the residual window is one request wide, as a branch delete's is.
 
 - Headers: `Armature-User` (required).
 - Who may (ADR-0068 decision 4, since 2026-11-01): into a branch, its owner or a maintainer of it or of every branch; into `main`, a maintainer of `main` or of every branch; else **403** `forbidden` with `permission: "merge"`. A branch with no owner is open to any registered user while the migration window is open (Grants).
-- Body: `{ "message": "...", "from": "<source branch>" }`.
+- Headers: `If-Match` (optional, since 2026-11-01): the target head the caller inspected; **412** `precondition_failed` when it moved.
+- Body: `{ "message": "...", "from": "<source branch>", "dryRun"?: true }`.
 - Success: `{ commit, base, source, target, upToDate: false }`. The merge commit records the merged source commit in its metadata (`armature.mergeSource`).
+- Dry run (`dryRun: true`, since 2026-11-01): **200** `{ base, source, target, upToDate, dryRun: true, conflicts, violations }` and nothing committed, whatever it finds; the merge would land when both lists are empty. An up-to-date dry run carries `commit` (the target head) and empty lists.
 
 A commit an operator made outside this API (ADR-0062) carries `armature.operator` in its metadata instead: `{ "tool": "put" | "delete", "rulesSkipped": true | false }`. It appears wherever a head's `metadata` does; a document's history shows the operator's message, which says when the hub's rules were skipped.
 - Already merged: `{ commit: <target head>, base, source, target, upToDate: true }`, with no new commit.
@@ -429,7 +431,7 @@ The schema graph at a ref (ADR-0027 decision 4), so a tool discovers types, cate
 
 Served by a workspace hub only (ADR-0065; [workspace hub plan](workspace-hub-plan.md) §4), under `armature/workspace`, which only such a hub lists in `GET /discover` and accepts in `Armature-Capabilities`. A remote hub answers these routes with **400** `workspace_only`. Since 2026-11-01. The workspace hub calls its remote (`ARMATURE_REMOTE_URL`) as an ordinary client of `/api/v1`, acting as the caller; a refusal from the remote comes back with the remote's own status and code and `remote: true`, and a remote that cannot be reached is **502** `remote_unreachable`.
 
-Push (since 2026-11-01, later the same day) replays a workspace's local commits on the remote through that same client (ADR-0065 decision 5 with its notes; plan §5). It is the owner's action: the desktop program's own when it exists (ADR-0065 decision 7, note), and until then the route below, on loopback under `header`. On a workspace hub a workspace is written and pushed by its owner, or by an agent acting for its owner; a request as anyone else is **403** `forbidden` with `owner` (plan §7).
+Push, bring in and deliver (since 2026-11-01, later the same day) are the rest of the cycle, each through that same client (ADR-0065 decisions 5 and 6 with their notes; plan §4 to §6). They are the owner's actions: the desktop program's own when it exists (ADR-0065 decision 7, note), and until then the routes below, on loopback under `header`. On a workspace hub a workspace is written, pushed, brought up to date and delivered by its owner, or by an agent acting for its owner; a request as anyone else is **403** `forbidden` with `owner` and `permission` naming the action (plan §7).
 
 A workspace's record: `{ branch, remote, owner, ownerExternalId, from?, base, local, clonedAt }`: the branch (the same name on the remote and here), the remote's address, the owner's `User` id on the remote and external identifier, the remote branch it started from when this hub created it, the remote commit cloned (the *base*), the local commit holding the clone, and when. Records are kept in the folder `ARMATURE_WORKSPACE_DIR` names, outside the store; beside each record, after its first push, `push.json`, the push table (below).
 
@@ -464,6 +466,14 @@ A local commit larger than one request (500 documents, 10 MiB) is replayed as se
 
 Response: `{ workspace, pushed: [ { local, remote, parts, pushedAt } ], remoteHead, upToDate }`, the commits this push replayed, oldest first. What stops a push, each as the remote gave it with `remote: true`, `pushed` (what landed before it) and `at` (`{ local, part, total }`): **403** `forbidden` before the first commit, when the owner may not write the branch on the remote (`permission: "write"`; the warning at creation will usually have said so); **412** `precondition_failed` when the branch moved on the remote, with `moved`, the documents changed there since the last commit this hub pushed (someone else with a grant wrote it, or the owner pushed from another machine; bringing in is plan §14 step 4); **422** `invariant_violation` at the commit the remote refused, which means the local engine was older than the remote's or a rule depends on state this hub lacks. After any of these nothing is recorded for the refused commit; after **502** `remote_unreachable` the marker stays for the next push to settle. A second push of the same workspace while one runs is **409** `push_in_progress`. A workspace with nothing to push answers `upToDate: true`. Reads on this hub at a pushed commit by its remote identifier are not yet served (plan §14 step 5).
 
+### `POST /workspace/:name/bring-in`
+
+Brings `main` into the workspace: with nothing left to push (**409** `unpushed_commits` with `unpushed` otherwise), the remote merges its `main` into the workspace's branch (`POST /branches/:ws/merge` with `from: "main"`, `If-Match` the last commit this hub pushed, checked before it commits), as the owner, who may merge into their own branch. Body, optional: `{ "message"? }` (`Bring in main` by default). The remote's answers come back as given with `remote: true`: **409** `merge_conflict` with `conflicts`, each a field with its base, target (the workspace's) and source (`main`'s) value, or `InsertConflict`; **422** `invariant_violation`; **412** when the branch moved on the remote (push's case). Nothing is resolved here: the review is the program's, and the resolution is ordinary local writes, pushed like any other (plan §6: restore the conflicting fields to their base value, push, bring in again, which then merges clean, then write the resolution). A clean merge is read back, the documents it changed at the merge commit, and written into the local branch as one commit, which the push table maps to the merge commit (`parts: 0`, `broughtIn: true`), so the next push continues from it; those documents were checked by the remote and are written here outside the pipeline (ADR-0062, note). Response: `{ workspace, remoteHead, upToDate, merge?: { base, source, target }, broughtIn?: { local, documents } }`.
+
+### `POST /workspace/:name/deliver`
+
+Delivers the workspace into `main`: with nothing left to push (**409** `unpushed_commits`) and `main` brought in cleanly, which a dry run of that merge confirms (**409** `bring_in_first` with the dry run's `conflicts` and `violations` otherwise), the remote merges the workspace into `main` with the person's message, which needs a maintainer of `main` there (the remote's **403** `forbidden`, `permission: "merge"`, `branch: "main"`, as given; ADR-0068 decision 4). Body: `{ "message", "deleteWorkspace"?: true }`. With `deleteWorkspace`, the branch is deleted on the remote (allowed, since `main` holds its head) and the local branch and the records here are removed; otherwise the workspace is kept and can go on. Response: `{ workspace, delivered: { commit, base, source, target, upToDate }, deleted }`.
+
 ---
 
 ## Error codes
@@ -491,20 +501,21 @@ Response: `{ workspace, pushed: [ { local, remote, parts, pushedAt } ], remoteHe
 | 400 | `remote_only` | A route or a write a workspace hub leaves to its remote (Discovery: `role`) |
 | 400 | `workspace_only` | A workspace route on a remote hub (Workspace) |
 | 401 | `identity_required`, `unknown_user`, `unknown_agent` | No identity, an unregistered one, or an unregistered agent in `Armature-Agent` |
-| 403 | `forbidden` | The identity may not do this; `permission` and, as it applies, `branch`, `role` or `agent` (Grants; ADR-0068); `credential`, an agent as the credential itself on a remote hub (ADR-0067 decision 10); `owner`, anyone but the owner on a workspace hub, where `permission` may also be `push` (Workspace) |
+| 403 | `forbidden` | The identity may not do this; `permission` and, as it applies, `branch`, `role` or `agent` (Grants; ADR-0068); `credential`, an agent as the credential itself on a remote hub (ADR-0067 decision 10); `owner`, anyone but the owner on a workspace hub, where `permission` may also be `push`, `bring-in` or `deliver` (Workspace) |
 | 403 | `host_not_allowed`, `origin_not_allowed` | A host name or a web origin this hub does not serve (Hosts and web origins) |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit |
 | 409 | `type_conflict` | An identifier held by another type (rule 12) |
 | 409 | `user_exists`, `branch_exists` | Already registered or created |
 | 409 | `merge_conflict`, `no_common_ancestor` | The merge cannot proceed |
-| 409 | `unmerged_branch`, `branch_moved` | Branch deletion refused; `branch_moved` also a write whose branch moved under each of its three runs (The write pipeline) |
+| 409 | `unmerged_branch`, `branch_moved` | Branch deletion refused; `branch_moved` also a write whose branch moved under each of its three runs (The write pipeline), or a merge whose target moved during its check (Branches: merge) |
 | 409 | `document_moved` | A write without `If-Match` lost its race to a commit that changed a document it replaces; `documents`, `checked`, `current` (Optimistic concurrency) |
 | 409 | `registration_conflict` | Concurrent user registration; retry |
 | 409 | `push_in_progress` | A push of the same workspace is already running on this hub (Workspace) |
+| 409 | `unpushed_commits`, `bring_in_first` | A bring-in or delivery with local commits not yet pushed; a delivery before `main` was brought in cleanly, with the dry run's `conflicts` and `violations` (Workspace) |
 | 409 | `workspace_exists` | A workspace this hub already holds (Workspace) |
 | 412 | `precondition_failed` | The branch moved since the commit in `If-Match` |
 | 413 | `body_too_large` | A request body over 10 MiB |
-| 422 | `invariant_violation` | One or more rules broken (see `violations`) |
+| 422 | `invariant_violation` | One or more rules broken (see `violations`), by a write or by the state a merge would make (Branches: merge) |
 | 422 | `group_too_large` | A local commit holds a group of documents naming each other that no one request can carry (Workspace: push) |
 | 500 | `store_unavailable` | The database rejected the configured credentials |
 | 500 | `store_error`, `internal_error` | An unexpected database or server error (details in the server log only) |

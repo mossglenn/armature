@@ -228,7 +228,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **Branches.** One branch per workspace, `<user>_<name>`, since branch names allow no slash.
 - ● **History and changes since.** changes?since= refreshes a workspace.
 - ○ **Reacting to changes.** Learns that `main` moved by polling, before it offers to bring it in.
-- ● **Three-way merge with conflicts.** Pull and deliver are merges, reviewed fragment by fragment. Scenarios 7 and 8 show the route skips the invariants.
+- ● **Three-way merge with conflicts.** Pull and deliver are merges, reviewed fragment by fragment. Scenarios 7 and 8 showed the route skipped the invariants; since 2026-11-01 the remote checks a merge before it commits, and bring in and deliver are the workspace hub's.
 - ● **One write path with invariants.** Local commits with reasons, pushed through the one write path.
 - ● **Batch writes with If-Match.** Push is a batch write with If-Match.
 - ● **Identity on every write.** Two users in two workspaces, built; a push from a second machine waits for the hub's `oidc` resolver (ADR-0067).

@@ -1516,3 +1516,11 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   hub's own; a `@ref` listed before its `@capture` resolves (AL2a), as does one inside a Hash
   key's fields (AL2b). The push's split rule uses the hub's cap as its part limit
   (`app/lib/api/workspace/split.ts`).
+
+**A merge checked before it commits** (2026-11-01)
+- *Verified (2026-11-01, check AK):* `/api/apply` ignores a `TerminusDB-Data-Version` header on
+  the target: a stale token lands (AK1, 200 `api:ApplyResponse`), as does the head's (AK2). So
+  the merge route cannot condition the checked result on the head it checked against; it reads
+  the head again before the apply and answers 409 `branch_moved` when it moved, leaving the
+  one-request window the operator's repair and a branch delete already accept (ADR-0025
+  decision 5, note).
