@@ -47,7 +47,7 @@ export const CAPABILITIES: Record<string, Capability> = {
     routes: ['/api/v1/documents'],
     settings: { batchLimit: 500, historyCount: 20 },
   },
-  'armature/branches': { fallback: 'reject', routes: ['/api/v1/branches'], settings: {} },
+  'armature/branches': { fallback: 'reject', routes: ['/api/v1/branches'], settings: { logCount: 20, logPage: 100 } },
   'armature/users': { fallback: 'reject', routes: ['/api/v1/users'], settings: {} },
   'armature/intelligence.coverage': {
     fallback: 'reject',

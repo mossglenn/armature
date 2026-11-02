@@ -319,6 +319,30 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
     expect(body.changes).toEqual([{ id: DOC, op: 'insert' }]);
   });
 
+  it('lists the branch log newest first, read at the head it names, with the merge metadata', async () => {
+    const res = await app.request(`/api/v1/branches/${TARGET}/log?count=1`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(etagOf(res)).toBe(body.head);
+    expect(body).toMatchObject({ branch: TARGET, start: 0, count: 1 });
+    expect(body.commits).toHaveLength(1);
+    expect(body.commits[0]).toMatchObject({ commit: body.head, author: AUTHOR, message: 'Merge the walkthrough', metadata: { armature: { mergeSource: secondWrite } } });
+    expect(typeof body.commits[0].timestamp).toBe('number');
+    // The next page continues from the same head: the fork commit, then main's history, never the head again.
+    const next = await (await app.request(`/api/v1/branches/${TARGET}/log?start=1&count=100`)).json();
+    const ids = next.commits.map((commit: { commit: string }) => commit.commit);
+    expect(ids[0]).toBe(forkCommit);
+    expect(ids).not.toContain(body.head);
+  });
+
+  it('refuses a log page larger than the hub walks at once, and an unknown branch', async () => {
+    const big = await app.request(`/api/v1/branches/${TARGET}/log?count=101`);
+    expect(big.status).toBe(400);
+    expect((await big.json()).error).toBe('bad_query');
+    const unknown = await app.request(`/api/v1/branches/no-such-${stamp}/log`);
+    expect(unknown.status).toBe(404);
+  });
+
   it('counts a commit the branch received by a merge as part of its history', async () => {
     // firstWrite is on SOURCE's log only; TARGET holds it through the merge of secondWrite.
     const res = await app.request(`/api/v1/branches/${TARGET}/changes?since=${firstWrite}`);
