@@ -19,6 +19,9 @@ interface) first. ADR-0066, its store, was accepted on 2026-11-02 once check AI 
 Status promised are on ADR-0025, ADR-0026, ADR-0032, ADR-0055, ADR-0059 and ADR-0062 (2026-10-30),
 and plan §2's terms are in CLAUDE.md's table.
 
+**Note 2026-11-02, built:** plan §14 step 5, the clone's snapshots, the kept log and forwarding
+(plan §8, note), and with it decision 5's read at a pushed commit by its remote identifier.
+
 **Note 2026-11-01 (evening), built:** push, plan §14 step 3: decision 5 with its notes, decision
 4's warning and decision 7's owner-only rule, with platform check AL first; the notes beside each
 decision say what was built and the one interim choice (how push is driven before the program).
@@ -221,6 +224,13 @@ Three facts constrain the answer:
    > identifier ("after a push, reads ... accept either identifier"), which comes with the
    > clone's snapshots (plan §14 step 5), where remote commits enter the local store's vocabulary.
 
+   > **Note (2026-11-02), built, step 5:** remote commits are in the workspace hub's vocabulary.
+   > `app/lib/api/workspace/store.ts` wraps the adapter on a workspace hub and resolves a commit
+   > identifier through the records (the base and every pushed or brought-in commit to its local
+   > counterpart, a snapshot to its branch), then the remote when it can be reached; a read is
+   > answered under the identifier asked for, and `If-Match` may name the remote identifier of
+   > the head's counterpart. The clone's snapshots, the kept log and forwarding are plan §8's note.
+
 6. **Delivery is the remote's merge, driven from the workspace hub.** With nothing left to push,
    the workspace hub asks the remote to merge `main` into the workspace (`POST /branches/<ws>/
    merge` with `from: main`), presents any conflict for review, writes the resolution as local
@@ -367,6 +377,11 @@ ship beside itself.
   `asOf`, need either a larger clone or the remote (plan §8).
   > **Later change (2026-10-30):** the clone holds as much as is reasonable, so that as many of
   > the hub's reads as possible work offline (plan §8 and §16, question 3).
+  >
+  > **Note (2026-11-02), built:** history offline now reaches the branch's beginning through the
+  > log kept at the clone, and the states a record names through the snapshots within the budget;
+  > anything else is forwarded to the remote when online and 404 `unknown_ref` with
+  > `remote_needed` when not (plan §8, note).
 - A store other than TerminusDB under a workspace hub must reproduce two of TerminusDB's formats
   that cross the API: the identifiers it mints for Hash-keyed classes, so a local record names the
   same junction the remote holds, and the JSON patch the diff route returns (plan §10).

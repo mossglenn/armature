@@ -117,6 +117,13 @@ store, and leaves the choice to its plan. Four facts bear on it.
    > in-flight marker and the recovery from the remote log's trailers (`workspace/push.ts`,
    > `GET /branches/:name/log`), over TerminusDB as the test bed (decision 3); the commit files
    > and the lock wait for step 6.
+   >
+   > **Note (2026-11-02), built in part:** the layout's `remote/at/<commit>`, the subjects at each
+   > older `asOf`, is built as full exports (plan §16 question 3's reading), in the test bed as
+   > branches `at.<commit>` of the workspace hub's store, recorded in `snapshots.json` beside
+   > `push.json`; the branch's log in `log.json`. Step 6 moves the snapshots and the log into the
+   > folder as files; their records and the resolution of a remote identifier
+   > (`app/lib/api/workspace/store.ts`) stay as they are.
 
 3. **TerminusDB is the test bed first.** The plan's steps 2 to 5 (workspace mode, push, bring in
    and deliver, the subject snapshots) are built with TerminusDB as the local store, since its
@@ -205,6 +212,9 @@ Check AI is done (2026-11-02); the other two run before step 6 at the latest:
 - **The two-store contract test** on the seed: the invariants engine and every intelligence read
   over the TerminusDB adapter and the file-backed store, with the same answers, at the base and at
   each local commit.
+- *Measured 2026-11-02, for the snapshot budget:* the seed's `main` names two older commits, each
+  snapshot 63 and 68 documents, about 90 KB apiece in the store's form; the budget's default is
+  20 commits per workspace (`ARMATURE_SNAPSHOTS`), to be revisited against the largest real bank.
 - **A measurement of opening a large workspace:** the time and memory to rebuild the state from the
   base and the commit files for the largest bank a real import produces, which is Dolt's second
   trigger.
