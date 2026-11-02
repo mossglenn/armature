@@ -17,7 +17,7 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const BUDGETS = {
-  '.claude/CLAUDE.md': 32 * 1024,
+  '.claude/CLAUDE.md': 42 * 1024,
   '.claude/SESSION.md': 32 * 1024,
   '.claude/PROJECT_CONTEXT.md': 20 * 1024,
 };

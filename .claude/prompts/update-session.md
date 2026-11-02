@@ -17,7 +17,7 @@ git diff --name-only "$(git log -1 --format=%H --grep='update session state')"..
 git status
 git diff --stat
 
-# The context files' sizes against their budgets (SESSION.md 32 KB, CLAUDE.md 32 KB, PROJECT_CONTEXT.md 20 KB)
+# The context files' sizes against their budgets (SESSION.md 32 KB, CLAUDE.md 42 KB, PROJECT_CONTEXT.md 20 KB)
 wc -c .claude/SESSION.md .claude/CLAUDE.md .claude/PROJECT_CONTEXT.md
 ```
 

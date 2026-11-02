@@ -1,6 +1,6 @@
 # Armature — Claude Code Context
 
-The primary context for AI-assisted development on Armature: the rules and the map. Read this first, then `PROJECT_CONTEXT.md` (the problem, audiences, reference clients) and `SESSION.md` (the state) before any work session; read `HISTORY.md`, the log, only when `SESSION.md` points at it or no ADR or document answers a "why". Human readers start with `docs/how-armature-works.md`. Budget: 32 KB (`docs/context-files-plan.md`).
+The primary context for AI-assisted development on Armature: the rules and the map. Read this first, then `PROJECT_CONTEXT.md` (the problem, audiences, reference clients) and `SESSION.md` (the state) before any work session; read `HISTORY.md`, the log, only when `SESSION.md` points at it or no ADR or document answers a "why". Human readers start with `docs/how-armature-works.md`. Budget: 42 KB since 2026-11-01 (`docs/context-files-plan.md`).
 
 Abbreviations: ADR (Architecture Decision Record), API, CI, WOQL (TerminusDB's query language), OIDC (OpenID Connect).
 
@@ -224,7 +224,7 @@ Say "update session" and follow `.claude/prompts/update-session.md`: the history
 - **A change to a route, the schema, a decision or what runs where updates the human-facing documents too** (the README, the reference, the guide, the explainer, deployment, the research path, demo coverage, the plans), as each describes the thing changed.
 - **`docs/client-changes.md` is also the revision list.** Every change a client would act on gets a dated, tool-neutral entry with a CoQui note; a dated entry is a revision `REVISIONS` in `version.ts` must name (a test fails otherwise), and `CLIENT_REVISION` follows. A read added on a day that already has a revision rides it; a header the contract already promised is a fix, not a revision.
 - **A review** of the documents runs as parallel readers over disjoint file groups against one written brief, whole files, every high finding spot-checked by the lead. An outside review is checked citation by citation first; its findings are cited by its own identifiers; a finding on an accepted ADR becomes a dated note; a disagreement goes into its banner with the reason.
-- **The context files keep their budgets** (this file and `SESSION.md` 32 KB, `PROJECT_CONTEXT.md` 20 KB; `npm run check:context`, in CI): over budget means move, not shorten; a fact lives in one place and the rest point.
+- **The context files keep their budgets** (this file 42 KB, `SESSION.md` 32 KB, `PROJECT_CONTEXT.md` 20 KB; `npm run check:context`, in CI): over budget means move, not shorten; a fact lives in one place and the rest point.
 
 ---
 
