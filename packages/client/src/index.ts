@@ -159,11 +159,25 @@ export interface BranchSummary {
 }
 
 export interface MergeResult {
-  commit: string;
+  /** The merge commit, or the target head when up to date; absent on a dry run that is not up to date. */
+  commit?: string;
   base: string;
   source: string;
   target: string;
   upToDate: boolean;
+  /** A dry run (2026-11-01): what the merge would have reported, nothing committed; the merge would land when both are empty. */
+  dryRun?: boolean;
+  conflicts?: MergeConflict[];
+  violations?: Violation[];
+}
+
+/** One rule a write or a checked merge breaks (the hub's `invariant_violation` body). */
+export interface Violation {
+  code: string;
+  id?: string;
+  index: number;
+  field?: string;
+  message: string;
 }
 
 export type MergeConflict =
@@ -587,9 +601,14 @@ export function createClient(options: ClientOptions) {
       head(name: string) {
         return call<BranchSummary>(`/branches/${encodeURIComponent(name)}`);
       },
-      /** `POST /branches/:name/merge`: three-way merge of `from` into `name`; 409 `merge_conflict` carries `conflicts`. */
-      merge(name: string, opts: { message: string; from: string }) {
-        return call<MergeResult>(`/branches/${encodeURIComponent(name)}/merge`, { method: 'POST', body: opts });
+      /**
+       * `POST /branches/:name/merge`: three-way merge of `from` into `name`, checked before it commits
+       * (2026-11-01): 409 `merge_conflict` carries `conflicts`, 422 `invariant_violation` the rules the
+       * result would break; `dryRun` returns both without a commit; `ifMatch` pins the target head.
+       */
+      merge(name: string, opts: { message: string; from: string; dryRun?: boolean; ifMatch?: string }) {
+        const { ifMatch, ...body } = opts;
+        return call<MergeResult>(`/branches/${encodeURIComponent(name)}/merge`, { method: 'POST', body, ifMatch });
       },
       /** `GET /branches/:name/changes?since=`: documents inserted, deleted or updated since a commit. */
       changes(name: string, since: string) {

@@ -546,6 +546,79 @@ describe('version-control walkthrough (Phase 2 exit criterion)', () => {
   });
 });
 
+describe('a merge checked before it commits (ADR-0025 decision 5, note of 2026-10-30; built 2026-11-01)', () => {
+  const A = `test-merge-a-${stamp}`;
+  const B = `test-merge-b-${stamp}`;
+  const MODULE = 'Module/how-ai-works';
+  const OBJECTIVE = 'LearningObjective/identify-ai-limitations';
+  const NEED = `LearningNeed/merge-check-${stamp}`;
+  const headOf = async (name: string) => (await (await app.request(`/api/v1/branches/${name}`)).json()).head.commit as string;
+
+  beforeAll(async () => {
+    expect((await post('/api/v1/branches', { name: A, from: { branch: 'main' } })).status).toBe(201);
+    // A need on A, so that B can edit the same document the other way for a conflict.
+    expect((await write(`/api/v1/documents/${NEED}?branch=${A}`, { message: 'A need', document: { label: 'Need', rationale: 'first' } })).status).toBe(200);
+    expect((await post('/api/v1/branches', { name: B, from: { branch: A } })).status).toBe(201);
+    // Each side places its own activity at sequence 21: clean on each, a duplicate_sequence together.
+    for (const [branch, side] of [[A, 'a'], [B, 'b']]) {
+      const res = await post(`/api/v1/documents?branch=${branch}`, {
+        message: `Place activity ${side}`,
+        documents: [
+          { '@type': 'LearningActivity', '@id': `LearningActivity/merge-${side}-${stamp}`, label: `Merge ${side}`, targets: [OBJECTIVE] },
+          { '@type': 'ModuleActivityLink', module: MODULE, activity: `LearningActivity/merge-${side}-${stamp}`, sequence: 21 },
+        ],
+      });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  afterAll(async () => {
+    for (const name of [B, A]) await deleteScratchBranch(name, AS_OPERATOR).catch(() => undefined);
+  });
+
+  it('refuses a merge whose result breaks a rule with 422, the target unchanged and no transient branch left', async () => {
+    const before = await headOf(A);
+    const res = await post(`/api/v1/branches/${A}/merge`, { message: 'Bring in B', from: B });
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error).toBe('invariant_violation');
+    expect(body.violations.map((v: { code: string }) => v.code)).toContain('duplicate_sequence');
+    expect(body.target).toBe(before);
+    expect(await headOf(A)).toBe(before);
+    const names = (await (await app.request('/api/v1/branches')).json()).map((b: { name: string }) => b.name);
+    expect(names.filter((n: string) => n.startsWith('operator-merge-'))).toEqual([]);
+  });
+
+  it('a dry run reports the violations, or the conflicts, and commits nothing', async () => {
+    const before = await headOf(A);
+    const dry = await post(`/api/v1/branches/${A}/merge`, { message: 'Would it merge?', from: B, dryRun: true });
+    expect(dry.status).toBe(200);
+    const body = await dry.json();
+    expect(body).toMatchObject({ dryRun: true, upToDate: false, target: before, conflicts: [] });
+    expect(body.commit).toBeUndefined();
+    expect(body.violations.map((v: { code: string }) => v.code)).toContain('duplicate_sequence');
+    expect(await headOf(A)).toBe(before);
+
+    // The same document edited both ways: the dry run reports the conflict, the real merge is 409.
+    expect((await write(`/api/v1/documents/${NEED}?branch=${A}`, { message: 'A edits', document: { label: 'Need', rationale: 'A' } })).status).toBe(200);
+    expect((await write(`/api/v1/documents/${NEED}?branch=${B}`, { message: 'B edits', document: { label: 'Need', rationale: 'B' } })).status).toBe(200);
+    const conflicted = await (await post(`/api/v1/branches/${A}/merge`, { message: 'Would it merge?', from: B, dryRun: true })).json();
+    expect(conflicted.conflicts).toEqual([{ id: NEED, field: 'rationale', base: 'first', target: 'A', source: 'B' }]);
+    expect(conflicted.violations).toEqual([]);
+    const real = await post(`/api/v1/branches/${A}/merge`, { message: 'Bring in B', from: B });
+    expect(real.status).toBe(409);
+    expect((await real.json()).error).toBe('merge_conflict');
+  });
+
+  it('pins the target head with If-Match (the review\'s H3) and refuses a bad dryRun', async () => {
+    const stale = await post(`/api/v1/branches/${A}/merge`, { message: 'x', from: B }, { 'If-Match': '"notthehead"' });
+    expect(stale.status).toBe(412);
+    expect((await stale.json()).error).toBe('precondition_failed');
+    const bad = await post(`/api/v1/branches/${A}/merge`, { message: 'x', from: B, dryRun: 'yes' });
+    expect(bad.status).toBe(400);
+  });
+});
+
 describe('users and identity resolution (ADR-0032)', () => {
   const REVIEWER_ID = `User/test-reviewer-${stamp}`;
   const REVIEWER_EXTERNAL_ID = `reviewer-${stamp}@example.edu`;
