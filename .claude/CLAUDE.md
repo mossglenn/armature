@@ -53,7 +53,7 @@ One line per entry: what it is and where its rules are. The code's own comments 
 schema/schema.json         # The schema, single source of truth; its @documentation is authoritative
 schema/docs/adr/           # The ADRs; README.md is the index with every status
 docker/                    # docker-compose.yml, Caddyfile, hub.Dockerfile, viewer.Dockerfile, operator-entrypoint.sh; docs/deployment.md explains them
-.github/workflows/ci.yml   # Lint, typecheck, drift check, context budgets, the hub bundle; the contract suite against a store container; the client install check; the browser test; both images
+.github/workflows/ci.yml   # Lint, typecheck, drift check, context budgets, the hub bundle; the contract suite against a store container; the client install check; the browser test; both images; the file store's suites on Windows
 package.json               # The npm workspace root: app and packages/*
 packages/types/            # @armature/types, GENERATED src/ (types.ts, schemas.ts); do not edit
 packages/client/           # @armature/client, every route as a typed function; takes a fetch; install-check/ is CI's consumer test
