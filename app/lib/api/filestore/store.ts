@@ -173,12 +173,18 @@ export class FileStore {
 
   // --- states --------------------------------------------------------------
 
-  private apply(state: State, commit: CommitFile): State {
+  /** `state` with the commits applied in order, as a new state sharing every unchanged document. */
+  private apply(state: State, commits: readonly CommitFile[]): State {
     const documents = new Map(state.documents);
-    for (const id of commit.deleted ?? []) documents.delete(id);
-    for (const doc of commit.documents ?? []) documents.set(doc['@id'], doc);
-    const schema = commit.schema ?? state.schema;
-    const index = commit.schema ? new SchemaIndex(commit.schema) : state.index;
+    let { schema, index } = state;
+    for (const commit of commits) {
+      for (const id of commit.deleted ?? []) documents.delete(id);
+      for (const doc of commit.documents ?? []) documents.set(doc['@id'], doc);
+      if (commit.schema) {
+        schema = commit.schema;
+        index = new SchemaIndex(commit.schema);
+      }
+    }
     return { documents, schema, ...(index ? { index } : {}) };
   }
 
@@ -191,7 +197,11 @@ export class FileStore {
     }
   }
 
-  /** The state at a commit, from the nearest remembered ancestor; the empty state for no commit. */
+  /**
+   * The state at a commit: the nearest remembered ancestor's with the commits
+   * between applied in one pass (so opening a long branch costs its writes,
+   * not its length times its size), remembered; the empty state for no commit.
+   */
   async stateAt(commitId: string | undefined): Promise<State> {
     await this.load();
     if (!commitId) return EMPTY;
@@ -209,12 +219,10 @@ export class FileStore {
       chain.push(commit);
       id = commit.parent;
     }
-    state ??= EMPTY;
-    for (const commit of chain.reverse()) {
-      state = this.apply(state, commit);
-      this.remember(commit.id, state);
-    }
-    return state;
+    if (!chain.length) return state ?? EMPTY;
+    const result = this.apply(state ?? EMPTY, chain.reverse());
+    this.remember(commitId, result);
+    return result;
   }
 
   /** A ref's head commit id: a branch's head, or the commit itself once known. */
@@ -292,7 +300,7 @@ export class FileStore {
       await this.files.write(`${branch}/${COMMITS}/${id}.json`, `${JSON.stringify(file, null, 2)}\n`);
       this.commits.set(id, file);
       this.folders.set(id, branch);
-      this.remember(id, this.apply(state, file));
+      this.remember(id, this.apply(state, [file]));
       await this.writeHead(branch, id);
       return { commit: id, ids };
     });
