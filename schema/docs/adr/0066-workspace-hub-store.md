@@ -302,7 +302,16 @@ Check AI and the contract test are done (2026-11-02); the other two run before s
   so indicative only. No real import is near these sizes; Dolt's second trigger is far.
 - **Atomic replacement on Windows:** the write-then-rename sequence under the conditions a
   designer's machine has (antivirus scanners holding files open, a folder inside a synced
-  directory), since rename semantics differ from macOS and Linux.
+  directory), since rename semantics differ from macOS and Linux. *Run in part 2026-11-02
+  (night) on GitHub's Windows runner (CI's `files` job, `app/vitest.files.config.mts`), with
+  Defender's real-time scanning on: the file flush, the rename over an existing file, 300
+  replacements of one file in a row, a store written over 40 commits and reopened from disk,
+  stray temporary files ignored, and the lock taken by exclusive create and taken over from a
+  dead process all pass; the one difference found is that Windows refuses to flush a directory
+  handle (`EPERM` on every write), so the folder flush after the rename is skipped there
+  (`app/lib/workspaceFolder.ts`, `syncFolder`), NTFS journaling the rename itself. Still for a
+  real machine: a folder inside a synced directory (OneDrive, Files On-Demand) and a process
+  killed between the temporary write and the rename.*
 
 ## Consequences
 

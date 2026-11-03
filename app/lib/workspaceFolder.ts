@@ -24,7 +24,7 @@ const PUSH = 'push.json';
 const SNAPSHOTS = 'snapshots.json';
 const LOG = 'log.json';
 
-/** Flushes a file or a folder to disk. */
+/** Flushes a file to disk. */
 async function sync(path: string, flags: string): Promise<void> {
   const handle = await open(path, flags);
   try {
@@ -34,7 +34,19 @@ async function sync(path: string, flags: string): Promise<void> {
   }
 }
 
-/** Writes `target` whole and durably: a temporary name, flushed, renamed into place, the folder flushed. */
+/**
+ * Flushes a folder, so a rename into it is on disk: what macOS and Linux need
+ * after `rename`. Windows has no such call: flushing a directory handle is
+ * refused (`EPERM`, every write on the CI runner, 2026-11-02; ADR-0066
+ * Verification), and NTFS journals the rename itself, so there is nothing to
+ * do.
+ */
+async function syncFolder(path: string): Promise<void> {
+  if (process.platform === 'win32') return;
+  await sync(path, 'r');
+}
+
+/** Writes `target` whole and durably: a temporary name, flushed, renamed into place, the folder flushed where the platform has it. */
 async function writeWhole(target: string, text: string): Promise<void> {
   const folder = join(target, '..');
   await mkdir(folder, { recursive: true });
@@ -47,7 +59,7 @@ async function writeWhole(target: string, text: string): Promise<void> {
     await handle.close();
   }
   await rename(temporary, target);
-  await sync(folder, 'r');
+  await syncFolder(folder);
 }
 
 const isMissing = (err: unknown): boolean => {
