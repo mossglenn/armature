@@ -11,9 +11,9 @@
 #                                                 against the store, from a Node container
 #   docker compose --profile workspace up -d --build
 #                                                 a workspace hub (ADR-0065) on this machine, on
-#                                                 loopback port 3101, its workspaces in the store
-#                                                 here, cloned from ARMATURE_REMOTE_URL; with
-#                                                 `--profile hub` too, from the hub beside it
+#                                                 loopback port 3101, its workspaces in a folder
+#                                                 (ADR-0066), cloned from ARMATURE_REMOTE_URL;
+#                                                 with `--profile hub` too, from the hub beside it
 #
 # Two private networks (ADR-0067 decision 8, note of 2026-10-30). The front one is
 # named `armature`, whatever the checkout's directory, so a client deployed beside the
@@ -21,8 +21,8 @@
 # external network and calls the hub as http://hub:3100; its public site is a file in
 # docker/sites/, which Caddy imports (docs/deployment.md, "A client on the same
 # server"). Whatever joins it can write as anyone, but cannot reach the store: the
-# store network, `armature-store`, is joined only by TerminusDB, the hubs and the
-# operator service. Every hub here runs the `header` resolver on a network it
+# store network, `armature-store`, is joined only by TerminusDB, the hub and the
+# operator service; a workspace hub has no store and never joins it. Every hub here runs the `header` resolver on a network it
 # trusts, so each says so (ARMATURE_TRUST_NETWORK=1); the image alone refuses to
 # listen beyond loopback under `header`.
 #
@@ -182,12 +182,14 @@ services:
 
   workspace:
     # A workspace hub (ADR-0065; docs/workspace-hub-plan.md §10): the same image in
-    # workspace mode, for developers and researchers. Its workspaces live in their
-    # own database in the store here (ARMATURE_WORKSPACE_DB, created on the first
-    # clone) and their records in a volume. It clones from ARMATURE_REMOTE_URL, the
-    # hub beside it by default (`--profile hub --profile workspace`); a remote
-    # elsewhere is named in docker/.env, and must answer to the name used (its
-    # ARMATURE_ALLOWED_HOSTS). Published on loopback only, like the hub.
+    # workspace mode, for developers and researchers. Its workspaces live in the
+    # file-backed store of ADR-0066, a folder in the volume `workspace-folder` (their
+    # records beside their commits), the one local store since decision 4 of that ADR
+    # (2026-11-02), so it needs no store server and stays off the store network. It
+    # clones from ARMATURE_REMOTE_URL, the hub beside it by default (`--profile hub
+    # --profile workspace`); a remote elsewhere is named in docker/.env, and must
+    # answer to the name used (its ARMATURE_ALLOWED_HOSTS). Published on loopback
+    # only, like the hub.
     build:
       context: ..
       dockerfile: docker/hub.Dockerfile
@@ -196,24 +198,14 @@ services:
     ports:
       - "127.0.0.1:${ARMATURE_WORKSPACE_PORT:-3101}:3100"
     volumes:
-      - workspace-records:/workspaces
+      - workspace-folder:/workspaces
     environment:
-      - TERMINUS_URL=http://terminusdb:6363
-      - TERMINUS_USER=admin
-      - TERMINUS_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
-      - TERMINUS_DB=${ARMATURE_WORKSPACE_DB:-workspace}
       - ARMATURE_IDENTITY=header
       - ARMATURE_ROLE=workspace
       - ARMATURE_REMOTE_URL=${ARMATURE_REMOTE_URL:-http://hub:3100}
       - ARMATURE_WORKSPACE_DIR=/workspaces
-      # This profile keeps its workspaces in the store server, where a workspace hub's
-      # default is the file-backed store in its folder (ADR-0066; decision 4 says whether
-      # the profile stays).
-      - ARMATURE_STORE=terminusdb
       - ARMATURE_TRUST_NETWORK=1
-    networks: [default, store]
-    depends_on:
-      - terminusdb
+    networks: [default]
 
 networks:
   # The front network: the hubs, the viewer, Caddy, and any client beside the instance.
@@ -225,7 +217,7 @@ networks:
 
 volumes:
   terminusdb-data:
-  workspace-records:
+  workspace-folder:
   caddy-data:
   caddy-config:
   operator-modules:
