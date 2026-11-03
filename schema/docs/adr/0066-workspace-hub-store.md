@@ -311,7 +311,37 @@ Check AI and the contract test are done (2026-11-02); the other two run before s
   handle (`EPERM` on every write), so the folder flush after the rename is skipped there
   (`app/lib/workspaceFolder.ts`, `syncFolder`), NTFS journaling the rename itself. Still for a
   real machine: a folder inside a synced directory (OneDrive, Files On-Demand) and a process
-  killed between the temporary write and the rename.*
+  killed between the temporary write and the rename.* *Run on a real machine 2026-11-03 (a
+  Windows 11 laptop, NTFS, Defender on, OneDrive signed in with Files On-Demand; the harness a
+  child bundled over the real `folderFiles` and file store, terminated by `TerminateProcess` at
+  the moment `rename` is about to move the temporary file into place): killed before the rename
+  of a commit file and before the rename of `head.json`, on NTFS and inside OneDrive alike, the
+  folder holds the old file whole with a complete `<name>.<pid>.tmp` beside it, and the store
+  reopens at the old head and takes the next write. Two things such a kill leaves for good: the
+  temporary file, which opening ignores and nothing removes, and, at the head seam, a commit file
+  no branch references, which opening reads and keeps. A killed hub leaves `lock`, and the next
+  hub takes it over. Inside OneDrive the suites pass (30 tests, 4.2 s against 2.6 s outside),
+  every file written is claimed by the cloud filter within seconds, and a commit file made
+  cloud-only (`attrib +U -P`) is read and rehydrated transparently while the sync client runs.
+  With the client stopped, the offline case of a folder "freed up", the first read of a cloud-only
+  commit file fails with Node's `UNKNOWN` (errno -4094, "unknown error, read"), so opening the
+  store fails: the hub starts and names its store as usual, then answers every request 500
+  `internal_error` with the path only on its stderr, and keeps failing after the client returns,
+  since `load()` keeps its first promise; a restarted hub recovers. The hub detects no synced
+  folder and the plan says nothing about one (the Consequences' claim is corrected by its note).
+  Open, for a decision: (a) refusing or warning on a folder inside a known synced root; (b) a
+  clear error for a cloud-only file and a load retried rather than kept; (c) pinning the folder
+  "always keep on this device"; (d) removing stray temporary files on open. Not rehearsed, one
+  machine only: the lock file synced to a second machine, where its process id means nothing.*
+  *Decided 2026-11-03 (Amos, on the session's recommendation), built the same day: (b) and (d).
+  A read the operating system refuses although the file is there (`UNKNOWN`, `EIO`) is 503
+  `store_unreadable` naming the file, with `Retry-After`, and the store reads its folder again on
+  the next request rather than keeping the failed open (`lib/workspaceFolder.ts`, `unreadable`;
+  `filestore/store.ts`, `load`; revision 2026-11-03 of `docs/client-changes.md`); taking the lock
+  removes the temporary files a dead process left (`sweepTemporaries`). The kill is kept as a
+  test, a child built from the real modules with esbuild and terminated at each seam
+  (`lib/workspaceFolder.test.ts`). (a) and (c) wait for the desktop program of plan §14 step 7,
+  which chooses the folder.*
 
 ## Consequences
 
@@ -327,6 +357,12 @@ Check AI and the contract test are done (2026-11-02); the other two run before s
   cloud-synced directory can be rewritten under the workspace hub by the sync service, so the
   workspace hub's default location is outside such directories and the plan says what it does when
   it finds itself inside one.
+  > **Note (2026-11-03):** the plan says nothing yet about a folder inside a synced directory,
+  > and the hub detects none; neither has a default location, since the desktop program (plan
+  > §14 step 7) is what chooses one. The Windows rehearsal (Verification, the note of 2026-11-03)
+  > found the offline case failing opaquely; since that day a file the system refuses to read is
+  > 503 `store_unreadable` naming it and the open is tried again, while a warning or a refusal
+  > on such a folder waits for step 7.
 - State lives in memory while a workspace is open, which bounds a workspace's size; the bound is
   measured, not assumed (Verification), and crossing it is a trigger for Dolt.
 - Quiver's folder becomes the workspace hub's store with three differences (plan §11); its
