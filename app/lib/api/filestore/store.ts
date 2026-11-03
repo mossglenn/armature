@@ -154,7 +154,17 @@ export class FileStore {
       for (const [name, head] of this.branches) {
         if (head && !this.commits.has(head)) throw new Error(`Branch ${name} heads at commit ${head}, which no commit file holds: the store is damaged`);
       }
-    })();
+    })().catch((err: unknown) => {
+      // A failed open is not kept: a file the operating system refused today
+      // (a cloud-only file under a stopped sync service; ADR-0066 Verification,
+      // 2026-11-03) may read on the next request, which reads the folder again.
+      this.loading = undefined;
+      this.commits.clear();
+      this.folders.clear();
+      this.branches.clear();
+      this.marked = false;
+      throw err;
+    });
     return this.loading;
   }
 

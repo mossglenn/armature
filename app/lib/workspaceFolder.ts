@@ -11,12 +11,17 @@
  *
  * Every file is written under a temporary name, flushed, and renamed into
  * place, and the folder is flushed after the rename, so a crash leaves the old
- * record or the new one (ADR-0066 decision 2, note of 2026-10-30).
+ * record or the new one (ADR-0066 decision 2, note of 2026-10-30); the
+ * temporary file such a crash leaves is removed when the next process takes
+ * the lock (`sweepTemporaries`). A file the operating system refuses to read
+ * is reported as such (`unreadable`), not as an internal error. Both from the
+ * rehearsal on a Windows laptop (ADR-0066 Verification, 2026-11-03).
  */
 import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import type { StoreFiles } from './api/filestore/files';
 import { BRANCH_NAME } from './api/http';
+import { StoreError } from './api/store';
 import type { PushTable, RemoteLog, Snapshots, WorkspaceRecord, WorkspaceRecords } from './api/workspace/records';
 
 const RECORD = 'workspace.json';
@@ -67,6 +72,20 @@ const isMissing = (err: unknown): boolean => {
   return code === 'ENOENT' || code === 'ENOTDIR';
 };
 
+/**
+ * A read the operating system refused although the file is there. On Windows
+ * a file a sync service has made cloud-only, read while that service is
+ * stopped or the machine offline, fails with libuv's `UNKNOWN` (errno -4094;
+ * rehearsed with OneDrive's Files On-Demand, 2026-11-03); macOS reports an
+ * evicted file as `EIO`. The hub answers 503 `store_unreadable` naming the
+ * file, and the store reads its folder again on the next request.
+ */
+export const unreadable = (err: unknown, path: string): StoreError | undefined => {
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code !== 'UNKNOWN' && code !== 'EIO') return undefined;
+  return new StoreError(503, 'store_unreadable', { path, code }, 'unreadable');
+};
+
 /** A relative store path as a path under `dir`; refuses one that would leave it. */
 function under(dir: string, path: string): string {
   const parts = path.split('/').filter(Boolean);
@@ -87,11 +106,12 @@ function under(dir: string, path: string): string {
 export function folderFiles(dir: string): StoreFiles {
   return {
     async read(path) {
+      const target = under(dir, path);
       try {
-        return await readFile(under(dir, path), 'utf8');
+        return await readFile(target, 'utf8');
       } catch (err) {
         if (isMissing(err)) return undefined;
-        throw err;
+        throw unreadable(err, target) ?? err;
       }
     },
     async write(path, text) {
@@ -129,10 +149,44 @@ function alive(pid: number): boolean {
   }
 }
 
+/** What `writeWhole` names a file while it is being written. */
+const TEMPORARY = /\.\d+\.tmp$/;
+
+/**
+ * Removes the temporary files a process that died between the write and the
+ * rename left under `dir`: beside the marker, in each branch folder and in
+ * its `commits/`. Opening ignores them, but nothing else removes them, and in
+ * a synced folder they would be uploaded. Run once the lock is held, when no
+ * other process is writing. Returns what it removed.
+ */
+export async function sweepTemporaries(dir: string): Promise<string[]> {
+  const removed: string[] = [];
+  const sweep = async (folder: string, depth: number): Promise<void> => {
+    let entries;
+    try {
+      entries = await readdir(folder, { withFileTypes: true });
+    } catch (err) {
+      if (isMissing(err)) return;
+      throw err;
+    }
+    for (const entry of entries) {
+      const path = join(folder, entry.name);
+      if (entry.isFile() && TEMPORARY.test(entry.name)) {
+        await rm(path, { force: true });
+        removed.push(path);
+      } else if (entry.isDirectory() && (depth === 0 ? BRANCH_NAME.test(entry.name) : depth === 1 && entry.name === 'commits')) {
+        await sweep(path, depth + 1);
+      }
+    }
+  };
+  await sweep(dir, 0);
+  return removed;
+}
+
 /**
  * Takes the store's lock for this process, or throws naming the process that
  * holds it. Returns the release, which removes the lock; a lock a dead
- * process left is replaced.
+ * process left is replaced, and so are the temporary files it left mid-write.
  */
 export async function lockFolder(dir: string): Promise<() => Promise<void>> {
   await mkdir(dir, { recursive: true });
@@ -147,6 +201,7 @@ export async function lockFolder(dir: string): Promise<() => Promise<void>> {
       } finally {
         await handle.close();
       }
+      await sweepTemporaries(dir);
       return () => rm(path, { force: true });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;

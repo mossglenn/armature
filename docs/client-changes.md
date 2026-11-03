@@ -15,6 +15,22 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-03 · A workspace hub names a file it cannot read: 503 `store_unreadable`
+
+**What changed.** A workspace hub whose folder holds a file the operating system refuses to read,
+such as a commit file a sync service (OneDrive with Files On-Demand) has made cloud-only while the
+service is stopped or the machine offline, answered **500** `internal_error` on every request until
+it was restarted. It now answers **503** `store_unreadable` with `path` naming the file and
+`Retry-After`, and reads its folder again on the next request, so a request after the file is back
+on disk succeeds without a restart. Found by ADR-0066's rehearsal on a Windows laptop (its
+Verification, note of 2026-11-03); [the deployment guide](deployment.md) says to keep the folder
+outside a synced directory. Also since that day, a temporary file a process killed mid-write left
+behind is removed when the next hub takes the folder's lock.
+
+**What a client does.** Treats 503 `store_unreadable` as retryable and shows the person `path`, so
+they can bring the file back: start the sync client, go online, or mark the folder "always keep on
+this device". **CoQui** is a client of a remote hub only and sees none of this.
+
 ## 2026-11-02 · A workspace hub answers remote commit identifiers: snapshots, forwarding, the log past the clone
 
 **What changed.** On a workspace hub (ADR-0065; [the reference](api.md), Workspace) a commit
