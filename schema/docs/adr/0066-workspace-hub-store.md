@@ -20,6 +20,13 @@ decision 5's patch and decision 6's ids minted by check AI's formula, held to th
 answers by the two-store contract test (Verification). Opt-in by `ARMATURE_STORE=files` on a
 workspace hub; it becomes the default, and decision 4 is taken, once the plan's step 6 closes.
 
+> **Note (2026-11-02, night):** the default is flipped: a workspace hub with no `ARMATURE_STORE`
+> runs over the folder (`app/lib/api/config.ts`), and `files` stays refused on a remote hub. The
+> `workspace` compose profile names `ARMATURE_STORE=terminusdb` explicitly, so developers keep
+> their workspaces in the store server until decision 4 is taken; rehearsed on a fresh VM
+> (`docs/deployment.md`, "A workspace hub on this machine"). Of step 6, the Windows rehearsal in
+> Verification and decision 4 remain.
+
 It depends on ADR-0065: a store for the workspace hub matters only if there is a workspace hub. It
 answers ADR-0065 decision 8, which leaves the store open, and `docs/workspace-hub-plan.md` §16
 questions 2 and 11. It amends:
