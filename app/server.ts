@@ -20,6 +20,9 @@
  *                                                            records in, required when the role is `workspace`
  *   ARMATURE_SNAPSHOTS                                       how many older remote commits a workspace holds
  *                                                            as snapshots, 20 by default (plan §8)
+ *   ARMATURE_STORE                                           `terminusdb` (default) or `files`: a workspace hub
+ *                                                            over the file-backed store in ARMATURE_WORKSPACE_DIR,
+ *                                                            with no TerminusDB (ADR-0066; lib/api/filestore/)
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
  *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
  *                                                            the caller, so the hub stays on this machine
@@ -37,8 +40,9 @@
  */
 import { configFromEnv } from './lib/api/config';
 import { loadEnvLocal } from './lib/envLocal';
+import { openFileStore } from './lib/api/filestore/store';
 import { bindRefusal, startHub } from './lib/hub';
-import { folderRecords } from './lib/workspaceFolder';
+import { folderFiles, folderRecords, lockFolder } from './lib/workspaceFolder';
 
 async function main(): Promise<void> {
   loadEnvLocal();
@@ -54,14 +58,19 @@ async function main(): Promise<void> {
   const hostname = process.env.HOST?.trim() || '127.0.0.1';
   const refusal = bindRefusal({ hostname, identity: config.identity, trustNetwork: process.env.ARMATURE_TRUST_NETWORK?.trim() === '1' });
   if (refusal) throw new Error(refusal);
+  // The file-backed store opens the workspace folder once and locks it against a second process (ADR-0066 decision 2).
+  const dir = config.workspaceDir;
+  const unlock = dir && config.storeKind === 'files' ? await lockFolder(dir) : undefined;
+  const files = unlock && dir ? openFileStore(folderFiles(dir)) : undefined;
   const hub = await startHub({
     port,
     hostname,
-    ...(config.workspaceDir ? { config: { ...config, workspaces: folderRecords(config.workspaceDir) } } : {}),
+    ...(dir ? { config: { ...config, workspaces: folderRecords(dir), ...(files ? { store: () => ({ files }) } : {}) } } : {}),
   });
   console.log(`Armature hub (revision ${hub.revision}) listening at ${hub.url}/api/v1`);
   if (config.role === 'workspace') console.log(`  role: workspace, of the remote at ${config.remote}; records in ${config.workspaceDir}`);
-  console.log(`  store: ${process.env.TERMINUS_URL ?? '(TERMINUS_URL is not set)'} database ${process.env.TERMINUS_DB ?? '(TERMINUS_DB is not set)'}`);
+  if (files) console.log(`  store: the file-backed store in ${dir}`);
+  else console.log(`  store: ${process.env.TERMINUS_URL ?? '(TERMINUS_URL is not set)'} database ${process.env.TERMINUS_DB ?? '(TERMINUS_DB is not set)'}`);
 
   // Docker sends SIGTERM on `compose down`; close the listener so in-flight
   // requests finish, then exit. A second signal exits at once.
@@ -70,7 +79,10 @@ async function main(): Promise<void> {
     if (stopping) process.exit(1);
     stopping = true;
     console.log(`${signal} received, stopping`);
-    hub.close().then(() => process.exit(0), () => process.exit(1));
+    hub
+      .close()
+      .then(() => unlock?.())
+      .then(() => process.exit(0), () => process.exit(1));
   };
   process.on('SIGTERM', () => stop('SIGTERM'));
   process.on('SIGINT', () => stop('SIGINT'));
