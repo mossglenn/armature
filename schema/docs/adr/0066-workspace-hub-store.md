@@ -13,9 +13,12 @@
 ## Status
 
 Accepted (2026-11-02, Amos's decision once check AI ran; proposed 2026-10-29). Built in part:
-decision 1, the interface (2026-10-31); decision 3 in force, steps 2 to 4 built on TerminusDB;
-decision 5 named in the reference; decision 2's `push.json`. The folder, decision 2's commit files
-and lock, is plan §14 step 6; decision 4 waits on it; decision 6's first branch holds (its note).
+decision 1, the interface (2026-10-31); decision 3 in force, steps 2 to 5 built on TerminusDB;
+decision 2's `push.json` (2026-11-01) and, since the evening of 2026-11-02, the folder itself:
+the commit files, the head, the lock, the in-memory index (`app/lib/api/filestore/`, its note),
+decision 5's patch and decision 6's ids minted by check AI's formula, held to the adapter's
+answers by the two-store contract test (Verification). Opt-in by `ARMATURE_STORE=files` on a
+workspace hub; it becomes the default, and decision 4 is taken, once the plan's step 6 closes.
 
 It depends on ADR-0065: a store for the workspace hub matters only if there is a workspace hub. It
 answers ADR-0065 decision 8, which leaves the store open, and `docs/workspace-hub-plan.md` §16
@@ -124,6 +127,23 @@ store, and leaves the choice to its plan. Four facts bear on it.
    > `push.json`; the branch's log in `log.json`. Step 6 moves the snapshots and the log into the
    > folder as files; their records and the resolution of a remote identifier
    > (`app/lib/api/workspace/store.ts`) stay as they are.
+   >
+   > **Note (2026-11-02, evening), built:** the folder is `app/lib/api/filestore/store.ts` over
+   > the `StoreFiles` interface (`files.ts`; the host's folder and lock in
+   > `app/lib/workspaceFolder.ts`, memory in the tests). The layout as built keeps the plan's
+   > shape as *branch folders*, so that the clone, the snapshots and the bring-in (`workspace/`)
+   > run unchanged over either store: one folder per branch holding `head.json` and
+   > `commits/<id>.json`; a workspace's branch folder is its workspace folder, its records beside
+   > `commits/`; the remote's `main` (`users.json` in the plan) and each snapshot (`remote/at/`)
+   > are branch folders of their own, `main/` and `at.<commit>/`, a snapshot shared by every
+   > workspace that names its commit; `base.jsonld` is the clone's own commit file, which holds
+   > every document of the export; a commit that replaced the schema carries `schema` in place of
+   > `documents`. A commit file carries no `origin`: which commits came from the remote is
+   > `push.json`'s `broughtIn`, beside the commits as the note above decided. The commit id is
+   > the SHA-256 of the file's body, verified when the folder is opened; the head file is written
+   > only after the commit file is durable; a branch made from another's commit shares its
+   > ancestry by parent links and copies nothing, and deleting a branch removes only the commit
+   > files no branch reaches. `store.json` marks the folder with a format number.
 
 3. **TerminusDB is the test bed first.** The plan's steps 2 to 5 (workspace mode, push, bring in
    and deliver, the subject snapshots) are built with TerminusDB as the local store, since its
@@ -143,6 +163,13 @@ store, and leaves the choice to its plan. Four facts bear on it.
    format (`docs/vendor/terminusdb/json-diff-and-patch.md`), so the dependency clients already have
    is written down, and the file-backed store produces it. A format of the API's own waits for a
    client that needs something the patch cannot say.
+
+   > **Note (2026-11-02, evening), built:** `app/lib/api/filestore/patch.ts` emits the patch's
+   > operations (`SwapValue`, a nested patch for a subdocument, `CopyList`, `PatchList`,
+   > `SwapList` and `KeepList` for a list, `Insert` and `Delete` over a branch) and applies them
+   > back (`applyPatch`, which the tests use to hold every diff to its after state). Where several
+   > chains describe one change to a list, the file store's segmentation may differ from
+   > TerminusDB's; the operations and their meaning do not, which is what a client reads.
 
 6. **Hash identifiers are reproduced if a check shows how, and mapped otherwise.** Platform check
    AI tries to reproduce TerminusDB's Hash algorithm from the key fields and compares the result
@@ -173,6 +200,15 @@ store, and leaves the choice to its plan. Four facts bear on it.
    > mapping in ADR-0065 decision 5's note stays written down as the fallback for a key form the
    > check did not cover: a Set in a key is order-independent and, empty, hashes as `+none+`
    > (AI4); no Armature key holds one.
+   >
+   > **Note (2026-11-02, evening), built:** `app/lib/api/filestore/ids.ts` mints by that formula,
+   > reading each key field's kind (a reference, an enum, a primitive) from the store's own
+   > schema entries rather than the generated types, so a folder holding another schema version
+   > mints by that schema. The contract test reproduces every Hash id in the seed, all ten
+   > classes, from the key fields, and the write pipeline run over both stores returns the same
+   > ids for a junction and an attestation. A Random id is sixteen characters of the URL-safe
+   > base64 alphabet, and a part's nested id has the store's form and is regenerated on every
+   > write of its parent, as checks J4 and AB4 found the store does.
 
 ## Alternatives considered
 
@@ -203,7 +239,7 @@ store, and leaves the choice to its plan. Four facts bear on it.
 
 ## Verification
 
-Check AI is done (2026-11-02); the other two run before step 6 at the latest:
+Check AI and the contract test are done (2026-11-02); the other two run before step 6 closes:
 
 - **Check AI** in `scripts/platform_checks.js`: whether TerminusDB's Hash identifiers can be
   computed from the key fields, compared against the ids the store minted on the seed. Its result
@@ -211,7 +247,13 @@ Check AI is done (2026-11-02); the other two run before step 6 at the latest:
   branch holds; decision 6, note.*
 - **The two-store contract test** on the seed: the invariants engine and every intelligence read
   over the TerminusDB adapter and the file-backed store, with the same answers, at the base and at
-  each local commit.
+  each local commit. *Done 2026-11-02 (evening): `app/lib/api/filestore/contract.test.ts` loads
+  the seed's export into a file store in memory and asks both hubs every read route (the schema,
+  the users, every type listed, every document, coverage, alignment, item statistics, module
+  content, the trace, attestations, impact, the export) with the same answers up to the commit
+  ids and the store-minted ids of parts; writes a junction and an attestation through the
+  pipeline on both with the same ids, replaces the junction by its key, meets the same 422; and
+  runs the operator's `check` over both.*
 - *Measured 2026-11-02, for the snapshot budget:* the seed's `main` names two older commits, each
   snapshot 63 and 68 documents, about 90 KB apiece in the store's form; the budget's default is
   20 commits per workspace (`ARMATURE_SNAPSHOTS`), to be revisited against the largest real bank.
