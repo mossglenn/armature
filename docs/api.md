@@ -524,4 +524,5 @@ Delivers the workspace into `main`: with nothing left to push (**409** `unpushed
 | 500 | `history_too_long` | A history longer than the 5,000 commits the hub walks (the changes route, a merge, a branch delete) |
 | 502 | `remote_unreachable`, `remote_error` | A workspace hub could not reach its remote, or the remote answered without what the hub needed (Workspace) |
 | 503 | `branch_busy` | A document's history could not be read at one head; `Retry-After` |
+| 503 | `store_unreadable` | A file of a workspace hub's folder could not be read on this machine although it is there, such as one a sync service has made cloud-only while the service is stopped or the machine offline; `path` names it, `Retry-After`, and the hub reads the folder again on the next request (since 2026-11-03) |
 | 504 | `store_timeout` | The database did not answer within the hub's 30-second deadline; a write may have landed, so re-read before retrying |

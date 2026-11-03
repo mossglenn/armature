@@ -262,4 +262,28 @@ describe('the folder', () => {
     expect(await files.list('main')).toEqual(['workspace.json']);
     expect(await main.ensureDatabase()).toBe(true);
   });
+
+  it('reads the folder again after an open that failed, rather than keeping the failure', async () => {
+    // A file the operating system refuses today (cloud-only under a stopped
+    // sync service; ADR-0066 Verification, 2026-11-03) may read tomorrow.
+    const files = memoryFiles();
+    const main = openFileStore(files).at({ branch: 'main' });
+    await main.ensureDatabase();
+    await main.replaceSchema(schema, by);
+    const { commit } = await main.putDocuments([{ '@type': 'Thing', '@id': 'Thing/t', label: 'x' }], { ...by, create: true });
+    let refusing = true;
+    const flaky: StoreFiles = {
+      ...files,
+      read: async (path) => {
+        if (refusing && path.endsWith(`${commit}.json`)) throw new StoreError(503, 'store_unreadable', { path }, 'unreadable');
+        return files.read(path);
+      },
+    };
+    const reopened = openFileStore(flaky).at({ branch: 'main' });
+    await expect(reopened.head()).rejects.toMatchObject({ kind: 'unreadable' });
+    await expect(reopened.head()).rejects.toMatchObject({ kind: 'unreadable' });
+    refusing = false;
+    expect((await reopened.head())?.id).toBe(commit);
+    expect((await reopened.getDocument('Thing/t')).document.label).toBe('x');
+  });
 });

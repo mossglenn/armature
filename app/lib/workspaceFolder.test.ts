@@ -3,13 +3,15 @@
  * `workspace.json` per workspace, written whole, never outside the folder;
  * the file-backed store's files beside them, and the lock one process holds.
  */
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { build } from 'esbuild';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openFileStore } from './api/filestore/store';
 import type { WorkspaceRecord } from './api/workspace/records';
-import { folderFiles, folderRecords, lockFolder } from './workspaceFolder';
+import { folderFiles, folderRecords, lockFolder, sweepTemporaries, unreadable } from './workspaceFolder';
 
 const record = (branch: string): WorkspaceRecord => ({
   branch,
@@ -124,7 +126,92 @@ describe('the folder on this file system', () => {
   });
 });
 
+// A process killed between the temporary write and the rename (ADR-0066
+// Verification; rehearsed on a Windows laptop 2026-11-03 and kept here): a
+// child built from these very modules writes three versions of one document,
+// then dies by SIGKILL (TerminateProcess on Windows) the moment `rename` would
+// move the next commit file, or the next head, into place. The folder must
+// hold the old file whole, the store must reopen at the old head and take the
+// next write, and the lock's sweep must remove what the child left.
+const KILLED_CHILD = `
+import { openFileStore } from './api/filestore/store';
+import { folderFiles } from './workspaceFolder';
+const [dir, seam] = process.argv.slice(2);
+const fsp = require('fs').promises;
+const real = fsp.rename;
+let armed = false;
+fsp.rename = async (from: string, to: string) => {
+  const hit = seam === 'commit' ? to.includes('commits') && to.endsWith('.json') : to.endsWith('head.json');
+  if (armed && hit) process.kill(process.pid, 'SIGKILL');
+  return real(from, to);
+};
+const by = { author: 'User/t', message: 'm' };
+const schema = [
+  { '@type': '@context', '@base': 'http://armature.design/data/', '@schema': 'http://armature.design/schema#' },
+  { '@type': 'Class', '@id': 'Thing', '@key': { '@type': 'Random' }, label: 'xsd:string' },
+];
+async function main() {
+  const main = openFileStore(folderFiles(dir)).at({ branch: 'main' });
+  await main.ensureDatabase();
+  await main.replaceSchema(schema, by);
+  for (let i = 0; i < 3; i++) await main.putDocuments([{ '@type': 'Thing', '@id': 'Thing/t', label: 'v' + i }], { ...by, create: true });
+  armed = true;
+  await main.putDocuments([{ '@type': 'Thing', '@id': 'Thing/t', label: 'killed' }], { ...by, create: true });
+  console.log('NOT KILLED');
+}
+main().then(() => process.exit(3), (err) => { console.error(err); process.exit(2); });
+`;
+
+describe('a process killed between the temporary write and the rename', () => {
+  it('leaves the old file whole; the store reopens at the old head, writes again, and the lock sweeps the temporary file', async () => {
+    const child = join(dir, 'killed-child.cjs');
+    await build({ stdin: { contents: KILLED_CHILD, resolveDir: __dirname, loader: 'ts' }, bundle: true, platform: 'node', format: 'cjs', outfile: child, logLevel: 'silent' });
+    for (const seam of ['commit', 'head'] as const) {
+      const folder = join(dir, seam);
+      const run = spawnSync(process.execPath, [child, folder, seam], { encoding: 'utf8' });
+      // Killed: exit status 1 on Windows, the signal elsewhere; 3 would mean the write completed, 2 that it failed.
+      expect(run.stdout, run.stderr).not.toContain('NOT KILLED');
+      expect(run.status, run.stderr).not.toBe(2);
+      const where = seam === 'commit' ? join(folder, 'main', 'commits') : join(folder, 'main');
+      expect((await readdir(where)).filter((f) => f.endsWith('.tmp'))).toHaveLength(1);
+      const main = openFileStore(folderFiles(folder)).at({ branch: 'main' });
+      expect((await main.getDocument('Thing/t')).document.label).toBe('v2');
+      await main.putDocuments([{ '@type': 'Thing', '@id': 'Thing/t', label: 'after' }], { author: 'User/t', message: 'm', create: true });
+      expect((await openFileStore(folderFiles(folder)).at({ branch: 'main' }).getDocument('Thing/t')).document.label).toBe('after');
+      await (await lockFolder(folder))();
+      expect((await readdir(where)).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+    }
+  });
+});
+
+describe('unreadable', () => {
+  it('names a file the operating system refused to read, and nothing else', () => {
+    const refused = unreadable({ code: 'UNKNOWN' }, 'C:/a/commits/b.json');
+    expect(refused?.status).toBe(503);
+    expect(refused?.kind).toBe('unreadable');
+    expect(refused?.body).toEqual({ path: 'C:/a/commits/b.json', code: 'UNKNOWN' });
+    expect(unreadable({ code: 'EIO' }, 'x')?.kind).toBe('unreadable');
+    expect(unreadable({ code: 'ENOENT' }, 'x')).toBeUndefined();
+    expect(unreadable(new Error('no code'), 'x')).toBeUndefined();
+  });
+});
+
 describe('lockFolder', () => {
+  it('sweeps the temporary files a dead process left, in the branch folders and their commits, and nothing else', async () => {
+    const files = folderFiles(dir);
+    await files.write('main/commits/abc.json', '{}');
+    await writeFile(join(dir, 'store.json.111.tmp'), 'partial');
+    await writeFile(join(dir, 'main', 'head.json.222.tmp'), 'partial');
+    await writeFile(join(dir, 'main', 'commits', 'def.json.333.tmp'), 'partial');
+    await writeFile(join(dir, 'main', 'notes.tmp'), 'kept: not a temporary of a write');
+    await writeFile(join(dir, 'main', 'commits', 'ghi.json'), 'kept');
+    const removed = await sweepTemporaries(dir);
+    expect(removed.map((p) => p.slice(dir.length + 1).replace(/\\/g, '/')).sort()).toEqual(['main/commits/def.json.333.tmp', 'main/head.json.222.tmp', 'store.json.111.tmp']);
+    expect((await readdir(join(dir, 'main'))).sort()).toEqual(['commits', 'notes.tmp']);
+    expect((await readdir(join(dir, 'main', 'commits'))).sort()).toEqual(['abc.json', 'ghi.json']);
+    expect(await sweepTemporaries(join(dir, 'absent'))).toEqual([]);
+  });
+
   it('is held by one process at a time, released on return, and taken over from a process that is gone', async () => {
     const release = await lockFolder(dir);
     expect(JSON.parse(await readFile(join(dir, 'lock'), 'utf8')).pid).toBe(process.pid);

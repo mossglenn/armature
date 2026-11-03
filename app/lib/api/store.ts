@@ -135,6 +135,8 @@ export type StoreErrorKind =
   | 'id_mismatch'
   /** The store did not answer within the adapter's deadline; a write may have landed. */
   | 'timeout'
+  /** A file of the store's folder could not be read on this machine, though it is there (a cloud-only file under a stopped sync service); 503, and the folder is read again next time. */
+  | 'unreadable'
   | 'other';
 
 /** A refusal from the store: its `kind`, and the store's own status, error name and body for logs. */

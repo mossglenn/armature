@@ -121,6 +121,23 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
       if (isUnknownRef(err)) {
         return c.json({ error: 'unknown_ref', message: 'No such branch, commit or document' }, 404);
       }
+      if (err.kind === 'unreadable') {
+        // A workspace hub's folder holds a file the operating system refuses to
+        // read, such as one a sync service made cloud-only while it is stopped
+        // (ADR-0066 Verification, 2026-11-03). The folder is read again on the
+        // next request, so the answer is 503 naming the file, not 500.
+        const path = (err.body as { path?: string } | undefined)?.path ?? '';
+        console.error(`A file of the store's folder could not be read (${c.req.method} ${c.req.path}): ${path}`);
+        c.header('Retry-After', '5');
+        return c.json(
+          {
+            error: 'store_unreadable',
+            message: `A file of the hub's folder could not be read: ${path}. Its contents may be held by a sync service that is stopped or offline; the hub reads the folder again on the next request`,
+            path,
+          },
+          503
+        );
+      }
       if (err.status === 401) {
         console.error('TerminusDB rejected the credentials; check the TERMINUS_* environment variables');
         return c.json({ error: 'store_unavailable', message: 'Database connection error' }, 500);

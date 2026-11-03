@@ -21,7 +21,7 @@ import { readOnlyBranches, remoteOnlyRoutes } from './role';
  * list against that file's headings. Revisions under /api/v1 are additive, so
  * a hub at the newest serves every earlier one.
  */
-export const REVISIONS = ['2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
+export const REVISIONS = ['2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
 
 export const CURRENT_REVISION = REVISIONS[0];
 const OLDEST_REVISION = REVISIONS[REVISIONS.length - 1];
