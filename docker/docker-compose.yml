@@ -206,6 +206,10 @@ services:
       - ARMATURE_ROLE=workspace
       - ARMATURE_REMOTE_URL=${ARMATURE_REMOTE_URL:-http://hub:3100}
       - ARMATURE_WORKSPACE_DIR=/workspaces
+      # This profile keeps its workspaces in the store server, where a workspace hub's
+      # default is the file-backed store in its folder (ADR-0066; decision 4 says whether
+      # the profile stays).
+      - ARMATURE_STORE=terminusdb
       - ARMATURE_TRUST_NETWORK=1
     networks: [default, store]
     depends_on:

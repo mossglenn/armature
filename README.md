@@ -102,8 +102,8 @@ TERMINUS_PASS=admin
 TERMINUS_DB=armature
 # Optional: which identity resolver to use (default: header)
 # ARMATURE_IDENTITY=header
-# A workspace hub only (ARMATURE_ROLE=workspace): ARMATURE_STORE=files runs it over the
-# file-backed store in ARMATURE_WORKSPACE_DIR with no TerminusDB (ADR-0066; docs/deployment.md)
+# A workspace hub (ARMATURE_ROLE=workspace) runs over the file-backed store in ARMATURE_WORKSPACE_DIR
+# with no TerminusDB; ARMATURE_STORE=terminusdb keeps it on the store instead (ADR-0066; docs/deployment.md)
 ENV
 #    TERMINUS_PASS must match TERMINUSDB_ADMIN_PASS given to the container (default: admin).
 #    The scripts read the same TERMINUS_* variables from your shell, defaulting to admin/admin.

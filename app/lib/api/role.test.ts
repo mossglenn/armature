@@ -118,6 +118,16 @@ describe('the role from the environment', () => {
     });
   });
 
+  it('a workspace hub runs over the file-backed store unless told otherwise; a remote hub over TerminusDB alone (ADR-0066)', () => {
+    const workspace = { ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'http://localhost:3100', ARMATURE_WORKSPACE_DIR: '/tmp/ws' };
+    expect(configFromEnv(workspace).storeKind).toBe('files');
+    expect(configFromEnv({ ...workspace, ARMATURE_STORE: 'terminusdb' }).storeKind).toBe('terminusdb');
+    expect(configFromEnv({ ...workspace, ARMATURE_STORE: ' files ' }).storeKind).toBe('files');
+    expect(configFromEnv({}).storeKind).toBe('terminusdb');
+    expect(() => configFromEnv({ ARMATURE_STORE: 'files' })).toThrow(/workspace hub's store/);
+    expect(() => configFromEnv({ ...workspace, ARMATURE_STORE: 'sqlite' })).toThrow(/names no store/);
+  });
+
   it('refuses an unknown role, and a workspace hub with no remote, a remote that is not http, or no folder', () => {
     expect(() => configFromEnv({ ARMATURE_ROLE: 'mirror' })).toThrow(/names no role/);
     expect(() => configFromEnv({ ARMATURE_ROLE: 'workspace' })).toThrow(/ARMATURE_REMOTE_URL is required/);
