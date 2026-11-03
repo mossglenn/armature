@@ -26,6 +26,11 @@ workspace hub; it becomes the default, and decision 4 is taken, once the plan's 
 > their workspaces in the store server until decision 4 is taken; rehearsed on a fresh VM
 > (`docs/deployment.md`, "A workspace hub on this machine"). Of step 6, the Windows rehearsal in
 > Verification and decision 4 remain.
+>
+> **Later change (2026-11-02, night, Amos's decision):** decision 4 is taken: the folder is the one
+> local store (its note). `ARMATURE_STORE` is retired, and the `workspace` compose profile runs
+> the image over the folder in a volume with no store server. Step 6 is closed but for the
+> Windows rehearsal.
 
 It depends on ADR-0065: a store for the workspace hub matters only if there is a workspace hub. It
 answers ADR-0065 decision 8, which leaves the store open, and `docs/workspace-hub-plan.md` §16
@@ -165,6 +170,27 @@ store, and leaves the choice to its plan. Four facts bear on it.
    the folder exists, on two counts: whether offline history at every commit has proved to matter
    to the second audience, and what keeping the compose profile rehearsed and the contract test
    double costs. Until then the compose profile is a development tool, not a documented install.
+
+   > **Later change (2026-11-02, night, decided by Amos):** the folder is the one local store;
+   > TerminusDB is a remote hub's store only. On the first count there was no evidence: no
+   > developer or researcher had used the compose profile beyond its rehearsals, Quiver was
+   > paused, and the advantage expected was smaller than it looked, since a clone is the remote's
+   > export at the base plus the snapshots and the local commits in either store, so both held
+   > the same history; what TerminusDB alone offered a developer was its dashboard and WOQL over
+   > a workspace, which no one had asked for. On the second count the cost was real: the
+   > workspace and cycle suites ran twice (64 of the contract job's 229 seconds), every compose
+   > change rehearsed the profile over TerminusDB on a fresh VM, the Colima and Podman Desktop
+   > rehearsals waited for a configuration no designer would run, and the host kept two paths.
+   > So: `ARMATURE_STORE`, the setting that chose between the stores while TerminusDB was the
+   > test bed (added and made role-dependent the same day), is retired and refused if set; the
+   > role names the store (`app/lib/api/config.ts`, `app/server.ts`); the `workspace` compose
+   > profile runs the hub's image over the folder in the volume `workspace-folder`, reads no
+   > `TERMINUS_*` variable and leaves the store network; the workspace and cycle suites run over
+   > the file store alone (`filestore/testing.ts`), the two-store contract test staying as the
+   > guard that holds the folder to the remote's store. The test bed served its purpose: steps 2
+   > to 5 were built on it, and both suites were green over both stores before it was retired. It
+   > reopens on the triggers in Alternatives: a portable Windows build of TerminusDB and check AH
+   > passing on macOS, with which TerminusDB beside the hub would be a choice again.
 
 5. **The diff format is TerminusDB's JSON patch.** `docs/api.md` names it as the diff route's
    format (`docs/vendor/terminusdb/json-diff-and-patch.md`), so the dependency clients already have
