@@ -7,7 +7,7 @@ Design Graph pull requests 1 to 4 are built (22 and 23 October); PR 5 waits for 
 larger store. ADR-0065 to ADR-0068 (the workspace hub, its store, authentication, authorization)
 were proposed on 28 and 29 October; ADR-0065, ADR-0067 and ADR-0068 were accepted on 30 October
 after verification, and ADR-0066 on 2 November once check AI ran; the workspace cycle is built
-since 1 November, the file-backed store not yet.
+since 1 November, the file-backed store in part since the evening of 2 November (opt-in).
 `.claude/SESSION.md` tracks day-to-day state against this plan. **Last reconciled with the code:**
 2026-10-30.
 
