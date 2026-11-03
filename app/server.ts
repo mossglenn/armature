@@ -16,15 +16,13 @@
  *                                                            lib/api/role.ts)
  *   ARMATURE_REMOTE_URL                                      the remote hub's address, required when the
  *                                                            role is `workspace`
- *   ARMATURE_WORKSPACE_DIR                                   the folder a workspace hub keeps its workspaces'
- *                                                            records in, required when the role is `workspace`
+ *   ARMATURE_WORKSPACE_DIR                                   the folder a workspace hub keeps its workspaces in,
+ *                                                            their records and the file-backed store, the one
+ *                                                            local store (ADR-0066; lib/api/filestore/); required
+ *                                                            when the role is `workspace`, and no TERMINUS_*
+ *                                                            variable is read then
  *   ARMATURE_SNAPSHOTS                                       how many older remote commits a workspace holds
  *                                                            as snapshots, 20 by default (plan §8)
- *   ARMATURE_STORE                                           `files`, a workspace hub's default: the file-backed
- *                                                            store in ARMATURE_WORKSPACE_DIR, no TerminusDB (ADR-0066;
- *                                                            lib/api/filestore/); `terminusdb` keeps a workspace hub
- *                                                            on a store server (the compose profile); a remote hub
- *                                                            runs over TerminusDB and refuses `files`
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
  *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
  *                                                            the caller, so the hub stays on this machine
@@ -60,10 +58,10 @@ async function main(): Promise<void> {
   const hostname = process.env.HOST?.trim() || '127.0.0.1';
   const refusal = bindRefusal({ hostname, identity: config.identity, trustNetwork: process.env.ARMATURE_TRUST_NETWORK?.trim() === '1' });
   if (refusal) throw new Error(refusal);
-  // The file-backed store opens the workspace folder once and locks it against a second process (ADR-0066 decision 2).
+  // A workspace hub opens its folder once as the file-backed store and locks it against a second process (ADR-0066 decisions 2 and 4).
   const dir = config.workspaceDir;
-  const unlock = dir && config.storeKind === 'files' ? await lockFolder(dir) : undefined;
-  const files = unlock && dir ? openFileStore(folderFiles(dir)) : undefined;
+  const unlock = dir ? await lockFolder(dir) : undefined;
+  const files = dir ? openFileStore(folderFiles(dir)) : undefined;
   const hub = await startHub({
     port,
     hostname,

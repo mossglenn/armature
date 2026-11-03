@@ -118,14 +118,13 @@ describe('the role from the environment', () => {
     });
   });
 
-  it('a workspace hub runs over the file-backed store unless told otherwise; a remote hub over TerminusDB alone (ADR-0066)', () => {
+  it('the role names the store, so ARMATURE_STORE is retired and refused when set (ADR-0066 decision 4)', () => {
     const workspace = { ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'http://localhost:3100', ARMATURE_WORKSPACE_DIR: '/tmp/ws' };
-    expect(configFromEnv(workspace).storeKind).toBe('files');
-    expect(configFromEnv({ ...workspace, ARMATURE_STORE: 'terminusdb' }).storeKind).toBe('terminusdb');
-    expect(configFromEnv({ ...workspace, ARMATURE_STORE: ' files ' }).storeKind).toBe('files');
-    expect(configFromEnv({}).storeKind).toBe('terminusdb');
-    expect(() => configFromEnv({ ARMATURE_STORE: 'files' })).toThrow(/workspace hub's store/);
-    expect(() => configFromEnv({ ...workspace, ARMATURE_STORE: 'sqlite' })).toThrow(/names no store/);
+    expect(configFromEnv(workspace)).not.toHaveProperty('storeKind');
+    expect(() => configFromEnv({ ...workspace, ARMATURE_STORE: 'files' })).toThrow(/retired/);
+    expect(() => configFromEnv({ ...workspace, ARMATURE_STORE: 'terminusdb' })).toThrow(/retired/);
+    expect(() => configFromEnv({ ARMATURE_STORE: 'terminusdb' })).toThrow(/retired/);
+    expect(configFromEnv({ ARMATURE_STORE: ' ' })).toMatchObject({ role: 'remote' });
   });
 
   it('refuses an unknown role, and a workspace hub with no remote, a remote that is not http, or no folder', () => {

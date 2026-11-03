@@ -23,10 +23,6 @@ import { createStore, storeConfigFromEnv, type Ref, type Store, type StoreConfig
 export type HubRole = 'remote' | 'workspace';
 const ROLES: readonly HubRole[] = ['remote', 'workspace'];
 
-/** TerminusDB through its adapter, or the file-backed store (ADR-0066), a workspace hub's alone. */
-export type StoreKind = 'terminusdb' | 'files';
-const STORE_KINDS: readonly StoreKind[] = ['terminusdb', 'files'];
-
 export interface HubConfig {
   /** ARMATURE_ROLE; `remote` by default. */
   role: HubRole;
@@ -35,14 +31,10 @@ export interface HubConfig {
   /** ARMATURE_WORKSPACE_DIR, the folder a workspace hub keeps its workspaces' records in; required, and only read, when the role is `workspace`. The host turns it into `workspaces`. */
   workspaceDir?: string;
   /**
-   * ARMATURE_STORE: `files`, the file-backed store of ADR-0066, a workspace
-   * hub's default (the host opens the folder, `workspaceDir`, and replaces
-   * `store` with it), or `terminusdb`, a remote hub's only store and a
-   * workspace hub's on request (the `workspace` compose profile, until
-   * ADR-0066 decision 4 says whether it keeps one).
+   * The store, read when a route makes one, so a request that needs none (GET /discover)
+   * never requires the TERMINUS_* variables. On a workspace hub the host replaces it with
+   * the file-backed store opened in `workspaceDir`, the one local store (ADR-0066 decision 4).
    */
-  storeKind: StoreKind;
-  /** The store, read when a route makes one, so a request that needs none (GET /discover) never requires the TERMINUS_* variables. */
   store: () => StoreConfig;
   /** The identity resolver's name (ADR-0032), ARMATURE_IDENTITY; `header` by default. */
   identity: string;
@@ -119,18 +111,15 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
   if (!(ROLES as readonly string[]).includes(role)) {
     throw new Error(`ARMATURE_ROLE=${role} names no role (known: ${ROLES.join(', ')})`);
   }
-  // A workspace hub's store is the folder unless told otherwise (ADR-0066 decision 3; the
-  // plan's step 6, closed 2026-11-02); a remote hub has one store, so its default is fixed.
-  const storeKind = env.ARMATURE_STORE?.trim() || (role === 'workspace' ? 'files' : 'terminusdb');
-  if (!(STORE_KINDS as readonly string[]).includes(storeKind)) {
-    throw new Error(`ARMATURE_STORE=${storeKind} names no store (known: ${STORE_KINDS.join(', ')})`);
-  }
-  if (storeKind === 'files' && role !== 'workspace') {
-    throw new Error('ARMATURE_STORE=files is a workspace hub\'s store (ADR-0066); a remote hub runs over TerminusDB');
+  // The role names the store: a workspace hub runs over the folder of ADR-0066, opened by
+  // its host, and a remote hub over TerminusDB. The setting that chose between them while
+  // TerminusDB was the test bed (ARMATURE_STORE, 2026-11-02) is retired by decision 4 of
+  // that ADR, and refused rather than ignored so a stale .env.local is noticed.
+  if (env.ARMATURE_STORE?.trim()) {
+    throw new Error('ARMATURE_STORE is retired (ADR-0066 decision 4): a workspace hub runs over the folder in ARMATURE_WORKSPACE_DIR, a remote hub over TerminusDB');
   }
   return {
     role: role as HubRole,
-    storeKind: storeKind as StoreKind,
     ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL), workspaceDir: workspaceDir(env.ARMATURE_WORKSPACE_DIR) } : {}),
     store: () => storeConfigFromEnv(env),
     snapshotBudget: snapshotBudget(env.ARMATURE_SNAPSHOTS),
