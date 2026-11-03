@@ -259,7 +259,14 @@ Check AI and the contract test are done (2026-11-02); the other two run before s
   20 commits per workspace (`ARMATURE_SNAPSHOTS`), to be revisited against the largest real bank.
 - **A measurement of opening a large workspace:** the time and memory to rebuild the state from the
   base and the commit files for the largest bank a real import produces, which is Dolt's second
-  trigger.
+  trigger. *Measured 2026-11-02 (evening), on a synthetic bank of `LearningNeed` records with a
+  200-word rationale each, inserted over half the commits and revised one per commit over the
+  rest, on this machine (an Apple laptop):* 5,000 documents over 1,000 commits open in about 40
+  ms from memory and 180 ms from disk (2.8 MB of commit files); 20,000 over 2,000 in about 100 ms
+  and 500 ms (10 MB). A document's history answers in milliseconds. Opening costs the branch's
+  writes, not its length times its size, since a chain is replayed into one working map
+  (`stateAt`). Heap growth was under 50 MB in every run, measured without a forced collection,
+  so indicative only. No real import is near these sizes; Dolt's second trigger is far.
 - **Atomic replacement on Windows:** the write-then-rename sequence under the conditions a
   designer's machine has (antivirus scanners holding files open, a folder inside a synced
   directory), since rename semantics differ from macOS and Linux.
