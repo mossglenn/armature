@@ -1,6 +1,6 @@
 # Armature CI (continuous integration)
 #
-# Five jobs, run in parallel on every push to main and every pull request:
+# Six jobs, run in parallel on every push to main and every pull request:
 #
 #   app       Guards the contracts that need no store: `schema/schema.json` and the
 #             generated `packages/types` agree (check:types), the app lints clean,
@@ -39,6 +39,13 @@
 #             Vitest, tsx and a Next build, the tools CoQui uses. Added after the
 #             README's install failed for an outside consumer: the client depended
 #             on @armature/types@0.1.0, which resolves only inside the workspace.
+#
+#   files     The suites that need no store (app/vitest.files.config.mts: the
+#             file-backed store's modules and the workspace folder on disk) on a
+#             Windows runner. ADR-0066's Verification asks that the write-then-rename
+#             sequence and the lock be proven where rename semantics differ and
+#             Defender's real-time scanning holds new files open; a folder inside a
+#             synced directory (OneDrive) still needs a real machine. Added 2026-11-02.
 #
 #   images    Builds the hub's container image (docker/hub.Dockerfile) and checks
 #             that it starts and answers GET /api/v1/discover, the one read that
@@ -207,6 +214,20 @@ jobs:
           name: playwright-report
           path: app/playwright-report
           retention-days: 7
+
+  files:
+    name: The file-backed store and the workspace folder on Windows
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run test:files --workspace app
 
   images:
     name: Hub and viewer container images

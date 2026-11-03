@@ -7,6 +7,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { openFileStore } from './api/filestore/store';
 import type { WorkspaceRecord } from './api/workspace/records';
 import { folderFiles, folderRecords, lockFolder } from './workspaceFolder';
 
@@ -80,6 +81,46 @@ describe('folderFiles', () => {
     await files.write('keep.txt', 'k');
     await files.remove('');
     expect(await files.list('')).toEqual([]);
+  });
+});
+
+// The write-then-rename sequence and the lock on this machine's file system
+// (ADR-0066 Verification): many replacements of one file in a row, and a file
+// store written as files, reopened from disk. CI runs this file on a Windows
+// runner too (`npm run test:files`), where rename semantics differ and Defender
+// holds new files open; a folder inside a synced directory needs a real machine.
+describe('the folder on this file system', () => {
+  it('replaces one file hundreds of times in a row, each replacement whole, and leaves no temporary file', async () => {
+    const files = folderFiles(dir);
+    for (let i = 0; i < 300; i++) {
+      await files.write('main/head.json', `{"head":"commit-${i}"}\n`);
+      expect(await files.read('main/head.json')).toBe(`{"head":"commit-${i}"}\n`);
+    }
+    expect(await readdir(join(dir, 'main'))).toEqual(['head.json']);
+  });
+
+  it('holds a file store: commits written as files, reopened from disk, read at an earlier commit, stray temporary files ignored', async () => {
+    const schema = [
+      { '@type': '@context', '@base': 'http://armature.design/data/', '@schema': 'http://armature.design/schema#' },
+      { '@type': 'Class', '@id': 'Thing', '@key': { '@type': 'Random' }, label: 'xsd:string' },
+    ];
+    const by = { author: 'User/t', message: 'm' };
+    const folder = join(dir, 'store');
+    const main = openFileStore(folderFiles(folder)).at({ branch: 'main' });
+    await main.ensureDatabase();
+    await main.replaceSchema(schema, { ...by, message: 'schema' });
+    const commits: string[] = [];
+    for (let i = 0; i < 40; i++) {
+      commits.push((await main.putDocuments([{ '@type': 'Thing', '@id': 'Thing/t', label: `v${i}` }], { ...by, create: true })).commit);
+    }
+    // A crash between the temporary write and the rename leaves a temporary file behind; opening ignores it.
+    await writeFile(join(folder, 'main', 'commits', 'abc.json.999.tmp'), 'partial');
+    await writeFile(join(folder, 'store.json.999.tmp'), 'partial');
+    const reopened = openFileStore(folderFiles(folder)).at({ branch: 'main' });
+    expect((await reopened.head())?.id).toBe(commits[39]);
+    expect((await reopened.getDocument('Thing/t')).document.label).toBe('v39');
+    expect((await reopened.at({ commit: commits[9] }).getDocument('Thing/t')).document.label).toBe('v9');
+    expect((await readdir(join(folder, 'main', 'commits'))).filter((f) => f.endsWith('.json'))).toHaveLength(41);
   });
 });
 
