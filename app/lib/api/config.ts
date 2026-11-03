@@ -23,6 +23,10 @@ import { createStore, storeConfigFromEnv, type Ref, type Store, type StoreConfig
 export type HubRole = 'remote' | 'workspace';
 const ROLES: readonly HubRole[] = ['remote', 'workspace'];
 
+/** TerminusDB through its adapter, or the file-backed store (ADR-0066), a workspace hub's alone. */
+export type StoreKind = 'terminusdb' | 'files';
+const STORE_KINDS: readonly StoreKind[] = ['terminusdb', 'files'];
+
 export interface HubConfig {
   /** ARMATURE_ROLE; `remote` by default. */
   role: HubRole;
@@ -30,6 +34,12 @@ export interface HubConfig {
   remote?: string;
   /** ARMATURE_WORKSPACE_DIR, the folder a workspace hub keeps its workspaces' records in; required, and only read, when the role is `workspace`. The host turns it into `workspaces`. */
   workspaceDir?: string;
+  /**
+   * ARMATURE_STORE: `terminusdb` (the default) or `files`, the file-backed
+   * store of ADR-0066, which only a workspace hub runs over; the host opens
+   * the folder (`workspaceDir`) and replaces `store` with it.
+   */
+  storeKind: StoreKind;
   /** The store, read when a route makes one, so a request that needs none (GET /discover) never requires the TERMINUS_* variables. */
   store: () => StoreConfig;
   /** The identity resolver's name (ADR-0032), ARMATURE_IDENTITY; `header` by default. */
@@ -107,8 +117,16 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
   if (!(ROLES as readonly string[]).includes(role)) {
     throw new Error(`ARMATURE_ROLE=${role} names no role (known: ${ROLES.join(', ')})`);
   }
+  const storeKind = env.ARMATURE_STORE?.trim() || 'terminusdb';
+  if (!(STORE_KINDS as readonly string[]).includes(storeKind)) {
+    throw new Error(`ARMATURE_STORE=${storeKind} names no store (known: ${STORE_KINDS.join(', ')})`);
+  }
+  if (storeKind === 'files' && role !== 'workspace') {
+    throw new Error('ARMATURE_STORE=files is a workspace hub\'s store (ADR-0066); a remote hub runs over TerminusDB');
+  }
   return {
     role: role as HubRole,
+    storeKind: storeKind as StoreKind,
     ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL), workspaceDir: workspaceDir(env.ARMATURE_WORKSPACE_DIR) } : {}),
     store: () => storeConfigFromEnv(env),
     snapshotBudget: snapshotBudget(env.ARMATURE_SNAPSHOTS),

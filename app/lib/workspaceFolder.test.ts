@@ -1,13 +1,14 @@
 /**
  * A workspace hub's records in a folder (lib/workspaceFolder.ts): one
- * `workspace.json` per workspace, written whole, never outside the folder.
+ * `workspace.json` per workspace, written whole, never outside the folder;
+ * the file-backed store's files beside them, and the lock one process holds.
  */
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from './api/workspace/records';
-import { folderRecords } from './workspaceFolder';
+import { folderFiles, folderRecords, lockFolder } from './workspaceFolder';
 
 const record = (branch: string): WorkspaceRecord => ({
   branch,
@@ -56,5 +57,43 @@ describe('folderRecords', () => {
     await expect(records.put(record('../escape'))).rejects.toThrow(/Not a branch name/);
     expect((await folderRecords(dir).list()).map((r) => r.branch)).toEqual([]);
     expect(await records.get('missing')).toBeUndefined();
+  });
+});
+
+describe('folderFiles', () => {
+  it('reads, writes, lists and removes under the folder, and nothing outside it', async () => {
+    const files = folderFiles(join(dir, 'store'));
+    expect(await files.read('store.json')).toBeUndefined();
+    expect(await files.list('')).toEqual([]);
+    await files.write('main/commits/abc.json', '{"id":"abc"}');
+    await files.write('main/head.json', '{"head":"abc"}');
+    await files.write('store.json', '{}');
+    expect(await files.list('')).toEqual(['main', 'store.json']);
+    expect(await files.list('main')).toEqual(['commits', 'head.json']);
+    expect(await files.read('main/commits/abc.json')).toBe('{"id":"abc"}');
+    expect(await readdir(join(dir, 'store', 'main'))).toEqual(['commits', 'head.json']);
+    await files.remove('main/commits');
+    expect(await files.list('main')).toEqual(['head.json']);
+    await files.remove('nothing/here');
+    await expect(files.read('../outside.json')).rejects.toThrow(/Not a store path/);
+    await expect(files.write('a/../../outside.json', 'x')).rejects.toThrow(/Not a store path/);
+    await files.write('keep.txt', 'k');
+    await files.remove('');
+    expect(await files.list('')).toEqual([]);
+  });
+});
+
+describe('lockFolder', () => {
+  it('is held by one process at a time, released on return, and taken over from a process that is gone', async () => {
+    const release = await lockFolder(dir);
+    expect(JSON.parse(await readFile(join(dir, 'lock'), 'utf8')).pid).toBe(process.pid);
+    // This process holds it, so this process may take it again (the same hub restarting in place).
+    await (await lockFolder(dir))();
+    await release();
+    expect(await readdir(dir)).toEqual([]);
+    await writeFile(join(dir, 'lock'), JSON.stringify({ pid: 2 ** 22 - 1 }));
+    await (await lockFolder(dir))();
+    await writeFile(join(dir, 'lock'), 'not json');
+    await (await lockFolder(dir))();
   });
 });
