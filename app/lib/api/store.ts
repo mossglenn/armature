@@ -11,7 +11,9 @@
  * connection drops is sent once more; a write never is (check AG).
  *
  * The rest of the API sees three interfaces, not the class, so a second
- * store can stand behind them (workspace hub plan §10, ADR-0066):
+ * store stands behind them (workspace hub plan §10, ADR-0066; the file-backed
+ * store in ./filestore/store.ts, which `createStore` hands out for a
+ * `FileStoreConfig`):
  * `DocumentReader`, documents at one ref, all the invariants engine and the
  * intelligence reads need; `Store`, adding writes, history, branches and
  * merge, what the routes need; and `OperatorStore`, adding the operator-side
@@ -21,10 +23,12 @@
  *
  * A store is bound to one ref and holds no other state, so one is created
  * per request from the resolved ref (`createStore`). `TerminusStore` is the
- * one implementation; the endpoints and behaviors it relies on are the ones
+ * TerminusDB implementation; the endpoints and behaviors it relies on are the ones
  * recorded in docs/development-plan.md §9 and reproduced by
  * scripts/platform_checks.js checks K and M to X.
  */
+
+import type { FileStore } from './filestore/store';
 
 /** A branch head or a commit. Reads accept either; writes need a branch. */
 export type Ref = { branch: string } | { commit: string };
@@ -281,8 +285,8 @@ export interface OperatorStore extends Store {
   deleteDatabase(): Promise<void>;
 }
 
-/** Where a store is and how to reach it: one TerminusDB database. */
-export interface StoreConfig {
+/** Where a TerminusDB store is and how to reach it: one database. */
+export interface TerminusConfig {
   url: string;
   user: string;
   pass: string;
@@ -292,12 +296,22 @@ export interface StoreConfig {
   timeoutMs?: number;
 }
 
+/** A folder opened as a file-backed store (ADR-0066; ./filestore/store.ts), once per process. */
+export interface FileStoreConfig {
+  files: FileStore;
+}
+
+/** Where a store is: a TerminusDB database, or an opened folder. `createStore` tells them apart. */
+export type StoreConfig = TerminusConfig | FileStoreConfig;
+
+export const isFileStore = (config: StoreConfig): config is FileStoreConfig => 'files' in config;
+
 /**
  * The TERMINUS_* variables as a store's configuration; throws naming the first
  * one unset. The default of the factories below, for the operator tools and the
  * tests; a route's store takes its hub's configuration (`storeFor` in config.ts).
  */
-export function storeConfigFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): StoreConfig {
+export function storeConfigFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): TerminusConfig {
   const need = (key: string): string => {
     const value = env[key];
     if (!value) throw new Error(`${key} is not set`);
@@ -395,7 +409,7 @@ interface StoreResponse {
 
 export class TerminusStore implements OperatorStore {
   constructor(
-    private readonly config: StoreConfig,
+    private readonly config: TerminusConfig,
     readonly ref: Ref
   ) {}
 
@@ -811,9 +825,13 @@ export class TerminusStore implements OperatorStore {
   }
 }
 
-/** A store bound to one ref, in the database the configuration names (the environment's by default). */
+/**
+ * A store bound to one ref, in the database the configuration names (the
+ * environment's by default), or a view of the opened folder it names
+ * (ADR-0066): the one place the two implementations are told apart.
+ */
 export function createStore(ref: Ref, config: StoreConfig = storeConfigFromEnv()): Store {
-  return new TerminusStore(config, ref);
+  return isFileStore(config) ? config.files.at(ref) : new TerminusStore(config, ref);
 }
 
 /**
@@ -822,5 +840,5 @@ export function createStore(ref: Ref, config: StoreConfig = storeConfigFromEnv()
  * for it.
  */
 export function createOperatorStore(ref: Ref, config: StoreConfig = storeConfigFromEnv()): OperatorStore {
-  return new TerminusStore(config, ref);
+  return isFileStore(config) ? config.files.at(ref) : new TerminusStore(config, ref);
 }
