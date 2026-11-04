@@ -11,7 +11,7 @@ import { build } from 'esbuild';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openFileStore } from './api/filestore/store';
 import type { WorkspaceRecord } from './api/workspace/records';
-import { folderFiles, folderRecords, lockFolder, sweepTemporaries, unreadable } from './workspaceFolder';
+import { RENAME_WAITS, folderFiles, folderRecords, lockFolder, sweepTemporaries, unreadable, unwritable } from './workspaceFolder';
 
 const record = (branch: string): WorkspaceRecord => ({
   branch,
@@ -193,6 +193,90 @@ describe('unreadable', () => {
     expect(unreadable({ code: 'EIO' }, 'x')?.kind).toBe('unreadable');
     expect(unreadable({ code: 'ENOENT' }, 'x')).toBeUndefined();
     expect(unreadable(new Error('no code'), 'x')).toBeUndefined();
+  });
+});
+
+describe('unwritable', () => {
+  it('names a file another program held against a rename, and nothing else', () => {
+    const held = unwritable({ code: 'EPERM' }, 'C:/a/push.json', 3);
+    expect(held?.status).toBe(503);
+    expect(held?.kind).toBe('unwritable');
+    expect(held?.body).toEqual({ path: 'C:/a/push.json', code: 'EPERM', attempts: 3 });
+    expect(unwritable({ code: 'EACCES' }, 'x', 1)?.kind).toBe('unwritable');
+    expect(unwritable({ code: 'EBUSY' }, 'x', 1)?.kind).toBe('unwritable');
+    expect(unwritable({ code: 'ENOENT' }, 'x', 1)).toBeUndefined();
+    expect(unwritable({ code: 'UNKNOWN' }, 'x', 1)).toBeUndefined();
+    expect(unwritable(new Error('no code'), 'x', 1)).toBeUndefined();
+  });
+});
+
+// A rename refused while another program holds the target (ADR-0066
+// Verification; met inside OneDrive on a Windows laptop 2026-11-03, where the
+// sync client holds a file it was just handed): the same child as above, its
+// `rename` refusing the next head with EPERM a given number of times, or every
+// time. A refusal that clears must leave the write landed and no temporary
+// file; one that never clears must leave the old head whole, the temporary
+// removed, and the error named `unwritable` with every attempt counted.
+const HELD_CHILD = `
+import { openFileStore } from './api/filestore/store';
+import { folderFiles } from './workspaceFolder';
+const [dir, mode] = process.argv.slice(2);
+const fsp = require('fs').promises;
+const real = fsp.rename;
+let armed = false;
+let refused = 0;
+fsp.rename = async (from: string, to: string) => {
+  if (armed && to.endsWith('head.json') && (mode === 'always' || refused < Number(mode))) {
+    refused++;
+    throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM', errno: -4048, syscall: 'rename' });
+  }
+  return real(from, to);
+};
+const by = { author: 'User/t', message: 'm' };
+const schema = [
+  { '@type': '@context', '@base': 'http://armature.design/data/', '@schema': 'http://armature.design/schema#' },
+  { '@type': 'Class', '@id': 'Thing', '@key': { '@type': 'Random' }, label: 'xsd:string' },
+];
+async function main() {
+  const main = openFileStore(folderFiles(dir)).at({ branch: 'main' });
+  await main.ensureDatabase();
+  await main.replaceSchema(schema, by);
+  for (let i = 0; i < 3; i++) await main.putDocuments([{ '@type': 'Thing', '@id': 'Thing/t', label: 'v' + i }], { ...by, create: true });
+  armed = true;
+  await main.putDocuments([{ '@type': 'Thing', '@id': 'Thing/t', label: 'retried' }], { ...by, create: true });
+  console.log('LANDED after ' + refused + ' refusals');
+}
+main().then(() => process.exit(0), (err) => { console.error('FAILED ' + err.kind + ' ' + JSON.stringify(err.body)); process.exit(2); });
+`;
+
+describe('a rename refused while another program holds the file', () => {
+  it('is tried again until it clears, and the write lands with no temporary file left', async () => {
+    const child = join(dir, 'held-child.cjs');
+    await build({ stdin: { contents: HELD_CHILD, resolveDir: __dirname, loader: 'ts' }, bundle: true, platform: 'node', format: 'cjs', outfile: child, logLevel: 'silent' });
+    const folder = join(dir, 'clears');
+    const run = spawnSync(process.execPath, [child, folder, '2'], { encoding: 'utf8' });
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout).toContain('LANDED after 2 refusals');
+    expect((await readdir(join(folder, 'main'))).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+    expect((await openFileStore(folderFiles(folder)).at({ branch: 'main' }).getDocument('Thing/t')).document.label).toBe('retried');
+  });
+
+  it('gives up as unwritable after every wait, the old file whole and the temporary removed', async () => {
+    const child = join(dir, 'held-child.cjs');
+    await build({ stdin: { contents: HELD_CHILD, resolveDir: __dirname, loader: 'ts' }, bundle: true, platform: 'node', format: 'cjs', outfile: child, logLevel: 'silent' });
+    const folder = join(dir, 'never');
+    const started = Date.now();
+    const run = spawnSync(process.execPath, [child, folder, 'always'], { encoding: 'utf8' });
+    const total = RENAME_WAITS.reduce((a, b) => a + b, 0);
+    expect(run.status, run.stderr).toBe(2);
+    expect(run.stderr).toContain(`FAILED unwritable {"path":"${join(folder, 'main', 'head.json').replace(/\\/g, '\\\\')}","code":"EPERM","attempts":${RENAME_WAITS.length + 1}}`);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(total);
+    expect((await readdir(join(folder, 'main'))).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+    const main = openFileStore(folderFiles(folder)).at({ branch: 'main' });
+    expect((await main.getDocument('Thing/t')).document.label).toBe('v2');
+    // A later write, with nothing holding the file, lands as before.
+    await main.putDocuments([{ '@type': 'Thing', '@id': 'Thing/t', label: 'after' }], { author: 'User/t', message: 'm', create: true });
+    expect((await openFileStore(folderFiles(folder)).at({ branch: 'main' }).getDocument('Thing/t')).document.label).toBe('after');
   });
 });
 

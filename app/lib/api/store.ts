@@ -137,6 +137,8 @@ export type StoreErrorKind =
   | 'timeout'
   /** A file of the store's folder could not be read on this machine, though it is there (a cloud-only file under a stopped sync service); 503, and the folder is read again next time. */
   | 'unreadable'
+  /** A file of the store's folder could not be replaced because another program held it (a sync client, on Windows) for longer than the hub's retries; 503, the old file stands. */
+  | 'unwritable'
   | 'other';
 
 /** A refusal from the store: its `kind`, and the store's own status, error name and body for logs. */

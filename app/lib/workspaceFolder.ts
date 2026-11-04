@@ -14,11 +14,14 @@
  * record or the new one (ADR-0066 decision 2, note of 2026-10-30); the
  * temporary file such a crash leaves is removed when the next process takes
  * the lock (`sweepTemporaries`). A file the operating system refuses to read
- * is reported as such (`unreadable`), not as an internal error. Both from the
- * rehearsal on a Windows laptop (ADR-0066 Verification, 2026-11-03).
+ * is reported as such (`unreadable`), not as an internal error; a rename
+ * refused while another program holds the file is tried again for a few
+ * seconds before it is reported (`unwritable`). All from the rehearsal on a
+ * Windows laptop (ADR-0066 Verification, 2026-11-03).
  */
 import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { join, sep } from 'node:path';
+import { setTimeout as wait } from 'node:timers/promises';
 import type { StoreFiles } from './api/filestore/files';
 import { BRANCH_NAME } from './api/http';
 import { StoreError } from './api/store';
@@ -51,7 +54,52 @@ async function syncFolder(path: string): Promise<void> {
   await sync(path, 'r');
 }
 
-/** Writes `target` whole and durably: a temporary name, flushed, renamed into place, the folder flushed where the platform has it. */
+/**
+ * The waits, in milliseconds, between attempts to rename a file into place
+ * when the system refuses because another program holds the target: about
+ * 2.5 seconds in all. Windows refuses a rename over a file a sync client has
+ * open (a sharing violation, surfacing as `EPERM`, `EACCES` or `EBUSY`), for
+ * the moment the client takes to upload what it was just handed; the
+ * rehearsal inside OneDrive met it once in 280 renames while the client was
+ * busy, cleared by a second attempt 15 ms later (ADR-0066 Verification,
+ * 2026-11-03). Retrying with a short backoff is what graceful-fs does there.
+ * A refusal that outlasts the waits is reported as `unwritable`.
+ */
+export const RENAME_WAITS = [10, 20, 40, 80, 160, 320, 640, 1280];
+
+const HELD = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+/**
+ * A rename the operating system refused because another program holds the
+ * target, after `attempts` tries. The hub answers 503 `store_unwritable`
+ * naming the file; nothing is lost, since the old file stands and the next
+ * write tries again. Any other refusal is not this error.
+ */
+export const unwritable = (err: unknown, path: string, attempts: number): StoreError | undefined => {
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code === undefined || !HELD.has(code)) return undefined;
+  return new StoreError(503, 'store_unwritable', { path, code, attempts }, 'unwritable');
+};
+
+/** Renames `temporary` over `target`, trying again through `RENAME_WAITS` while the target is held; gives up as `unwritable`, the temporary removed. */
+async function renameInto(temporary: string, target: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await rename(temporary, target);
+      return;
+    } catch (err) {
+      const held = unwritable(err, target, attempt);
+      if (!held) throw err;
+      if (attempt > RENAME_WAITS.length) {
+        await rm(temporary, { force: true }).catch(() => undefined);
+        throw held;
+      }
+      await wait(RENAME_WAITS[attempt - 1]);
+    }
+  }
+}
+
+/** Writes `target` whole and durably: a temporary name, flushed, renamed into place (`renameInto`), the folder flushed where the platform has it. */
 async function writeWhole(target: string, text: string): Promise<void> {
   const folder = join(target, '..');
   await mkdir(folder, { recursive: true });
@@ -63,7 +111,7 @@ async function writeWhole(target: string, text: string): Promise<void> {
   } finally {
     await handle.close();
   }
-  await rename(temporary, target);
+  await renameInto(temporary, target);
   await syncFolder(folder);
 }
 

@@ -138,6 +138,23 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
           503
         );
       }
+      if (err.kind === 'unwritable') {
+        // A workspace hub's folder holds a file another program kept open while
+        // the hub tried to replace it, for longer than its retries: a sync client
+        // under Windows (ADR-0066 Verification, 2026-11-03). The old file stands
+        // and the next write tries again, so the answer is 503 naming the file.
+        const path = (err.body as { path?: string } | undefined)?.path ?? '';
+        console.error(`A file of the store's folder could not be replaced (${c.req.method} ${c.req.path}): ${path}`);
+        c.header('Retry-After', '5');
+        return c.json(
+          {
+            error: 'store_unwritable',
+            message: `A file of the hub's folder could not be replaced: ${path}. Another program, such as a sync client, held it; nothing was lost, and the request can be sent again`,
+            path,
+          },
+          503
+        );
+      }
       if (err.status === 401) {
         console.error('TerminusDB rejected the credentials; check the TERMINUS_* environment variables');
         return c.json({ error: 'store_unavailable', message: 'Database connection error' }, 500);
