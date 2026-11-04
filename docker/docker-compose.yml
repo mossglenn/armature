@@ -205,6 +205,13 @@ services:
       - ARMATURE_REMOTE_URL=${ARMATURE_REMOTE_URL:-http://hub:3100}
       - ARMATURE_WORKSPACE_DIR=/workspaces
       - ARMATURE_TRUST_NETWORK=1
+      # The per-launch secret every write carries as Armature-Local-Token (ADR-0065
+      # decision 7): set in docker/.env, or left empty, when the hub draws one at each
+      # start and prints it in its log (`docker compose logs workspace`). The profile has
+      # no desktop program in front of it, so push, bring in and deliver are served as
+      # routes here; a workspace hub run without this setting refuses them.
+      - ARMATURE_LOCAL_TOKEN=${ARMATURE_LOCAL_TOKEN:-}
+      - ARMATURE_WORKSPACE_ACTIONS=routes
     networks: [default]
 
 networks:
