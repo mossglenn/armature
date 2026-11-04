@@ -143,6 +143,8 @@ Verifying a fix end to end against the Mac needs its instance on today's `main`,
 
 **Not rehearsed, needing two machines:** the lock file synced to a second machine, where its process id means nothing. Both machines are on the tailnet, so it can be.
 
+> **Note (2026-11-03, night, from the Mac):** option 1 taken (Amos). `writeWhole` tries a rename refused with `EPERM`, `EACCES` or `EBUSY` again through waits of 10 ms doubling to 1.28 s, about 2.5 seconds in all, then reports 503 `store_unwritable` naming the file, the temporary removed and the old file standing (`app/lib/workspaceFolder.ts`, `renameInto`, `RENAME_WAITS`; ADR-0066 Verification, the night's note; riding revision 2026-11-03). Two kept tests in `app/lib/workspaceFolder.test.ts` drive it with the kill test's child, its `rename` refusing the next head twice and then every time. The end-to-end check against the kept OneDrive folder is still to run from the laptop, its hub rebuilt from this change first; the Mac's remote needs no rebuild, since the change is the workspace hub's side and the revision is the same.
+
 ---
 
 ## 7. Loose ends
