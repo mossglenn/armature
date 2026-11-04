@@ -239,6 +239,11 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > credential (decision 4); the hub gains a cheap liveness route and a store-backed readiness
    > route, and the proxy sets body and time limits the deployment guide states. The connection
    > profile's public address (decision 9; plan §16, question 12) is this name. Review H5.
+   >
+   > **Note (2026-11-03):** the workspace hub's half is built: the per-launch secret on every
+   > write and the action routes gated (ADR-0065 decision 7, note of 2026-11-03). `api.<site>`,
+   > the viewer's service credential and the liveness and readiness routes wait for the `oidc`
+   > resolver (decision 1), since the proxy is refused with `header`.
 
 8. **`header` stays, bounded.** The `header` resolver remains the default for development, tests,
    a workspace hub's loopback and a private compose network, and reads `Armature-Agent` as
