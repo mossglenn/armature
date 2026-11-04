@@ -254,6 +254,14 @@ creates `demo-designer_chapter-2` on the remote and clones it; tools then write 
 - A workspace was created and cloned: the volume held `store.json`, the `lock` (the container's process), `main/`, two `at.<commit>/` snapshot folders and the workspace's own folder with `head.json`, `commits/` and its three records. A local write was a commit file there, `localCommits: 1` in status, and 404 on the remote. After a restart of the container the lock was taken over, status still counted the commit and the document still read. A push replayed it as one remote commit, after which the remote served the document; the remote listed the branch and `check` on `main` was clean.
 - The image given `ARMATURE_STORE` exited 1. Only 3000, 3100, 3101 and 6363 were published, on loopback.
 
+**Rehearsed a fourth time on 2026-11-03 (night)** on a fresh Lima VM of the same kind, when every write to a workspace hub began to carry the local token and the action routes were gated:
+
+- `--profile hub --profile workspace up -d --build` with no `ARMATURE_LOCAL_TOKEN` in `docker/.env`: the workspace container's log said `actions: … served as routes (ARMATURE_WORKSPACE_ACTIONS=routes)` and printed a 64-character `local token` it had drawn; `GET /discover` said `localToken: required, actions: routes`. Creating a workspace without the header, and with a wrong value, was **403** `forbidden` with `reason: local_token`; with the printed value, 201. A write without the token was 403 and with it 200; status, a read, needed none. A push without the token was 403, with it 200, and the remote held the document.
+- After `restart workspace` the log showed a different token, the old value was refused and the new one accepted, and status still counted the commits.
+- With `ARMATURE_LOCAL_TOKEN` set in `docker/.env` and `up -d` again, the log said `local token: from ARMATURE_LOCAL_TOKEN`, the chosen value wrote and the drawn one was refused.
+- The hub's image run alone in workspace mode on the `armature` network, with a token and without `ARMATURE_WORKSPACE_ACTIONS`, said the actions `are the program's own; the routes are refused`, listed `actions: program`, refused `POST …/push` with **403** `forbidden`, `reason: program_action`, and still cloned a workspace with the token.
+- Only 3000, 3100, 3101 and 6363 were published, on loopback.
+
 The runtimes beyond Docker Engine and Docker Desktop (Colima on macOS, Podman Desktop on Windows; plan §10) are not yet rehearsed with this profile.
 
 ## Development on a laptop
