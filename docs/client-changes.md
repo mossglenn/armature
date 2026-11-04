@@ -27,9 +27,18 @@ Verification, note of 2026-11-03); [the deployment guide](deployment.md) says to
 outside a synced directory. Also since that day, a temporary file a process killed mid-write left
 behind is removed when the next hub takes the folder's lock.
 
-**What a client does.** Treats 503 `store_unreadable` as retryable and shows the person `path`, so
-they can bring the file back: start the sync client, go online, or mark the folder "always keep on
-this device". **CoQui** is a client of a remote hub only and sees none of this.
+*Also that day (the same revision):* inside a synced folder, Windows refuses a rename over a file
+the sync client is holding for the moment it takes to upload what it was just handed; a push's
+rewrite of its table after each commit met it twice and failed as **500**. A workspace hub now tries
+such a rename again with a short backoff, about 2.5 seconds in all (the rehearsal's measurement:
+one refusal in 280 renames, cleared 15 ms later), and only then answers **503** `store_unwritable`
+with `path` and `Retry-After`; the old file stands and nothing is lost.
+
+**What a client does.** Treats 503 `store_unreadable` and 503 `store_unwritable` as retryable and
+shows the person `path`, so they can bring the file back or wait for the sync client: start the
+client, go online, or mark the folder "always keep on this device". A push refused `store_unwritable`
+is sent again and resumes where it stopped. **CoQui** is a client of a remote hub only and sees
+none of this.
 
 ## 2026-11-02 · A workspace hub answers remote commit identifiers: snapshots, forwarding, the log past the clone
 

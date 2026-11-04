@@ -525,4 +525,5 @@ Delivers the workspace into `main`: with nothing left to push (**409** `unpushed
 | 502 | `remote_unreachable`, `remote_error` | A workspace hub could not reach its remote, or the remote answered without what the hub needed (Workspace) |
 | 503 | `branch_busy` | A document's history could not be read at one head; `Retry-After` |
 | 503 | `store_unreadable` | A file of a workspace hub's folder could not be read on this machine although it is there, such as one a sync service has made cloud-only while the service is stopped or the machine offline; `path` names it, `Retry-After`, and the hub reads the folder again on the next request (since 2026-11-03) |
+| 503 | `store_unwritable` | A file of a workspace hub's folder could not be replaced because another program held it (a sync client under Windows refusing the rename) for longer than the hub's retries, about 2.5 seconds; `path` names it, `Retry-After`; the old file stands, nothing is lost, and the request can be sent again (since 2026-11-03) |
 | 504 | `store_timeout` | The database did not answer within the hub's 30-second deadline; a write may have landed, so re-read before retrying |
