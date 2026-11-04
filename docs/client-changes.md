@@ -15,6 +15,29 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-03 · A write to a workspace hub carries its local token; push, bring in and deliver are the program's
+
+**What changed.** A workspace hub, the hub on a person's own machine (ADR-0065), now requires its
+per-launch secret on every request that is not a read: `Armature-Local-Token: <value>`, checked
+before identity, and a write without it or with another value is **403** `forbidden` with
+`reason: local_token` (ADR-0065 decision 7, the note of 2026-10-30, built on the hub's side this
+day). The desktop program, when it exists, draws the value at each start and hands it to the tools
+it launches as `ARMATURE_LOCAL_TOKEN`; until then the hub's own process draws and prints it at
+start, or takes `ARMATURE_LOCAL_TOKEN`. Reads need nothing, and a remote hub neither requires nor
+reads the header. `GET /discover` says `localToken: required` under `armature/workspace`. The three
+action routes, `POST /workspace/:name/push`, `/bring-in` and `/deliver`, are the desktop program's
+own actions: a workspace hub serves them only when started with `ARMATURE_WORKSPACE_ACTIONS=routes`
+(the `workspace` compose profile does) and otherwise answers **403** `forbidden` with `reason:
+program_action`; `GET /discover` says which under `actions` (`routes` or `program`). Rides this
+day's revision, since a workspace hub had no client at a distance yet; the first client to send the
+header is `@armature/client`'s `localToken` option.
+
+**What a client does.** A tool that writes to a workspace hub reads `ARMATURE_LOCAL_TOKEN` from its
+environment when the program launched it, or asks the person to paste the value the program shows,
+and sends it as `Armature-Local-Token` on every request (`createClient({ localToken })` does). It
+does not push: that is the person's action in the program. **CoQui** is a client of a remote hub
+only and sends nothing new.
+
 ## 2026-11-03 · A workspace hub names a file it cannot read: 503 `store_unreadable`
 
 **What changed.** A workspace hub whose folder holds a file the operating system refuses to read,

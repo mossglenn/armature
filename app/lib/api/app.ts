@@ -19,8 +19,9 @@
  * Armature-Version and Armature-Capabilities headers, read by `negotiate`
  * on every request, and the discovery and schema routes. Phase 8 adds the
  * loopback boundary (ADR-0067 decision 7): `boundary` refuses a request from a
- * host or a web origin the hub does not serve, before anything else runs.
- * Since the workspace hub plan's step 2 the app is made by `createApp` from a
+ * host or a web origin the hub does not serve, before anything else runs, and
+ * since 2026-11-03 a workspace hub's per-launch secret on every write
+ * (`requireLocalToken`, ADR-0065 decision 7). Since the workspace hub plan's step 2 the app is made by `createApp` from a
  * source of its configuration (`./config.ts`), so two hubs with different
  * stores can run in one process; `app` is the hub the environment configures.
  */
@@ -30,6 +31,7 @@ import { HTTPException } from 'hono/http-exception';
 import { boundary } from './boundary';
 import { configFromEnv, type HubConfig } from './config';
 import { ApiError } from './errors';
+import { requireLocalToken } from './localToken';
 import { guardRemoteOnly } from './role';
 import { branches } from './routes/branches';
 import { discover } from './routes/discover';
@@ -61,6 +63,9 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
   // web origin the hub does not serve is refused before anything else reads it.
   app.use('*', boundary);
   app.use('*', negotiate);
+  // Then a workspace hub's per-launch secret on every write (ADR-0065 decision 7,
+  // note; ./localToken.ts), before identity: "are you a tool I started".
+  app.use('*', requireLocalToken);
   // A body is read whole before it is parsed, so its size is bounded before
   // anything reads it (the deep review's HTTP item 4): 10 MiB holds a batch of
   // 500 documents with room to spare.
