@@ -16,6 +16,7 @@ import { createClient, HubError } from '@armature/client';
 
 const hub = createClient({ baseUrl: 'http://localhost:3100', user: 'demo-designer@example.edu' });
 // An AI agent drafting for that person: add agent: 'agent:<tool>/<name>'; the agent is the author, the person's authority applies (ADR-0067 decision 3).
+// A workspace hub on this machine: add localToken: process.env.ARMATURE_LOCAL_TOKEN, its per-launch secret, which every write carries (ADR-0065 decision 7).
 
 const { data: objectives, commit } = await hub.documents.list('LearningObjective', { branch: 'main' });
 const coverage = await hub.intelligence.coverage('how-ai-works', { ref: commit });

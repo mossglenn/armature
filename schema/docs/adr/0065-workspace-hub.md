@@ -313,6 +313,25 @@ Three facts constrain the answer:
    > profile keeps an entry for pushing, having no program in front of it, is decided then. The
    > secret and the program's own actions stay as decided.
 
+   > **Note (2026-11-03), built on the hub's side, with four choices Amos took on the session's
+   > recommendations:** every request to a workspace hub that is not a read carries
+   > `Armature-Local-Token`, checked after the loopback boundary and before identity, 403
+   > `forbidden` with `reason: local_token` without it or with another value, and a hub whose
+   > configuration holds no token refuses every write (`app/lib/api/localToken.ts`). (1) Until the
+   > program exists its host, `app/server.ts`, draws the value when `ARMATURE_LOCAL_TOKEN` is unset
+   > and prints it once at start, as Jupyter prints its token, so a workspace hub is never open;
+   > the program sets the variable for the hub it hosts and the tools it launches. (2) Push, bring
+   > in and deliver stay routes for the compose profile and the suites, served only when the host
+   > says `ARMATURE_WORKSPACE_ACTIONS=routes`; a hub without the setting refuses them 403
+   > `forbidden` with `reason: program_action`, and `GET /discover` says `actions: routes` or
+   > `program`. The setting is retired with the program, which calls the push module in-process.
+   > (3) The `workspace` compose profile keeps its push entry: it sets the actions setting and takes
+   > `ARMATURE_LOCAL_TOKEN` from `docker/.env`, the hub drawing and logging one when it is empty.
+   > (4) Creating a workspace is a write and needs the token; a tool the program launched has it.
+   > `@armature/client` sends the header from its `localToken` option; `GET /discover` says
+   > `localToken: required`. Riding revision 2026-11-03 of `docs/client-changes.md`. Names chosen
+   > without a separate decision, open to overrule: `ARMATURE_WORKSPACE_ACTIONS`, `reason`.
+
 8. **The store under a workspace hub is a choice behind the adapter.** TerminusDB as a process
    beside the hub and a file-backed store are both admissible. Decisions 3 and 6 limit what the
    store must do (no merge, no branch creation): documents at the head, a log of local commits,
