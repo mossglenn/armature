@@ -101,6 +101,7 @@ describe('Origin', () => {
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get('Access-Control-Allow-Origin')).toBe(origin);
     expect(preflight.headers.get('Access-Control-Allow-Headers')).toContain('Armature-User');
+    expect(preflight.headers.get('Access-Control-Allow-Headers')).toContain('Armature-Local-Token');
     expect(preflight.headers.get('Access-Control-Allow-Methods')).toContain('PUT');
 
     const read = await discover('localhost', { Origin: origin });

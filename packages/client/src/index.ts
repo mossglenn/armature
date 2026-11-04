@@ -43,6 +43,13 @@ export interface ClientOptions {
    * applies; the hub records the person in the commit (ADR-0067 decision 3, since 2026-11-01).
    */
   agent?: string;
+  /**
+   * A workspace hub's per-launch secret, sent as `Armature-Local-Token` on every request: a
+   * tool the desktop program launched reads it from `ARMATURE_LOCAL_TOKEN`, another has it
+   * pasted once. A write to a workspace hub without it is 403 `forbidden` (`reason:
+   * local_token`); a remote hub ignores it (ADR-0065 decision 7, since 2026-11-03).
+   */
+  localToken?: string;
   /** Replaces the global fetch: for a test, `(input, init) => app.request(input, init)`. */
   fetch?: FetchLike;
   /** Extra headers on every request. */
@@ -514,6 +521,7 @@ export function createClient(options: ClientOptions) {
     const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
     if (options.user) headers['Armature-User'] = options.user;
     if (options.agent) headers['Armature-Agent'] = options.agent;
+    if (options.localToken) headers['Armature-Local-Token'] = options.localToken;
     const version = options.version === undefined ? CLIENT_REVISION : options.version;
     if (version) headers['Armature-Version'] = version;
     if (options.capabilities?.length) headers['Armature-Capabilities'] = options.capabilities.join(', ');

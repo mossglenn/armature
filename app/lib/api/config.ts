@@ -46,6 +46,18 @@ export interface HubConfig {
   workspaces?: WorkspaceRecords;
   /** ARMATURE_SNAPSHOTS: how many remote commits a workspace holds as snapshots (plan §16 question 3); reads at the rest are forwarded. */
   snapshotBudget: number;
+  /**
+   * A workspace hub's per-launch secret (ADR-0065 decision 7, note; ./localToken.ts): ARMATURE_LOCAL_TOKEN, or
+   * drawn by the host at start when unset. Every write to a workspace hub carries it as `Armature-Local-Token`;
+   * a workspace hub with none refuses every write. Unused on a remote hub.
+   */
+  localToken?: string;
+  /**
+   * Whether a workspace hub serves push, bring in and deliver as routes, ARMATURE_WORKSPACE_ACTIONS=routes
+   * (./localToken.ts): the desktop program's own actions, offered as routes to the compose profile and the
+   * suites until the program exists; false by default, and never read on a remote hub.
+   */
+  actionRoutes: boolean;
   /** The key the pseudonymous and institutional export profiles hash with (ADR-0031); absent, a random one per export. */
   exportKey?: string;
 }
@@ -101,6 +113,14 @@ function snapshotBudget(raw: string | undefined): number {
   return value;
 }
 
+/** Whether the host asked for the program's actions as routes: `routes`, or unset; anything else is refused. */
+function actionRoutes(raw: string | undefined): boolean {
+  const value = raw?.trim();
+  if (!value) return false;
+  if (value === 'routes') return true;
+  throw new Error(`ARMATURE_WORKSPACE_ACTIONS=${value} is not a setting (routes, or unset)`);
+}
+
 /**
  * The hub's configuration from the environment (app/server.ts lists the
  * variables); throws on a role it does not know or a workspace hub without a
@@ -123,6 +143,8 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
     ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL), workspaceDir: workspaceDir(env.ARMATURE_WORKSPACE_DIR) } : {}),
     store: () => storeConfigFromEnv(env),
     snapshotBudget: snapshotBudget(env.ARMATURE_SNAPSHOTS),
+    ...(role === 'workspace' && env.ARMATURE_LOCAL_TOKEN?.trim() ? { localToken: env.ARMATURE_LOCAL_TOKEN.trim() } : {}),
+    actionRoutes: role === 'workspace' && actionRoutes(env.ARMATURE_WORKSPACE_ACTIONS),
     identity: env.ARMATURE_IDENTITY?.trim() || 'header',
     allowedHosts: list(env.ARMATURE_ALLOWED_HOSTS),
     allowedOrigins: list(env.ARMATURE_ALLOWED_ORIGINS),

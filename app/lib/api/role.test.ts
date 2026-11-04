@@ -11,9 +11,11 @@ import { app, createApp } from './app';
 import { configFromEnv } from './config';
 import { REMOTE_ONLY } from './role';
 
-const workspace = createApp(() => ({ ...configFromEnv(), role: 'workspace', remote: 'http://localhost:3100' }));
+const TOKEN = 'role-probe-token';
+const workspace = createApp(() => ({ ...configFromEnv(), role: 'workspace', remote: 'http://localhost:3100', localToken: TOKEN }));
 
-const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu' };
+// The workspace hub's local token on every request (ADR-0065 decision 7); a remote hub ignores it.
+const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-designer@example.edu', 'Armature-Local-Token': TOKEN };
 /** A body neither hub can act on: past the refusal it is a 400 of another code, or a 404. */
 const MALFORMED = JSON.stringify({ message: '' });
 
@@ -29,7 +31,7 @@ describe('the routes only a remote serves (plan §9)', () => {
     for (const route of REMOTE_ONLY) {
       const res = await workspace.request(`/api/v1${concrete(route.path)}`, {
         method: route.method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Armature-Local-Token': TOKEN },
         body: route.method === 'DELETE' ? undefined : MALFORMED,
       });
       expect(res.status, `${route.method} ${route.path}`).toBe(400);

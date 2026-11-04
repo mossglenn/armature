@@ -62,7 +62,8 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/intelligence.module-content': { fallback: 'reject', routes: ['/api/v1/intelligence/module-content'], settings: {} },
   'armature/export': { fallback: 'reject', routes: ['/api/v1/export'], settings: { profiles: ['full', 'pseudonymous', 'institutional'] } },
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema'], settings: {} },
-  'armature/workspace': { fallback: 'reject', routes: ['/api/v1/workspace'], settings: { profile: 'full' }, roles: ['workspace'] },
+  /** `localToken` and `actions` are set by `discovery` from the hub's configuration (./localToken.ts). */
+  'armature/workspace': { fallback: 'reject', routes: ['/api/v1/workspace'], settings: { profile: 'full', localToken: 'required' }, roles: ['workspace'] },
   /** The hub authorizes (ADR-0068 decision 7): a 403 `forbidden` is possible, and `GET /users/me` carries the caller's grants. No route of its own. */
   'armature/authorization': { fallback: 'reject', routes: [], settings: AUTHORIZATION_SETTINGS, roles: ['remote'] },
 };
@@ -78,7 +79,10 @@ export const capabilitiesOf = (role: HubRole): [string, Capability][] =>
  * workspace hub answers `remote_only` under each capability (`remoteOnly`),
  * and the branches it serves only for reading (`readOnlyBranches`); both empty
  * on a remote hub. A workspace hub also lists `armature/workspace`, its
- * routes for creating, listing and reading the status of workspaces.
+ * routes for creating, listing and reading the status of workspaces, with
+ * `localToken: required` (every write carries the per-launch secret) and
+ * `actions`, whether push, bring in and deliver are served as routes
+ * (`routes`) or are the program's own (`program`); ./localToken.ts.
  */
 export function discovery(hub: HubConfig) {
   const capabilities: Record<string, Record<string, unknown>> = {};
@@ -89,6 +93,8 @@ export function discovery(hub: HubConfig) {
   for (const id of ['armature/branches', 'armature/users']) {
     capabilities[id].remoteOnly = remoteOnlyRoutes(hub.role, id);
   }
+  // A workspace hub says whether push, bring in and deliver are routes here or the program's own actions (since 2026-11-03).
+  if (capabilities['armature/workspace']) capabilities['armature/workspace'].actions = hub.actionRoutes ? 'routes' : 'program';
   return { role: hub.role, versions: [...REVISIONS], capabilities, schema: { route: '/api/v1/schema' } };
 }
 

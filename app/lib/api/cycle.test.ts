@@ -35,7 +35,9 @@ describe('over the file-backed store in memory', () => {
   let config: HubConfig;
   let workspace: ReturnType<typeof createApp>;
   let onMain: ReturnType<typeof createClient>;
-  const headers = (user: string) => ({ 'Content-Type': 'application/json', 'Armature-User': user });
+  /** The workspace hub's per-launch secret, which every write to it carries (ADR-0065 decision 7). */
+  const TOKEN = `cycle-token-${stamp}`;
+  const headers = (user: string) => ({ 'Content-Type': 'application/json', 'Armature-User': user, 'Armature-Local-Token': TOKEN });
   const on = (method: string, path: string, body?: unknown, user = DESIGNER) =>
     workspace.request(`/api/v1${path}`, { method, headers: headers(user), body: body === undefined ? undefined : JSON.stringify(body) });
   const json = async (res: Response) => ({ status: res.status, body: await res.json() });
@@ -62,7 +64,7 @@ describe('over the file-backed store in memory', () => {
       { author: 'User/demo-designer', message: 'The seed\'s dated records, for the cycle suite' }
     );
     remote = await startHub({ port: 0, config: { ...configFromEnv(), store: () => ({ ...storeConfigFromEnv(), db: REMOTE_DB }) } });
-    config = { ...configFromEnv(), role: 'workspace', remote: remote.url, workspaces: memoryRecords(), store: () => localConfig };
+    config = { ...configFromEnv(), role: 'workspace', remote: remote.url, workspaces: memoryRecords(), store: () => localConfig, localToken: TOKEN, actionRoutes: true };
     workspace = createApp(() => config);
     onMain = createClient({ baseUrl: remote.url, user: DESIGNER });
   });

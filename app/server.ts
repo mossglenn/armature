@@ -23,6 +23,15 @@
  *                                                            variable is read then
  *   ARMATURE_SNAPSHOTS                                       how many older remote commits a workspace holds
  *                                                            as snapshots, 20 by default (plan §8)
+ *   ARMATURE_LOCAL_TOKEN                                     a workspace hub's per-launch secret, which every
+ *                                                            write to it carries as Armature-Local-Token (ADR-0065
+ *                                                            decision 7; lib/api/localToken.ts); the desktop program
+ *                                                            sets it for the tools it launches; drawn and printed
+ *                                                            once at start when unset
+ *   ARMATURE_WORKSPACE_ACTIONS                               `routes` serves push, bring in and deliver as routes
+ *                                                            on a workspace hub, for the compose profile until the
+ *                                                            desktop program exists; unset, they are the program's
+ *                                                            own and the routes are refused
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
  *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
  *                                                            the caller, so the hub stays on this machine
@@ -40,6 +49,7 @@
  */
 import { configFromEnv } from './lib/api/config';
 import { loadEnvLocal } from './lib/envLocal';
+import { drawLocalToken } from './lib/api/localToken';
 import { openFileStore } from './lib/api/filestore/store';
 import { bindRefusal, startHub } from './lib/hub';
 import { folderFiles, folderRecords, lockFolder } from './lib/workspaceFolder';
@@ -62,13 +72,23 @@ async function main(): Promise<void> {
   const dir = config.workspaceDir;
   const unlock = dir ? await lockFolder(dir) : undefined;
   const files = dir ? openFileStore(folderFiles(dir)) : undefined;
+  // A workspace hub's per-launch secret (ADR-0065 decision 7): the program's when it set
+  // ARMATURE_LOCAL_TOKEN, else drawn here and shown once, so the hub is never open.
+  const drawn = config.role === 'workspace' && !config.localToken ? drawLocalToken() : undefined;
   const hub = await startHub({
     port,
     hostname,
-    ...(dir ? { config: { ...config, workspaces: folderRecords(dir), ...(files ? { store: () => ({ files }) } : {}) } } : {}),
+    ...(dir
+      ? { config: { ...config, workspaces: folderRecords(dir), ...(files ? { store: () => ({ files }) } : {}), ...(drawn ? { localToken: drawn } : {}) } }
+      : {}),
   });
   console.log(`Armature hub (revision ${hub.revision}) listening at ${hub.url}/api/v1`);
-  if (config.role === 'workspace') console.log(`  role: workspace, of the remote at ${config.remote}; records in ${config.workspaceDir}`);
+  if (config.role === 'workspace') {
+    console.log(`  role: workspace, of the remote at ${config.remote}; records in ${config.workspaceDir}`);
+    console.log(`  actions: push, bring in and deliver ${config.actionRoutes ? 'served as routes (ARMATURE_WORKSPACE_ACTIONS=routes)' : "are the program's own; the routes are refused"}`);
+    if (drawn) console.log(`  local token: ${drawn}\n  (drawn at this start; every write carries it as Armature-Local-Token. Set ARMATURE_LOCAL_TOKEN to choose it)`);
+    else console.log('  local token: from ARMATURE_LOCAL_TOKEN; every write carries it as Armature-Local-Token');
+  }
   if (files) console.log(`  store: the file-backed store in ${dir}`);
   else console.log(`  store: ${process.env.TERMINUS_URL ?? '(TERMINUS_URL is not set)'} database ${process.env.TERMINUS_DB ?? '(TERMINUS_DB is not set)'}`);
 

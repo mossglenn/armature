@@ -8,6 +8,7 @@ import { isActive, type GrantDocument } from '../grants';
 import { BRANCH_NAME, readJson } from '../http';
 import { isRecord } from '../store';
 import { handleOf, principalOf, requireClaims, resolveUser, type UserDocument } from '../identity';
+import { requireActionRoutes } from '../localToken';
 
 export { handleOf };
 import { cloneBranch, mirrorMain, type Owner } from '../workspace/clone';
@@ -42,11 +43,15 @@ import { ensureSnapshots, fetchRemoteLog, resolvableCommitsOf } from '../workspa
  *                             of the workspace into main, after main was
  *                             brought in cleanly (409 bring_in_first)
  *
- * Push, bring in and deliver are the desktop program's own actions rather than routes a tool may call
- * (ADR-0065 decision 7, note of 2026-10-30); until the program exists (plan
- * §14 step 7) the push route is the development entry and the `workspace`
- * compose profile's, on loopback under `header`, where any process already
- * writes as the owner (decided 2026-11-01).
+ * Every route but the reads carries the hub's per-launch secret as
+ * `Armature-Local-Token` (../localToken.ts; since 2026-11-03). Push, bring in
+ * and deliver are the desktop program's own actions rather than routes a tool
+ * may call (ADR-0065 decision 7, note of 2026-10-30); until the program exists
+ * (plan §14 step 7) they are served as routes only where the host asks for
+ * them, `ARMATURE_WORKSPACE_ACTIONS=routes`, which the `workspace` compose
+ * profile and the suites set, and are 403 `forbidden` (`reason:
+ * program_action`) elsewhere (decided 2026-11-03; until then the push route
+ * was open to any process on loopback, decided 2026-11-01).
  */
 export const workspace = new Hono();
 
@@ -201,11 +206,13 @@ async function ownedWorkspace(c: Context, action: 'push' | 'bring-in' | 'deliver
 }
 
 workspace.post('/:name/push', async (c) => {
+  requireActionRoutes(c, 'push');
   const record = await ownedWorkspace(c, 'push');
   return c.json(await pushWorkspace(hubOf(c), recordsOf(c), record));
 });
 
 workspace.post('/:name/bring-in', async (c) => {
+  requireActionRoutes(c, 'bring-in');
   const record = await ownedWorkspace(c, 'bring-in');
   // The body is optional: a bare POST brings main in with the default message.
   const raw = (await c.req.text()).trim();
@@ -223,6 +230,7 @@ workspace.post('/:name/bring-in', async (c) => {
 });
 
 workspace.post('/:name/deliver', async (c) => {
+  requireActionRoutes(c, 'deliver');
   const record = await ownedWorkspace(c, 'deliver');
   const body = await readJson(c);
   if (typeof body.message !== 'string' || !body.message.trim()) throw new ApiError(400, 'message_required', 'A delivery needs a message saying why (ADR-0025)');

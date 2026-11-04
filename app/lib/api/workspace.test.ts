@@ -28,7 +28,9 @@ describe('over the file-backed store in memory', () => {
   const AS_OPERATOR = { as: 'demo-designer@example.edu' };
   const stamp = Date.now().toString(36);
   const USER = 'demo-designer@example.edu';
-  const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': USER };
+  /** The hub's per-launch secret, which every write carries (ADR-0065 decision 7; ../localToken.ts). */
+  const TOKEN = `ws-token-${stamp}`;
+  const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': USER, 'Armature-Local-Token': TOKEN };
 
   const NAME = `test-ws-${stamp}`;
   const BRANCH = `${handleOf(USER)}_${NAME}`;
@@ -67,6 +69,8 @@ describe('over the file-backed store in memory', () => {
       remote: remote.url,
       workspaces: memoryRecords(),
       store: () => localConfig,
+      localToken: TOKEN,
+      actionRoutes: true,
     };
     workspace = createApp(() => config);
   });
@@ -123,7 +127,7 @@ describe('over the file-backed store in memory', () => {
     });
 
     it('@armature/client reads the same status through its workspace functions', async () => {
-      const client = createClient({ baseUrl: 'http://localhost', user: USER, fetch: (input, init) => workspace.request(input, init) });
+      const client = createClient({ baseUrl: 'http://localhost', user: USER, localToken: TOKEN, fetch: (input, init) => workspace.request(input, init) });
       const { data } = await client.workspace.status(BRANCH);
       expect(data.workspace.base).toBe(record.base);
       expect(data.localCommits).toBe(1);
@@ -181,7 +185,7 @@ describe('over the file-backed store in memory', () => {
       expect((await json(await create({ name: 'bad/name' }))).body.error).toBe('bad_name');
       const stranger = await workspace.request('/api/v1/workspace', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Armature-User': `nobody-${stamp}@example.edu` },
+        headers: { ...HEADERS, 'Armature-User': `nobody-${stamp}@example.edu` },
         body: JSON.stringify({ name: 'x' }),
       });
       expect(stranger.status).toBe(401);
@@ -201,7 +205,7 @@ describe('over the file-backed store in memory', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('workspace_only');
       expect((await json(await on(app, 'GET', '/discover'))).body.capabilities['armature/workspace']).toBeUndefined();
-      expect((await json(await on(workspace, 'GET', '/discover'))).body.capabilities['armature/workspace']).toEqual({ fallback: 'reject', profile: 'full' });
+      expect((await json(await on(workspace, 'GET', '/discover'))).body.capabilities['armature/workspace']).toEqual({ fallback: 'reject', profile: 'full', localToken: 'required', actions: 'routes' });
     });
   });
 
@@ -239,7 +243,7 @@ describe('over the file-backed store in memory', () => {
     });
 
     it('a second push with nothing new is up to date, and @armature/client reads it', async () => {
-      const client = createClient({ baseUrl: 'http://localhost', user: USER, fetch: (input, init) => workspace.request(input, init) });
+      const client = createClient({ baseUrl: 'http://localhost', user: USER, localToken: TOKEN, fetch: (input, init) => workspace.request(input, init) });
       const { data } = await client.workspace.push(BRANCH);
       expect(data).toMatchObject({ pushed: [], remoteHead: first.remote, upToDate: true });
     });
@@ -350,7 +354,7 @@ describe('over the file-backed store in memory', () => {
   });
 
   describe("a workspace is its owner's (plan §7; ADR-0068 decision 9)", () => {
-    const asReviewer = { 'Content-Type': 'application/json', 'Armature-User': REVIEWER };
+    const asReviewer = { ...HEADERS, 'Armature-User': REVIEWER };
     const reviewer = (method: string, path: string, body?: unknown) =>
       workspace.request(`/api/v1${path}`, { method, headers: asReviewer, body: body === undefined ? undefined : JSON.stringify(body) });
 
