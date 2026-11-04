@@ -342,6 +342,19 @@ Check AI and the contract test are done (2026-11-02); the other two run before s
   test, a child built from the real modules with esbuild and terminated at each seam
   (`lib/workspaceFolder.test.ts`). (a) and (c) wait for the desktop program of plan §14 step 7,
   which chooses the folder.*
+  > **Note (2026-11-03, night):** the rehearsal's push inside the synced folder (its record,
+  > `docs/windows-rehearsal-2026-11-03.md` §5) failed twice on the rename of `push.json` over
+  > its previous version, refused by Windows with `EPERM` while the sync client held the file it
+  > had just been handed; a loop reproduced it once in 280 renames with the client kept busy,
+  > cleared by a second attempt 15 ms later, and never on plain NTFS. Decided the same night
+  > (Amos, on the session's recommendation; the record's §6 option 1): `writeWhole` tries a rename
+  > refused with `EPERM`, `EACCES` or `EBUSY` again with a backoff from 10 ms to 1.28 s, about
+  > 2.5 seconds in all (`RENAME_WAITS`, graceful-fs's practice on Windows), then reports it as the
+  > kind `unwritable`, 503 `store_unwritable` naming the file with `Retry-After`, the temporary
+  > removed and the old file standing (`lib/workspaceFolder.ts`, `renameInto`; riding revision
+  > 2026-11-03). The two tests are the kill test's child with its `rename` refusing the next head
+  > twice, then every time. Documenting only, and rewriting the push table less often, were the
+  > alternatives; the second weakens the recovery that worked twice in the rehearsal.
 
 ## Consequences
 
@@ -361,8 +374,9 @@ Check AI and the contract test are done (2026-11-02); the other two run before s
   > and the hub detects none; neither has a default location, since the desktop program (plan
   > §14 step 7) is what chooses one. The Windows rehearsal (Verification, the note of 2026-11-03)
   > found the offline case failing opaquely; since that day a file the system refuses to read is
-  > 503 `store_unreadable` naming it and the open is tried again, while a warning or a refusal
-  > on such a folder waits for step 7.
+  > 503 `store_unreadable` naming it and the open is tried again, and a rename the sync client
+  > refuses is tried again for a few seconds before it is 503 `store_unwritable` (Verification,
+  > the night's note), while a warning or a refusal on such a folder waits for step 7.
 - State lives in memory while a workspace is open, which bounds a workspace's size; the bound is
   measured, not assumed (Verification), and crossing it is a trigger for Dolt.
 - Quiver's folder becomes the workspace hub's store with three differences (plan §11); its
