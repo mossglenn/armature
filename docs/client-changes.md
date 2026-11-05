@@ -15,6 +15,35 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-05 · A workspace hub reaches a remote under `oidc` with the owner's token; the user list by the generic route
+
+**What changed.** A workspace hub whose remote runs under `oidc` now reaches it with the owner's
+bearer token, supplied by its host (`ARMATURE_REMOTE_TOKEN` for the hub's own process, the desktop
+program's sign-in later; ADR-0067 decision 2, note), and sends no `Armature-User` to the remote.
+Before a workspace is made, pushed, brought in or delivered, the remote's `GET /users/me` must
+resolve that token to the workspace's owner; otherwise **403** `forbidden` with `reason:
+remote_identity`, `owner` and `credential`. A read a workspace hub forwards to the remote goes
+through the token too. The remote's own refusals of the token (`invalid_token`, `not_registered`)
+are answered as it gave them, with `remote: true`. Also this day, settling what the registry's
+gate means for a clone (ADR-0068 decision 4, note of 2026-11-05; Amos): `GET /documents/User`
+under `oidc` is the same read as `GET /users` and is kept the same way, for maintainers of `main`
+and administrators; `GET /users?kind=agent` lists the agents, which anyone may read, and
+`kind=person` the persons, kept like the whole; and `GET /export?profile=full` is served to anyone
+under `oidc`, carrying every `User` for a maintainer of `main` or an administrator
+(`armature.users: "all"`) and for anyone else only the users its records name, themselves and the
+agents (`"referenced"`), since those are readable one by one already. A workspace hub's mirror of
+`main` therefore holds the owner and the agents, no longer every person, under either resolver.
+Rides this day's revision.
+
+**What a client does.** A tool of a workspace hub sends what it always did: `Armature-User` naming
+the owner and `Armature-Local-Token`; under a remote under `oidc` the owner's external identifier
+is the token's `sub`. A tool that drives push treats `reason: remote_identity` as "sign in to the
+remote as the owner". A tool that reads `GET /users` on a workspace hub sees the owner and the
+agents. A tool that takes a full export reads `armature.users` to know whether it holds the
+registry. **CoQui** is a client of a remote hub only; its reviewers' names reach it as the authors
+of the records it reads, and the registry only if its service holds a maintainer's or an
+administrator's grant.
+
 ## 2026-11-05 · Relays: a service delivers a person's earlier work under a `Relay` grant; the viewer holds its own credential
 
 **What changed.** Under `oidc`, a service whose agent `User` holds an active `Relay` grant may send
@@ -58,9 +87,9 @@ no person present (no `name` claim, the client in `azp` or `client_id`), resolve
 and never writes (decision 10). `Armature-Agent` works beside a person's token as under `header`.
 `Armature-User` beside a token is a relay's claim (decision 5) and is **403** `forbidden` with
 `reason: relay` until relays are built. Two reads change under `oidc` only (ADR-0068 decision 4,
-note): `GET /users` and `GET /export?profile=full` need a maintainer of `main` or an administrator,
-**403** `forbidden` with `permission: "list_users"` or `"export_full"` otherwise, and the export's
-default profile is `pseudonymous`. Under `header` nothing changes. `GET /discover` gains a top-level
+note): `GET /users` needs a maintainer of `main` or an administrator, **403** `forbidden` with
+`permission: "list_users"` otherwise, and the export's default profile is `pseudonymous` (what
+`profile=full` carries for anyone else is in this day's third entry, which settled it). Under `header` nothing changes. `GET /discover` gains a top-level
 `identity` entry on every hub: the resolver, the headers a client may send with what each names,
 and under `oidc` the `issuer`, the `audience` and the `clientId` a native program signs in with.
 The hub's `OPTIONS` preflight allows `Authorization`. An issuer whose keys cannot be read is

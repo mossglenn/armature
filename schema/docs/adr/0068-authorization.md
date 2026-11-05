@@ -49,7 +49,11 @@ decision 1 (the note beside decision 4). *Later the same day:* decision 4's rela
 5's relayed author, with ADR-0067 decision 5 (its note of this day): a service holding an active
 `Relay` grant writes a person's documents as the person, bounded by the grant's `relayedUsers`,
 `branch` and `expires`, with the service in `Armature-Relayed-By`; and a service's own credential
-reads (ADR-0067 decision 4). The migration window's close remains.
+reads (ADR-0067 decision 4). *Later still:* the user list by the generic route, `GET /documents/User`,
+is the same read and is kept the same way (a gap of the morning's build); and a workspace hub's
+clone, which read that list and the branch's full export, met decision 4's note under `oidc`,
+which its later change of this day narrows (the full export to anyone with the users its records
+name; the mirror of `main` the owner and the agents). The migration window's close remains.
 
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065), built whole before its push
 (`docs/workspace-hub-plan.md` §14), since push's failures depend on ownership.
@@ -204,6 +208,25 @@ answers for, and not for another person, who never consented.
    > stays `full`, as this note says. A service's credential (ADR-0067 decision 4) is refused both
    > as any agent is (decision 10's rule runs first), which the viewer, a reader of modules and
    > coverage, does not need. First encounter's refusal is ADR-0067 decision 1's note of this day.
+   >
+   > **Later change (2026-11-05, decided):** the full export's half of the row is narrowed, since
+   > building the workspace hub's sign-in (ADR-0067 decision 2, note) showed its cost: a clone
+   > loads its branch from `profile=full` and mirrored every `User` of `main`, so under the row as
+   > written a designer holding only their own branch could not clone it. What the row protects is
+   > the registry of everyone registered, including people who have written nothing: the authors
+   > of records one may read are readable one by one already (`GET /documents/User/:id` is open),
+   > so naming them in an export reveals nothing new. Decided (Amos, on the session's
+   > recommendation over keeping the gate, which would confine workspace hubs to maintainers,
+   > and over opening the list to every person, which would let anyone an institution admits
+   > enumerate it): `profile=full` is served to anyone, carrying every `User` for a maintainer of
+   > `main` or an administrator and, for anyone else, only the users the exported records name,
+   > the caller and the agents, which `armature.users` reports as `all` or `referenced`;
+   > `GET /users` and `GET /documents/User` stay the registry's gate, and `GET /users?kind=agent`
+   > is open to any token, since agents are tools, not people (ADR-0021's concern). A workspace
+   > hub's mirror of `main` holds the owner's own record and the agents under either resolver,
+   > no longer every person, which also keeps fewer people's records on a laptop; the authors a
+   > branch names arrive in its export as the copies ADR-0032 decision 5 put there. The
+   > `export_full` operation of the morning is retired. Review B7's intent stands.
 
 5. **Who may be named as an author.** Each write's author is the caller; or a registered agent
    acting for the caller (ADR-0067 decision 3), any agent whoever registered it, with the caller

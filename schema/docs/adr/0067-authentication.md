@@ -205,6 +205,28 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    the standard for native applications (RFC 8252), and keep the refresh token in the operating
    system's keychain, so a push after a week offline needs no new sign-in.
 
+   > **Note (2026-11-05), built in part:** the hub's side of the workspace hub's sign-in
+   > (`app/lib/api/workspace/remote.ts`; `workspaceToken.test.ts`, a remote under `oidc` with the
+   > suite's own key). The sign-in itself, the code flow with PKCE and the keychain, belongs to
+   > the desktop program, which does not exist yet; what the hub needs of it is a source of the
+   > owner's current token, `hub.remoteToken`, which the host supplies on each call, so the hub
+   > stays host-neutral and `app/server.ts` meanwhile takes `ARMATURE_REMOTE_TOKEN` as given (Amos,
+   > 2026-11-05, on the session's recommendation over a static variable alone, which a token's
+   > lifetime makes useless, and over the hub signing in itself, which would keep a refresh token
+   > on disk in a container). With a token the remote client sends no `Armature-User`, since
+   > beside a token that header is a relay's claim (decision 5), and a forwarded read needs no
+   > local identity, the token being the owner's. Whose token it is, the remote says: before a
+   > workspace is made, pushed, brought in or delivered, `GET /users/me` on the remote must
+   > resolve to the workspace's owner, else 403 `forbidden` with `reason: remote_identity`, so a
+   > token left over from someone else's sign-in never writes as them; a remote under `oidc`
+   > resolves the owner by `(issuer, sub)`, so the local `Armature-User` names the `sub`, and the
+   > mirror of `main` carries the owner as the remote registered them. A workspace hub refuses
+   > `ARMATURE_IDENTITY=oidc` for itself (decision 1's note). Building it found that a clone read
+   > the remote's user list and the branch's full export, both kept under `oidc` for maintainers
+   > of `main` and administrators (ADR-0068 decision 4, note), so a workspace owner holding only
+   > their branch could not clone it; decided the same day (ADR-0068 decision 4, later change):
+   > the full export to anyone with the users its records name, and the mirror of `main` the
+   > owner and the agents, so the suite's owner holds no grant.
 3. **An agent acting for a person writes under its own name, and the hub records the person.** A
    request carries the person's credential and `Armature-Agent: <agent externalId>`. The hub
    resolves the person, then the agent, which must be a registered agent `User` (any agent,
