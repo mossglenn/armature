@@ -261,7 +261,9 @@ jobs:
         run: docker run --rm armature-hub node operator.mjs --help
       - name: Validate the Caddyfile under each resolver (the hub's site only under oidc)
         # The snippet the Caddyfile imports is chosen by ARMATURE_IDENTITY (docker/caddy/);
-        # both must adapt, and under oidc the hub's site must carry the API host, not a catch-all.
+        # both must adapt, and under oidc the hub's site must carry the API host, not a catch-all,
+        # and no `encode`: Caddy appends the encoding's name to a strong ETag when it compresses,
+        # which broke If-Match and a workspace hub's push on the Droplet run of 2026-11-05.
         run: |
           for identity in header oidc; do
             docker run --rm -e ARMATURE_SITE=example.org -e ARMATURE_IDENTITY=$identity -e ARMATURE_API_HOST=api.example.org \
@@ -270,6 +272,7 @@ jobs:
           done
           grep -q '"hub:3100"' /tmp/caddy-oidc.json && ! grep -q '"hub:3100"' /tmp/caddy-header.json
           grep -q '"api.example.org"' /tmp/caddy-oidc.json
+          jq -e '[.apps.http.servers[].routes[] | select(.match[]?.host[]? == "api.example.org") | .. | objects | select(.handler? == "encode")] | length == 0' /tmp/caddy-oidc.json
       - name: Build the viewer image
         run: docker build -f docker/viewer.Dockerfile -t armature-viewer .
       - name: Start it and wait for a page
