@@ -1,0 +1,70 @@
+{
+  "realm": "armature",
+  "enabled": true,
+  "displayName": "Armature rehearsal",
+  "accessTokenLifespan": 300,
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "armature-desktop",
+      "name": "A native program: the desktop program, Quiver, the Storyline bridge (ADR-0067 decision 2)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://127.0.0.1/*", "http://localhost/*"],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "defaultClientScopes": ["basic", "profile", "email"],
+      "protocolMappers": [
+        {
+          "name": "the hub as audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": { "included.custom.audience": "armature-hub", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "armature-viewer",
+      "name": "The viewer's own credential (ADR-0067 decision 4): a service, no person present",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "rehearsal-viewer-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": ["basic", "email"],
+      "protocolMappers": [
+        {
+          "name": "the hub as audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": { "included.custom.audience": "armature-hub", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "designer",
+      "enabled": true,
+      "email": "designer@example.edu",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Designer",
+      "credentials": [{ "type": "password", "value": "designer", "temporary": false }]
+    },
+    {
+      "username": "reviewer",
+      "enabled": true,
+      "email": "reviewer@example.edu",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Reviewer",
+      "credentials": [{ "type": "password", "value": "reviewer", "temporary": false }]
+    }
+  ]
+}

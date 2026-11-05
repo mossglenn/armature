@@ -14,6 +14,9 @@
 #                                                 loopback port 3101, its workspaces in a folder
 #                                                 (ADR-0066), cloned from ARMATURE_REMOTE_URL;
 #                                                 with `--profile hub` too, from the hub beside it
+#   docker compose --profile rehearsal-oidc up -d an identity provider (Keycloak) for a rehearsal
+#                                                 of the `oidc` resolver, on loopback port 8080;
+#                                                 never a deployment's
 #
 # Two private networks (ADR-0067 decision 8, note of 2026-10-30). The front one is
 # named `armature`, whatever the checkout's directory, so a client deployed beside the
@@ -22,18 +25,23 @@
 # docker/sites/, which Caddy imports (docs/deployment.md, "A client on the same
 # server"). Whatever joins it can write as anyone, but cannot reach the store: the
 # store network, `armature-store`, is joined only by TerminusDB, the hub and the
-# operator service; a workspace hub has no store and never joins it. Every hub here runs the `header` resolver on a network it
-# trusts, so each says so (ARMATURE_TRUST_NETWORK=1); the image alone refuses to
-# listen beyond loopback under `header`.
+# operator service; a workspace hub has no store and never joins it. A hub here under
+# the `header` resolver runs on a network it trusts, so each says so
+# (ARMATURE_TRUST_NETWORK=1); the image alone refuses to listen beyond loopback
+# under `header`. Under `oidc` the same hub is published through Caddy at
+# ARMATURE_API_HOST, every request verified (docs/deployment.md, "An instance under oidc").
 #
 # What the machine publishes, and to whom:
 #   caddy   80 and 443 everywhere     the public face (profile `public`): HTTPS for
-#                                     ARMATURE_SITE, proxied to the viewer on the network
+#                                     ARMATURE_SITE, proxied to the viewer on the network;
+#                                     under `oidc` also ARMATURE_API_HOST, proxied to the
+#                                     hub, every request carrying a verified token
 #   viewer  3000 on loopback only     its pages only read; ARMATURE_VIEWER_BIND widens it
 #   hub     3100 on loopback only     for operators on the machine (curl /discover, a
-#                                     client run locally); nothing beyond the machine,
-#                                     because the `header` identity resolver trusts the
-#                                     caller (ADR-0032); ARMATURE_HUB_BIND widens it
+#                                     client run locally); nothing beyond the machine
+#                                     under `header`, which trusts the caller (ADR-0032),
+#                                     and only through Caddy under `oidc`; ARMATURE_HUB_BIND
+#                                     widens it
 #   store   6363 on loopback only     for the operator scripts (load_schema.js, seed_data.js,
 #                                     a re-import), which need the store's password
 #
@@ -74,15 +82,25 @@ services:
       - TERMINUS_PASS=${TERMINUSDB_ADMIN_PASS:-admin}
       - TERMINUS_DB=${TERMINUS_DB:-armature}
       # The identity resolver (ADR-0032): `header` trusts the caller, which is
-      # why the hub's port stays on loopback (see the note above).
+      # why the hub's port stays on loopback (see the note above); `oidc`
+      # (ADR-0067 decision 1, since 2026-11-05) verifies a bearer token on every
+      # request against the issuer named here, and only then is the hub
+      # published, under the `public` profile at ARMATURE_API_HOST.
       - ARMATURE_IDENTITY=${ARMATURE_IDENTITY:-header}
+      - ARMATURE_OIDC_ISSUER=${ARMATURE_OIDC_ISSUER:-}
+      - ARMATURE_OIDC_AUDIENCE=${ARMATURE_OIDC_AUDIENCE:-}
+      - ARMATURE_OIDC_ADMIT=${ARMATURE_OIDC_ADMIT:-}
+      - ARMATURE_OIDC_CLIENT_ID=${ARMATURE_OIDC_CLIENT_ID:-}
+      - ARMATURE_OIDC_JWKS_URL=${ARMATURE_OIDC_JWKS_URL:-}
       # The loopback boundary (ADR-0067 decision 7): besides loopback, the hub
       # answers only the host names listed here, so a web page that points its
       # own domain at this machine is refused. `hub` is the name the viewer and a
-      # client beside the instance call it by; add a name if anything calls the
-      # hub by one. A web page that calls the hub directly needs its origin in
+      # client beside the instance call it by; the API host is the name Caddy
+      # proxies it at under `oidc` (harmless under `header`, where nothing
+      # proxies it); add a name if anything else calls the hub by one. A web
+      # page that calls the hub directly needs its origin in
       # ARMATURE_ALLOWED_ORIGINS; none does by default.
-      - ARMATURE_ALLOWED_HOSTS=hub,${ARMATURE_ALLOWED_HOSTS:-}
+      - ARMATURE_ALLOWED_HOSTS=hub,${ARMATURE_API_HOST:-api.${ARMATURE_SITE:-localhost}},${ARMATURE_ALLOWED_HOSTS:-}
       - ARMATURE_ALLOWED_ORIGINS=${ARMATURE_ALLOWED_ORIGINS:-}
       # Set it so pseudonymous exports name the same person the same way every time (ADR-0031).
       - ARMATURE_EXPORT_KEY=${ARMATURE_EXPORT_KEY:-}
@@ -106,7 +124,16 @@ services:
       - ARMATURE_HUB_URL=http://hub:3100
       # Where a reader's browser could reach the hub, for the raw-data links in
       # the page footers; unset, the links are omitted and the hub stays private.
+      # Under `oidc` with the hub published, https://<ARMATURE_API_HOST>.
       - ARMATURE_HUB_PUBLIC_URL=${ARMATURE_HUB_PUBLIC_URL:-}
+      # The viewer's own credential for a hub under `oidc` (ADR-0067 decision 4;
+      # app/lib/viewerToken.ts): a token as issued, or a client id and secret
+      # with which it asks the issuer for one; the endpoint when the issuer's
+      # public name is not reachable from here (a rehearsal). Unset under `header`.
+      - ARMATURE_HUB_TOKEN=${ARMATURE_HUB_TOKEN:-}
+      - ARMATURE_HUB_CLIENT_ID=${ARMATURE_HUB_CLIENT_ID:-}
+      - ARMATURE_HUB_CLIENT_SECRET=${ARMATURE_HUB_CLIENT_SECRET:-}
+      - ARMATURE_HUB_TOKEN_ENDPOINT=${ARMATURE_HUB_TOKEN_ENDPOINT:-}
     depends_on:
       - hub
 
@@ -114,7 +141,10 @@ services:
     # The front door of a hosted instance: TLS with a certificate it obtains and
     # renews itself for ARMATURE_SITE (a domain whose DNS points at this machine),
     # proxying to the viewer by its service name. `:80` serves plain HTTP on any
-    # address, for a rehearsal without a domain.
+    # address, for a rehearsal without a domain. Under `oidc` it also proxies the
+    # hub at ARMATURE_API_HOST (`api.<site>` by default; ARMATURE_API_SCHEME `http`
+    # for a rehearsal), the snippet in docker/caddy/ chosen by ARMATURE_IDENTITY
+    # (ADR-0067 decision 7, note; since 2026-11-05).
     image: caddy:2.10.2-alpine
     profiles: [public]
     restart: unless-stopped
@@ -124,6 +154,8 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The hub's site under `oidc`, nothing under `header` (docker/caddy/).
+      - ./caddy:/etc/caddy/profile:ro
       # Other sites on this server, one file each (docker/sites/README.md).
       - ./sites:/etc/caddy/sites:ro
       # Certificates and the account key; kept so a restart does not ask again.
@@ -131,6 +163,9 @@ services:
       - caddy-config:/config
     environment:
       - ARMATURE_SITE=${ARMATURE_SITE:-localhost}
+      - ARMATURE_IDENTITY=${ARMATURE_IDENTITY:-header}
+      - ARMATURE_API_HOST=${ARMATURE_API_HOST:-api.${ARMATURE_SITE:-localhost}}
+      - ARMATURE_API_SCHEME=${ARMATURE_API_SCHEME:-https}
     depends_on:
       viewer:
         condition: service_started
@@ -143,11 +178,19 @@ services:
     # only after this exits 0, so `up` fails, naming the variable, while
     # TERMINUSDB_ADMIN_PASS is unset or `admin`. A check in the file itself
     # (`${VAR:?}`) cannot do this: Compose evaluates it for every profile.
+    # Since 2026-11-05 it also refuses a resolver it does not know, and `oidc`
+    # without its issuer and audience (the hub would not start) or without an
+    # API host (Caddy would proxy the hub for any name); and the hub's site under
+    # `header` is never there, whatever ARMATURE_API_HOST says (the Caddyfile).
     image: caddy:2.10.2-alpine
     profiles: [public]
     network_mode: none
     environment:
       - PASS=${TERMINUSDB_ADMIN_PASS:-}
+      - IDENTITY=${ARMATURE_IDENTITY:-header}
+      - ISSUER=${ARMATURE_OIDC_ISSUER:-}
+      - AUDIENCE=${ARMATURE_OIDC_AUDIENCE:-}
+      - API_HOST=${ARMATURE_API_HOST:-api.${ARMATURE_SITE:-localhost}}
     entrypoint:
       - sh
       - -c
@@ -156,6 +199,25 @@ services:
           echo 'The public profile needs TERMINUSDB_ADMIN_PASS in docker/.env, set to something other than admin' >&2
           exit 1
         fi
+        case "$$IDENTITY" in
+          header) ;;
+          oidc)
+            if [ -z "$$ISSUER" ] || [ -z "$$AUDIENCE" ]; then
+              echo 'ARMATURE_IDENTITY=oidc needs ARMATURE_OIDC_ISSUER and ARMATURE_OIDC_AUDIENCE in docker/.env' >&2
+              exit 1
+            fi
+            case "$$API_HOST" in
+              ''|*:*|*/*)
+                echo "ARMATURE_IDENTITY=oidc publishes the hub at ARMATURE_API_HOST, a bare host name; it is '$$API_HOST' (set it, or set ARMATURE_SITE to a domain)" >&2
+                exit 1
+                ;;
+            esac
+            ;;
+          *)
+            echo "ARMATURE_IDENTITY=$$IDENTITY names no resolver (header, oidc)" >&2
+            exit 1
+            ;;
+        esac
 
   operator:
     # The operator scripts (scripts/: wait_for_store, load_schema, seed_data), run in
@@ -212,6 +274,39 @@ services:
       # routes here; a workspace hub run without this setting refuses them.
       - ARMATURE_LOCAL_TOKEN=${ARMATURE_LOCAL_TOKEN:-}
       - ARMATURE_WORKSPACE_ACTIONS=routes
+      # The owner's bearer token for a remote under `oidc` (ADR-0067 decision 2,
+      # note; since 2026-11-05), sent on every call to the remote in place of the
+      # owner's identifier; unset for a remote under `header`, such as the hub beside it.
+      - ARMATURE_REMOTE_TOKEN=${ARMATURE_REMOTE_TOKEN:-}
+    networks: [default]
+
+  keycloak:
+    # An identity provider for a rehearsal of `oidc` (ADR-0067, open question 2:
+    # the ADR names no provider; Keycloak in a profile that ships nowhere by
+    # default, decided 2026-11-05), with the realm in docker/rehearsal/: two
+    # clients, `armature-desktop` for people (PKCE, and password sign-in for a
+    # rehearsal's curl) and `armature-viewer` (a service, the client credentials
+    # grant), both with the hub as audience; two people, designer and reviewer,
+    # whose passwords are their names. KEYCLOAK_HOSTNAME is the issuer's base:
+    # tokens say `<it>/realms/armature`, so the hub's ARMATURE_OIDC_ISSUER names
+    # that, and reaches the keys by the service name instead
+    # (ARMATURE_OIDC_JWKS_URL), as the viewer reaches the token endpoint
+    # (ARMATURE_HUB_TOKEN_ENDPOINT); docs/deployment.md, "A hosted instance",
+    # has the settings. Development mode, in memory, on loopback port 8080:
+    # a rehearsal's provider, never a deployment's.
+    image: quay.io/keycloak/keycloak:26.7.5
+    profiles: [rehearsal-oidc]
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    ports:
+      - "127.0.0.1:${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./rehearsal/keycloak-realm.json:/opt/keycloak/data/import/armature-realm.json:ro
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASS:-admin}
+      - KC_HOSTNAME=${KEYCLOAK_HOSTNAME:-http://localhost:8080}
+      - KC_HTTP_ENABLED=true
     networks: [default]
 
 networks:

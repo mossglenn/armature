@@ -1,0 +1,3 @@
+# Imported by the Caddyfile under ARMATURE_IDENTITY=header: nothing. The hub trusts
+# whatever Armature-User a request claims under that resolver, so it is never proxied;
+# only the viewer is (docker-compose.yml, "What the machine publishes").
