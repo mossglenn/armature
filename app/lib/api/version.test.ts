@@ -114,6 +114,8 @@ describe('GET /api/v1/discover and /schema (ADR-0059 decision 6, ADR-0027 decisi
     expect(body.capabilities['armature/intelligence.coverage']).toEqual({ fallback: 'reject', fullyAssessedAt: 2, overAssessedAbove: 4 });
     expect(body.capabilities['armature/documents'].fallback).toBe('reject');
     expect(body.schema).toEqual({ route: '/api/v1/schema' });
+    // How to authenticate (ADR-0067 decision 9): under header, the two headers and what each names.
+    expect(body.identity).toEqual({ resolver: 'header', headers: { 'Armature-User': 'person', 'Armature-Agent': 'agent' } });
   });
 
   it('returns the schema graph at a ref, reloadable, with the commit in ETag', async () => {

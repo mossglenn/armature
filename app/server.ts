@@ -9,6 +9,16 @@
  * Environment:
  *   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS, TERMINUS_DB  the store (see README.md)
  *   ARMATURE_IDENTITY, ARMATURE_EXPORT_KEY                  optional (see README.md)
+ *   ARMATURE_OIDC_ISSUER, ARMATURE_OIDC_AUDIENCE             under ARMATURE_IDENTITY=oidc, required: the identity
+ *                                                            provider's issuer and this hub's audience, which every
+ *                                                            bearer token is checked against (ADR-0067 decision 1;
+ *                                                            lib/api/oidc.ts)
+ *   ARMATURE_OIDC_ADMIT                                      optional, comma-separated: the issuers and email domains
+ *                                                            whose people are registered on first sign-in; empty
+ *                                                            admits no one, an administrator registers them
+ *   ARMATURE_OIDC_CLIENT_ID, ARMATURE_OIDC_JWKS_URL          optional: the client id a native program signs in with,
+ *                                                            published by GET /discover; where the issuer's keys are
+ *                                                            when not where its metadata says
  *   ARMATURE_ALLOWED_HOSTS, ARMATURE_ALLOWED_ORIGINS        optional, comma-separated: host names besides
  *                                                            loopback, and web origins, the hub serves
  *                                                            (ADR-0067 decision 7; lib/api/boundary.ts)
@@ -83,6 +93,13 @@ async function main(): Promise<void> {
       : {}),
   });
   console.log(`Armature hub (revision ${hub.revision}) listening at ${hub.url}/api/v1`);
+  if (config.oidc) {
+    const admitted = [...config.oidc.admit.issuers, ...config.oidc.admit.domains];
+    console.log(`  identity: oidc, tokens from ${config.oidc.issuer} for audience ${config.oidc.audience}`);
+    console.log(`  admitted on first sign-in: ${admitted.length ? admitted.join(', ') : 'no one (ARMATURE_OIDC_ADMIT is empty; an administrator registers each person)'}`);
+  } else {
+    console.log(`  identity: ${config.identity}`);
+  }
   if (config.role === 'workspace') {
     console.log(`  role: workspace, of the remote at ${config.remote}; records in ${config.workspaceDir}`);
     console.log(`  actions: push, bring in and deliver ${config.actionRoutes ? 'served as routes (ARMATURE_WORKSPACE_ACTIONS=routes)' : "are the program's own; the routes are refused"}`);

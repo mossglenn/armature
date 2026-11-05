@@ -15,6 +15,42 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-05 · The `oidc` resolver: a signed token on every request, and `GET /discover` says how to sign in
+
+**What changed.** A hub may now run under `ARMATURE_IDENTITY=oidc` (OpenID Connect; ADR-0067
+decision 1 with its note of 2026-10-30, decisions 4 and 9). Under it every request but
+`GET /discover` carries `Authorization: Bearer <token>`, a JSON Web Token the identity provider
+signed, which the hub verifies against the provider's published keys, checking the issuer, the
+audience, the expiry and the algorithm (`RS256`, `ES256` or `EdDSA`). No token is **401**
+`identity_required` and a token the hub refuses is **401** `invalid_token` with `reason`
+(`expired`, `audience`, `issuer`, `signature`, `algorithm`, `unknown_key`, `malformed`), both with
+`WWW-Authenticate: Bearer`. A person's token resolves by `(issuer, sub)`: `sub` is the
+`externalId`, and a `User` registered under `oidc` carries the new `issuer` field. First sign-in
+registers a person only when the instance admits their issuer or email domain
+(`ARMATURE_OIDC_ADMIT`); otherwise a valid token is **403** `not_registered` until an administrator
+registers them with `POST /users`, naming `issuer`. A service's token, one issued to a program with
+no person present (no `name` claim, the client in `azp` or `client_id`), resolves to the agent
+`User` whose `externalId` is `agent:<client id>`, registered by a person as any agent is; it reads
+and never writes (decision 10). `Armature-Agent` works beside a person's token as under `header`.
+`Armature-User` beside a token is a relay's claim (decision 5) and is **403** `forbidden` with
+`reason: relay` until relays are built. Two reads change under `oidc` only (ADR-0068 decision 4,
+note): `GET /users` and `GET /export?profile=full` need a maintainer of `main` or an administrator,
+**403** `forbidden` with `permission: "list_users"` or `"export_full"` otherwise, and the export's
+default profile is `pseudonymous`. Under `header` nothing changes. `GET /discover` gains a top-level
+`identity` entry on every hub: the resolver, the headers a client may send with what each names,
+and under `oidc` the `issuer`, the `audience` and the `clientId` a native program signs in with.
+The hub's `OPTIONS` preflight allows `Authorization`. An issuer whose keys cannot be read is
+**503** `issuer_unreachable`.
+
+**What a client does.** Reads `GET /discover` first: `identity.resolver` says whether to send
+`Armature-User` (`header`) or a bearer token (`oidc`), and under `oidc` the `issuer`, `audience`
+and `clientId` to sign in with. A client of an `oidc` hub sends the token on every call and leaves
+`Armature-User` unset (`createClient({ token })`, a string or a function returning the current
+one), asks for `profile=full` only when it holds the grant, and treats **403** `not_registered` as
+"ask an administrator". A program with no person present holds its own credential and reads.
+**CoQui** sends nothing new until its hub runs under `oidc`; then its server-side client holds a
+token for the reviewer who signed in, and its outbox waits for relays (decision 5).
+
 ## 2026-11-03 · A write to a workspace hub carries its local token; push, bring in and deliver are the program's
 
 **What changed.** A workspace hub, the hub on a person's own machine (ADR-0065), now requires its

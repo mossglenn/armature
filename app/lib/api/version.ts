@@ -21,7 +21,7 @@ import { readOnlyBranches, remoteOnlyRoutes } from './role';
  * list against that file's headings. Revisions under /api/v1 are additive, so
  * a hub at the newest serves every earlier one.
  */
-export const REVISIONS = ['2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
+export const REVISIONS = ['2026-11-05', '2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
 
 export const CURRENT_REVISION = REVISIONS[0];
 const OLDEST_REVISION = REVISIONS[REVISIONS.length - 1];
@@ -83,7 +83,26 @@ export const capabilitiesOf = (role: HubRole): [string, Capability][] =>
  * `localToken: required` (every write carries the per-launch secret) and
  * `actions`, whether push, bring in and deliver are served as routes
  * (`routes`) or are the program's own (`program`); ./localToken.ts.
+ *
+ * Since 2026-11-05 it says how to authenticate, in `identity` beside the rest
+ * (ADR-0067 decision 9): the resolver, the headers a client may send with
+ * what each names, and under `oidc` the issuer, the audience and the client
+ * id a native program signs in with; the admission list is not published.
  */
+export function identityEntry(hub: HubConfig) {
+  if (hub.identity === 'oidc' && hub.oidc) {
+    const { issuer, audience, clientId } = hub.oidc;
+    return {
+      resolver: 'oidc',
+      headers: { Authorization: 'bearer', 'Armature-Agent': 'agent', 'Armature-User': 'relay' },
+      issuer,
+      audience,
+      ...(clientId ? { clientId } : {}),
+    };
+  }
+  return { resolver: hub.identity, headers: { 'Armature-User': 'person', 'Armature-Agent': 'agent' } };
+}
+
 export function discovery(hub: HubConfig) {
   const capabilities: Record<string, Record<string, unknown>> = {};
   for (const [id, cap] of capabilitiesOf(hub.role)) {
@@ -95,7 +114,7 @@ export function discovery(hub: HubConfig) {
   }
   // A workspace hub says whether push, bring in and deliver are routes here or the program's own actions (since 2026-11-03).
   if (capabilities['armature/workspace']) capabilities['armature/workspace'].actions = hub.actionRoutes ? 'routes' : 'program';
-  return { role: hub.role, versions: [...REVISIONS], capabilities, schema: { route: '/api/v1/schema' } };
+  return { role: hub.role, versions: [...REVISIONS], identity: identityEntry(hub), capabilities, schema: { route: '/api/v1/schema' } };
 }
 
 const isRevision = (value: string): value is (typeof REVISIONS)[number] =>

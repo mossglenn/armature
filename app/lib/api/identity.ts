@@ -1,8 +1,9 @@
-import type { Context } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import type { User } from '@armature/types';
 import { ApiError } from './errors';
 import { ON_BEHALF_OF_TRAILER, withTrailer } from './trailers';
 import { hubOf, storeFor } from './config';
+import { challenge, oidcResolver } from './oidc';
 import { StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
 
 /**
@@ -18,9 +19,14 @@ import { StoreError, type DocumentReader, type Store, type TerminusDocument } fr
  * Resolvers, chosen by `ARMATURE_IDENTITY`:
  *   header  (default) `Armature-User: <externalId>`; trusts the caller, so
  *           the mutating routes stay local while it is configured
- *   oidc    specified by ADR-0067 (accepted 2026-10-30), not yet built: OpenID Connect (OIDC) bearer token,
- *           `sub` as externalId, `name`
- *           and `email` as the other claims
+ *   oidc    `Authorization: Bearer <token>`, a signed token the hub verifies
+ *           against the issuer's keys (ADR-0067 decision 1; ./oidc.ts, since
+ *           2026-11-05): a person by `(issuer, sub)`, registered on first
+ *           encounter only when ARMATURE_OIDC_ADMIT admits the token, else
+ *           403 `not_registered`; a service's token as the agent `User` named
+ *           by its client id. Every request needs a token but `GET /discover`
+ *           (`requireIdentity`), and `Armature-User` beside a token is a
+ *           relay's claim (decision 5), refused until relays are built.
  */
 
 export interface IdentityClaims {
@@ -28,6 +34,12 @@ export interface IdentityClaims {
   displayName?: string;
   email?: string;
   institution?: string;
+  /** The identity provider that vouches for a person, kept on the `User` and part of its identity (ADR-0067 decision 1, note). */
+  issuer?: string;
+  /** Whether the resolver lets a first encounter register this person; `oidc` says no unless ARMATURE_OIDC_ADMIT admits the token. */
+  admitted?: boolean;
+  /** A program's own credential (ADR-0067 decision 4), which resolves to a registered agent and is never registered here. */
+  service?: boolean;
 }
 
 export type IdentityResolver = (c: Context) => IdentityClaims | undefined | Promise<IdentityClaims | undefined>;
@@ -61,12 +73,14 @@ export const headerResolver: IdentityResolver = (c) => {
   return externalId ? { externalId } : undefined;
 };
 
-const RESOLVERS: Record<string, IdentityResolver> = { header: headerResolver };
+// Built at the call, not at load: ./oidc.ts imports this module's types and this module imports its resolver.
+const resolvers = (): Record<string, IdentityResolver> => ({ header: headerResolver, oidc: oidcResolver });
 
 export function configuredResolver(name: string): IdentityResolver {
-  const resolver = RESOLVERS[name];
+  const known = resolvers();
+  const resolver = known[name];
   if (!resolver) {
-    throw new Error(`ARMATURE_IDENTITY=${name} names no identity resolver (known: ${Object.keys(RESOLVERS).join(', ')})`);
+    throw new Error(`ARMATURE_IDENTITY=${name} names no identity resolver (known: ${Object.keys(known).join(', ')})`);
   }
   return resolver;
 }
@@ -100,13 +114,21 @@ export function registry(c: Context): Store {
   return storeFor(c, { branch: REGISTRY_BRANCH });
 }
 
-/** The `User` with this externalId at the store's ref, and the commit read (check W1). */
+/**
+ * The `User` with this externalId at the store's ref, and the commit read
+ * (check W1). With an issuer, the one that provider vouches for, `(issuer,
+ * sub)` (ADR-0067 decision 1, note): a `User` registered without one is not
+ * matched by a token, so an administrator registering ahead of a first
+ * encounter names the issuer too.
+ */
 export async function findUserByExternalId(
   store: Store,
-  externalId: string
+  externalId: string,
+  issuer?: string
 ): Promise<{ user: UserDocument | undefined; commit: string }> {
-  const { documents, commit } = await store.queryDocuments('User', { externalId });
-  return { user: documents[0] as UserDocument | undefined, commit };
+  const { documents, commit } = await store.queryDocuments('User', { externalId, ...(issuer ? { issuer } : {}) });
+  const user = (issuer ? documents.find((d) => d.issuer === issuer) : documents[0]) as UserDocument | undefined;
+  return { user, commit };
 }
 
 /** A hub-minted `User` id for a registration (ADR-0032 decision 3). */
@@ -114,21 +136,53 @@ export const mintUserId = (): string => `User/${crypto.randomUUID()}`;
 
 /** The claims the hub's resolver finds on the request; 401 `identity_required` when it finds none. */
 export async function requireClaims(c: Context): Promise<IdentityClaims> {
-  const claims = await configuredResolver(hubOf(c).identity)(c);
+  const { identity } = hubOf(c);
+  const claims = await configuredResolver(identity)(c);
   if (!claims) {
+    if (identity === 'oidc') {
+      challenge(c);
+      throw new ApiError(401, 'identity_required', 'No identity on the request: send Authorization: Bearer <token> from the issuer GET /discover names');
+    }
     throw new ApiError(401, 'identity_required', `No identity on the request: send ${USER_HEADER}: <externalId>`);
   }
   return claims;
 }
+
+declare module 'hono' {
+  interface ContextVariableMap {
+    /** The request's resolved identity, kept once resolved so a route after `requireIdentity` reads it, not the store again. */
+    who?: ResolvedUser;
+  }
+}
+
+/**
+ * Under `oidc` every request carries a token, reads included, except
+ * `GET /discover`, which says how to sign in and so must be readable before
+ * anyone has (ADR-0067 decision 1). Runs before the routes; under `header`
+ * it does nothing, and the routes that need an identity resolve it themselves.
+ */
+export const requireIdentity: MiddlewareHandler = async (c, next) => {
+  if (hubOf(c).identity === 'oidc' && c.req.path !== '/api/v1/discover' && c.req.method !== 'OPTIONS') await resolveUser(c);
+  await next();
+};
 
 /**
  * Resolves the request to a registered `User`, registering one on `main`
  * when the claims carry a displayName. 401 `identity_required` with no
  * claims; 401 `unknown_user` when nothing is registered and nothing can be.
  * With `Armature-Agent`, the credential's person is resolved first and the
- * agent second: the agent is the author, the person is `onBehalfOf`.
+ * agent second: the agent is the author, the person is `onBehalfOf`. Resolved
+ * once per request.
  */
 export async function resolveUser(c: Context): Promise<ResolvedUser> {
+  const kept = c.get('who');
+  if (kept) return kept;
+  const who = await resolveOnce(c);
+  c.set('who', who);
+  return who;
+}
+
+async function resolveOnce(c: Context): Promise<ResolvedUser> {
   const person = await resolveCredential(c);
   const agentExternalId = c.req.header(AGENT_HEADER)?.trim();
   if (!agentExternalId) return person;
@@ -145,21 +199,50 @@ export async function resolveUser(c: Context): Promise<ResolvedUser> {
 
 /** The `User` the request's own credential resolves to. */
 async function resolveCredential(c: Context): Promise<ResolvedUser> {
+  const hub = hubOf(c);
+  // Under a verified token, naming someone else in Armature-User is a relay's
+  // claim (ADR-0067 decision 5), which needs a Relay grant; refused as such
+  // until relays are built, never taken as the author or ignored.
+  if (hub.identity === 'oidc' && c.req.header(USER_HEADER)?.trim()) {
+    throw new ApiError(
+      403,
+      'forbidden',
+      `${USER_HEADER} beside a bearer token names someone else as the author, which only a service holding a Relay grant may do (ADR-0067 decision 5), and relays are not built yet; the token's own subject is the caller`,
+      { reason: 'relay' }
+    );
+  }
   const claims = await requireClaims(c);
   const main = registry(c);
   // Two passes: a concurrent registration of the same externalId makes the
   // insert fail on the head it read (If-Match) or on the id, and the second
   // lookup then finds the winner's document.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { user, commit } = await findUserByExternalId(main, claims.externalId);
+    const { user, commit } = await findUserByExternalId(main, claims.externalId, claims.issuer);
     if (user) return { id: user['@id'], user };
     // A workspace hub's main is the remote's registry, mirrored: a person is
     // registered on the remote, never here (docs/workspace-hub-plan.md §9).
-    if (hubOf(c).role === 'workspace') {
+    if (hub.role === 'workspace') {
       throw new ApiError(
         401,
         'unknown_user',
         `No User is registered for ${claims.externalId} in this workspace hub's mirror of the remote; register on the remote`
+      );
+    }
+    // A service's credential resolves to an agent a person registered (ADR-0067 decision 4); it registers nothing.
+    if (claims.service) {
+      throw new ApiError(
+        401,
+        'unknown_user',
+        `No agent User is registered for ${claims.externalId}, the client this token was issued to; a person registers it with POST /api/v1/users`
+      );
+    }
+    // A valid token from a provider or a domain the instance did not admit
+    // registers no one (ADR-0067 decision 1, note of 2026-10-30).
+    if (claims.admitted === false) {
+      throw new ApiError(
+        403,
+        'not_registered',
+        `${claims.externalId} signed in with ${claims.issuer} but is not registered here, and the token is not admitted for first encounter (ARMATURE_OIDC_ADMIT); an administrator registers them with POST /api/v1/users, naming the issuer`
       );
     }
     if (!claims.displayName) {
@@ -177,6 +260,7 @@ async function resolveCredential(c: Context): Promise<ResolvedUser> {
       externalId: claims.externalId,
       ...(claims.email ? { email: claims.email } : {}),
       ...(claims.institution ? { institution: claims.institution } : {}),
+      ...(claims.issuer ? { issuer: claims.issuer } : {}),
     };
     try {
       await main.insertDocument(document, {

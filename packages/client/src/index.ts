@@ -28,15 +28,27 @@
 import type { ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-03';
+export const CLIENT_REVISION = '2026-11-05';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
 export interface ClientOptions {
   /** The hub's origin, with or without a trailing slash: `http://localhost:3100`. */
   baseUrl: string;
-  /** The external identifier sent as `Armature-User` on every request; needed for writes. */
+  /**
+   * The external identifier sent as `Armature-User` on every request; needed for writes under
+   * the `header` resolver. Under `oidc` the token names the caller, and this header is a
+   * relay's claim to write as someone else (ADR-0067 decision 5), so leave it unset there.
+   */
   user?: string;
+  /**
+   * A bearer token sent as `Authorization: Bearer <token>` on every request, for a hub under
+   * the `oidc` resolver (ADR-0067 decision 1, since 2026-11-05), where every call but
+   * `discover()` needs one: a person's token from the issuer `discover()` names, or a service's
+   * own (decision 4). A function is called on each request, so a caller that refreshes tokens
+   * hands over the current one.
+   */
+  token?: string | (() => string | Promise<string>);
   /**
    * A registered agent's external identifier (`agent:…`), sent as `Armature-Agent`: the
    * agent is the author of what this client writes, acting for `user`, whose authority
@@ -77,6 +89,13 @@ export interface Discovery {
   /** A remote hub, or a workspace hub that leaves the routes in each capability's `remoteOnly` to its remote (2026-11-01). */
   role: 'remote' | 'workspace';
   versions: string[];
+  /**
+   * How to authenticate (ADR-0067 decision 9, since 2026-11-05): the resolver, the headers a
+   * client may send with what each names (`person`, `agent`, `relay`, `bearer`), and under
+   * `oidc` the issuer and audience a token is checked against and the client id a native
+   * program signs in with.
+   */
+  identity: { resolver: string; headers: Record<string, string>; issuer?: string; audience?: string; clientId?: string };
   capabilities: Record<string, { fallback: 'ignore' | 'reject'; [setting: string]: unknown }>;
   schema: { route: string };
 }
@@ -519,6 +538,10 @@ export function createClient(options: ClientOptions) {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }
     const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
+    if (options.token !== undefined) {
+      const token = typeof options.token === 'function' ? await options.token() : options.token;
+      if (token) headers.Authorization = `Bearer ${token}`;
+    }
     if (options.user) headers['Armature-User'] = options.user;
     if (options.agent) headers['Armature-Agent'] = options.agent;
     if (options.localToken) headers['Armature-Local-Token'] = options.localToken;

@@ -21,7 +21,9 @@
  * loopback boundary (ADR-0067 decision 7): `boundary` refuses a request from a
  * host or a web origin the hub does not serve, before anything else runs, and
  * since 2026-11-03 a workspace hub's per-launch secret on every write
- * (`requireLocalToken`, ADR-0065 decision 7). Since the workspace hub plan's step 2 the app is made by `createApp` from a
+ * (`requireLocalToken`, ADR-0065 decision 7), and since 2026-11-05 the `oidc`
+ * resolver, under which every request but `GET /discover` carries a verified
+ * token (`requireIdentity`, ADR-0067 decision 1). Since the workspace hub plan's step 2 the app is made by `createApp` from a
  * source of its configuration (`./config.ts`), so two hubs with different
  * stores can run in one process; `app` is the hub the environment configures.
  */
@@ -31,6 +33,7 @@ import { HTTPException } from 'hono/http-exception';
 import { boundary } from './boundary';
 import { configFromEnv, type HubConfig } from './config';
 import { ApiError } from './errors';
+import { requireIdentity } from './identity';
 import { requireLocalToken } from './localToken';
 import { guardRemoteOnly } from './role';
 import { branches } from './routes/branches';
@@ -66,6 +69,9 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
   // Then a workspace hub's per-launch secret on every write (ADR-0065 decision 7,
   // note; ./localToken.ts), before identity: "are you a tool I started".
   app.use('*', requireLocalToken);
+  // Then, under `oidc`, the token on every request but GET /discover (ADR-0067
+  // decision 1): a request no provider vouches for reaches no route.
+  app.use('*', requireIdentity);
   // A body is read whole before it is parsed, so its size is bounded before
   // anything reads it (the deep review's HTTP item 4): 10 MiB holds a batch of
   // 500 documents with room to spare.

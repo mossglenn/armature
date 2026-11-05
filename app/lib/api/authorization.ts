@@ -3,7 +3,7 @@ import type { GrantRole } from '@armature/types';
 import { hubOf, type HubConfig } from './config';
 import { ApiError } from './errors';
 import { grantsAt, isActive, type GrantDocument } from './grants';
-import { isAgentExternalId, principalOf, registry, REGISTRY_BRANCH, type ResolvedUser } from './identity';
+import { isAgentExternalId, principalOf, registry, REGISTRY_BRANCH, resolveUser, type ResolvedUser } from './identity';
 import type { TerminusDocument } from './store';
 
 /**
@@ -23,6 +23,9 @@ import type { TerminusDocument } from './store';
  *   grant anything else      an Administrator
  *   register an agent        any person
  *   register a person        an Administrator
+ *   list users, export full  under `oidc`, a Maintainer of main or an Administrator
+ *                            (decision 4's note of 2026-10-30; under `header` open, since
+ *                            the caller is trusted and on loopback)
  *
  * A branch with no Owner in force is writable, mergeable and deletable by any
  * registered User, as before this decision: the migration window of decision
@@ -40,7 +43,9 @@ export type Operation =
   | { permission: 'merge'; branch: string }
   | { permission: 'delete'; branch: string }
   | { permission: 'grant'; role: GrantRole; branch?: string }
-  | { permission: 'register'; agent: boolean };
+  | { permission: 'register'; agent: boolean }
+  | { permission: 'list_users' }
+  | { permission: 'export_full' };
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -95,7 +100,23 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
     case 'register':
       if (op.agent) return isAgentExternalId(who.user.externalId) ? 'registering an agent needs a person' : undefined;
       return admin ? undefined : 'registering a person needs an Administrator';
+    case 'list_users':
+      return maintains(REGISTRY_BRANCH) || admin ? undefined : `listing users needs Maintainer of ${REGISTRY_BRANCH} or an Administrator`;
+    case 'export_full':
+      return maintains(REGISTRY_BRANCH) || admin ? undefined : `the full export profile needs Maintainer of ${REGISTRY_BRANCH} or an Administrator; pseudonymous and institutional are open`;
   }
+}
+
+/**
+ * The two reads ADR-0068 decision 4's note keeps for maintainers of `main`
+ * and administrators under `oidc`, where anyone with a token may read: the
+ * user list and the full export. Under `header` nothing is checked, as the
+ * note says. On a workspace hub, which runs under `header`, likewise.
+ */
+export async function requireReadPermission(c: Context, op: { permission: 'list_users' | 'export_full' }): Promise<void> {
+  if (hubOf(c).identity !== 'oidc') return;
+  const who = await resolveUser(c);
+  await requirePermission(c, who, op);
 }
 
 /** Refuses with 403 `forbidden` when `who` may not perform `op` on this hub. */
