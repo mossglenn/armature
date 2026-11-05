@@ -11,8 +11,16 @@
 # a large export. The Host header passes through unchanged, so the hub's loopback
 # boundary sees the public name, and so do ETag and If-Match, which the 412
 # concurrency check depends on.
+#
+# No `encode` here, unlike the viewer's site: Caddy appends the encoding's name to
+# a strong ETag when it compresses a response (`"<commit>-gzip"`, on responses over
+# its 512-byte minimum), as RFC 9110 asks of a representation that differs, and the
+# hub's ETag is a commit identifier a client sends back as If-Match and a workspace
+# hub records as its clone's base. Found on the Droplet run of 2026-11-05: a push
+# from a workspace hub failed 412 with a base of `<commit>-gzip`. The responses are
+# JSON of modest size over HTTP/2; the export is the largest (ADR-0067 decision 7,
+# note of 2026-11-05, later).
 {$ARMATURE_API_SCHEME:https}://{$ARMATURE_API_HOST} {
-	encode zstd gzip
 	request_body {
 		max_size 10MB
 	}
