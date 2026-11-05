@@ -17,7 +17,10 @@ The hub needs the TerminusDB container running with the schema and seed loaded (
 | `TERMINUS_USER` | Database account | `admin` |
 | `TERMINUS_PASS` | Its password; must match `TERMINUSDB_ADMIN_PASS` given to the container | `admin` |
 | `TERMINUS_DB` | Database name | `armature` |
-| `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local; the `oidc` resolver is specified in ADR-0067 (accepted 2026-10-30, not yet built) | `header` |
+| `ARMATURE_IDENTITY` | Optional. The identity resolver (ADR-0032): `header`, the default, reads `Armature-User: <externalId>` and trusts the caller, so keep the server local; `oidc` (ADR-0067 decision 1, since 2026-11-05) verifies `Authorization: Bearer <token>` on every request but `GET /discover` against the issuer's published keys, and needs the two variables below | `header` |
+| `ARMATURE_OIDC_ISSUER`, `ARMATURE_OIDC_AUDIENCE` | Under `oidc`, required: the identity provider's issuer identifier, the token's `iss`, and this hub as the provider names it, the token's `aud` | unset |
+| `ARMATURE_OIDC_ADMIT` | Under `oidc`, optional, comma-separated: the issuers (URLs) and email domains whose people are registered on their first sign-in; empty admits no one, and an administrator registers each person with `POST /users` naming `issuer` | unset |
+| `ARMATURE_OIDC_CLIENT_ID`, `ARMATURE_OIDC_JWKS_URL` | Under `oidc`, optional: the client id a native program signs in with, published by `GET /discover`; where the issuer's keys are, when not where its metadata (`/.well-known/openid-configuration`) says | unset |
 | `ARMATURE_ALLOWED_HOSTS` | Optional, comma-separated. Host names the hub answers besides loopback ones (ADR-0067 decision 7); the compose file sets `hub` | none |
 | `ARMATURE_ALLOWED_ORIGINS` | Optional, comma-separated. Web origins whose pages may call the hub from a browser, and get CORS answers; other remote web origins are refused | none |
 | `ARMATURE_EXPORT_KEY` | Optional. The key under which `GET /api/v1/export?profile=pseudonymous` derives user tokens (ADR-0031); set it so the same person has the same token in every export, leave it unset and each export mints its own | unset |
