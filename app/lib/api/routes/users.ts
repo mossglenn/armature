@@ -9,7 +9,7 @@ import { isRecord, StoreError } from '../store';
 /**
  * /api/v1/users (architecture decision record ADR-0032, decision 6).
  *
- *   GET  /?branch=|ref=    every User at a ref; ETag (entity tag) is the commit
+ *   GET  /?branch=|ref=&kind=  every User at a ref, or the agents or the persons; ETag (entity tag) is the commit
  *   GET  /me               the User the request resolved to (401 otherwise), with
  *                          the grants it holds (ADR-0068 decision 7)
  *   POST /                 { message, user }  register a User on main → 201; a person
@@ -24,14 +24,18 @@ export const users = new Hono();
 const USER_FIELDS = new Set(['@id', '@type', 'displayName', 'externalId', 'email', 'institution', 'issuer']);
 
 users.get('/', async (c) => {
-  // Under `oidc` the list is a maintainer's or an administrator's (ADR-0068 decision 4, note); under `header` it is open.
-  await requireReadPermission(c, { permission: 'list_users' });
+  // `kind=agent` lists the tools, which anyone may see; the persons, or everyone, is the
+  // registry, under `oidc` a maintainer's of main or an administrator's (ADR-0068 decision 4,
+  // notes of 2026-10-30 and 2026-11-05); under `header` all of it is open.
+  const kind = c.req.query('kind');
+  if (kind !== undefined && kind !== 'agent' && kind !== 'person') throw new ApiError(400, 'bad_query', 'kind is agent or person');
+  if (kind !== 'agent') await requireReadPermission(c, { permission: 'list_users' });
   const ref = refFromQuery(c);
   const store = storeFor(c, ref);
   if ('commit' in ref) await requireCommit(store, ref.commit);
   const { documents, commit } = await store.queryDocuments('User', {});
   setEtag(c, commit);
-  return c.json(documents);
+  return c.json(kind ? documents.filter((u) => isAgentExternalId(u.externalId) === (kind === 'agent')) : documents);
 });
 
 users.get('/me', async (c) => {

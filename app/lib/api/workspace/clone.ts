@@ -37,18 +37,28 @@ const schemaKey = (entries: Record<string, unknown>[]) =>
   );
 
 /**
- * Brings the local `main` level with the remote's: its schema, and every `User`
- * as the remote holds it, read at one remote commit, which is returned. A
- * schema or a user unchanged since the last mirror writes nothing, so the
- * mirror's log records only what changed. Creates the local store on first use
- * (platform check AN).
+ * Brings the local `main` level with the remote's: its schema, and the `User`
+ * documents identity resolves here, the owner's own and every agent, as the
+ * remote holds them, read at one remote commit, which is returned. Not every
+ * person: a workspace hub holds one owner (plan §7), the registry of everyone
+ * registered is a maintainer's read on a remote under `oidc` (ADR-0068
+ * decision 4, note of 2026-11-05), and the authors a branch names arrive in
+ * its export as the copies the write pipeline put there (ADR-0032 decision 5).
+ * Until 2026-11-05 every person was mirrored. A schema or a user unchanged
+ * since the last mirror writes nothing, so the mirror's log records only what
+ * changed. Creates the local store on first use (platform check AN).
  */
 export async function mirrorMain(hub: HubConfig, remote: ArmatureClient, owner: Owner): Promise<string> {
   const main = local(hub, { branch: MIRROR_BRANCH });
   await main.ensureDatabase();
   const schema = await fromRemote(hub, () => remote.schema({ branch: MIRROR_BRANCH }));
   const at = schema.data.ref;
-  const users = await fromRemote(hub, () => remote.users.list({ ref: at }));
+  const agents = await fromRemote(hub, () => remote.users.list({ ref: at, kind: 'agent' }));
+  // The owner as registered, without what /users/me adds about the moment (grants, a relay).
+  const me = { ...((await fromRemote(hub, () => remote.users.me())).data as unknown as Record<string, unknown>) };
+  delete me.grants;
+  delete me.relayedBy;
+  const users = { data: [me, ...(agents.data as unknown as Record<string, unknown>[]).filter((u) => u['@id'] !== me['@id'])] };
   const from = `from ${hub.remote} at ${at}`;
 
   const entries = schema.data.schema as Record<string, unknown>[];

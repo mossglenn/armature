@@ -672,9 +672,13 @@ export function createClient(options: ClientOptions) {
     },
 
     users: {
-      /** `GET /users` at a ref (`main` by default, the registry). */
-      list(opts: AtRef = {}) {
-        return call<User[]>('/users', { query: at(opts) });
+      /**
+       * `GET /users` at a ref (`main` by default, the registry), or with `kind` the agents or the
+       * persons only. Under a hub's `oidc` resolver the registry and the persons are a maintainer's
+       * of `main` or an administrator's; the agents, which are tools, anyone's (since 2026-11-05).
+       */
+      list(opts: AtRef & { kind?: 'agent' | 'person' } = {}) {
+        return call<User[]>('/users', { query: { ...at(opts), kind: opts.kind } });
       },
       /** `GET /users/me`: the user this client's identity resolves to, with the grants it holds in force (ADR-0068 decision 7). */
       me() {

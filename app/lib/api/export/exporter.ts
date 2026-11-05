@@ -67,6 +67,29 @@ export function unresolvedReferences(documents: TerminusDocument[]): Unresolved[
 }
 
 /**
+ * The export with every `User` the exported records do not name left out
+ * (ADR-0068 decision 4, note of 2026-11-05): what a caller who may not list
+ * the registry gets under the `full` profile, since the authors of records
+ * one may read are readable one by one already, and the registry of everyone
+ * registered is what the list keeps. `keep` names ids kept whatever
+ * references them, the caller's own. Agents are tools, not people, and stay.
+ */
+export function withoutUnreferencedUsers(documents: TerminusDocument[], keep: Iterable<string> = []): TerminusDocument[] {
+  const referenced = new Set<string>(keep);
+  for (const doc of documents) {
+    if (doc['@type'] === 'User') continue;
+    for (const [field, shape] of Object.entries(fieldsOf(doc['@type']))) {
+      if (shape.kind !== 'reference') continue;
+      const value = doc[field];
+      for (const target of Array.isArray(value) ? value : [value]) {
+        if (typeof target === 'string') referenced.add(target);
+      }
+    }
+  }
+  return documents.filter((doc) => doc['@type'] !== 'User' || referenced.has(doc['@id']) || String(doc.externalId ?? '').startsWith('agent:'));
+}
+
+/**
  * The store decorates every `Set` it returns with `@max_cardinality: "inf"`,
  * which it then refuses to load (platform check AE5). An export carries the
  * schema as it can be reloaded.

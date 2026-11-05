@@ -347,6 +347,18 @@ describe("the reads kept for maintainers of main and administrators under oidc (
     const listed = await json(await as(await token({ sub: ADMIN_SUB, name: 'Pat Admin' }), 'GET', '/users'));
     expect(listed.status).toBe(200);
     expect(listed.body.some((u: { externalId: string }) => u.externalId === 'sub-7')).toBe(true);
+    // The generic document route lists the same people, so it is the same read.
+    const byType = await json(await as(await person('sub-7', 'sam@example.edu'), 'GET', '/documents/User'));
+    expect(byType.status).toBe(403);
+    expect(byType.body).toMatchObject({ error: 'forbidden', permission: 'list_users' });
+    expect((await as(await token({ sub: ADMIN_SUB, name: 'Pat Admin' }), 'GET', '/documents/User')).status).toBe(200);
+    // The agents are tools, not people: anyone may list them, and the persons are the registry.
+    const agents = await json(await as(await person('sub-7', 'sam@example.edu'), 'GET', '/users?kind=agent'));
+    expect(agents.status).toBe(200);
+    expect(agents.body.map((u: { externalId: string }) => u.externalId)).toContain(`agent:${VIEWER_CLIENT}`);
+    expect(agents.body.every((u: { externalId: string }) => u.externalId.startsWith('agent:'))).toBe(true);
+    expect((await as(await person('sub-7', 'sam@example.edu'), 'GET', '/users?kind=person')).status).toBe(403);
+    expect((await json(await as(await person('sub-7', 'sam@example.edu'), 'GET', '/users?kind=robot'))).body.error).toBe('bad_query');
     // Under header the list stays open, as the note says.
     expect((await operator('GET', '/users')).status).toBe(200);
   });
@@ -357,16 +369,27 @@ describe("the reads kept for maintainers of main and administrators under oidc (
     expect(byDefault.status).toBe(200);
     expect(byDefault.body.armature.profile).toBe('pseudonymous');
     expect(byDefault.body.documents.some((d: { '@type': string; displayName?: string }) => d['@type'] === 'User' && d.displayName)).toBe(false);
-    const refused = await json(await as(sam, 'GET', '/export?profile=full'));
-    expect(refused.status).toBe(403);
-    expect(refused.body).toMatchObject({ error: 'forbidden', permission: 'export_full' });
+    // Full to anyone, but with the users the records name and oneself only: the registry stays a maintainer's.
+    const users = (body: { documents: Array<{ '@type': string; externalId?: string }> }) => body.documents.filter((d) => d['@type'] === 'User').map((d) => d.externalId);
+    const referenced = await json(await as(sam, 'GET', '/export?profile=full'));
+    expect(referenced.status).toBe(200);
+    expect(referenced.body.armature).toMatchObject({ profile: 'full', users: 'referenced' });
+    expect(users(referenced.body)).toContain('sub-7');
+    expect(users(referenced.body)).toContain('demo-designer@example.edu'); // the seed's author, named by its records
+    expect(users(referenced.body)).toContain(ADMIN_SUB); // named by their Grant, which anyone may list (ADR-0068 decision 8)
+    // A person registered and named by nothing is the registry's alone.
+    const quiet = await json(await operator('POST', '/users', { message: 'Registered, wrote nothing', user: { displayName: 'Quiet', externalId: `quiet-${stamp}`, issuer: ISSUER } }));
+    expect(quiet.status).toBe(201);
+    const again = await json(await as(sam, 'GET', '/export?profile=full'));
+    expect(users(again.body)).not.toContain(`quiet-${stamp}`);
     const institutional = await as(sam, 'GET', '/export?profile=institutional');
     expect(institutional.status).toBe(200);
     const full = await json(await as(await token({ sub: ADMIN_SUB, name: 'Pat Admin' }), 'GET', '/export?profile=full'));
     expect(full.status).toBe(200);
-    expect(full.body.armature.profile).toBe('full');
-    // Under header the default stays full.
-    expect((await json(await operator('GET', '/export'))).body.armature.profile).toBe('full');
+    expect(full.body.armature).toMatchObject({ profile: 'full', users: 'all' });
+    expect(users(full.body)).toContain(`quiet-${stamp}`);
+    // Under header the default stays full and every user is carried.
+    expect((await json(await operator('GET', '/export'))).body.armature).toMatchObject({ profile: 'full', users: 'all' });
   });
 });
 

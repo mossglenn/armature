@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { CLASS_FIELDS, type FieldShape } from '@armature/types';
 import { storeFor } from '../config';
-import { requireWrite } from '../authorization';
+import { requireReadPermission, requireWrite } from '../authorization';
 import { inheritsFrom, isKnownType, isWritable } from '../classes';
 import { ApiError } from '../errors';
 import {
@@ -105,6 +105,8 @@ function writeRef(c: Context): Ref & { branch: string } {
 documents.get('/:type', async (c) => {
   const { type } = c.req.param();
   if (!isKnownType(type)) throw new ApiError(404, 'unknown_type', `No type ${type}`);
+  // The user list by this route is the user list (ADR-0068 decision 4, note): under oidc a maintainer's of main or an administrator's.
+  if (type === 'User') await requireReadPermission(c, { permission: 'list_users' });
   const ref = refFromQuery(c);
   const store = storeFor(c, ref);
   if ('commit' in ref) await requireCommit(store, ref.commit);
