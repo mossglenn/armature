@@ -1,6 +1,6 @@
 import { CLASS_FIELDS, CLASS_KEY, type FieldShape } from '@armature/types';
 import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
-import { hasAttestedBy, hasCreatedBy, isWritable, livesOnMain } from './classes';
+import { hasAttestedBy, hasCreatedBy, isOperatorWritable, isWritable, livesOnMain } from './classes';
 import { ApiError } from './errors';
 import { commitMessage, REGISTRY_BRANCH, userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
@@ -81,16 +81,18 @@ const keyOf = (type: string): { type: string; fields?: readonly string[] } | und
   (CLASS_KEY as Record<string, { type: string; fields?: readonly string[] }>)[type];
 
 /** Step 1: shape. Returns the parsed documents with @type set. */
-export function parseDocuments(inputs: unknown[]): TerminusDocument[] {
+export function parseDocuments(inputs: unknown[], opts: { operator?: boolean } = {}): TerminusDocument[] {
   const issues: Array<{ index: number; path: string; message: string }> = [];
   const parsed: TerminusDocument[] = [];
+  // The operator's put also writes `User` (classes.ts); a route never does.
+  const writable = opts.operator ? isOperatorWritable : isWritable;
   inputs.forEach((input, index) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
       issues.push({ index, path: '', message: 'each document must be an object' });
       return;
     }
     const type = (input as Record<string, unknown>)['@type'];
-    if (typeof type !== 'string' || !isWritable(type)) {
+    if (typeof type !== 'string' || !writable(type)) {
       issues.push({ index, path: '@type', message: `${String(type)} is not a writable document type` });
       return;
     }
@@ -128,7 +130,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
     throw new ApiError(
       400,
       'grants_live_on_main',
-      `${onMain['@type']} documents live on ${REGISTRY_BRANCH} only, whatever branch the work is on; write this one there (ADR-0068 decision 2)`
+      `${onMain['@type']} documents live on ${REGISTRY_BRANCH} only, whatever branch the work is on; write this one there (ADR-0068 decision 2; ADR-0032 decision 2 for a User)`
     );
   }
   const moved = (current: string | undefined) =>
