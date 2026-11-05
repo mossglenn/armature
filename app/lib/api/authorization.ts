@@ -35,7 +35,10 @@ import type { TerminusDocument } from './store';
  * On a remote hub an agent's own credential may read and never write
  * (ADR-0067 decision 10). The operator tools are outside the API and outside
  * this (ADR-0062). An agent acting for a person may do what the person may
- * (ADR-0067 decision 3): the person's grants are read, the agent's never.
+ * (ADR-0067 decision 3): the person's grants are read, the agent's never. A
+ * service relaying a person's earlier work (ADR-0067 decision 5, since
+ * 2026-11-05) writes documents only, to a branch its Relay grant covers, and
+ * then as the person: the person's grants decide, the service's grant bounds.
  */
 export type Operation =
   | { permission: 'create'; branch: string }
@@ -135,8 +138,38 @@ export async function requirePermission(c: Context, who: ResolvedUser, op: Opera
       { permission, ...rest, credential: who.user.externalId }
     );
   }
+  const grants = await activeGrants(c);
+  // ADR-0067 decision 5: a relay delivers a person's documents, to a branch its
+  // Relay grant covers; the person's own grants then decide the write, as for
+  // anyone. Nothing else is done by relay: not a branch, a merge, a grant.
+  if (who.relayedBy) {
+    const relayedBy = who.relayedBy.user.externalId;
+    if (permission !== 'write') {
+      throw new ApiError(403, 'forbidden', `${relayedBy} relays ${who.user.externalId}'s earlier work as documents; ${permission} is not a relayed action (ADR-0067 decision 5)`, {
+        permission,
+        ...rest,
+        reason: 'relay',
+        relayed: who.user.externalId,
+      });
+    }
+    const covers = grants.some(
+      (grant) =>
+        grant.role === 'Relay' &&
+        grant.user === who.relayedBy!.id &&
+        (grant.branch === undefined || grant.branch === op.branch) &&
+        (grant.relayedUsers === undefined || grant.relayedUsers.includes(who.id))
+    );
+    if (!covers) {
+      throw new ApiError(403, 'forbidden', `${relayedBy}'s Relay grant does not cover branch ${op.branch} for ${who.user.externalId} (ADR-0067 decision 5)`, {
+        permission,
+        ...rest,
+        reason: 'relay',
+        relayed: who.user.externalId,
+      });
+    }
+  }
   const principal = principalOf(who);
-  const why = refusal(principal, op, await activeGrants(c));
+  const why = refusal(principal, op, grants);
   if (why === undefined) return;
   throw new ApiError(403, 'forbidden', `${principal.user.externalId} may not: ${why} (ADR-0068 decision 4)`, { permission, ...rest });
 }

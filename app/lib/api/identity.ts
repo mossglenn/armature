@@ -1,10 +1,12 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import type { User } from '@armature/types';
 import { ApiError } from './errors';
-import { ON_BEHALF_OF_TRAILER, withTrailer } from './trailers';
+import { ON_BEHALF_OF_TRAILER, RELAYED_BY_TRAILER, withTrailer } from './trailers';
 import { hubOf, storeFor } from './config';
 import { challenge, oidcResolver } from './oidc';
 import { StoreError, type DocumentReader, type Store, type TerminusDocument } from './store';
+// A cycle at the module level (authorization.ts resolves identities too), used only inside functions.
+import { activeGrants } from './authorization';
 
 /**
  * Identity resolution (architecture decision record ADR-0032).
@@ -26,7 +28,10 @@ import { StoreError, type DocumentReader, type Store, type TerminusDocument } fr
  *           403 `not_registered`; a service's token as the agent `User` named
  *           by its client id. Every request needs a token but `GET /discover`
  *           (`requireIdentity`), and `Armature-User` beside a token is a
- *           relay's claim (decision 5), refused until relays are built.
+ *           relay's claim (decision 5, since 2026-11-05): a service whose
+ *           agent holds a `Relay` grant naming the person delivers the
+ *           person's earlier work with the person as author, and the hub
+ *           writes `Armature-Relayed-By` into the message.
  */
 
 export interface IdentityClaims {
@@ -99,14 +104,24 @@ export interface ResolvedUser {
    * `Armature-On-Behalf-Of` trailer. Absent when the caller acts as itself.
    */
   onBehalfOf?: { id: string; user: UserDocument };
+  /**
+   * The service that delivered this person's earlier work (ADR-0067 decision
+   * 5): the request's credential, an agent holding an active `Relay` grant
+   * that names the person, under `oidc`. The person is the author, the
+   * `createdBy` and the `attestedBy`; the commit says who carried it in its
+   * `Armature-Relayed-By` trailer. Absent when the caller acts as itself.
+   */
+  relayedBy?: { id: string; user: UserDocument };
 }
 
-/** Whose authority a request runs under: the person an agent acts for, else the caller. */
+/** Whose authority a request runs under: the person an agent acts for, else the caller (a relayed person is the caller). */
 export const principalOf = (who: ResolvedUser): { id: string; user: UserDocument } => who.onBehalfOf ?? who;
 
-/** The message as the hub commits it: the caller's, with the hub's own trailer when an agent acts for a person (ADR-0067 decisions 3 and 6). */
+/** The message as the hub commits it: the caller's, with the hub's own trailer when an agent acts for a person or a service relays one (ADR-0067 decisions 3, 5 and 6). */
 export function commitMessage(who: ResolvedUser, message: string): string {
-  return who.onBehalfOf ? withTrailer(message, `${ON_BEHALF_OF_TRAILER}: ${who.onBehalfOf.user.externalId}`) : message;
+  if (who.onBehalfOf) return withTrailer(message, `${ON_BEHALF_OF_TRAILER}: ${who.onBehalfOf.user.externalId}`);
+  if (who.relayedBy) return withTrailer(message, `${RELAYED_BY_TRAILER}: ${who.relayedBy.user.externalId}`);
+  return message;
 }
 
 /** The store bound to the registry branch of the request's hub. */
@@ -186,6 +201,11 @@ async function resolveOnce(c: Context): Promise<ResolvedUser> {
   const person = await resolveCredential(c);
   const agentExternalId = c.req.header(AGENT_HEADER)?.trim();
   if (!agentExternalId) return person;
+  if (person.relayedBy) {
+    throw new ApiError(403, 'forbidden', `A relay delivers the person's own earlier work; ${AGENT_HEADER} names an agent acting now, which a relayed write cannot carry (ADR-0067 decision 5)`, {
+      reason: 'relay',
+    });
+  }
   if (isAgentExternalId(person.user.externalId)) {
     throw new ApiError(400, 'not_a_person', `${AGENT_HEADER} needs a person's credential in ${USER_HEADER}; ${person.user.externalId} is an agent`);
   }
@@ -197,22 +217,54 @@ async function resolveOnce(c: Context): Promise<ResolvedUser> {
   return { id: user['@id'], user, onBehalfOf: { id: person.id, user: person.user } };
 }
 
-/** The `User` the request's own credential resolves to. */
+/** The `User` the request's own credential resolves to, or the person a service relays. */
 async function resolveCredential(c: Context): Promise<ResolvedUser> {
   const hub = hubOf(c);
-  // Under a verified token, naming someone else in Armature-User is a relay's
-  // claim (ADR-0067 decision 5), which needs a Relay grant; refused as such
-  // until relays are built, never taken as the author or ignored.
-  if (hub.identity === 'oidc' && c.req.header(USER_HEADER)?.trim()) {
-    throw new ApiError(
-      403,
-      'forbidden',
-      `${USER_HEADER} beside a bearer token names someone else as the author, which only a service holding a Relay grant may do (ADR-0067 decision 5), and relays are not built yet; the token's own subject is the caller`,
-      { reason: 'relay' }
-    );
-  }
   const claims = await requireClaims(c);
   const main = registry(c);
+  // Under a verified token, naming someone else in Armature-User is a relay's
+  // claim (ADR-0067 decision 5): only a service holding a Relay grant that
+  // names the person may make it, and the person is then the author.
+  const relayed = hub.identity === 'oidc' ? c.req.header(USER_HEADER)?.trim() : undefined;
+  if (relayed) return resolveRelay(c, claims, relayed);
+  return resolveClaims(c, claims, main);
+}
+
+/** The relay's 403, one code and reason for every refusal so a client treats them alike. */
+const relayRefused = (message: string, relayed: string): ApiError =>
+  new ApiError(403, 'forbidden', `${message} (ADR-0067 decision 5)`, { reason: 'relay', relayed });
+
+/**
+ * A service delivering a person's earlier work (ADR-0067 decision 5): the
+ * token is a service's, its agent `User` holds an active `Relay` grant, and
+ * the grant names the person or names no one in particular (`relayedUsers`
+ * absent). The person is resolved as the author, the service recorded beside
+ * them; which branches the grant covers is checked at the write
+ * (authorization.ts), where the branch is known.
+ */
+async function resolveRelay(c: Context, claims: IdentityClaims, relayed: string): Promise<ResolvedUser> {
+  if (!claims.service) {
+    throw relayRefused(`${USER_HEADER} beside a person's token names someone else as the author, which only a service holding a Relay grant may do; the token's own subject is the caller`, relayed);
+  }
+  const main = registry(c);
+  const service = await resolveClaims(c, claims, main);
+  const relays = (await activeGrants(c)).filter((grant) => grant.role === 'Relay' && grant.user === service.id);
+  if (!relays.length) {
+    throw relayRefused(`${service.user.externalId} holds no Relay grant, so it may not deliver anyone's work as theirs; an administrator grants one on main`, relayed);
+  }
+  // The person by the hub's issuer first, then as registered under header, since a relayed person signed in somewhere once.
+  const found = (await findUserByExternalId(main, relayed, hubOf(c).oidc?.issuer)).user ?? (await findUserByExternalId(main, relayed)).user;
+  if (!found) throw new ApiError(401, 'unknown_user', `No User is registered for ${relayed}, the person this relay names; they sign in once, or an administrator registers them`);
+  if (isAgentExternalId(found.externalId)) throw new ApiError(400, 'not_a_person', `${relayed} is an agent; a relay delivers a person's work`);
+  if (!relays.some((grant) => grant.relayedUsers === undefined || grant.relayedUsers.includes(found['@id']))) {
+    throw relayRefused(`${service.user.externalId}'s Relay grant does not name ${relayed} among the people it may speak for (relayedUsers)`, relayed);
+  }
+  return { id: found['@id'], user: found, relayedBy: { id: service.id, user: service.user } };
+}
+
+/** The `User` these claims resolve to, registered on first encounter when the resolver allows. */
+async function resolveClaims(c: Context, claims: IdentityClaims, main: Store): Promise<ResolvedUser> {
+  const hub = hubOf(c);
   // Two passes: a concurrent registration of the same externalId makes the
   // insert fail on the head it read (If-Match) or on the id, and the second
   // lookup then finds the winner's document.
