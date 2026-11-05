@@ -160,9 +160,12 @@ export const UNCHECKED_NOTE = "[operator: the hub's rules were skipped]";
 
 /**
  * One document or a batch through the write pipeline (decision 5.3), exactly
- * as on /api/v1 but authored by the operator. `unchecked` skips the hub's
- * rules, never shape, provenance or the store's checks, and the message says
- * so; run `check` afterward.
+ * as on /api/v1 but authored by the operator, and taking `User` documents too,
+ * which no route writes: a person's email corrected, or the `issuer` they
+ * sign in with added (ADR-0067 decision 1; the rehearsal of 2026-11-05 found
+ * the ADR's promise unkept). `unchecked` skips the hub's rules, never shape,
+ * provenance or the store's checks, and the message says so; run `check`
+ * afterward.
  */
 export async function putDocuments(opts: {
   branch: string;
@@ -174,7 +177,7 @@ export async function putDocuments(opts: {
   const reason = needReason(opts.reason);
   if (!opts.documents.length) throw new OperatorError('Nothing to write: the input holds no documents');
   const who = await operatorIdentity(opts.as);
-  const documents = parseDocuments(opts.documents);
+  const documents = parseDocuments(opts.documents, { operator: true });
   const message = opts.unchecked ? `${reason} ${UNCHECKED_NOTE}` : reason;
   const { commit, result } = await asOperatorCommit(
     opts.branch,

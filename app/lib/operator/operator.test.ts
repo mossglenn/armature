@@ -201,6 +201,32 @@ describe('grants on main through put (ADR-0068 decision 6)', () => {
     expect(revoked.ids[0]).toBe(written.ids[0]);
     expect((await createStore({ branch: 'main' }).getDocument(written.ids[0])).document.status).toBe('Revoked');
   });
+
+  it('writes a User on main, which no route does: the first administrator under oidc, or an issuer added (ADR-0062; found by the rehearsal of 2026-11-05)', async () => {
+    const id = `User/operator-${stamp}`;
+    const user = { '@type': 'User', '@id': id, displayName: 'Pat Admin', externalId: `sub-${stamp}`, issuer: 'https://login.example.edu/realms/armature' };
+    const written = await putDocuments({ branch: 'main', documents: [user], as: OPERATOR, reason: 'The first administrator under oidc' });
+    expect(written.ids).toEqual([id]);
+    expect((await createStore({ branch: 'main' }).getDocument(id)).document).toMatchObject({ externalId: `sub-${stamp}`, issuer: user.issuer });
+    // Corrected the same way: a replace by id.
+    await putDocuments({ branch: 'main', documents: [{ ...user, email: 'pat@example.edu' }], as: OPERATOR, reason: 'An email added' });
+    expect((await createStore({ branch: 'main' }).getDocument(id)).document.email).toBe('pat@example.edu');
+    // Never elsewhere, and never through the routes.
+    const elsewhere = `test-operator-user-${stamp}`;
+    expect(
+      (await app.request('/api/v1/branches', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Armature-User': OPERATOR }, body: JSON.stringify({ name: elsewhere }) })).status
+    ).toBe(201);
+    await expect(putDocuments({ branch: elsewhere, documents: [user], as: OPERATOR, reason: 'x' })).rejects.toMatchObject({ code: 'grants_live_on_main' });
+    await deleteScratchBranch(elsewhere, AS_OPERATOR);
+    const byRoute = await app.request('/api/v1/documents?branch=main', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Armature-User': OPERATOR },
+      body: JSON.stringify({ message: 'x', documents: [user] }),
+    });
+    expect(byRoute.status).toBe(400);
+    expect((await byRoute.json()).issues[0].message).toContain('not a writable document type');
+    await deleteDocument({ id, branch: 'main', as: OPERATOR, reason: 'The test is over' });
+  });
 });
 
 describe('the skip stays operator-only', () => {
