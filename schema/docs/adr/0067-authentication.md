@@ -374,6 +374,23 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > the session's recommendation over a hosted tenant and CILogon); `docs/deployment.md`, "An
    > instance under `oidc`", has the settings, the first administrator by the operator's `put`
    > with `issuer`, and the checks from outside. The fresh-VM rehearsal is recorded there too.
+   >
+   > **Note (2026-11-05, later), from the Droplet run** (`docs/deployment.md`, "An instance under
+   > `oidc`", the Droplet paragraph): the hub's snippet compressed its responses (`encode zstd
+   > gzip`, as the viewer's site does), and Caddy appends the encoding's name to a strong `ETag`
+   > when it compresses, `"<commit>-gzip"`, on responses over its 512-byte minimum. A client that
+   > accepts compression, as Node's `fetch` does, then holds an `ETag` that is not a commit, and
+   > the first remote writing client showed it: a workspace hub's clone recorded `<commit>-gzip`
+   > as its base and its push was 412 at the remote. The fresh-VM rehearsal's `curl` accepted no
+   > encoding and its responses were small, so it never saw it. The snippet no longer compresses
+   > the hub's responses, which pass the proxy with their `ETag` untouched; the viewer's site keeps
+   > its `encode`. Verified on the Droplet after the change: a 132 KB export and a list read with
+   > every encoding offered carried the bare commit, and a fresh workspace's push landed. A
+   > deployment that puts the hub behind another proxy must check the same, as the guide says,
+   > and a workspace hub now checks for itself: a base that is not a bare commit identifier is
+   > refused at the clone, 502 `remote_error` with `reason: etag_altered`, before anything is
+   > written (`remoteCommit` in `app/lib/api/workspace/remote.ts`), and status reads the remote's
+   > head from the body rather than the `ETag`.
 
 8. **`header` stays, bounded.** The `header` resolver remains the default for development, tests,
    a workspace hub's loopback and a private compose network, and reads `Armature-Agent` as
