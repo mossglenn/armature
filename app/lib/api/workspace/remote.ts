@@ -39,6 +39,32 @@ export function remoteClient(hub: HubConfig, externalId?: string, agent?: string
   });
 }
 
+/** The shape of a commit identifier from either store: TerminusDB's and the file store's are lower-case letters and digits. */
+const COMMIT_ID = /^[a-z0-9]+$/;
+
+/**
+ * A commit identifier the remote gave in an `ETag`, checked to be one before
+ * this hub records it. A proxy in front of the remote can alter a strong ETag:
+ * Caddy's `encode` appends the encoding's name when it compresses a response
+ * (`"<commit>-gzip"`), which the Droplet run of 2026-11-05 found when a clone
+ * recorded such a base and its push was 412 at the remote (ADR-0067 decision 7,
+ * note of that day). Refused here instead, before anything is written: 502
+ * `remote_error` with `reason: etag_altered` and the value, naming the proxy as
+ * the likely cause. A missing commit is the same code without a reason.
+ */
+export function remoteCommit(hub: HubConfig, commit: string | undefined, what: string): string {
+  if (!commit) throw new ApiError(502, 'remote_error', `The remote answered ${what} without a commit`, { remote: true });
+  if (!COMMIT_ID.test(commit)) {
+    throw new ApiError(
+      502,
+      'remote_error',
+      `The remote at ${hub.remote} answered ${what} with an ETag that is not a commit identifier, ${JSON.stringify(commit)}; a proxy in front of it has altered the ETag (a compressing proxy appends the encoding's name), which would break If-Match and every push from here`,
+      { remote: true, reason: 'etag_altered', commit }
+    );
+  }
+  return commit;
+}
+
 /** Whether this hub reaches its remote with a token rather than the owner's identifier. */
 export const remoteTakesToken = (hub: HubConfig): boolean => hub.remoteToken !== undefined;
 
