@@ -46,6 +46,19 @@ without a separate decision, open to overrule.
 agent as the credential itself reads and never writes on a remote hub, 403 `forbidden` with
 `credential`; a workspace hub's push replays an agent's commit as the agent acting for the owner.
 
+**Note 2026-11-05, built:** the `oidc` resolver itself (decision 1 with its note, the resolving
+half of decision 4, and decision 9; `app/lib/api/oidc.ts`, `identity.ts`; `oidc.test.ts`,
+contract revision 2026-11-05), the first of the pull requests that build the rest before the
+workspace hub's release (the plan's §14, "Before step 7"). The notes beside each decision say what
+was chosen while building. Still to come, in order: services' credentials as the viewer uses one
+and relays (decisions 4 and 5, the next pull request); the workspace hub signing in to its remote
+(decision 2); `api.<site>`, the liveness and readiness routes and the compose guard (decision 7's
+note). Amos accepted the session's recommendations for the five choices the notes had left open:
+`jose` with its remote key set, the key set kept per process by its address and read from the
+issuer's own metadata; the settings read in `config.ts` on every request like every other; a
+token source the host supplies for the workspace hub; a service told from a person by the absence
+of a `name` claim; and discovery's `identity` entry as decision 9's note has it.
+
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065). Decision 7 is built first;
 decisions 3, 6 and 8, with the client's `agent` option, before the workspace hub's push; the rest
 (decisions 1, 2, 4, 5 and 9) before its release (`docs/workspace-hub-plan.md` §14).
@@ -156,6 +169,35 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > already touches `User`. Open question 1 is resolved by this. Review B7 and H4
    > (`docs/armature-deep-review-2026-10-30.md`); `not_registered` is a name chosen without a
    > separate decision, open to overrule.
+   >
+   > **Note (2026-11-05), built** (`app/lib/api/oidc.ts`): `jose`'s `jwtVerify` against a remote
+   > key set (`createRemoteJWKSet`), which caches the keys, refetches once when a token names a
+   > key it lacks and at most every half minute, so a provider's rotation needs nothing of the
+   > hub; the key set's address is read from the issuer's metadata
+   > (`<issuer>/.well-known/openid-configuration`, OpenID Connect Discovery, the document's own
+   > `issuer` checked against the one asked for) or from `ARMATURE_OIDC_JWKS_URL`, and both are
+   > kept per process by address, since the configuration is rebuilt per request (`config.ts`).
+   > `ARMATURE_OIDC_ISSUER`, `ARMATURE_OIDC_AUDIENCE`, `ARMATURE_OIDC_ADMIT` and the two optional
+   > settings are read in `config.ts` with every other, so an administrator widens admission
+   > without a restart; an entry of the admission list is an issuer when it contains `://`, else
+   > an email domain, and a domain admits only a token whose `email` the provider does not mark
+   > unverified (`email_verified: false`). Every request but `GET /discover` resolves its token
+   > before any route runs (`requireIdentity`), and the resolved identity is kept on the request.
+   > A refused token is 401 `invalid_token` with `reason` (`expired`, `audience`, `issuer`,
+   > `signature`, `algorithm`, `unknown_key`, `not_yet_valid`, `malformed`), and no token is 401
+   > `identity_required`, both with `WWW-Authenticate: Bearer` (RFC 6750). A token's `sub` is the
+   > `externalId` and a `User` is matched by `(issuer, sub)` strictly: one registered without an
+   > `issuer`, as the seed's are, is never a token's subject, so under `oidc` the first
+   > administrator is registered by the operator's `put` or `POST /users` naming the issuer, which
+   > that route now accepts. A workspace hub refuses `ARMATURE_IDENTITY=oidc` at start: it resolves
+   > its owner from the trusted header and signs in to its remote from its host (decision 2).
+   > Until relays are built, `Armature-User` beside a token is 403 `forbidden` with `reason:
+   > relay`, never ignored, so a client still sending its old header cannot believe it wrote as
+   > that person. The contract test signs tokens with a key it generates and hands the hub the
+   > matching key set on its configuration (`oidc.keys`), so no issuer is reached; the metadata
+   > read is tested with a stub fetch. Names chosen without a separate decision, open to overrule:
+   > `invalid_token` and its reasons, 503 `issuer_unreachable`, `ARMATURE_OIDC_CLIENT_ID` and
+   > `ARMATURE_OIDC_JWKS_URL`, `HubConfig.oidc` and `oidc.keys`.
 
 2. **A native client signs in as the person.** The workspace hub, Quiver and the Storyline bridge
    use the authorization code flow with PKCE (Proof Key for Code Exchange) and a loopback redirect,
@@ -187,6 +229,15 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > the service's own work with no person present, is refused with 403 `forbidden` (ADR-0068);
    > a service writes a person's earlier work only under a `Relay` grant (decision 5), and an
    > agent's own work reaches a remote only through a workspace hub (decision 10).
+   >
+   > **Note (2026-11-05), built in part:** the resolving half. A service's token is told from a
+   > person's by the rule decision 1 already draws: a person's token carries `name`, which first
+   > encounter registers with; a service's carries none and names its client in `azp` (what most
+   > providers set) or `client_id` (RFC 9068's claim). Such a token resolves to the agent `User`
+   > `agent:<client id>`, 401 `unknown_user` until a person registers it, and reads, decision 10's
+   > refusal already standing for a write. The viewer holding such a credential, and
+   > `@armature/client` taking a function that returns the current token, come with decision 7's
+   > note (`api.<site>`); the client's `token` option itself is built.
 
 5. **A service may relay a person's earlier work only if it holds a relay grant.** A service whose
    agent `User` holds an active `Relay` grant (ADR-0068) may send `Armature-User: <person>` with
@@ -287,6 +338,15 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    client id they sign in with, which with the issuer and audience is what the workspace hub's
    connection profile carries (`docs/workspace-hub-plan.md` §16, question 12).
 
+   > **Note (2026-11-05), built:** `identity` on every hub's `GET /discover`: `resolver`;
+   > `headers`, each header a client may send with what it names (`Armature-User: person`,
+   > `Armature-Agent: agent` under `header`; `Authorization: bearer`, `Armature-Agent: agent`,
+   > `Armature-User: relay` under `oidc`); and under `oidc` the `issuer`, the `audience` and the
+   > `clientId` from `ARMATURE_OIDC_CLIENT_ID` when set. Nothing more: a client reads the issuer's
+   > own metadata for its endpoints, and the admission list is the instance's, not published.
+   > `@armature/client` has `token`, a string or a function returning the current one; `agent` it
+   > had. Contract revision 2026-11-05 (`docs/client-changes.md`).
+
 10. **An agent's own work reaches a remote only through a workspace hub** (added 2026-10-30). A
     remote hub refuses a write whose author would be an agent unless it arrives as a workspace
     hub's push acting for the workspace's owner (decision 3's form, with the owner's credential),
@@ -377,6 +437,21 @@ how an instance runs.
 > which the trailer test will build on. "Before acceptance" above reads as "before the build":
 > the JWKS tests with decision 1 and the refused-trailer test with decision 6, in the workspace
 > hub plan's §14 order.
+>
+> **Note (2026-11-05):** the signing-key tests are `app/lib/api/oidc.test.ts`, over a scratch
+> database since first encounters register on `main`: a valid token registers an admitted person
+> with the issuer and resolves them by `(issuer, sub)` after; a token not admitted is 403
+> `not_registered` and registers nothing, an unverified email and a token with no name likewise; a
+> person registered ahead with the issuer resolves with their grants; a service's token resolves to
+> its agent, reads, and is refused a write; the expired, wrong-audience, wrong-issuer, wrong-key,
+> unknown-key, HS256 and malformed tokens are each 401 `invalid_token` with their reason and the
+> challenge; no token is 401 on every read but `/discover`; `Armature-User` beside a token is
+> refused and `Armature-Agent` beside one writes as under `header`; the user list and the full
+> export are refused to a person without the grant and served to an administrator, the default
+> export pseudonymous. The issuer's metadata read is tested with a stub fetch (one read kept, a
+> foreign issuer's document refused, a failed read forgotten), and `configFromEnv`'s parsing of the
+> five settings in the same file. An issuer in a container for a fresh-VM rehearsal comes with
+> decision 7's note, since the compose file does not change here.
 
 ## Consequences
 

@@ -216,7 +216,7 @@ Beat 5 is the one no other demo can show, and the one most likely to stay with a
 - **Answer caching across requests.** A read at a commit is immutable, so a cache would be safe, but the hub already memoizes history (`memo.ts`) and no measured need exists.
 - **Generation by the client's model.** Sampling is deprecated in the 2026-07-28 revision; summaries are written by the server's code.
 - **Pictures in the conversation.** The MCP Apps extension could render the Coverage View inside a chat; client support could not be confirmed. Revisit after M3.
-- **Remote hosting before OIDC.** Streamable HTTP with authorization waits for the hub's `oidc` resolver (§13 question 3).
+- **Remote hosting before OIDC.** Streamable HTTP with authorization waits for the hub's `oidc` resolver (§13 question 3); the resolver is built since 2026-11-05, and a hub published under it is the remaining step.
 - **Writes to a remote hub, in any mode.** *Decided 2026-10-30:* an agent's own work reaches a remote only as a workspace hub's push acting for its owner (ADR-0067 decision 10; §7). A hosted server reads.
 
 ---

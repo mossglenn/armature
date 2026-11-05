@@ -44,6 +44,9 @@ come with ADR-0067 decision 1; decision 9's warning at workspace creation, which
 **Note 2026-11-01 (evening), built:** decision 9's warning at workspace creation, with push (the
 note beside it); the migration window's close and the `oidc` rows remain.
 
+**Note 2026-11-05, built:** decision 4's two `oidc` rows and `not_registered`, with ADR-0067
+decision 1 (the note beside decision 4). The migration window's close remains.
+
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065), built whole before its push
 (`docs/workspace-hub-plan.md` §14), since push's failures depend on ownership.
 
@@ -188,6 +191,15 @@ answers for, and not for another person, who never consented.
    > needs the token admitted by `ARMATURE_OIDC_ADMIT` (ADR-0067 decision 1, note), else 403
    > `not_registered` until an administrator registers them. A branch-scoped `Reader` grant stays
    > deferred to open question 1's trigger. Review B7.
+   >
+   > **Note (2026-11-05), built** (`requireReadPermission` in `authorization.ts`, two operations
+   > in the table's code, `list_users` and `export_full`): under `oidc` `GET /users` and
+   > `GET /export?profile=full` are refused 403 `forbidden` naming that permission to anyone but a
+   > maintainer of `main` or an administrator, the export's default profile is `pseudonymous`,
+   > and `institutional` stays open with it; under `header` nothing is checked and the default
+   > stays `full`, as this note says. A service's credential (ADR-0067 decision 4) is refused both
+   > as any agent is (decision 10's rule runs first), which the viewer, a reader of modules and
+   > coverage, does not need. First encounter's refusal is ADR-0067 decision 1's note of this day.
 
 5. **Who may be named as an author.** Each write's author is the caller; or a registered agent
    acting for the caller (ADR-0067 decision 3), any agent whoever registered it, with the caller

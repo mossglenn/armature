@@ -34,9 +34,9 @@ Every response that read from or wrote to the database carries the commit it was
 
 A write may send `If-Match: "<commit-id>"`, meaning "apply this only if the branch is still at this commit." If anyone has committed to the branch since, the write is refused with **412** (`precondition_failed`), and the body carries `expected` and `current` commit identifiers. The token is the branch head, not a fingerprint of one document, so a 412 may mean someone changed a different document; re-read and retry. `If-Match: *` (HTTP's "the resource exists") is refused with 400 `bad_if_match`, since a branch head cannot express it (since 2026-10-31; it was read as no condition). Without `If-Match`, a write is not conditioned on what the client read, but it is checked and committed at one commit: the hub conditions it on the head its rules were checked at, and if another commit lands in between, runs the whole write again on the new head, up to three runs, then answers **409** `branch_moved` with nothing written (since 2026-10-31; the deep review's B2). That rerun refuses rather than overwrites when the commit it lost to changed a document the write replaces: **409** `document_moved` with `documents`, `checked` and `current` (since 2026-11-01; ADR-0025 decision 7, note), so a concurrent edit of the same record is never silently undone; read again and write with `If-Match`. A stale `If-Match` is refused before the write's rules are checked, so its 412 comes before a `type_conflict` or an `invariant_violation`. `If-None-Match` is not supported.
 
-### Identity: `Armature-User`
+### Identity: `Armature-User`, or a bearer token
 
-Every route that changes data needs an identity (ADR-0032). Under the default `header` resolver, the request carries `Armature-User: <externalId>`, the external identifier of a registered `User` (the seed registers `demo-designer@example.edu`). The hub resolves it to a `User` document on `main`, records that user as the commit author, and sets `createdBy` on documents it creates. Missing header: **401** `identity_required`. Unregistered identifier: **401** `unknown_user`.
+Every route that changes data needs an identity (ADR-0032), and under `oidc` every route but `GET /discover` does (below). Under the default `header` resolver, the request carries `Armature-User: <externalId>`, the external identifier of a registered `User` (the seed registers `demo-designer@example.edu`). The hub resolves it to a `User` document on `main`, records that user as the commit author, and sets `createdBy` on documents it creates. Missing header: **401** `identity_required`. Unregistered identifier: **401** `unknown_user`.
 
 Since 2026-11-01 a request may also carry `Armature-Agent: <agent externalId>`, a registered agent `User` (one whose `externalId` begins with `agent:`), under every resolver (ADR-0067 decisions 3 and 8). The person in `Armature-User` is resolved first and the agent second: the agent is the commit's author and the `createdBy` of what it creates, the person's authority decides the request (below), and the hub appends `Armature-On-Behalf-Of: <person externalId>` to the commit message. An agent that is not registered: **401** `unknown_agent`; a person named as the agent: **400** `not_an_agent`; an agent's identifier in `Armature-User` beside `Armature-Agent`: **400** `not_a_person`. A request naming an agent directly in `Armature-User` may read; on a remote hub it may not write, create a branch, merge, delete, grant or register: **403** `forbidden` with `credential` naming the agent (ADR-0067 decision 10, since 2026-11-01). An agent's own work reaches a remote only as a workspace hub's push, acting for the workspace's owner (Workspace).
 
@@ -44,7 +44,9 @@ Since 2026-11-01 a request may also carry `Armature-Agent: <agent externalId>`, 
 
 **Authorization (ADR-0068, since 2026-11-01).** Once the identity is resolved, a remote hub checks that it may do what it asks, from the `Grant` documents in force on `main` (the Grants section), and refuses with **403** `forbidden`, naming the missing `permission` (`create`, `write`, `merge`, `delete`, `grant` or `register`) and, as it applies, the `branch`, the `role` or `agent`. An agent acting for a person may do what the person may. A workspace hub does not check grants; it keeps each workspace to its owner (**403** `forbidden` with `owner` for anyone else, since 2026-11-01), warns at creation when the remote would refuse the owner, and leaves the refusal to the remote's push (ADR-0068 decision 9; Workspace). The capability `armature/authorization` in `GET /discover` says the hub authorizes.
 
-The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself. An `oidc` (OpenID Connect) resolver is specified in ADR-0067 (accepted 2026-10-30; its `Host` and `Origin` checks, the next section, are built, the rest not yet), a prerequisite of the workspace hub (ADR-0065, accepted the same day); until it is built, every writing client runs beside the hub.
+The `header` resolver trusts the caller. While it is configured, the hub is reachable only from its own server (its port on loopback; `deployment.md`), and a tool that writes runs there or behind a proxy that authenticates and sets the header itself.
+
+**The `oidc` resolver (OpenID Connect; ADR-0067 decision 1, since 2026-11-05).** A hub under `ARMATURE_IDENTITY=oidc` takes no `Armature-User`: every request carries `Authorization: Bearer <token>`, a JSON Web Token the instance's identity provider signed, which the hub verifies against the provider's published keys, checking the issuer and the audience `GET /discover` names (`identity.issuer`, `identity.audience`), the expiry, and the algorithm (`RS256`, `ES256` or `EdDSA`). Every request needs one, reads included; `GET /discover` alone stays open. No token: **401** `identity_required`; a token the hub refuses: **401** `invalid_token` with `reason` (`expired`, `audience`, `issuer`, `signature`, `algorithm`, `unknown_key`, `not_yet_valid`, `malformed`); both carry `WWW-Authenticate: Bearer`. A person's token resolves by `(issuer, sub)`: `sub` is the `externalId`, and a `User` registered under `oidc` carries `issuer`, so a `User` registered without one (the seed's) is never a token's subject. First sign-in registers a person, from the token's `name` and `email`, only when `ARMATURE_OIDC_ADMIT` admits the token: it lists issuers and email domains, a domain matched against the token's `email` unless the token marks it unverified, and empty admits no one. Otherwise a valid token is **403** `not_registered` until an administrator registers the person with `POST /users`, naming `issuer`. A service's token, issued to a program with no person present by the client credentials grant (decision 4), carries no `name` and names its client in `azp` or `client_id`; it resolves to the agent `User` whose `externalId` is `agent:<client id>`, registered by a person as any agent is (**401** `unknown_user` until then), and reads only (decision 10). `Armature-Agent` works beside a person's token exactly as under `header`. `Armature-User` beside a token is a relay's claim (decision 5), **403** `forbidden` with `reason: relay` until relays are built. An issuer whose keys cannot be read: **503** `issuer_unreachable`. Under `oidc` two reads are kept for a maintainer of `main` or an administrator, `GET /users` and `GET /export?profile=full` (Users; Export). Native sign-in (decision 2) and relays (decision 5) are not built yet; a workspace hub runs under `header` and signs in to its remote from its host.
 
 ### Hosts and web origins
 
@@ -219,7 +221,7 @@ There are no reset, squash or rebase routes: shared history is never rewritten.
 
 ### `GET /users`
 
-Every `User` at a ref (`main` by default).
+Every `User` at a ref (`main` by default). Under `oidc` the list is a maintainer's of `main` or an administrator's, **403** `forbidden` with `permission: "list_users"` otherwise (ADR-0068 decision 4, note; since 2026-11-05); under `header` it is open.
 
 ### `GET /users/me`
 
@@ -229,7 +231,7 @@ The `User` this request resolves to, or the resolver's 401; since 2026-11-01 wit
 
 Registers a user on `main`, the registry of record (ADR-0032). A `branch` or `ref` parameter is refused (400 `users_live_on_main`). The caller must be a registered user; since 2026-11-01 a person is registered by an `Administrator` and an agent by any person (**403** `forbidden`, `permission: "register"`, `agent: true | false`; ADR-0068 decision 4).
 
-- Body: `{ "message": "...", "user": { "displayName": "...", "externalId": "...", "email"?: "...", "institution"?: "...", "@id"?: "User/<id>" } }`. Unknown fields: 400 `unknown_field`.
+- Body: `{ "message": "...", "user": { "displayName": "...", "externalId": "...", "email"?: "...", "institution"?: "...", "issuer"?: "...", "@id"?: "User/<id>" } }`. Unknown fields: 400 `unknown_field`. `issuer` (since 2026-11-05) names the identity provider a person will sign in with under `oidc`, whose tokens resolve by `(issuer, sub)` with `externalId` the bare `sub`; a person registered ahead of their first sign-in needs it, an agent may not carry it (400 `bad_request`).
 - Response **201**: `{ id, commit }`.
 - An `externalId` already registered: 409 `user_exists` (with its `id`). An `@id` held by another type: 409 `type_conflict`.
 
@@ -385,7 +387,7 @@ Every document that references this one, found from the schema's reference field
 
 ### `GET /export?branch=|ref=&profile=<full|pseudonymous|institutional>&slice=<name>`
 
-The graph at a ref as one JSON-LD document (ADR-0031): `{ "@context", "armature": { ref, profile, slice, pseudonyms, counts: { documents, byType }, unresolved }, "schema", "documents" }`. `documents` are the store's native shape, unchanged; `schema` is the schema graph at the same ref as it can be reloaded (the store's `@max_cardinality: "inf"` decoration removed, platform check AE5); the `ETag` is the commit exported and `armature.ref` repeats it. Defaults: `profile=full`, `slice=full`.
+The graph at a ref as one JSON-LD document (ADR-0031): `{ "@context", "armature": { ref, profile, slice, pseudonyms, counts: { documents, byType }, unresolved }, "schema", "documents" }`. `documents` are the store's native shape, unchanged; `schema` is the schema graph at the same ref as it can be reloaded (the store's `@max_cardinality: "inf"` decoration removed, platform check AE5); the `ETag` is the commit exported and `armature.ref` repeats it. Defaults: `profile=full`, `slice=full`. Under `oidc` (since 2026-11-05) the default profile is `pseudonymous`, and `profile=full` is a maintainer's of `main` or an administrator's, **403** `forbidden` with `permission: "export_full"` otherwise (ADR-0068 decision 4, note); `pseudonymous` and `institutional` are open to any token.
 
 Profiles rewrite people only. `full` keeps `User` documents as stored. `pseudonymous` replaces every `User` by `{ "@id": "User/<token>", "@type": "User", "externalId": "<token>" }` and rewrites every reference to a user (`createdBy`, `attestedBy`, any field whose target is `User`) to the token's id; nothing else about the person is kept. `institutional` adds `institution` to that. The token is an HMAC-SHA256 of the `User` id under `ARMATURE_EXPORT_KEY`; with the key set, `pseudonyms` is `stable` and the same person has the same token in every export of the deployment; without it a key is minted per export and `pseudonyms` is `per-export`. Free text is not scrubbed.
 
@@ -408,7 +410,11 @@ What this hub is, for a client that wants to know before its first write (ADR-00
 ```
 {
   role:         "remote",                                  // or "workspace" (since 2026-11-01)
-  versions:     [ "2026-11-01", "2026-10-31", ... ],       // the revisions served, newest first
+  versions:     [ "2026-11-05", "2026-11-03", ... ],       // the revisions served, newest first
+  identity:     { resolver: "header",                      // or "oidc" (since 2026-11-05)
+                  headers: { "Armature-User": "person", "Armature-Agent": "agent" } },
+                                                           // under oidc: headers { Authorization: "bearer", "Armature-Agent": "agent",
+                                                           //   "Armature-User": "relay" }, issuer, audience, clientId
   capabilities: { "armature/documents": { fallback: "reject", batchLimit: 500, historyCount: 20, readOnlyBranches: [] },
                   "armature/branches": { fallback: "reject", remoteOnly: [] },
                   "armature/intelligence.coverage": { fallback: "reject", fullyAssessedAt: 2, overAssessedAbove: 4 },
@@ -416,6 +422,8 @@ What this hub is, for a client that wants to know before its first write (ADR-00
   schema:       { route: "/api/v1/schema" }
 }
 ```
+
+`identity` says how to authenticate (ADR-0067 decision 9, since 2026-11-05): the resolver, the headers a client may send with what each names (`person`, the caller; `agent`, a registered agent acting for the caller; `bearer`, the token; `relay`, a service naming the person whose earlier work it delivers, not yet served), and under `oidc` the `issuer` and `audience` a token is checked against and, when the instance set one, the `clientId` a native program signs in with (`ARMATURE_OIDC_CLIENT_ID`). The admission list is not published.
 
 A capability's `fallback` says what a hub that lacks it does with a request that declares it: `reject` (refuse by name) or `ignore` (serve under core behavior). Every capability the hub defines is `reject`. The settings are the defaults of the behavior's parameters, so a client can read them rather than assume them.
 
@@ -504,8 +512,10 @@ Delivers the workspace into `main`: with nothing left to push (**409** `unpushed
 | 400 | `not_an_agent`, `not_a_person` | `Armature-Agent` names a person, or `Armature-User` names an agent beside it (Identity) |
 | 400 | `remote_only` | A route or a write a workspace hub leaves to its remote (Discovery: `role`) |
 | 400 | `workspace_only` | A workspace route on a remote hub (Workspace) |
-| 401 | `identity_required`, `unknown_user`, `unknown_agent` | No identity, an unregistered one, or an unregistered agent in `Armature-Agent` |
-| 403 | `forbidden` | The identity may not do this; `permission` and, as it applies, `branch`, `role` or `agent` (Grants; ADR-0068); `credential`, an agent as the credential itself on a remote hub (ADR-0067 decision 10); `owner`, anyone but the owner on a workspace hub, where `permission` may also be `push`, `bring-in` or `deliver` (Workspace); `reason: local_token`, a write to a workspace hub without its `Armature-Local-Token` (Identity), or `reason: program_action`, push, bring in or deliver called as a route on a workspace hub that serves them as the program's own actions (Workspace); both since 2026-11-03 |
+| 401 | `identity_required`, `unknown_user`, `unknown_agent` | No identity, an unregistered one (a service's unregistered agent included), or an unregistered agent in `Armature-Agent`; under `oidc` with `WWW-Authenticate: Bearer` |
+| 401 | `invalid_token` | Under `oidc`, a bearer token the hub refuses; `reason` says why (Identity; since 2026-11-05) |
+| 403 | `forbidden` | The identity may not do this; `permission` and, as it applies, `branch`, `role` or `agent` (Grants; ADR-0068), or `permission: list_users` or `export_full`, the two reads kept for maintainers of `main` and administrators under `oidc` (since 2026-11-05); `credential`, an agent as the credential itself on a remote hub (ADR-0067 decision 10); `owner`, anyone but the owner on a workspace hub, where `permission` may also be `push`, `bring-in` or `deliver` (Workspace); `reason: local_token`, a write to a workspace hub without its `Armature-Local-Token` (Identity), or `reason: program_action`, push, bring in or deliver called as a route on a workspace hub that serves them as the program's own actions (Workspace); both since 2026-11-03; `reason: relay`, `Armature-User` beside a bearer token, until relays are built (since 2026-11-05) |
+| 403 | `not_registered` | Under `oidc`, a valid token for a person the instance has not registered and does not admit on first sign-in (Identity; since 2026-11-05) |
 | 403 | `host_not_allowed`, `origin_not_allowed` | A host name or a web origin this hub does not serve (Hosts and web origins) |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit; on a workspace hub `unknown_ref` carries `remote_needed: true` when the commit may be the remote's and the remote could not be reached (Workspace) |
 | 409 | `type_conflict` | An identifier held by another type (rule 12) |
@@ -528,4 +538,5 @@ Delivers the workspace into `main`: with nothing left to push (**409** `unpushed
 | 503 | `branch_busy` | A document's history could not be read at one head; `Retry-After` |
 | 503 | `store_unreadable` | A file of a workspace hub's folder could not be read on this machine although it is there, such as one a sync service has made cloud-only while the service is stopped or the machine offline; `path` names it, `Retry-After`, and the hub reads the folder again on the next request (since 2026-11-03) |
 | 503 | `store_unwritable` | A file of a workspace hub's folder could not be replaced because another program held it (a sync client under Windows refusing the rename) for longer than the hub's retries, about 2.5 seconds; `path` names it, `Retry-After`; the old file stands, nothing is lost, and the request can be sent again (since 2026-11-03) |
+| 503 | `issuer_unreachable` | Under `oidc`, the identity provider's keys could not be read; the hub tries again on the next request (since 2026-11-05) |
 | 504 | `store_timeout` | The database did not answer within the hub's 30-second deadline; a write may have landed, so re-read before retrying |
