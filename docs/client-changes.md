@@ -15,6 +15,30 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-05 · Relays: a service delivers a person's earlier work under a `Relay` grant; the viewer holds its own credential
+
+**What changed.** Under `oidc`, a service whose agent `User` holds an active `Relay` grant may send
+`Armature-User: <person externalId>` beside its own token (ADR-0067 decision 5; ADR-0068 decision
+5). The person is the author, the `createdBy` and the `attestedBy` of what is written, exactly as
+if they had sent it, and the hub appends `Armature-Relayed-By: <agent externalId>` to the commit
+message, a trailer it writes itself and refuses from clients. The grant bounds the relay: the
+people it names in `relayedUsers` (anyone registered when absent), the branch it names (every
+branch when absent), until `expires`; and a relay delivers documents only, never a branch, a
+merge or a grant. Every refusal is **403** `forbidden` with `reason: relay` and `relayed` naming the
+person; a person the relay names who is not registered is **401** `unknown_user`. `GET /users/me`
+under a relay answers the person with `relayedBy`. Rides this day's revision. On the viewer's side,
+the pages now hold a credential of their own for a hub under `oidc` (decision 4): a token as issued
+in `ARMATURE_HUB_TOKEN`, or the client credentials grant from `ARMATURE_HUB_CLIENT_ID` and
+`ARMATURE_HUB_CLIENT_SECRET` against the issuer `GET /discover` names, renewed before it expires.
+
+**What a client does.** A client with an outbox registers one agent `User` for the service, asks
+an administrator for a `Relay` grant naming the reviewers it drains for and the branch, and drains
+with `createClient({ token: serviceToken, user: reviewerExternalId })`, one client per reviewer;
+nothing changes in the writes themselves. A program with no person present and no grant reads
+with its token alone. **CoQui**'s outbox is the case this was built for: its server holds the
+service credential, the grant names its reviewers, and each queued decision is written with that
+reviewer in `Armature-User`.
+
 ## 2026-11-05 · The `oidc` resolver: a signed token on every request, and `GET /discover` says how to sign in
 
 **What changed.** A hub may now run under `ARMATURE_IDENTITY=oidc` (OpenID Connect; ADR-0067
