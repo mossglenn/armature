@@ -104,10 +104,12 @@ describe('over the file-backed store in memory', () => {
       expect(ours.schema.map((e: { '@id'?: string }) => e['@id']).sort()).toEqual(theirs.schema.map((e: { '@id'?: string }) => e['@id']).sort());
     });
 
-    it('main is mirrored: the remote\'s users, so identity resolves here offline', async () => {
-      const theirs = (await json(await on(app, 'GET', '/users'))).body;
-      const ours = (await json(await on(workspace, 'GET', '/users'))).body;
-      expect(ours.map((u: { '@id': string }) => u['@id']).sort()).toEqual(theirs.map((u: { '@id': string }) => u['@id']).sort());
+    it('main is mirrored: the owner and the agents, so identity resolves here offline; not every person (since 2026-11-05)', async () => {
+      const theirs = (await json(await on(app, 'GET', '/users'))).body as Array<{ '@id': string; externalId: string }>;
+      const ours = (await json(await on(workspace, 'GET', '/users'))).body as Array<{ '@id': string; externalId: string }>;
+      const ids = ours.map((u) => u['@id']).sort();
+      expect(ids).toEqual(['User/demo-designer', ...theirs.filter((u) => u.externalId.startsWith('agent:')).map((u) => u['@id'])].sort());
+      expect(ids).not.toContain('User/demo-reviewer');
       const me = await json(await on(workspace, 'GET', '/users/me'));
       expect(me.body['@id']).toBe('User/demo-designer');
     });
