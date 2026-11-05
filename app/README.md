@@ -26,6 +26,7 @@ The hub needs the TerminusDB container running with the schema and seed loaded (
 | `ARMATURE_EXPORT_KEY` | Optional. The key under which `GET /api/v1/export?profile=pseudonymous` derives user tokens (ADR-0031); set it so the same person has the same token in every export, leave it unset and each export mints its own | unset |
 | `PORT`, `HOST` | The hub (`npm run start:hub` and the container): where it listens. Loopback by default because the `header` resolver trusts the caller; the container sets `HOST=0.0.0.0` inside its own network and `docker-compose.yml` confines what is published | `3100`, `127.0.0.1` |
 | `ARMATURE_HUB_URL` | The viewer only: the hub its pages read. The one variable the viewer needs; it reads no `TERMINUS_*` | `http://localhost:3100` |
+| `ARMATURE_HUB_TOKEN`, or `ARMATURE_HUB_CLIENT_ID` and `ARMATURE_HUB_CLIENT_SECRET` | The viewer only, for a hub under `oidc` (ADR-0067 decision 4): a token as issued, sent as is; or the viewer's own client credentials, with which it asks the issuer the hub names for a token and renews it before it expires. Its agent `User`, `agent:<client id>`, is registered once by a person. Unset, the viewer sends no token | unset |
 | `ARMATURE_HUB_PUBLIC_URL` | The viewer only, optional: the hub's address as a reader's browser could reach it, for the raw-data links in page footers. Unset, a `localhost` hub is linked as itself and any other is not linked at all, so a hub kept private behind the viewer stays private | unset |
 
 The hub reads `.env.local` from its working directory as Next.js does (a variable already set in the environment wins); the container has no such file and takes everything from `docker-compose.yml`, which publishes its port on loopback only by default (`ARMATURE_HUB_BIND`), because the `header` resolver trusts the caller.
@@ -62,7 +63,7 @@ app/                          The viewer (Next.js); no route files, it hosts no 
 e2e/graph.spec.ts             The browser smoke test (Playwright); playwright.config.ts starts the bundled hub and the built viewer
 lib/
   graph/                      The Design Graph's pure modules: stages (the visual language as data), glyphs, derive, layout, relations, state, lenses (each intelligence read as marks and a legend), focus, walk, with their tests on a fixture and on the seed
-  viewer.ts                   The viewer's hub: hubUrl() from ARMATURE_HUB_URL and viewerHub(), a read-only @armature/client
+  viewer.ts                   The viewer's hub: hubUrl() from ARMATURE_HUB_URL and viewerHub(), a read-only @armature/client; viewerToken.ts its credential under oidc
   hub.ts                      The API served by Node's HTTP server (@hono/node-server): startHub({ port }) for server.ts and the test
   hub.test.ts                 The standalone host over a real socket: the same answers as app.request(), headers included
   envLocal.ts                 Reads .env.local into the environment, for server.ts and operator.ts

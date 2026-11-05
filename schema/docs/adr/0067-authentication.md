@@ -53,7 +53,8 @@ workspace hub's release (the plan's §14, "Before step 7"). The notes beside eac
 was chosen while building. Still to come, in order: services' credentials as the viewer uses one
 and relays (decisions 4 and 5, the next pull request); the workspace hub signing in to its remote
 (decision 2); `api.<site>`, the liveness and readiness routes and the compose guard (decision 7's
-note). Amos accepted the session's recommendations for the five choices the notes had left open:
+note). *The same day, the second pull request:* relays (decision 5, whole) and the viewer's
+credential (decision 4, whole), their notes beside them; the two remaining follow. Amos accepted the session's recommendations for the five choices the notes had left open:
 `jose` with its remote key set, the key set kept per process by its address and read from the
 issuer's own metadata; the settings read in `config.ts` on every request like every other; a
 token source the host supplies for the workspace hub; a service told from a person by the absence
@@ -238,6 +239,17 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > refusal already standing for a write. The viewer holding such a credential, and
    > `@armature/client` taking a function that returns the current token, come with decision 7's
    > note (`api.<site>`); the client's `token` option itself is built.
+   >
+   > **Note (2026-11-05, later), built:** the viewer's credential (`app/lib/viewerToken.ts`,
+   > its test with a stub issuer): `ARMATURE_HUB_TOKEN` sent as issued, or the client credentials
+   > grant (RFC 6749 §4.4, the client authenticated by HTTP Basic) from `ARMATURE_HUB_CLIENT_ID`
+   > and `ARMATURE_HUB_CLIENT_SECRET` at the token endpoint the issuer's metadata names, the
+   > issuer read once from the hub's `GET /discover`; the token held and asked for again thirty
+   > seconds before it expires, one request in flight at a time across the pages. Neither
+   > variable set, the viewer sends no token, as under `header`; a client credential against a
+   > hub that names no issuer is refused at the first read, since it can only be a mistake. The
+   > compose file passes the variables through with `api.<site>` (decision 7's note), where the
+   > rehearsal registers the viewer's agent and checks the provider sets the hub's audience.
 
 5. **A service may relay a person's earlier work only if it holds a relay grant.** A service whose
    agent `User` holds an active `Relay` grant (ADR-0068) may send `Armature-User: <person>` with
@@ -250,6 +262,23 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > **Later change (2026-10-30, decided):** the grant names whom the service may speak for and
    > until when (`Grant.relayedUsers` and `Grant.expires`, ADR-0068 decision 2, note); a relayed
    > write naming anyone else, or after the expiry, is 403 `forbidden`. Review H1.
+   >
+   > **Note (2026-11-05), built** (`resolveRelay` in `identity.ts`, the branch check in
+   > `authorization.ts`; `oidc.test.ts`): under `oidc` only, since a relay is a service's token
+   > beside `Armature-User`. The token must be a service's (decision 4's rule), its agent must
+   > hold an active `Relay` grant, and the grant must name the person (`relayedUsers`, or no one
+   > in particular) and cover the branch (`branch`, or every branch), the branch judged at the
+   > write where it is known; `expires` is already part of "active". The person is the resolved
+   > identity itself, so `createdBy`, `attestedBy` (constraint 15) and the commit author are the
+   > person's without any route changing, and `Armature-Relayed-By: <agent externalId>` goes
+   > into the message as `Armature-On-Behalf-Of` does. Chosen while building, open to overrule: a
+   > relay delivers documents only, never a branch, a merge, a grant or a registration, since
+   > "earlier work" is records (403 `forbidden`, `reason: relay`); `Armature-Agent` beside a relay
+   > is refused the same way, since a relay carries work already done and an agent acts now; the
+   > person is looked up by the hub's issuer first and then as registered under `header`, so a
+   > reviewer registered before the instance moved to `oidc` can still be relayed; every refusal
+   > of a relay is the one code and reason with `relayed` naming the person, so a client treats
+   > them alike. `GET /users/me` under a relay answers the person with `relayedBy`.
 
 6. **The hub writes some trailers itself and refuses them from clients.** `Armature-On-Behalf-Of`
    and `Armature-Relayed-By` are written only by the hub; a request whose message already has a

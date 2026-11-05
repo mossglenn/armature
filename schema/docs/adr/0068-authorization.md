@@ -45,7 +45,11 @@ come with ADR-0067 decision 1; decision 9's warning at workspace creation, which
 note beside it); the migration window's close and the `oidc` rows remain.
 
 **Note 2026-11-05, built:** decision 4's two `oidc` rows and `not_registered`, with ADR-0067
-decision 1 (the note beside decision 4). The migration window's close remains.
+decision 1 (the note beside decision 4). *Later the same day:* decision 4's relay row and decision
+5's relayed author, with ADR-0067 decision 5 (its note of this day): a service holding an active
+`Relay` grant writes a person's documents as the person, bounded by the grant's `relayedUsers`,
+`branch` and `expires`, with the service in `Armature-Relayed-By`; and a service's own credential
+reads (ADR-0067 decision 4). The migration window's close remains.
 
 **Note 2026-10-30:** a prerequisite of the workspace hub (ADR-0065), built whole before its push
 (`docs/workspace-hub-plan.md` §14), since push's failures depend on ownership.
