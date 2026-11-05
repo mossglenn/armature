@@ -6,7 +6,7 @@ import { MIRROR_BRANCH } from '../role';
 import { createOperatorStore, type TerminusDocument } from '../store';
 import { localCommitsSince, mappingOf } from './push';
 import { emptyPushTable, type PushedCommit, type WorkspaceRecord, type WorkspaceRecords } from './records';
-import { fromRemote, remoteClient } from './remote';
+import { fromRemote, ownerClient } from './remote';
 import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
 
 /**
@@ -86,7 +86,7 @@ async function changedDocuments(hub: HubConfig, remote: ArmatureClient, branch: 
 export async function bringIn(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, message?: string): Promise<BringInResult> {
   const { branch } = record;
   const { lastRemote } = await requireNothingUnpushed(hub, records, record, 'bringing in main');
-  const remote = remoteClient(hub, record.ownerExternalId);
+  const remote = await ownerClient(hub, record);
   const merged: MergeResult = (
     await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: message ?? `Bring in ${MIRROR_BRANCH}`, ifMatch: lastRemote }))
   ).data;
@@ -128,7 +128,7 @@ export async function deliver(
 ): Promise<DeliverResult> {
   const { branch } = record;
   await requireNothingUnpushed(hub, records, record, 'delivering');
-  const remote = remoteClient(hub, record.ownerExternalId);
+  const remote = await ownerClient(hub, record);
   // main brought in cleanly: the merge of main into the workspace has nothing left to do.
   const preview: MergeResult = (await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: 'preview', dryRun: true }))).data;
   if (!preview.upToDate) {
