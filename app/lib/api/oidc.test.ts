@@ -235,12 +235,6 @@ describe('who a token is (decision 1 and its note; decision 4)', () => {
     expect(unregistered.body.error).toBe('unknown_user');
   });
 
-  it('refuses Armature-User beside a token as a relay claim until relays are built (decision 5)', async () => {
-    const res = await json(await as(await person('sub-7', 'sam@example.edu'), 'GET', '/users/me', undefined, { 'Armature-User': 'demo-designer@example.edu' }));
-    expect(res.status).toBe(403);
-    expect(res.body).toMatchObject({ error: 'forbidden', reason: 'relay' });
-  });
-
   it('takes Armature-Agent beside a person\'s token as under header: the agent writes, acting for the person (decision 3)', async () => {
     const sam = await person('sub-7', 'sam@example.edu');
     const created = await json(await as(sam, 'POST', '/branches', { name: BRANCH }));
@@ -257,6 +251,91 @@ describe('who a token is (decision 1 and its note; decision 4)', () => {
     expect(written.status).toBe(200);
     const note = await json(await as(sam, 'GET', `/documents/DesignNote/oidc-${stamp}?branch=${BRANCH}`));
     expect(note.body.createdBy).toBe(me.body['@id']);
+  });
+});
+
+describe("a service relaying a person's earlier work (ADR-0067 decision 5; ADR-0068 decision 5)", () => {
+  const RELAY_CLIENT = `outbox-${stamp}`;
+  const relay = () => token({ sub: `service-account-${RELAY_CLIENT}`, azp: RELAY_CLIENT });
+  const forSam = { 'Armature-User': 'sub-7' };
+  let samId: string;
+  let relayId: string;
+
+  beforeAll(async () => {
+    samId = (await json(await as(await person('sub-7', 'sam@example.edu'), 'GET', '/users/me'))).body['@id'];
+    const registered = await json(await operator('POST', '/users', { message: "CoQui's outbox", user: { displayName: 'The outbox', externalId: `agent:${RELAY_CLIENT}` } }));
+    expect(registered.status).toBe(201);
+    relayId = registered.body.id;
+  });
+
+  it('refuses Armature-User beside a person\'s token, and beside a service\'s with no Relay grant', async () => {
+    const byPerson = await json(await as(await person('sub-7', 'sam@example.edu'), 'GET', '/users/me', undefined, { 'Armature-User': ADMIN_SUB }));
+    expect(byPerson.status).toBe(403);
+    expect(byPerson.body).toMatchObject({ error: 'forbidden', reason: 'relay', relayed: ADMIN_SUB });
+    const noGrant = await json(await as(await relay(), 'GET', '/users/me', undefined, forSam));
+    expect(noGrant.status).toBe(403);
+    expect(noGrant.body).toMatchObject({ error: 'forbidden', reason: 'relay' });
+  });
+
+  it('under a Relay grant naming the person, writes as the person with the hub\'s Armature-Relayed-By trailer, on the branch the grant covers', async () => {
+    const granted = await json(
+      await operator('POST', '/documents?branch=main', {
+        message: 'The outbox may deliver Sam\'s decisions for this round',
+        documents: [{ '@type': 'Grant', user: relayId, role: 'Relay', branch: BRANCH, relayedUsers: [samId], status: 'Active', rationale: 'The outbox drains after the review' }],
+      })
+    );
+    expect(granted.status).toBe(200);
+
+    const me = await json(await as(await relay(), 'GET', '/users/me', undefined, forSam));
+    expect(me.status).toBe(200);
+    expect(me.body).toMatchObject({ '@id': samId, externalId: 'sub-7', relayedBy: `agent:${RELAY_CLIENT}` });
+
+    const written = await json(
+      await as(await relay(), 'POST', `/documents?branch=${BRANCH}`, {
+        message: "Sam's decision, delivered later",
+        documents: [
+          { '@type': 'DesignNote', '@id': `DesignNote/relayed-${stamp}`, label: 'Relayed', rationale: 'Decided offline', subject: ['Module/how-ai-works'] },
+          { '@type': 'Attestation', subject: 'Module/how-ai-works', verdict: 'Affirmed' },
+        ],
+      }, forSam)
+    );
+    expect(written.status).toBe(200);
+    const note = await json(await as(await relay(), 'GET', `/documents/DesignNote/relayed-${stamp}?branch=${BRANCH}`));
+    expect(note.body.createdBy).toBe(samId);
+    const attestation = await json(await as(await relay(), 'GET', `/documents/${written.body.ids[1]}?branch=${BRANCH}`));
+    expect(attestation.body.attestedBy).toBe(samId);
+    const history = await json(await as(await relay(), 'GET', `/documents/DesignNote/relayed-${stamp}/history?branch=${BRANCH}`));
+    expect(history.body.entries[0].author).toBe(samId);
+    expect(history.body.entries[0].message).toBe(`Sam's decision, delivered later\n\nArmature-Relayed-By: agent:${RELAY_CLIENT}`);
+
+    // The person's own grants decide the write: Sam owns the branch; main is beyond both the grant and Sam.
+    const elsewhere = await json(
+      await as(await relay(), 'POST', '/documents?branch=main', { message: 'x', documents: [{ '@type': 'DesignNote', label: 'x', rationale: 'x', subject: ['Module/how-ai-works'] }] }, forSam)
+    );
+    expect(elsewhere.status).toBe(403);
+    expect(elsewhere.body).toMatchObject({ error: 'forbidden', reason: 'relay', permission: 'write', branch: 'main' });
+  });
+
+  it('delivers documents only, for the people the grant names, and never beside Armature-Agent', async () => {
+    const branch = await json(await as(await relay(), 'POST', '/branches', { name: `${BRANCH}-relayed` }, forSam));
+    expect(branch.status).toBe(403);
+    expect(branch.body).toMatchObject({ error: 'forbidden', reason: 'relay', permission: 'create' });
+    const someoneElse = await json(await as(await relay(), 'GET', '/users/me', undefined, { 'Armature-User': ADMIN_SUB }));
+    expect(someoneElse.status).toBe(403);
+    expect(someoneElse.body).toMatchObject({ error: 'forbidden', reason: 'relay', relayed: ADMIN_SUB });
+    const nobody = await json(await as(await relay(), 'GET', '/users/me', undefined, { 'Armature-User': 'nobody-here' }));
+    expect(nobody.status).toBe(401);
+    expect(nobody.body.error).toBe('unknown_user');
+    const withAgent = await json(await as(await relay(), 'GET', '/users/me', undefined, { ...forSam, 'Armature-Agent': `agent:${VIEWER_CLIENT}` }));
+    expect(withAgent.status).toBe(403);
+    expect(withAgent.body).toMatchObject({ error: 'forbidden', reason: 'relay' });
+    const reserved = await json(
+      await as(await relay(), 'POST', `/documents?branch=${BRANCH}`, {
+        message: `Forged\n\nArmature-Relayed-By: agent:${VIEWER_CLIENT}`,
+        documents: [{ '@type': 'DesignNote', label: 'x', rationale: 'x', subject: ['Module/how-ai-works'] }],
+      }, forSam)
+    );
+    expect(reserved.body.error).toBe('reserved_trailer');
   });
 });
 

@@ -37,7 +37,8 @@ users.get('/', async (c) => {
 users.get('/me', async (c) => {
   const who = await resolveUser(c);
   const grants = (await activeGrants(c)).filter((grant) => grant.user === who.id);
-  return c.json({ ...who.user, grants });
+  // Under a relay the answer is the person the service writes as, and who carries it (ADR-0067 decision 5).
+  return c.json({ ...who.user, grants, ...(who.relayedBy ? { relayedBy: who.relayedBy.user.externalId } : {}) });
 });
 
 users.post('/', async (c) => {
