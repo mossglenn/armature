@@ -54,7 +54,11 @@ was chosen while building. Still to come, in order: services' credentials as the
 and relays (decisions 4 and 5, the next pull request); the workspace hub signing in to its remote
 (decision 2); `api.<site>`, the liveness and readiness routes and the compose guard (decision 7's
 note). *The same day, the second pull request:* relays (decision 5, whole) and the viewer's
-credential (decision 4, whole), their notes beside them; the two remaining follow. Amos accepted the session's recommendations for the five choices the notes had left open:
+credential (decision 4, whole), their notes beside them. *The third:* the workspace hub's token
+for its remote (decision 2's hub side, its note), which settled what a clone reads under `oidc`
+(ADR-0068 decision 4, later change). *The fourth:* the hub published as `api.<site>` with the
+health routes and the compose guard (decision 7's note of this day). What remains of this record
+is the desktop program's own sign-in (decision 2), which comes with the program. Amos accepted the session's recommendations for the five choices the notes had left open:
 `jose` with its remote key set, the key set kept per process by its address and read from the
 issuer's own metadata; the settings read in `config.ts` on every request like every other; a
 token source the host supplies for the workspace hub; a service told from a person by the absence
@@ -272,6 +276,12 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > hub that names no issuer is refused at the first read, since it can only be a mistake. The
    > compose file passes the variables through with `api.<site>` (decision 7's note), where the
    > rehearsal registers the viewer's agent and checks the provider sets the hub's audience.
+   > *Later that day, from the rehearsal:* a token the hub refuses as `invalid_token` (the
+   > provider's keys changed under a token the viewer still held) is forgotten and the request
+   > sent once more with a new one (`retryingFetch`), where before the pages answered 500 until
+   > it expired; and `ARMATURE_HUB_TOKEN_ENDPOINT` names the token endpoint when the issuer's
+   > public name is not reachable from the viewer's container, as the hub's `ARMATURE_OIDC_JWKS_URL`
+   > does for its keys.
 
 5. **A service may relay a person's earlier work only if it holds a relay grant.** A service whose
    agent `User` holds an active `Relay` grant (ADR-0068) may send `Armature-User: <person>` with
@@ -346,6 +356,24 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > write and the action routes gated (ADR-0065 decision 7, note of 2026-11-03). `api.<site>`,
    > the viewer's service credential and the liveness and readiness routes wait for the `oidc`
    > resolver (decision 1), since the proxy is refused with `header`.
+   >
+   > **Note (2026-11-05), built:** the rest. The Caddyfile imports a snippet chosen by
+   > `ARMATURE_IDENTITY` (`docker/caddy/`): under `oidc` the hub's site at `ARMATURE_API_HOST`
+   > (`api.<site>` by default; `ARMATURE_API_SCHEME` `http` for a rehearsal), with a 10 MB body
+   > limit, the hub's own cap, and 90 seconds for the hub's answer; under `header` nothing, so
+   > the hub stays on the private network whatever the variable says. The compose file's guard
+   > refuses `oidc` without its issuer and audience, and without a bare API host, since Caddy
+   > would otherwise adapt the snippet to a catch-all proxy of the hub (found while building;
+   > CI adapts the Caddyfile both ways and checks the hub's upstream appears only under `oidc`).
+   > The API host is in the hub's `ARMATURE_ALLOWED_HOSTS`. Two health probes
+   > (`app/lib/api/routes/health.ts`): `GET /health/live`, the process; `GET /health/ready`, the
+   > store, 503 `not_ready` with `Retry-After` otherwise; both open without a token like
+   > `GET /discover`, and the image's health check is `live`. The viewer's and a workspace hub's
+   > credential variables pass through the compose file. Keycloak in a `rehearsal-oidc` profile,
+   > never a deployment's provider, answers open question 2 for rehearsals (Amos, 2026-11-05, on
+   > the session's recommendation over a hosted tenant and CILogon); `docs/deployment.md`, "An
+   > instance under `oidc`", has the settings, the first administrator by the operator's `put`
+   > with `issuer`, and the checks from outside. The fresh-VM rehearsal is recorded there too.
 
 8. **`header` stays, bounded.** The `header` resolver remains the default for development, tests,
    a workspace hub's loopback and a private compose network, and reads `Armature-Agent` as

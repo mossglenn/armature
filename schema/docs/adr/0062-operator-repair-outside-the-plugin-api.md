@@ -229,6 +229,14 @@ A `User` with a wrong email is repaired with `put` on `main`. A `PUT /api/v1/use
 added when a client needs it (carried in SESSION.md), not before; the operator path keeps the
 registry correct meanwhile.
 
+> **Note (2026-11-05), built:** this had not been true. `put` ran the pipeline's shape check,
+> which admits what the document routes admit, and `User` is not among them (it has its own
+> registration route), so `put` answered "User is not a writable document type". The fresh-VM
+> rehearsal of ADR-0067's `oidc` instance found it, where the first administrator is written
+> this way with the `issuer` and the subject a person signs in with (`docs/deployment.md`, "An
+> instance under `oidc`"). Now `put` admits `User` too (`isOperatorWritable` in `classes.ts`;
+> the routes still refuse it), on `main` only, as `Grant` (`operator.test.ts`).
+
 ## Alternatives considered
 
 - **A superuser mode on `/api/v1`** (a header or a role that skips the rules). Rejected: every

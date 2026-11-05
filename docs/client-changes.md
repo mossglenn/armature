@@ -33,7 +33,11 @@ under `oidc`, carrying every `User` for a maintainer of `main` or an administrat
 (`armature.users: "all"`) and for anyone else only the users its records name, themselves and the
 agents (`"referenced"`), since those are readable one by one already. A workspace hub's mirror of
 `main` therefore holds the owner and the agents, no longer every person, under either resolver.
-Rides this day's revision.
+Also this day: two health probes, `GET /health/live` and `GET /health/ready` (**503** `not_ready`
+with `Retry-After` while the store does not answer), open without a token under `oidc`; and an
+instance under `oidc` publishes its hub beside the viewer at `api.<site>` by default
+([deployment](deployment.md), "An instance under `oidc`"), so a client elsewhere reaches it with a
+token. Rides this day's revision.
 
 **What a client does.** A tool of a workspace hub sends what it always did: `Armature-User` naming
 the owner and `Armature-Local-Token`; under a remote under `oidc` the owner's external identifier
