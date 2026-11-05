@@ -15,6 +15,10 @@
  *   ARMATURE_HUB_CLIENT_ID, _CLIENT_SECRET  the viewer asks the issuer for a token itself,
  *                                           at the token endpoint the issuer's metadata
  *                                           names, and asks again shortly before it expires
+ *   ARMATURE_HUB_TOKEN_ENDPOINT             optional: the token endpoint itself, when the
+ *                                           issuer's public name is not one the viewer's
+ *                                           container can reach (a rehearsal), as the hub's
+ *                                           ARMATURE_OIDC_JWKS_URL is for its keys
  *
  * The issuer is the one the hub names in `GET /discover` (`identity.issuer`),
  * read once; a hub under `header` names none, and the viewer then sends no
@@ -22,8 +26,8 @@
  * client of the hub over HTTP like any plugin (ADR-0054).
  */
 
-/** How the viewer reaches the hub and the issuer; replaceable for a test. */
-export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
+/** How the viewer reaches the hub and the issuer; replaceable for a test, and the shape @armature/client takes. */
+export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export interface TokenSourceOptions {
   /** The hub's origin, for `GET /discover`. */
@@ -37,24 +41,33 @@ export interface TokenSourceOptions {
 /** Seconds before a token's expiry at which the viewer asks for a new one. */
 const REFRESH_MARGIN_SECONDS = 30;
 
+/** The current token on each call; `forget` drops a held token so the next call asks for a new one. */
+export interface TokenSource {
+  (): Promise<string>;
+  forget: () => void;
+}
+
 /**
  * A function the client calls on every request for the current token, or
  * undefined when the environment holds no credential, so a hub under `header`
- * is read as before.
+ * is read as before. A token the hub refuses as `invalid_token` (the issuer
+ * rotated its keys under a token still in its lifetime) is forgotten by the
+ * viewer's hub client (./viewer.ts), which asks once more with a new one.
  */
-export function tokenSource(options: TokenSourceOptions): (() => Promise<string>) | undefined {
+export function tokenSource(options: TokenSourceOptions): TokenSource | undefined {
   const env = options.env ?? process.env;
   const fetchFn: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
   const now = options.now ?? (() => Date.now());
 
   const fixed = env.ARMATURE_HUB_TOKEN?.trim();
-  if (fixed) return async () => fixed;
+  if (fixed) return Object.assign(async () => fixed, { forget: () => undefined });
 
   const clientId = env.ARMATURE_HUB_CLIENT_ID?.trim();
   const clientSecret = env.ARMATURE_HUB_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) return undefined;
 
-  let tokenEndpoint: Promise<string> | undefined;
+  const fixedEndpoint = env.ARMATURE_HUB_TOKEN_ENDPOINT?.trim();
+  let tokenEndpoint: Promise<string> | undefined = fixedEndpoint ? Promise.resolve(fixedEndpoint) : undefined;
   let held: { token: string; expiresAt: number } | undefined;
   let pending: Promise<string> | undefined;
 
@@ -96,10 +109,37 @@ export function tokenSource(options: TokenSourceOptions): (() => Promise<string>
     return held.token;
   };
 
-  return async () => {
+  const source = async () => {
     if (held && held.expiresAt > now()) return held.token;
     // One request at a time: pages rendering in parallel share the one in flight.
     pending ??= request().finally(() => (pending = undefined));
     return pending;
+  };
+  return Object.assign(source, {
+    forget: () => {
+      held = undefined;
+    },
+  });
+}
+
+/**
+ * A fetch that, when the hub refuses the token it was sent as `invalid_token`,
+ * forgets it and sends the request once more with a fresh one: the issuer may
+ * have rotated its keys under a token the viewer still held. Any other answer
+ * passes through.
+ */
+export function retryingFetch(source: TokenSource, fetchFn: FetchLike = (input, init) => fetch(input, init)): FetchLike {
+  return async (input, init) => {
+    const res = await fetchFn(input, init);
+    if (res.status !== 401) return res;
+    const body = (await res
+      .clone()
+      .json()
+      .catch(() => undefined)) as { error?: unknown } | undefined;
+    if (body?.error !== 'invalid_token') return res;
+    source.forget();
+    const headers = new Headers(init?.headers);
+    headers.set('Authorization', `Bearer ${await source()}`);
+    return fetchFn(input, { ...init, headers });
   };
 }

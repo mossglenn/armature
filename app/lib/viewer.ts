@@ -17,7 +17,7 @@
  * viewer consumes it (ADR-0026 decision 4, ADR-0054).
  */
 import { createClient } from '@armature/client';
-import { tokenSource } from './viewerToken';
+import { retryingFetch, tokenSource, type TokenSource } from './viewerToken';
 
 const origin = (value: string | undefined): string | undefined => value?.trim().replace(/\/+$/, '') || undefined;
 
@@ -42,10 +42,10 @@ export function hubPublicUrl(): string | undefined {
 }
 
 // One source per process: the token it holds is shared by every page's client.
-let source: (() => Promise<string>) | undefined | null = null;
+let source: TokenSource | undefined | null = null;
 
-/** A read-only client of the configured hub, with the viewer's credential when the environment holds one. */
+/** A read-only client of the configured hub, with the viewer's credential when the environment holds one, asked for again once if the hub refuses it. */
 export function viewerHub() {
   if (source === null) source = tokenSource({ hubUrl: hubUrl() });
-  return createClient({ baseUrl: hubUrl(), ...(source ? { token: source } : {}) });
+  return createClient({ baseUrl: hubUrl(), ...(source ? { token: source, fetch: retryingFetch(source) } : {}) });
 }
