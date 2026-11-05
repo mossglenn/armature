@@ -37,7 +37,8 @@ COPY --from=build /src/app/dist/server.mjs /src/app/dist/server.mjs.map /src/app
 RUN mkdir /workspaces && chown node:node /workspaces
 USER node
 EXPOSE 3100
-# GET /discover needs no store, so it says whether the hub itself is up.
+# The liveness probe (app/lib/api/routes/health.ts): the process answers, whatever
+# the store does; readiness is /api/v1/health/ready, for a proxy or a watcher.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s \
-  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/v1/discover').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/v1/health/live').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
 CMD ["node", "server.mjs"]
