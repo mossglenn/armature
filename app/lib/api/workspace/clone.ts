@@ -5,7 +5,7 @@ import { normalizeSchema } from '../export/exporter';
 import { canonical } from '../fragments';
 import { MIRROR_BRANCH } from '../role';
 import { createOperatorStore, type OperatorStore, type Ref, type TerminusDocument } from '../store';
-import { fromRemote } from './remote';
+import { fromRemote, remoteCommit } from './remote';
 
 /**
  * The clone (docs/workspace-hub-plan.md §4; ADR-0065 decision 2): the remote's
@@ -94,8 +94,8 @@ export async function cloneBranch(
   branch: string
 ): Promise<{ base: string; local: string; documents: TerminusDocument[] }> {
   const exported = await fromRemote(hub, () => remote.export.read({ branch, profile: 'full' }));
-  const base = exported.commit;
-  if (!base) throw new ApiError(502, 'remote_error', `The remote answered the export of ${branch} without a commit`, { remote: true });
+  // The base is the export's ETag, checked to be a bare commit identifier (a proxy can alter it; remoteCommit says how).
+  const base = remoteCommit(hub, exported.commit, `the export of ${branch}`);
   const remoteUrl = hub.remote ?? '';
 
   const store = local(hub, { branch });

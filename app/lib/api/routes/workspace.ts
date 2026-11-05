@@ -174,7 +174,8 @@ workspace.get('/:name/status', async (c) => {
   let remote: { head: string; moved: boolean } | { reachable: false };
   try {
     const summary = await fromRemote(hub, () => remoteClient(hub, record.ownerExternalId).branches.head(record.branch));
-    const remoteHead = summary.commit ?? summary.data.head.commit;
+    // The body's head, not the ETag: a proxy in front of the remote can alter the ETag (remoteCommit in workspace/remote.ts), the body it cannot.
+    const remoteHead = summary.data.head.commit;
     remote = { head: remoteHead, moved: remoteHead !== lastKnown };
   } catch (err) {
     if (err instanceof ApiError && err.code === 'remote_unreachable') remote = { reachable: false };

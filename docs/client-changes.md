@@ -37,7 +37,11 @@ Also this day: two health probes, `GET /health/live` and `GET /health/ready` (**
 with `Retry-After` while the store does not answer), open without a token under `oidc`; and an
 instance under `oidc` publishes its hub beside the viewer at `api.<site>` by default
 ([deployment](deployment.md), "An instance under `oidc`"), so a client elsewhere reaches it with a
-token. Rides this day's revision.
+token. Later this day, from the Droplet run: a workspace hub refuses to clone a workspace whose base,
+the remote's `ETag`, is not a bare commit identifier (**502** `remote_error`, `reason: etag_altered`,
+`commit`), because a proxy in front of the remote can alter a strong `ETag` (Caddy's `encode` appends
+`-gzip`), and such a base would be refused at every push; the hub's own Caddy snippet no longer
+compresses. Rides this day's revision.
 
 **What a client does.** A tool of a workspace hub sends what it always did: `Armature-User` naming
 the owner and `Armature-Local-Token`; under a remote under `oidc` the owner's external identifier

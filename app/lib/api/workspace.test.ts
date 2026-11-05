@@ -11,10 +11,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startHub, type RunningHub } from '../hub';
 import { app, createApp } from './app';
 import { configFromEnv, type HubConfig } from './config';
+import { ApiError } from './errors';
 import { normalizeSchema } from './export/exporter';
 import { canonical } from './fragments';
 import { handleOf } from './routes/workspace';
 import { createOperatorStore } from './store';
+import { cloneBranch } from './workspace/clone';
 import { pushWorkspace } from './workspace/push';
 import { memoryRecords, type WorkspaceRecord } from './workspace/records';
 import { trailerValue } from './trailers';
@@ -93,6 +95,17 @@ describe('over the file-backed store in memory', () => {
       expect((record as { warning?: unknown }).warning).toBeUndefined(); // the owner made it, so the owner may write it
       const head = await json(await on(app, 'GET', `/branches/${BRANCH}`));
       expect(head.body.head.commit).toBe(record.base);
+    });
+
+    it("refuses a base that is not a commit identifier before writing anything: a proxy's altered ETag (the Droplet run of 2026-11-05)", async () => {
+      // What Caddy's `encode` did to the export's ETag through the published hub, as a client of the remote would hand it over.
+      const altered = `${stamp}-gzip-branch`;
+      const proxied = { export: { read: async () => ({ commit: 'abc123-gzip', data: { schema: [], documents: [] } }) } } as unknown as Parameters<typeof cloneBranch>[1];
+      const err = await cloneBranch(config, proxied, { id: 'User/demo-designer', externalId: USER }, altered).then(() => undefined, (e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err).toMatchObject({ status: 502, code: 'remote_error', details: { remote: true, reason: 'etag_altered', commit: 'abc123-gzip' } });
+      expect((err as ApiError).message).toMatch(/proxy/);
+      expect(await localStore('main').listBranches()).not.toContain(altered);
     });
 
     it('the clone is the remote branch at its base: the same documents and the same schema', async () => {
