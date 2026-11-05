@@ -1,0 +1,24 @@
+# Imported by the Caddyfile under ARMATURE_IDENTITY=oidc: the hub published at its
+# own name beside the viewer's (ADR-0067 decision 7, note of 2026-10-30; review H5),
+# ARMATURE_API_HOST, which the hub answers to (it is in its ARMATURE_ALLOWED_HOSTS)
+# and every request to which carries a bearer token the hub verifies, GET /discover
+# and the health probes excepted. ARMATURE_API_SCHEME is `https` (a certificate
+# from Let's Encrypt, as for the site) or `http` for a rehearsal without a domain.
+#
+# The limits here are the proxy's, stated in docs/deployment.md: a request body
+# at most 10 MB, the hub's own cap (413 body_too_large beyond it), and 90 seconds
+# for the hub to begin its answer, longer than the store's 30-second deadline and
+# a large export. The Host header passes through unchanged, so the hub's loopback
+# boundary sees the public name, and so do ETag and If-Match, which the 412
+# concurrency check depends on.
+{$ARMATURE_API_SCHEME:https}://{$ARMATURE_API_HOST} {
+	encode zstd gzip
+	request_body {
+		max_size 10MB
+	}
+	reverse_proxy hub:3100 {
+		transport http {
+			response_header_timeout 90s
+		}
+	}
+}

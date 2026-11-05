@@ -259,6 +259,17 @@ jobs:
         run: docker logs hub; docker rm -f hub
       - name: Run the operator tools inside the hub image
         run: docker run --rm armature-hub node operator.mjs --help
+      - name: Validate the Caddyfile under each resolver (the hub's site only under oidc)
+        # The snippet the Caddyfile imports is chosen by ARMATURE_IDENTITY (docker/caddy/);
+        # both must adapt, and under oidc the hub's site must carry the API host, not a catch-all.
+        run: |
+          for identity in header oidc; do
+            docker run --rm -e ARMATURE_SITE=example.org -e ARMATURE_IDENTITY=$identity -e ARMATURE_API_HOST=api.example.org \
+              -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$PWD/docker/caddy:/etc/caddy/profile:ro" -v "$PWD/docker/sites:/etc/caddy/sites:ro" \
+              caddy:2.10.2-alpine caddy adapt --config /etc/caddy/Caddyfile > /tmp/caddy-$identity.json
+          done
+          grep -q '"hub:3100"' /tmp/caddy-oidc.json && ! grep -q '"hub:3100"' /tmp/caddy-header.json
+          grep -q '"api.example.org"' /tmp/caddy-oidc.json
       - name: Build the viewer image
         run: docker build -f docker/viewer.Dockerfile -t armature-viewer .
       - name: Start it and wait for a page

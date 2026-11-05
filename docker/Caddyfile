@@ -5,14 +5,20 @@
 # 443 open and the domain's DNS pointing at this machine. `:80` serves plain
 # HTTP for any address, for a rehearsal without a domain.
 #
-# Only the viewer is behind it. The hub is never proxied: its `header` identity
-# resolver trusts the caller (ADR-0032), so it stays on the private network until
-# an authenticating resolver exists: `oidc`, specified in ADR-0067 (accepted 2026-10-30; its
-# Host and Origin checks built 2026-10-30; docs/deployment.md).
+# The viewer is behind it always. The hub is behind it only under the `oidc`
+# resolver, at its own name (ARMATURE_API_HOST, `api.<site>` by default): the
+# snippet imported below is chosen by ARMATURE_IDENTITY, and under `header`,
+# which trusts the caller, it adds nothing, so the hub stays on the private
+# network (ADR-0067 decision 7, note of 2026-10-30; built 2026-11-05;
+# docs/deployment.md, "A hosted instance"). The compose file's public-guard
+# refuses the pairing of `oidc` with no API host, since Caddy would otherwise
+# proxy the hub for any name.
 {$ARMATURE_SITE} {
 	encode zstd gzip
 	reverse_proxy viewer:3000
 }
+
+import /etc/caddy/profile/{$ARMATURE_IDENTITY:header}.caddy
 
 # Other sites served from this server, one file each in docker/sites/ (mounted
 # read-only at /etc/caddy/sites): a client deployed beside the instance names its
