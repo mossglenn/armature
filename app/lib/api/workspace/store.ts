@@ -3,7 +3,7 @@ import type { HubConfig } from '../config';
 import { ApiError } from '../errors';
 import { StoreError, type ApplyResult, type Commit, type DocumentReader, type HistoryEntry, type Ref, type Store, type TerminusDocument } from '../store';
 import type { RemoteLogEntry, WorkspaceRecords } from './records';
-import { remoteClient } from './remote';
+import { remoteClient, remoteTakesToken } from './remote';
 import { snapshotBranch } from './snapshots';
 
 /**
@@ -236,7 +236,8 @@ function matches(doc: TerminusDocument, template: Record<string, unknown>): bool
  * two answer alike.
  */
 function remoteReader(hub: HubConfig, as: string | undefined, commitId: string): DocumentReader {
-  if (!as) throw remoteNeeded(hub, commitId);
+  // Under a token the remote reads as the token's subject, the owner, whoever asked here.
+  if (!as && !remoteTakesToken(hub)) throw remoteNeeded(hub, commitId);
   const client = remoteClient(hub, as);
   let loaded: Promise<{ byId: Map<string, TerminusDocument>; schema: Record<string, unknown>[] }> | undefined;
   const load = () => {

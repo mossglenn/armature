@@ -15,7 +15,7 @@ import { cloneBranch, mirrorMain, type Owner } from '../workspace/clone';
 import { bringIn, deliver } from '../workspace/bringIn';
 import { localCommitsSince, pushWorkspace } from '../workspace/push';
 import type { WorkspaceRecord, WorkspaceRecords } from '../workspace/records';
-import { fromRemote, remoteClient } from '../workspace/remote';
+import { fromRemote, remoteClient, requireRemoteIdentity } from '../workspace/remote';
 import { ensureSnapshots, fetchRemoteLog, resolvableCommitsOf } from '../workspace/snapshots';
 
 /**
@@ -119,7 +119,9 @@ workspace.post('/', async (c) => {
   const records = recordsOf(c);
   if (await records.get(branch)) throw new ApiError(409, 'workspace_exists', `This hub already holds the workspace ${branch}`);
 
-  // The remote is the registry: the owner is whoever it resolves the caller to.
+  // The remote is the registry: the owner is whoever it resolves the caller to,
+  // and under a token that must be the person this request names (remote.ts).
+  await requireRemoteIdentity(hub, { externalId });
   const remote = remoteClient(hub, externalId);
   const me = await fromRemote(hub, () => remote.users.me());
   const owner: Owner = { id: me.data['@id'], externalId };

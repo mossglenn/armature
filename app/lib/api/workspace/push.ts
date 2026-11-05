@@ -15,7 +15,7 @@ import {
   withTrailer,
 } from '../trailers';
 import { emptyPushTable, type InFlight, type PushedCommit, type PushTable, type WorkspaceRecord, type WorkspaceRecords } from './records';
-import { fromRemote, remoteClient } from './remote';
+import { fromRemote, remoteClient, requireRemoteIdentity } from './remote';
 import { GroupTooLarge, PART_LIMITS, splitIntoParts, type PartLimits } from './split';
 
 /**
@@ -196,6 +196,8 @@ export async function pushWorkspace(hub: HubConfig, records: WorkspaceRecords, r
   if (running.has(branch)) throw new ApiError(409, 'push_in_progress', `A push of ${branch} is already running on this hub`);
   running.add(branch);
   try {
+    // Under a token, the remote must take this hub for the owner before anything is replayed as them.
+    await requireRemoteIdentity(hub, { id: record.owner, externalId: record.ownerExternalId });
     const local = storeOf(hub, { branch });
     const table = (await records.getPush(branch)) ?? emptyPushTable();
     const mapping = mappingOf(record, table);

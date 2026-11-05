@@ -54,6 +54,14 @@ export interface HubConfig {
   /** ARMATURE_WORKSPACE_DIR, the folder a workspace hub keeps its workspaces' records in; required, and only read, when the role is `workspace`. The host turns it into `workspaces`. */
   workspaceDir?: string;
   /**
+   * A workspace hub's credential for its remote under `oidc` (ADR-0067 decision 2, note of 2026-11-05):
+   * the owner's bearer token, as the host supplies it on each call. The desktop program signs the
+   * person in and refreshes from its keychain; `app/server.ts` takes ARMATURE_REMOTE_TOKEN as given.
+   * Absent, the remote runs under `header` and every call carries the owner's external identifier.
+   * Never read on a remote hub.
+   */
+  remoteToken?: () => Promise<string>;
+  /**
    * The store, read when a route makes one, so a request that needs none (GET /discover)
    * never requires the TERMINUS_* variables. On a workspace hub the host replaces it with
    * the file-backed store opened in `workspaceDir`, the one local store (ADR-0066 decision 4).
@@ -128,6 +136,9 @@ function workspaceDir(raw: string | undefined): string {
   if (!value) throw new Error('ARMATURE_WORKSPACE_DIR is required when ARMATURE_ROLE=workspace');
   return value;
 }
+
+/** A token given once in the environment, handed over as it is on every call. */
+const remoteToken = (value: string) => async () => value;
 
 /** The snapshot budget as given: a whole number of commits per workspace; 20 when unset (ADR-0066, Verification: measured on the seed). */
 export const DEFAULT_SNAPSHOT_BUDGET = 20;
@@ -209,6 +220,7 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
   return {
     role: role as HubRole,
     ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL), workspaceDir: workspaceDir(env.ARMATURE_WORKSPACE_DIR) } : {}),
+    ...(role === 'workspace' && env.ARMATURE_REMOTE_TOKEN?.trim() ? { remoteToken: remoteToken(env.ARMATURE_REMOTE_TOKEN.trim()) } : {}),
     store: () => storeConfigFromEnv(env),
     snapshotBudget: snapshotBudget(env.ARMATURE_SNAPSHOTS),
     ...(role === 'workspace' && env.ARMATURE_LOCAL_TOKEN?.trim() ? { localToken: env.ARMATURE_LOCAL_TOKEN.trim() } : {}),

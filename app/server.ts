@@ -26,6 +26,12 @@
  *                                                            lib/api/role.ts)
  *   ARMATURE_REMOTE_URL                                      the remote hub's address, required when the
  *                                                            role is `workspace`
+ *   ARMATURE_REMOTE_TOKEN                                    a workspace hub's bearer token for a remote under
+ *                                                            oidc, the owner's, sent as given on every call to
+ *                                                            the remote (ADR-0067 decision 2; lib/api/workspace/
+ *                                                            remote.ts); the desktop program will hold it from
+ *                                                            the person's sign-in instead. Unset, the remote runs
+ *                                                            under header and takes the owner's identifier
  *   ARMATURE_WORKSPACE_DIR                                   the folder a workspace hub keeps its workspaces in,
  *                                                            their records and the file-backed store, the one
  *                                                            local store (ADR-0066; lib/api/filestore/); required
@@ -102,6 +108,7 @@ async function main(): Promise<void> {
   }
   if (config.role === 'workspace') {
     console.log(`  role: workspace, of the remote at ${config.remote}; records in ${config.workspaceDir}`);
+    console.log(`  remote identity: ${config.remoteToken ? 'the bearer token in ARMATURE_REMOTE_TOKEN (a remote under oidc)' : "the owner's identifier in Armature-User (a remote under header)"}`);
     console.log(`  actions: push, bring in and deliver ${config.actionRoutes ? 'served as routes (ARMATURE_WORKSPACE_ACTIONS=routes)' : "are the program's own; the routes are refused"}`);
     if (drawn) console.log(`  local token: ${drawn}\n  (drawn at this start; every write carries it as Armature-Local-Token. Set ARMATURE_LOCAL_TOKEN to choose it)`);
     else console.log('  local token: from ARMATURE_LOCAL_TOKEN; every write carries it as Armature-Local-Token');
