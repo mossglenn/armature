@@ -170,14 +170,18 @@ declare module 'hono' {
   }
 }
 
+/** The routes open without a token under `oidc`: discovery, which says how to sign in, and the health probes, which cannot (./routes/health.ts). */
+const OPEN_UNDER_OIDC = (path: string): boolean => path === '/api/v1/discover' || path.startsWith('/api/v1/health/');
+
 /**
  * Under `oidc` every request carries a token, reads included, except
  * `GET /discover`, which says how to sign in and so must be readable before
- * anyone has (ADR-0067 decision 1). Runs before the routes; under `header`
- * it does nothing, and the routes that need an identity resolve it themselves.
+ * anyone has (ADR-0067 decision 1), and the health routes. Runs before the
+ * routes; under `header` it does nothing, and the routes that need an
+ * identity resolve it themselves.
  */
 export const requireIdentity: MiddlewareHandler = async (c, next) => {
-  if (hubOf(c).identity === 'oidc' && c.req.path !== '/api/v1/discover' && c.req.method !== 'OPTIONS') await resolveUser(c);
+  if (hubOf(c).identity === 'oidc' && !OPEN_UNDER_OIDC(c.req.path) && c.req.method !== 'OPTIONS') await resolveUser(c);
   await next();
 };
 

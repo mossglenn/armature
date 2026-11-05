@@ -61,7 +61,8 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/intelligence.item-statistics': { fallback: 'reject', routes: ['/api/v1/intelligence/item-statistics'], settings: {} },
   'armature/intelligence.module-content': { fallback: 'reject', routes: ['/api/v1/intelligence/module-content'], settings: {} },
   'armature/export': { fallback: 'reject', routes: ['/api/v1/export'], settings: { profiles: ['full', 'pseudonymous', 'institutional'] } },
-  'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema'], settings: {} },
+  /** What a tool asks a hub about itself, and since 2026-11-05 the two health probes (routes/health.ts). */
+  'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema', '/api/v1/health'], settings: {} },
   /** `localToken` and `actions` are set by `discovery` from the hub's configuration (./localToken.ts). */
   'armature/workspace': { fallback: 'reject', routes: ['/api/v1/workspace'], settings: { profile: 'full', localToken: 'required' }, roles: ['workspace'] },
   /** The hub authorizes (ADR-0068 decision 7): a 403 `forbidden` is possible, and `GET /users/me` carries the caller's grants. No route of its own. */
