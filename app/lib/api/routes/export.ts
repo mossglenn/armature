@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { requireReadPermission } from '../authorization';
 import { hubOf, storeFor } from '../config';
 import { ApiError } from '../errors';
 import { applyProfile, normalizeSchema, PROFILES, SLICES, selectSlice, unresolvedReferences, type Profile } from '../export/exporter';
@@ -19,16 +20,25 @@ import { refFromQuery, setEtag, snapshot } from '../http';
  * without the key one is minted per export and `pseudonyms` says so. The
  * ETag is the commit exported. Re-import is an operator action outside this
  * API (ADR-0062): load the schema, post the documents.
+ *
+ * Under `oidc`, where anyone with a token may read, the default profile is
+ * `pseudonymous` and `full` is a maintainer's of `main` or an administrator's,
+ * 403 `forbidden` otherwise (ADR-0068 decision 4, note of 2026-10-30); under
+ * `header` the default stays `full` and nothing is checked.
  */
 export const exportRoutes = new Hono();
 
 exportRoutes.get('/slices', (c) => c.json(SLICES));
 
+/** The profile an export takes when the caller names none. */
+export const defaultProfile = (identity: string): Profile => (identity === 'oidc' ? 'pseudonymous' : 'full');
+
 exportRoutes.get('/', async (c) => {
-  const profile = (c.req.query('profile') ?? 'full') as Profile;
+  const profile = (c.req.query('profile') ?? defaultProfile(hubOf(c).identity)) as Profile;
   if (!PROFILES.includes(profile)) {
     throw new ApiError(400, 'unknown_profile', `profile must be one of ${PROFILES.join(', ')}`);
   }
+  if (profile === 'full') await requireReadPermission(c, { permission: 'export_full' });
   const sliceName = c.req.query('slice') ?? 'full';
   const slice = SLICES[sliceName];
   if (!slice) throw new ApiError(400, 'unknown_slice', `slice must be one of ${Object.keys(SLICES).join(', ')}`);

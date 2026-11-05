@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import type { JWTVerifyGetKey } from 'jose';
 import type { WorkspaceRecords } from './workspace/records';
 import { workspaceStore } from './workspace/store';
 import { createStore, storeConfigFromEnv, type Ref, type Store, type StoreConfig } from './store';
@@ -23,6 +24,28 @@ import { createStore, storeConfigFromEnv, type Ref, type Store, type StoreConfig
 export type HubRole = 'remote' | 'workspace';
 const ROLES: readonly HubRole[] = ['remote', 'workspace'];
 
+/**
+ * What the `oidc` resolver verifies a token against (ADR-0067 decision 1;
+ * ./oidc.ts), read when ARMATURE_IDENTITY=oidc and refused incomplete.
+ */
+export interface OidcConfig {
+  /** ARMATURE_OIDC_ISSUER: the identity provider's issuer identifier, the token's `iss`, compared as a string. */
+  issuer: string;
+  /** ARMATURE_OIDC_AUDIENCE: this hub as the provider names it, the token's `aud`. */
+  audience: string;
+  /** ARMATURE_OIDC_CLIENT_ID: the client id a native program signs in with, published by `GET /discover` (decision 9); optional. */
+  clientId?: string;
+  /** ARMATURE_OIDC_JWKS_URL: where the issuer's keys are, when not at the address its metadata names; optional. */
+  jwksUrl?: string;
+  /**
+   * ARMATURE_OIDC_ADMIT (decision 1, note of 2026-10-30): who is registered on first encounter. An entry
+   * with `://` is an issuer, any other an email domain matched against the token's `email`; empty admits no one.
+   */
+  admit: { issuers: ReadonlySet<string>; domains: ReadonlySet<string> };
+  /** The issuer's keys, when a host or a test supplies them; absent, fetched from the issuer and kept (./oidc.ts). */
+  keys?: JWTVerifyGetKey;
+}
+
 export interface HubConfig {
   /** ARMATURE_ROLE; `remote` by default. */
   role: HubRole;
@@ -38,6 +61,8 @@ export interface HubConfig {
   store: () => StoreConfig;
   /** The identity resolver's name (ADR-0032), ARMATURE_IDENTITY; `header` by default. */
   identity: string;
+  /** The `oidc` resolver's settings; present exactly when `identity` is `oidc`. */
+  oidc?: OidcConfig;
   /** Host names the hub answers besides loopback, lower case (ADR-0067 decision 7). */
   allowedHosts: ReadonlySet<string>;
   /** Web origins the hub serves, lower case (ADR-0067 decision 7). */
@@ -113,6 +138,43 @@ function snapshotBudget(raw: string | undefined): number {
   return value;
 }
 
+/** An http or https address as given, without a trailing slash; throws naming the variable otherwise. */
+function httpUrl(variable: string, raw: string | undefined): string {
+  const value = raw?.trim().replace(/\/+$/, '');
+  if (!value) throw new Error(`${variable} is required when ARMATURE_IDENTITY=oidc`);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${variable}=${value} is not a URL`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`${variable}=${value} is not an http or https address`);
+  return value;
+}
+
+/**
+ * The `oidc` resolver's settings from the environment: the issuer and the
+ * audience are required, the rest optional. The admission list is split by
+ * shape: an issuer is a URL, an email domain is not.
+ */
+function oidcConfig(env: Readonly<Record<string, string | undefined>>): OidcConfig {
+  const issuer = httpUrl('ARMATURE_OIDC_ISSUER', env.ARMATURE_OIDC_ISSUER);
+  const audience = env.ARMATURE_OIDC_AUDIENCE?.trim();
+  if (!audience) throw new Error('ARMATURE_OIDC_AUDIENCE is required when ARMATURE_IDENTITY=oidc');
+  const admit = { issuers: new Set<string>(), domains: new Set<string>() };
+  for (const entry of (env.ARMATURE_OIDC_ADMIT ?? '').split(',').map((e) => e.trim()).filter(Boolean)) {
+    if (entry.includes('://')) admit.issuers.add(entry.replace(/\/+$/, ''));
+    else admit.domains.add(bareName(entry));
+  }
+  return {
+    issuer,
+    audience,
+    ...(env.ARMATURE_OIDC_CLIENT_ID?.trim() ? { clientId: env.ARMATURE_OIDC_CLIENT_ID.trim() } : {}),
+    ...(env.ARMATURE_OIDC_JWKS_URL?.trim() ? { jwksUrl: httpUrl('ARMATURE_OIDC_JWKS_URL', env.ARMATURE_OIDC_JWKS_URL) } : {}),
+    admit,
+  };
+}
+
 /** Whether the host asked for the program's actions as routes: `routes`, or unset; anything else is refused. */
 function actionRoutes(raw: string | undefined): boolean {
   const value = raw?.trim();
@@ -138,6 +200,12 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
   if (env.ARMATURE_STORE?.trim()) {
     throw new Error('ARMATURE_STORE is retired (ADR-0066 decision 4): a workspace hub runs over the folder in ARMATURE_WORKSPACE_DIR, a remote hub over TerminusDB');
   }
+  const identity = env.ARMATURE_IDENTITY?.trim() || 'header';
+  // A workspace hub resolves its owner from the trusted header and signs in to its
+  // remote from its host (ADR-0067 decision 2; docs/workspace-hub-plan.md §7).
+  if (identity === 'oidc' && role === 'workspace') {
+    throw new Error('ARMATURE_IDENTITY=oidc is a remote hub\'s resolver; a workspace hub runs under header (ADR-0067 decision 8)');
+  }
   return {
     role: role as HubRole,
     ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL), workspaceDir: workspaceDir(env.ARMATURE_WORKSPACE_DIR) } : {}),
@@ -145,7 +213,8 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
     snapshotBudget: snapshotBudget(env.ARMATURE_SNAPSHOTS),
     ...(role === 'workspace' && env.ARMATURE_LOCAL_TOKEN?.trim() ? { localToken: env.ARMATURE_LOCAL_TOKEN.trim() } : {}),
     actionRoutes: role === 'workspace' && actionRoutes(env.ARMATURE_WORKSPACE_ACTIONS),
-    identity: env.ARMATURE_IDENTITY?.trim() || 'header',
+    identity,
+    ...(identity === 'oidc' ? { oidc: oidcConfig(env) } : {}),
     allowedHosts: list(env.ARMATURE_ALLOWED_HOSTS),
     allowedOrigins: list(env.ARMATURE_ALLOWED_ORIGINS),
     exportKey: env.ARMATURE_EXPORT_KEY?.trim() || undefined,

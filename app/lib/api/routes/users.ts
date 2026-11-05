@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { activeGrants, requirePermission } from '../authorization';
+import { activeGrants, requirePermission, requireReadPermission } from '../authorization';
 import { storeFor } from '../config';
 import { ApiError } from '../errors';
 import { ifMatchFrom, readEnvelope, refFromQuery, requireCommit, setEtag } from '../http';
@@ -21,9 +21,11 @@ import { isRecord, StoreError } from '../store';
  */
 export const users = new Hono();
 
-const USER_FIELDS = new Set(['@id', '@type', 'displayName', 'externalId', 'email', 'institution']);
+const USER_FIELDS = new Set(['@id', '@type', 'displayName', 'externalId', 'email', 'institution', 'issuer']);
 
 users.get('/', async (c) => {
+  // Under `oidc` the list is a maintainer's or an administrator's (ADR-0068 decision 4, note); under `header` it is open.
+  await requireReadPermission(c, { permission: 'list_users' });
   const ref = refFromQuery(c);
   const store = storeFor(c, ref);
   if ('commit' in ref) await requireCommit(store, ref.commit);
@@ -66,6 +68,10 @@ users.post('/', async (c) => {
   const externalId = text('externalId', true) as string;
   const email = text('email', false);
   const institution = text('institution', false);
+  // The provider a person will sign in with (ADR-0067 decision 1, note): a token resolves by
+  // (issuer, sub), so a person registered ahead of their first encounter names it here.
+  const issuer = text('issuer', false);
+  if (issuer && isAgentExternalId(externalId)) throw new ApiError(400, 'bad_request', 'user.issuer names the provider a person signs in with; an agent has none');
   let id: string | undefined;
   if (input['@id'] !== undefined) {
     if (typeof input['@id'] !== 'string' || !/^User\/[^\s/]+$/.test(input['@id'])) {
@@ -103,6 +109,7 @@ users.post('/', async (c) => {
       externalId,
       ...(email ? { email } : {}),
       ...(institution ? { institution } : {}),
+      ...(issuer ? { issuer } : {}),
     };
     try {
       const { commit } = await main.insertDocument(document, {

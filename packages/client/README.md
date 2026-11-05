@@ -5,7 +5,7 @@ A thin typed client for the Armature API: every `/api/v1` route as a function, g
 - the ref: `{ branch }` or `{ ref: '<commit-id>' }` on every read, `main` when neither;
 - the commit every response was served from or created, read from the `ETag` and returned as `commit`;
 - optimistic concurrency: `ifMatch: '<commit-id>'` on a write becomes `If-Match`, and a moved branch is a thrown `HubError` with code `precondition_failed` (412);
-- identity: the `user` given to `createClient` is sent as `Armature-User`;
+- identity: the `user` given to `createClient` is sent as `Armature-User`, or under a hub's `oidc` resolver the `token` as `Authorization: Bearer` (a string, or a function returning the current one), which every call but `discover()` then needs;
 - the write envelopes (`{ message, document }`, `{ message, documents }`, …);
 - errors: a non-2xx answer throws `HubError` with the hub's `status`, stable `code`, `message` and the body's other fields as `details` (a merge conflict's `conflicts`, a rule violation's `violations`).
 
@@ -17,6 +17,7 @@ import { createClient, HubError } from '@armature/client';
 const hub = createClient({ baseUrl: 'http://localhost:3100', user: 'demo-designer@example.edu' });
 // An AI agent drafting for that person: add agent: 'agent:<tool>/<name>'; the agent is the author, the person's authority applies (ADR-0067 decision 3).
 // A workspace hub on this machine: add localToken: process.env.ARMATURE_LOCAL_TOKEN, its per-launch secret, which every write carries (ADR-0065 decision 7).
+// A hub under oidc: token: () => session.accessToken() instead of user; (await hub.discover()).data.identity says which a hub wants (ADR-0067 decisions 1 and 9).
 
 const { data: objectives, commit } = await hub.documents.list('LearningObjective', { branch: 'main' });
 const coverage = await hub.intelligence.coverage('how-ai-works', { ref: commit });
