@@ -6,7 +6,10 @@
  * The hub's address is the viewer's one piece of configuration,
  * `ARMATURE_HUB_URL`, by default the standalone hub on this machine
  * (`npm run start:hub`, or the `hub` container in docker/docker-compose.yml).
- * The pages only read, so the client carries no identity.
+ * The pages only read, so under the `header` resolver the client carries no
+ * identity; under `oidc` every read carries the viewer's own credential
+ * (./viewerToken.ts; ADR-0067 decision 4, since 2026-11-05), a service's
+ * token the hub resolves to an agent that reads.
  *
  * Until 2026-10-21 the pages called the Hono app in-process and the Next.js
  * app also hosted the API through a catch-all route; that made the viewer a
@@ -14,6 +17,7 @@
  * viewer consumes it (ADR-0026 decision 4, ADR-0054).
  */
 import { createClient } from '@armature/client';
+import { tokenSource } from './viewerToken';
 
 const origin = (value: string | undefined): string | undefined => value?.trim().replace(/\/+$/, '') || undefined;
 
@@ -37,7 +41,11 @@ export function hubPublicUrl(): string | undefined {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(url) ? url : undefined;
 }
 
-/** A read-only client of the configured hub. */
+// One source per process: the token it holds is shared by every page's client.
+let source: (() => Promise<string>) | undefined | null = null;
+
+/** A read-only client of the configured hub, with the viewer's credential when the environment holds one. */
 export function viewerHub() {
-  return createClient({ baseUrl: hubUrl() });
+  if (source === null) source = tokenSource({ hubUrl: hubUrl() });
+  return createClient({ baseUrl: hubUrl(), ...(source ? { token: source } : {}) });
 }
