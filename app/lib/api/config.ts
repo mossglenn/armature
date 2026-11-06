@@ -71,6 +71,14 @@ export interface HubConfig {
   identity: string;
   /** The `oidc` resolver's settings; present exactly when `identity` is `oidc`. */
   oidc?: OidcConfig;
+  /** ARMATURE_INSTANCE_NAME: what `GET /discover`'s `instance.name` says of a remote hub; unset, its host name (docs/desktop-program-plan.md §8). */
+  instanceName?: string;
+  /**
+   * ARMATURE_PUBLIC_URL: where a client beyond this server reaches the hub, `GET /discover`'s `instance.api`.
+   * Read only under `oidc`: only then is a hub published (ADR-0067 decision 7, note), so a hub under `header`
+   * has no public name and the compose file can derive the address without knowing the resolver.
+   */
+  publicUrl?: string;
   /** Host names the hub answers besides loopback, lower case (ADR-0067 decision 7). */
   allowedHosts: ReadonlySet<string>;
   /** Web origins the hub serves, lower case (ADR-0067 decision 7). */
@@ -163,6 +171,9 @@ function httpUrl(variable: string, raw: string | undefined): string {
   return value;
 }
 
+/** ARMATURE_PUBLIC_URL as given, without a trailing slash, when the hub is published; a value that is not an address stops the hub at start. */
+const publicUrl = (raw: string | undefined): string | undefined => (raw?.trim() ? httpUrl('ARMATURE_PUBLIC_URL', raw) : undefined);
+
 /**
  * The `oidc` resolver's settings from the environment: the issuer and the
  * audience are required, the rest optional. The admission list is split by
@@ -226,7 +237,8 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
     ...(role === 'workspace' && env.ARMATURE_LOCAL_TOKEN?.trim() ? { localToken: env.ARMATURE_LOCAL_TOKEN.trim() } : {}),
     actionRoutes: role === 'workspace' && actionRoutes(env.ARMATURE_WORKSPACE_ACTIONS),
     identity,
-    ...(identity === 'oidc' ? { oidc: oidcConfig(env) } : {}),
+    ...(identity === 'oidc' ? { oidc: oidcConfig(env), publicUrl: publicUrl(env.ARMATURE_PUBLIC_URL) } : {}),
+    ...(role === 'remote' && env.ARMATURE_INSTANCE_NAME?.trim() ? { instanceName: env.ARMATURE_INSTANCE_NAME.trim() } : {}),
     allowedHosts: list(env.ARMATURE_ALLOWED_HOSTS),
     allowedOrigins: list(env.ARMATURE_ALLOWED_ORIGINS),
     exportKey: env.ARMATURE_EXPORT_KEY?.trim() || undefined,

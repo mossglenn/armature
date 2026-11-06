@@ -8,7 +8,8 @@ import { discovery } from '../version';
  * What a tool can ask a hub about itself (ADR-0059 decision 6, ADR-0027
  * decision 4).
  *
- *   GET /discover               the hub's role, the revisions served, the
+ *   GET /discover               the hub's role, the revisions served, how to
+ *                               authenticate, the connection profile, the
  *                               capabilities with their settings, and where
  *                               the schema is; no ref, no identity, the same
  *                               at every ref
@@ -18,7 +19,7 @@ import { discovery } from '../version';
  */
 export const discover = new Hono();
 
-discover.get('/discover', (c) => c.json(discovery(hubOf(c))));
+discover.get('/discover', async (c) => c.json(await discovery(hubOf(c), new URL(c.req.url).hostname)));
 
 discover.get('/schema', async (c) => {
   const ref = refFromQuery(c);

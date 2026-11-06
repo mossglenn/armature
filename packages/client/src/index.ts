@@ -28,7 +28,7 @@
 import type { ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-05';
+export const CLIENT_REVISION = '2026-11-06';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -84,6 +84,20 @@ export interface ClientOptions {
   timeout?: number;
 }
 
+/**
+ * The connection profile (since 2026-11-06): what a person confirms before connecting. A remote
+ * hub's own, or on a workspace hub its remote's as last cloned. Holds no secret; the issuer, the
+ * audience and the client id are in `identity`.
+ */
+export interface InstanceProfile {
+  /** The instance's name for a person to recognize; its host name when the administrator set none. */
+  name: string;
+  /** Where a client beyond the server reaches the hub; absent on a hub with no public name, where a client keeps the address it was given. */
+  api?: string;
+  /** Where the desktop program comes from. */
+  program: { releases: string };
+}
+
 /** The body of GET /discover: the hub, not the graph. */
 export interface Discovery {
   /** A remote hub, or a workspace hub that leaves the routes in each capability's `remoteOnly` to its remote (2026-11-01). */
@@ -96,6 +110,8 @@ export interface Discovery {
    * program signs in with.
    */
   identity: { resolver: string; headers: Record<string, string>; issuer?: string; audience?: string; clientId?: string };
+  /** Absent on a hub older than 2026-11-06, and on a workspace hub before its first clone. */
+  instance?: InstanceProfile;
   capabilities: Record<string, { fallback: 'ignore' | 'reject'; [setting: string]: unknown }>;
   schema: { route: string };
 }
@@ -584,7 +600,7 @@ export function createClient(options: ClientOptions) {
   const at = ({ branch, ref }: AtRef): Query => ({ branch, ref });
 
   return {
-    /** `GET /discover`: the revisions the hub serves, its capabilities with their settings, and where the schema is. */
+    /** `GET /discover`: the revisions the hub serves, how to authenticate, the connection profile, its capabilities with their settings, and where the schema is. */
     discover() {
       return call<Discovery>('/discover');
     },

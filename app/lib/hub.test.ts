@@ -41,7 +41,7 @@ describe('the hub as its own process', () => {
 
   it('serves GET /discover over the socket exactly as the app does in-process', async () => {
     const overHttp = await fetch(`${running.url}/api/v1/discover`);
-    const inProcess = await app.request('/api/v1/discover');
+    const inProcess = await app.request(`${running.url}/api/v1/discover`); // the same host: `instance.name` falls back on it
     expect(overHttp.status).toBe(200);
     expect(overHttp.headers.get('Armature-Version')).toBe(CURRENT_REVISION);
     expect(await overHttp.json()).toEqual(await inProcess.json());
