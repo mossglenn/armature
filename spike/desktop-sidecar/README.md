@@ -57,6 +57,19 @@ Each runner builds the bundles, installs them as a person would (the macOS app a
 - **WebKitGTK under Xvfb** hung creating the webview until `WEBKIT_DISABLE_DMABUF_RENDERER=1` and `WEBKIT_DISABLE_COMPOSITING_MODE=1`; a runner's display only, to be checked on a Linux desktop before it is said of one.
 - **Linux packages** put the sidecar at `/usr/bin/armature-node` and the core at `/usr/lib/Armature Spike/core/core.mjs`.
 
-### The Windows laptop
+### The Windows laptop (tec-757: Windows 11 Pro, Intel Core i7-8700, 2026-11-06)
 
-By `RUNBOOK-windows.md`, for what a runner cannot show (SmartScreen on an unsigned installer, a console window flashing, closing the window with its X): to come.
+Installed from the Mac over SSH (`setup.exe /S`): per user, under `%LOCALAPPDATA%\Armature Spike`, no prompt; the shell 10.9 MiB, `armature-node.exe` 83 MiB, the core 0.9 MiB. The checks themselves cannot run over SSH: that session has no desktop, so WebView2 has no window to attach to and Tauri stops at setup (`failed to create webview: WebView2 error: … Invalid window handle`, HRESULT 0x80070578). So `spike-check.mjs` was started at the laptop's desktop (`run-check.cmd`) and its results read back over SSH. Every case passed:
+
+| What | Measured |
+|---|---|
+| Launch to a listening hub | 1.40 s the first time after installing, 0.60 to 0.68 s after |
+| Of which: Node's start and the bundle's load | 120 to 136 ms in the core |
+| Of which: `start` to listening | 23 to 26 ms |
+| `stop` to the core's exit | 14 to 15 ms |
+| The core, resident | 61 MiB |
+| The shell killed outright (`TerminateProcess`) | the core stopped itself; no lock left; the next start listened in 0.55 s |
+| The shell closed by `taskkill` (a WM_CLOSE, as the system closes a program) | the shell's own graceful stop, 18 ms; no lock left |
+| The core killed, the shell running | the shell lived and saw exit code 1; the lock left, taken over by the next start in 0.57 s |
+
+Afterward no spike process ran and the workspace folder held no lock. Not yet observed, since they need a person at the screen: what SmartScreen says when the unsigned installer is double-clicked, whether a console window flashes beside the shell, and closing the window with its X (the same path as `taskkill`'s WM_CLOSE in the shell, so expected to match).
