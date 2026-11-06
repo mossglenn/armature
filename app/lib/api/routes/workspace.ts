@@ -132,6 +132,8 @@ workspace.post('/', async (c) => {
   // A branch this hub just created is the owner's (ADR-0068 decision 3); an existing one may not be.
   const warning = typeof existing === 'string' ? await writeWarning(hub, remote, me.data as UserDocument & { grants?: Grant[] }, branch) : undefined;
   const { base, local, documents } = await cloneBranch(hub, remote, owner, branch);
+  // The remote's profile, kept so this hub's GET /discover can name the instance offline (docs/desktop-program-plan.md §8).
+  const { instance } = (await fromRemote(hub, () => remote.discover())).data;
 
   const record: WorkspaceRecord = {
     branch,
@@ -142,6 +144,7 @@ workspace.post('/', async (c) => {
     base,
     local,
     clonedAt: new Date().toISOString(),
+    ...(instance ? { instance } : {}),
   };
   await records.put(record);
   // What the clone holds beyond the base (plan §8, §16 question 3): the

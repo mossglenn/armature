@@ -11,6 +11,10 @@
  * (`app/lib/workspaceFolder.ts`, which uses the file system), a test gives
  * memory, and nothing under `app/lib/api/` touches a file.
  */
+import type { InstanceProfile } from '@armature/client';
+
+export type { InstanceProfile };
+
 export interface WorkspaceRecord {
   /** The branch: the same name on the remote and in the local store. */
   branch: string;
@@ -27,6 +31,8 @@ export interface WorkspaceRecord {
   local: string;
   /** When the clone was made, ISO 8601. */
   clonedAt: string;
+  /** The remote's connection profile at the clone (since 2026-11-06), which this hub's `GET /discover` repeats; absent when the remote published none or the clone is older. */
+  instance?: InstanceProfile;
 }
 
 /** One local commit replayed on the remote (ADR-0065 decision 5). */

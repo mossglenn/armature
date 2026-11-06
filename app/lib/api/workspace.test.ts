@@ -97,6 +97,13 @@ describe('over the file-backed store in memory', () => {
       expect(head.body.head.commit).toBe(record.base);
     });
 
+    it("keeps the remote's connection profile at the clone, and answers it in its own GET /discover (desktop plan §8)", async () => {
+      const profile = (await (await fetch(`${remote.url}/api/v1/discover`)).json()).instance;
+      expect(profile.program.releases).toContain('/releases');
+      expect(record.instance).toEqual(profile);
+      expect((await json(await on(workspace, 'GET', '/discover'))).body.instance).toEqual(profile);
+    });
+
     it("refuses a base that is not a commit identifier before writing anything: a proxy's altered ETag (the Droplet run of 2026-11-05)", async () => {
       // What Caddy's `encode` did to the export's ETag through the published hub, as a client of the remote would hand it over.
       const altered = `${stamp}-gzip-branch`;

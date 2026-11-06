@@ -15,6 +15,28 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-06 · The connection profile: `instance` in `GET /discover`; one `User` per person at first sign-in
+
+**What changed.** `GET /discover` carries `instance`, what a person confirms before connecting: `name`
+(`ARMATURE_INSTANCE_NAME`, else the host of the hub's public address, else the host the request
+called it by), `api` (`ARMATURE_PUBLIC_URL`, the address a client beyond the server reaches the hub
+at; read only under `oidc`, since a hub under `header` is never published, and absent otherwise) and
+`program.releases`, where the desktop program comes from. Like the rest of the route it is open
+without a token and holds no secret; the issuer, the audience and the client id stay in `identity`. A
+workspace hub's entry is its remote's, kept at the clone in the workspace's record (`instance`, also
+in `POST /workspace`'s answer), so it answers offline; it has none before its first clone, or when the
+remote published none. `@armature/client` has the type, `InstanceProfile`. The viewer has a new page,
+`/connect`, offering `armature://connect?remote=<address>`. Also this day, a fix: under `oidc`,
+requests sent at once by a person new to the hub each registered a `User`, because the store lets
+concurrent writers land at one data version (check AO). A first encounter now registers under an id
+derived from `(issuer, sub)`, so they settle on one, and the insert no longer carries `If-Match`
+(ADR-0032 decision 3, note of 2026-11-06).
+
+**What a client does.** A tool that shows the person where it is connecting reads `instance.name`, and
+uses `instance.api` when it has one, keeping the address it was given when it has none. Treat the
+entry as optional: a hub older than this revision has none. A `User` id stays opaque. **CoQui** needs
+nothing: it knows its hub's address from its own configuration.
+
 ## 2026-11-05 · A workspace hub reaches a remote under `oidc` with the owner's token; the user list by the generic route
 
 **What changed.** A workspace hub whose remote runs under `oidc` now reaches it with the owner's

@@ -443,6 +443,11 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > `@armature/client` has `token`, a string or a function returning the current one; `agent` it
    > had. Contract revision 2026-11-05 (`docs/client-changes.md`).
 
+   > **Note (2026-11-06), built:** the connection profile this decision points at is `instance`, an
+   > entry beside `identity` that does not repeat it: `name`, `api` and `program.releases`
+   > (`docs/desktop-program-plan.md` §8; contract revision 2026-11-06). `api` is published only under
+   > `oidc`, the only resolver under which a hub has a public name (decision 7, note).
+
 10. **An agent's own work reaches a remote only through a workspace hub** (added 2026-10-30). A
     remote hub refuses a write whose author would be an agent unless it arrives as a workspace
     hub's push acting for the workspace's owner (decision 3's form, with the owner's credential),

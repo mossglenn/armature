@@ -3,6 +3,7 @@ import { hubOf, type HubConfig, type HubRole } from './config';
 import { ApiError } from './errors';
 import { AUTHORIZATION_SETTINGS } from './authorization';
 import { readOnlyBranches, remoteOnlyRoutes } from './role';
+import type { InstanceProfile } from './workspace/records';
 
 /**
  * The per-request version contract (architecture decision record ADR-0059).
@@ -21,7 +22,7 @@ import { readOnlyBranches, remoteOnlyRoutes } from './role';
  * list against that file's headings. Revisions under /api/v1 are additive, so
  * a hub at the newest serves every earlier one.
  */
-export const REVISIONS = ['2026-11-05', '2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
+export const REVISIONS = ['2026-11-06', '2026-11-05', '2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
 
 export const CURRENT_REVISION = REVISIONS[0];
 const OLDEST_REVISION = REVISIONS[REVISIONS.length - 1];
@@ -89,6 +90,8 @@ export const capabilitiesOf = (role: HubRole): [string, Capability][] =>
  * (ADR-0067 decision 9): the resolver, the headers a client may send with
  * what each names, and under `oidc` the issuer, the audience and the client
  * id a native program signs in with; the admission list is not published.
+ *
+ * Since 2026-11-06 it carries the connection profile, `instance` (below).
  */
 export function identityEntry(hub: HubConfig) {
   if (hub.identity === 'oidc' && hub.oidc) {
@@ -104,7 +107,41 @@ export function identityEntry(hub: HubConfig) {
   return { resolver: hub.identity, headers: { 'Armature-User': 'person', 'Armature-Agent': 'agent' } };
 }
 
-export function discovery(hub: HubConfig) {
+/** Where the desktop program's releases are: a constant of the hub's own, since the program and the hub come from one repository, and a fork changes it (docs/desktop-program-plan.md §8). */
+export const PROGRAM_RELEASES = 'https://github.com/mossglenn/armature/releases';
+
+/**
+ * The connection profile (docs/desktop-program-plan.md §8): what a person
+ * confirms before connecting, read before any sign-in, so it holds no secret.
+ * The issuer, the audience and the client id are in `identity`.
+ *
+ * A remote hub says who it is: `name` from ARMATURE_INSTANCE_NAME, else the
+ * host of its public address, else the host this request called it by, which
+ * the boundary has already checked. The public address comes before the
+ * request's so the viewer, which calls the hub `hub` inside the network, sees
+ * the name a person would. `api` is absent on a hub with no public name, where
+ * a client keeps the address it was given.
+ *
+ * A workspace hub describes its remote, as the newest clone from that remote
+ * copied it, so a tool on the machine learns the instance's name offline; none
+ * before the first clone, or when the remote published none.
+ */
+export async function instanceEntry(hub: HubConfig, hostname: string): Promise<InstanceProfile | undefined> {
+  if (hub.role === 'workspace') {
+    const records = (await hub.workspaces?.list()) ?? [];
+    return records
+      .filter((record) => record.remote === hub.remote && record.instance)
+      .sort((a, b) => b.clonedAt.localeCompare(a.clonedAt))[0]?.instance;
+  }
+  const { instanceName, publicUrl } = hub;
+  return {
+    name: instanceName ?? (publicUrl ? new URL(publicUrl).hostname : hostname),
+    ...(publicUrl ? { api: publicUrl } : {}),
+    program: { releases: PROGRAM_RELEASES },
+  };
+}
+
+export async function discovery(hub: HubConfig, hostname: string) {
   const capabilities: Record<string, Record<string, unknown>> = {};
   for (const [id, cap] of capabilitiesOf(hub.role)) {
     capabilities[id] = { fallback: cap.fallback, ...cap.settings };
@@ -115,7 +152,8 @@ export function discovery(hub: HubConfig) {
   }
   // A workspace hub says whether push, bring in and deliver are routes here or the program's own actions (since 2026-11-03).
   if (capabilities['armature/workspace']) capabilities['armature/workspace'].actions = hub.actionRoutes ? 'routes' : 'program';
-  return { role: hub.role, versions: [...REVISIONS], identity: identityEntry(hub), capabilities, schema: { route: '/api/v1/schema' } };
+  const instance = await instanceEntry(hub, hostname);
+  return { role: hub.role, versions: [...REVISIONS], identity: identityEntry(hub), ...(instance ? { instance } : {}), capabilities, schema: { route: '/api/v1/schema' } };
 }
 
 const isRevision = (value: string): value is (typeof REVISIONS)[number] =>

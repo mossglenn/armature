@@ -19,6 +19,10 @@
  *   ARMATURE_OIDC_CLIENT_ID, ARMATURE_OIDC_JWKS_URL          optional: the client id a native program signs in with,
  *                                                            published by GET /discover; where the issuer's keys are
  *                                                            when not where its metadata says
+ *   ARMATURE_INSTANCE_NAME                                   optional: the name GET /discover's `instance` gives a person
+ *                                                            to confirm before connecting (docs/desktop-program-plan.md §8)
+ *   ARMATURE_PUBLIC_URL                                      under oidc, optional: where a client beyond this server reaches
+ *                                                            the hub, published as `instance.api`; not read under header
  *   ARMATURE_ALLOWED_HOSTS, ARMATURE_ALLOWED_ORIGINS        optional, comma-separated: host names besides
  *                                                            loopback, and web origins, the hub serves
  *                                                            (ADR-0067 decision 7; lib/api/boundary.ts)
