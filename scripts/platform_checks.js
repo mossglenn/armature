@@ -144,6 +144,14 @@
 //      refused and the target unchanged, with the head's token it lands; and the refusal's
 //      error type, so the adapter maps it as it maps a write's
 //
+// Concurrent writers (ADR-0032 decision 3, note of 2026-11-06; ADR-0025 decision 7), added
+// 2026-11-06, when the oidc suite's concurrent first encounters made one person three `User`s:
+//   AO. What the store settles among writers sent at once. A stale data version is refused when
+//      it is stale on arrival (check M); sent together at one version, whether only one lands,
+//      for inserts of different documents and replaces of one document; and whether concurrent
+//      inserts of one @id leave one winner and refuse the rest as DocumentIdAlreadyExists.
+//      Timing decides the first two, so several rounds, and either answer is recorded as INFO
+//
 // Hash identifiers reproduced (ADR-0066 decision 6; the workspace hub plan's step 6), added
 // 2026-11-02:
 //   AI. Whether the id the store mints for a Hash-keyed document can be computed from its key
@@ -1157,6 +1165,28 @@ async function main() {
     const aiSetTwo = ["+", ",", ""].some((j) => aiSet['["x","y"]'] === `KeyedSet/${aiHash([aiRef, ["x", "y"].join(j)])}`);
     record("AI4", "INFO", `a Set in a key (no Armature key has one): one element hashes as the element (${aiSetOne}); two elements in either order are one id (${aiSet['["y","x"]']}); the two-element string reproduced by a plain join: ${aiSetTwo}; an empty Set hashes as "+none+", the absent Optional's form (${aiSet["[]"] === `KeyedSet/${aiHash([aiRef, undefined])}`})`);
   }
+
+  // AO: concurrent writers at one data version.
+  const aoHead = async () => `branch:${(await log("main", 1))?.[0]?.identifier}`;
+  const aoInsert = (doc, token) => api("POST", docs(commit("AO insert")), doc, { "TerminusDB-Data-Version": token });
+  const aoReplace = (doc, token) => api("PUT", docs(commit("AO replace")), doc, { "TerminusDB-Data-Version": token });
+  const aoRounds = 3, aoWriters = [0, 1, 2, 3];
+  const aoLanded = (answers) => answers.filter((a) => a.status === 200).length;
+  const aoDifferent = [], aoSameDoc = [], aoSameId = [];
+  await aoInsert({ "@type": "Artifact", "@id": "Artifact/ao-one", label: "start" }, await aoHead());
+  for (let round = 0; round < aoRounds; round++) {
+    let token = await aoHead();
+    aoDifferent.push(aoLanded(await Promise.all(aoWriters.map((i) => aoInsert({ "@type": "Artifact", "@id": `Artifact/ao-${round}-${i}`, label: "ao" }, token)))));
+    token = await aoHead();
+    aoSameDoc.push(aoLanded(await Promise.all(aoWriters.map((i) => aoReplace({ "@type": "Artifact", "@id": "Artifact/ao-one", label: `writer ${i}` }, token)))));
+    token = await aoHead();
+    const taken = await Promise.all(aoWriters.map((i) => aoInsert({ "@type": "Artifact", "@id": `Artifact/ao-id-${round}`, label: `writer ${i}` }, token)));
+    aoSameId.push({ landed: aoLanded(taken), refused: taken.filter((a) => errType(a) === "api:DocumentIdAlreadyExists").length });
+  }
+  record("AO1", "INFO", `${aoWriters.length} inserts of different documents sent at once at one data version: ${aoDifferent.join(", ")} landed per round (a version check held through the commit would land 1)`);
+  record("AO2", "INFO", `${aoWriters.length} replaces of one document sent at once at one data version: ${aoSameDoc.join(", ")} landed per round (more than 1 is a lost update: the last one holds, and every writer was told 200)`);
+  record("AO3", aoSameId.every((x) => x.landed === 1 && x.refused === aoWriters.length - 1) ? "PASS" : "FAIL",
+    `${aoWriters.length} inserts of one @id sent at once: ${aoSameId.map((x) => `${x.landed} landed, ${x.refused} DocumentIdAlreadyExists`).join("; ")}: the id is what the store settles among concurrent writers`);
 
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);

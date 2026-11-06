@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { User } from '@armature/types';
 import { ApiError } from './errors';
@@ -146,8 +147,19 @@ export async function findUserByExternalId(
   return { user, commit };
 }
 
-/** A hub-minted `User` id for a registration (ADR-0032 decision 3). */
+/** A hub-minted `User` id for a registration by a person (ADR-0032 decision 3). */
 export const mintUserId = (): string => `User/${crypto.randomUUID()}`;
+
+/**
+ * The `User` id a first encounter registers under (ADR-0032 decision 3, note of
+ * 2026-11-06): opaque like any other, and the same for every first encounter of
+ * one `(issuer, sub)`, so concurrent ones collide on the id, the one thing the
+ * store settles among concurrent writers (check AO). A random id with `If-Match`
+ * on the head does not: the store checks the version before its transaction and
+ * lets every concurrent writer land, so one person became several `User`s.
+ */
+export const firstEncounterId = (issuer: string | undefined, externalId: string): string =>
+  `User/${createHash('sha256').update(JSON.stringify([issuer ?? '', externalId])).digest('hex').slice(0, 32)}`;
 
 /** The claims the hub's resolver finds on the request; 401 `identity_required` when it finds none. */
 export async function requireClaims(c: Context): Promise<IdentityClaims> {
@@ -269,11 +281,10 @@ async function resolveRelay(c: Context, claims: IdentityClaims, relayed: string)
 /** The `User` these claims resolve to, registered on first encounter when the resolver allows. */
 async function resolveClaims(c: Context, claims: IdentityClaims, main: Store): Promise<ResolvedUser> {
   const hub = hubOf(c);
-  // Two passes: a concurrent registration of the same externalId makes the
-  // insert fail on the head it read (If-Match) or on the id, and the second
-  // lookup then finds the winner's document.
+  // Two passes: a concurrent registration of the same person makes the insert
+  // fail on the id, and the second lookup then finds the winner's document.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { user, commit } = await findUserByExternalId(main, claims.externalId, claims.issuer);
+    const { user } = await findUserByExternalId(main, claims.externalId, claims.issuer);
     if (user) return { id: user['@id'], user };
     // A workspace hub's main is the remote's registry, mirrored: a person is
     // registered on the remote, never here (docs/workspace-hub-plan.md §9).
@@ -308,7 +319,7 @@ async function resolveClaims(c: Context, claims: IdentityClaims, main: Store): P
         `No User is registered for ${claims.externalId}; create one with POST /api/v1/users`
       );
     }
-    const id = mintUserId();
+    const id = firstEncounterId(claims.issuer, claims.externalId);
     const document: UserDocument = {
       '@id': id,
       '@type': 'User',
@@ -322,13 +333,12 @@ async function resolveClaims(c: Context, claims: IdentityClaims, main: Store): P
       await main.insertDocument(document, {
         author: id,
         message: `Register ${claims.externalId} on first encounter`,
-        ifMatch: commit || undefined,
       });
       return { id, user: document };
     } catch (err) {
-      // Only the race: main moved under the insert, or the id was taken. Any
-      // other refusal is a fault to surface, not a reason to look again.
-      if (err instanceof StoreError && (err.kind === 'version_mismatch' || err.kind === 'exists')) continue;
+      // Only the race: the id was taken. Any other refusal is a fault to
+      // surface, not a reason to look again.
+      if (err instanceof StoreError && err.kind === 'exists') continue;
       throw err;
     }
   }
