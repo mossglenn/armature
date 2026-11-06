@@ -43,7 +43,10 @@ import { changesOf, StoreError, type DocumentReader, type Store, type TerminusDo
  * write replaces, which is 409 `document_moved` rather than a silent
  * overwrite (decision 7, note of 2026-11-01), and answered 409 `branch_moved`
  * when the branch keeps moving; with one, losing the race is the 412 it
- * asked for.
+ * asked for. Except that a race lost inside the store is not seen here: the
+ * store compares a data version ahead of what orders its commits, so writes
+ * in flight together at one head can all land (check AO; decision 7, note of
+ * 2026-11-06). A per-branch write queue in the hub is decided, not built.
  */
 
 export interface WriteOptions {

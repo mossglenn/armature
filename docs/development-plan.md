@@ -1382,10 +1382,17 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   the retry does not check the version again, so a replace can lose an update with every writer
   told 200. The source at v12.0.7 says why: `before_write` (`src/core/api/api_document.pl`) compares
   the versions ahead of `with_transaction`, and `retry_transaction`
-  (`src/core/transaction/database.pl`) reruns only the body. The same probe shows it on v12.0.9 and
-  v12.1.0-rc2, where the commit queue orders commits but `before_write` still runs before anything
-  is queued. Only an `@id` is settled among concurrent writers, one winner and the rest
-  `DocumentIdAlreadyExists` (AO3). ADR-0032 decision 3, note of that day, relies on AO3.
+  (`src/core/transaction/database.pl`) reruns only the body. Measured the same day: with
+  `TERMINUSDB_SERVER_MAX_TRANSACTION_RETRIES=0`, v12.0.7 and v12.0.9 land one writer and answer the
+  rest 500, so the retry is the cause there. v12.1.0-rc2 lands all four with
+  `TerminusDB-Transaction-Retry-Count: 0`, retries off or on: nothing retries there, and from reading
+  the source its commit queue orders the writes while `before_write` runs before anything is enqueued,
+  the queue's module not comparing the version. Older servers do not send that header. `main` shows no
+  change to this that day. Only an `@id` is settled among concurrent writers, one winner and the rest
+  `DocumentIdAlreadyExists` (AO3). ADR-0032 decision 3, note of that day, relies on AO3; ADR-0025
+  decision 7's note of that day records what the hub does about the rest. Retries at 0 would make
+  the store refuse the losers on the pinned version, across processes, but it fails plain concurrent
+  writes too, answers them 500, and stops working on 12.1, so it is not the fix.
 - *Verified (2026-10-08, check M):* the token is `branch:<commit-id>` on a branch read and
   `commit:<commit-id>` on a read at a commit, and the id is the log head. A write with a stale
   token is HTTP 400 `api:DataVersionMismatch` (not 409); a bare commit id as the token is HTTP
