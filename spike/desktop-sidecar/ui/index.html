@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Armature (sidecar spike)</title>
+    <style>
+      body { font: 13px/1.4 system-ui, sans-serif; margin: 16px; }
+      pre { background: #f4f4f4; padding: 8px; height: 300px; overflow: auto; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <p>The shell started the core; every line below is a measurement or an event, also written to the log folder's <code>spike.jsonl</code>.</p>
+    <button id="ping">Ping the core</button>
+    <button id="quit">Quit (stop the hub first)</button>
+    <pre id="log"></pre>
+    <script>
+      const { invoke } = window.__TAURI__.core;
+      const { listen } = window.__TAURI__.event;
+      const log = document.getElementById('log');
+      listen('spike', (e) => {
+        log.textContent += JSON.stringify(e.payload) + '\n';
+        log.scrollTop = log.scrollHeight;
+      });
+      document.getElementById('ping').onclick = () => invoke('ping');
+      document.getElementById('quit').onclick = () => invoke('quit');
+    </script>
+  </body>
+</html>
