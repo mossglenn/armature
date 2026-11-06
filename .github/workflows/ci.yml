@@ -273,6 +273,12 @@ jobs:
           grep -q '"hub:3100"' /tmp/caddy-oidc.json && ! grep -q '"hub:3100"' /tmp/caddy-header.json
           grep -q '"api.example.org"' /tmp/caddy-oidc.json
           jq -e '[.apps.http.servers[].routes[] | select(.match[]?.host[]? == "api.example.org") | .. | objects | select(.handler? == "encode")] | length == 0' /tmp/caddy-oidc.json
+      - name: The compose file derives the hub's public address, and a set one wins
+        run: |
+          derived() { env "$@" docker compose -f docker/docker-compose.yml --profile hub config --format json | jq -r .services.hub.environment.ARMATURE_PUBLIC_URL; }
+          test "$(derived ARMATURE_SITE=example.org)" = https://api.example.org
+          test "$(derived ARMATURE_API_HOST=hub.example.org ARMATURE_API_SCHEME=http)" = http://hub.example.org
+          test "$(derived ARMATURE_PUBLIC_URL=https://elsewhere.example.org)" = https://elsewhere.example.org
       - name: Build the viewer image
         run: docker build -f docker/viewer.Dockerfile -t armature-viewer .
       - name: Start it and wait for a page

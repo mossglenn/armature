@@ -16,6 +16,7 @@
       "redirectUris": ["http://127.0.0.1/*", "http://localhost/*"],
       "attributes": { "pkce.code.challenge.method": "S256" },
       "defaultClientScopes": ["basic", "profile", "email"],
+      "optionalClientScopes": ["offline_access"],
       "protocolMappers": [
         {
           "name": "the hub as audience",
@@ -55,6 +56,7 @@
       "emailVerified": true,
       "firstName": "Demo",
       "lastName": "Designer",
+      "realmRoles": ["offline_access"],
       "credentials": [{ "type": "password", "value": "designer", "temporary": false }]
     },
     {
@@ -64,6 +66,7 @@
       "emailVerified": true,
       "firstName": "Demo",
       "lastName": "Reviewer",
+      "realmRoles": ["offline_access"],
       "credentials": [{ "type": "password", "value": "reviewer", "temporary": false }]
     }
   ]
