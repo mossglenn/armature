@@ -1,7 +1,0 @@
-{
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "The spike's page listens for the shell's events; its two commands are the shell's own.",
-  "windows": ["main"],
-  "permissions": ["core:default"]
-}
