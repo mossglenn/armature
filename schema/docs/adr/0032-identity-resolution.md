@@ -128,6 +128,19 @@ What the store does, reproduced on 2026-10-08 in a scratch database (check lette
    `If-Match` on the `main` head the lookup read, so two concurrent first encounters cannot both
    register; the loser re-resolves and finds the winner's document.
 
+   > **Later change (2026-11-06):** that `If-Match` did not do what this decision says. The store
+   > checks a data version before its transaction and retries the transaction when the head moves
+   > without checking again, so writers sent at once at one version all land (check AO; AO1 and
+   > AO2). In the server's source at v12.0.7, `before_write` in `src/core/api/api_document.pl` makes
+   > the comparison ahead of `with_transaction`, and `retry_transaction` in
+   > `src/core/transaction/database.pl` reruns only the body. No client could reach this until the `oidc` resolver, and its first concurrency test
+   > made one person three `User`s, each answered 200. A first encounter now registers under an id
+   > derived from the person, `User/<first 32 hex digits of SHA-256 over [issuer, sub]>`
+   > (`firstEncounterId`), and the insert carries no `If-Match`: concurrent inserts of one id leave
+   > one winner and refuse the rest as `DocumentIdAlreadyExists` (AO3), the loser looks again and
+   > finds the winner, as this decision intended. The id stays opaque (ADR-0024 decision 2) and
+   > hub-minted, so its author is still known before the insert. `POST /users` keeps a random id.
+
 4. **Author and `createdBy` come from the resolved identity, never from the body.** The commit
    author is the resolved `User`'s id (ADR-0025 decision 2, unchanged). For every class that
    inherits `ArmatureDocument`, the hub sets `createdBy` to the resolved `User` when it creates

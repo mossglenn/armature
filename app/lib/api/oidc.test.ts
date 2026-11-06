@@ -11,11 +11,12 @@
  * second hub over the same database runs under `header`, as the operator
  * would, to register ahead and to grant.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Hono } from 'hono';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type CryptoKey, type JWTPayload } from 'jose';
 import { app, createApp } from './app';
 import { configFromEnv, type HubConfig } from './config';
+import { firstEncounterId } from './identity';
 import { forgetIssuers, jwksUrlOf } from './oidc';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from './store';
 
@@ -173,6 +174,59 @@ describe('the token on every request (ADR-0067 decision 1)', () => {
     expect(refused.body.reason).toBe('algorithm');
     const basic = await json(await oidcHub.request('/api/v1/users/me', { headers: { Authorization: 'Basic abc' } }));
     expect(basic.body).toMatchObject({ error: 'invalid_token', reason: 'malformed' });
+  });
+});
+
+describe('first encounter under a race (ADR-0032; the deep review\'s HTTP item 3, narrowed in PR #85 and reachable since this resolver)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Answers the store's inserts into the scratch database with `refusal`, counting them; every other call goes through. */
+  function refuseInserts(refusal: () => Response) {
+    const seen = { inserts: 0 };
+    const real = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      const isInsert = init?.method === 'POST' && url.includes(`/api/document/`) && url.includes(SCRATCH_DB) && url.includes('author=');
+      if (!isInsert) return real(input, init);
+      seen.inserts += 1;
+      return refusal();
+    });
+    return seen;
+  }
+  const storeRefusal = (status: number, type: string) => () =>
+    new Response(JSON.stringify({ '@type': 'api:InsertDocumentErrorResponse', 'api:status': 'api:failure', 'api:error': { '@type': type }, 'api:message': type }), { status });
+
+  it('settles concurrent first encounters on one User, every request answered', async () => {
+    const bearer = await person('sub-race', 'race@example.edu', 'Ray Race');
+    const answers = await Promise.all(Array.from({ length: 4 }, async () => json(await as(bearer, 'GET', '/users/me'))));
+    expect(answers.map((a) => a.status)).toEqual([200, 200, 200, 200]);
+    expect(new Set(answers.map((a) => a.body['@id']))).toEqual(new Set([firstEncounterId(ISSUER, 'sub-race')]));
+    const listed = await json(await operator('GET', '/users'));
+    expect(listed.body.filter((u: { externalId: string }) => u.externalId === 'sub-race')).toHaveLength(1);
+  });
+
+  it('looks again once when the id was taken, then says to retry: 409 registration_conflict', async () => {
+    const seen = refuseInserts(storeRefusal(400, 'api:DocumentIdAlreadyExists'));
+    const res = await json(await as(await person('sub-lost-twice', 'lost@example.edu', 'Lee Lost'), 'GET', '/users/me'));
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('registration_conflict');
+    expect(seen.inserts).toBe(2);
+  });
+
+  it("gives one person's id under one issuer only: the same sub at another issuer is another person (decision 1's (issuer, sub))", () => {
+    expect(firstEncounterId(ISSUER, 'sub-7')).toBe(firstEncounterId(ISSUER, 'sub-7'));
+    expect(firstEncounterId(ISSUER, 'sub-7')).not.toBe(firstEncounterId('https://other.example.org', 'sub-7'));
+    expect(firstEncounterId(ISSUER, 'sub-7')).toMatch(/^User\/[0-9a-f]{32}$/);
+  });
+
+  it('surfaces any other refusal at once: a store 400 is a fault, not a reason to look again', async () => {
+    const seen = refuseInserts(storeRefusal(400, 'api:SchemaCheckFailure'));
+    const res = await as(await person('sub-refused', 'refused@example.edu', 'Rae Refused'), 'GET', '/users/me');
+    expect(seen.inserts).toBe(1);
+    expect(res.status).not.toBe(200);
+    expect(res.status).not.toBe(409);
   });
 });
 

@@ -1376,7 +1376,16 @@ pinned docs commit and release), so future checks can diff rather than re-read.
 - `TerminusDB-Data-Version` is returned on every operation and accepted on writes for optimistic
   concurrency. Independently, the server retries a transaction up to three times when the branch
   head moved during it (`TERMINUSDB_SERVER_MAX_TRANSACTION_RETRIES`), so concurrent writers do not
-  fail unless they pass a data version.
+  fail unless they pass a data version. *Corrected (2026-11-06, check AO):* they do not fail then
+  either. A data version stale on arrival is refused (check M), but writers sent at once at one
+  version all land, every round, whether they insert different documents or replace one (AO1, AO2):
+  the retry does not check the version again, so a replace can lose an update with every writer
+  told 200. The source at v12.0.7 says why: `before_write` (`src/core/api/api_document.pl`) compares
+  the versions ahead of `with_transaction`, and `retry_transaction`
+  (`src/core/transaction/database.pl`) reruns only the body. The same probe shows it on v12.0.9 and
+  v12.1.0-rc2, where the commit queue orders commits but `before_write` still runs before anything
+  is queued. Only an `@id` is settled among concurrent writers, one winner and the rest
+  `DocumentIdAlreadyExists` (AO3). ADR-0032 decision 3, note of that day, relies on AO3.
 - *Verified (2026-10-08, check M):* the token is `branch:<commit-id>` on a branch read and
   `commit:<commit-id>` on a read at a commit, and the id is the log head. A write with a stale
   token is HTTP 400 `api:DataVersionMismatch` (not 409); a bare commit id as the token is HTTP
