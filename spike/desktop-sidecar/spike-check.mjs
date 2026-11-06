@@ -10,7 +10,7 @@
 //
 //   node spike-check.mjs "<path to the shell's executable>"
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -32,7 +32,11 @@ let runs = 0;
 function launch(env = {}) {
   const log = join(logs, `run-${++runs}.jsonl`);
   const began = Date.now();
-  const shell = spawn(bin, [], { env: { ...process.env, SPIKE_LOG: log, ...env }, stdio: 'ignore' });
+  // The shell's own output, kept so a shell that never starts says why.
+  const out = `${log}.out`;
+  const fd = openSync(out, 'w');
+  const shell = spawn(bin, [], { env: { ...process.env, SPIKE_LOG: log, ...env }, stdio: ['ignore', fd, fd] });
+  closeSync(fd);
   const exited = new Promise((r) => shell.on('exit', (code, signal) => r({ code, signal, wallMs: Date.now() - began })));
   const events = () => (existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
   const until = async (test, ms = 20000) => {
@@ -40,7 +44,8 @@ function launch(env = {}) {
       const found = events().find(test);
       if (found) return found;
     }
-    throw new Error(`timed out waiting in ${log}: ${JSON.stringify(events())}`);
+    const said = existsSync(out) ? readFileSync(out, 'utf8').split('\n').slice(-30).join('\n') : '';
+    throw new Error(`timed out waiting in ${log}: ${JSON.stringify(events())}; the shell ${alive(shell.pid) ? 'is running' : 'has exited'} and said:\n${said}`);
   };
   return { shell, exited, events, until };
 }

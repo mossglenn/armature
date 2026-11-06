@@ -58,8 +58,10 @@ if (existsSync(target)) {
   const out = join(cache, 'x');
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  // bsdtar reads zip as well as tar, on macOS and on Windows 10 and later.
-  execFileSync('tar', ['-xf', archive, '-C', out, `${base}/${dist.inner}`]);
+  // bsdtar reads zip as well as tar, on macOS and on Windows 10 and later; on Windows by its
+  // own path, since Git's GNU tar comes first under Git Bash and reads `D:` as a host name.
+  const tar = process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+  execFileSync(tar, ['-xf', archive, '-C', out, `${base}/${dist.inner}`]);
   mkdirSync(dirname(target), { recursive: true });
   copyFileSync(join(out, base, dist.inner), target);
   if (!exe) chmodSync(target, 0o755);
