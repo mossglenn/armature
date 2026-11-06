@@ -72,7 +72,9 @@ jobs:
         run: |
           sudo dpkg -i spike/desktop-sidecar/src-tauri/target/release/bundle/deb/*.deb
           dpkg -L armature-spike | grep -E 'bin/|core.mjs'
-          xvfb-run -a node spike/desktop-sidecar/spike-check.mjs /usr/bin/armature-desktop-spike | tee -a check.jsonl
+          # WebKitGTK under Xvfb hangs creating the webview with its GPU paths on.
+          export WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1
+          dbus-run-session -- xvfb-run -a node spike/desktop-sidecar/spike-check.mjs /usr/bin/armature-desktop-spike | tee -a check.jsonl
       - name: Results to the summary
         if: always()
         run: |
