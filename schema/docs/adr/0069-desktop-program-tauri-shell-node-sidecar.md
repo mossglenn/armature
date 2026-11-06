@@ -117,6 +117,12 @@ it merged): a throwaway Tauri shell starting Node 22.23.4 as the sidecar with a 
 the real hub over the file-backed store, measured by one script on each machine against the
 installed program.
 
+> **Note (2026-11-06):** `fd50f8c` was the commit's identifier on the spike's branch, which is
+> deleted; the rebase merge (PR #111) gave the commits new identifiers. On `main` the spike is
+> `6be705f` (the code, the build step and the check script) to `81014e7` (the laptop's results in
+> its README), and `aa6035d` removes it; `git show 81014e7:spike/desktop-sidecar/README.md` reads
+> the findings as the spike left them.
+
 | | The Mac (M2, macOS, arm64) | GitHub's macOS runner | GitHub's Windows runner | The Windows laptop (Windows 11 Pro, i7-8700) | GitHub's Ubuntu 22.04 runner, Xvfb |
 |---|---|---|---|---|---|
 | What a person downloads | `.dmg` 38 MiB | `.dmg` 38 MiB | installer 24 MiB | installer 24 MiB | `.deb` 47 MiB, AppImage 117 MiB |
