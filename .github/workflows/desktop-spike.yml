@@ -1,0 +1,89 @@
+# The desktop program's sidecar spike (docs/desktop-program-plan.md §14 step 1). Throwaway:
+# removed with spike/desktop-sidecar/ before the spike's branch merges; only its numbers are kept.
+# Builds the spike's Tauri shell with Node as a sidecar on the three systems, installs what a
+# person would install, runs spike-check.mjs against the installed shell, and keeps the bundles
+# as artifacts for the Windows laptop's run.
+name: Desktop spike
+
+on:
+  push:
+    branches: ['spike/desktop-sidecar']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and check on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            bundles: app,dmg
+          - os: windows-latest
+            bundles: nsis
+          - os: ubuntu-22.04
+            bundles: deb,appimage
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Rust
+        run: rustup toolchain install stable --profile minimal && rustc --version
+      - name: Linux libraries for the webview
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb
+      - name: Bundle the core and fetch Node
+        run: node spike/desktop-sidecar/prepare.mjs
+      - name: Build the shell
+        working-directory: spike/desktop-sidecar
+        run: npx -y @tauri-apps/cli@2.12.4 build --bundles ${{ matrix.bundles }}
+      - name: Sizes
+        working-directory: spike/desktop-sidecar/src-tauri/target/release
+        run: |
+          {
+            echo "### Bundles on ${{ matrix.os }}"
+            echo '```'
+            find bundle -maxdepth 2 -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' \) -exec ls -l {} \;
+            du -sh bundle/macos/*.app 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Install and check (macOS)
+        if: runner.os == 'macOS'
+        run: node spike/desktop-sidecar/spike-check.mjs "spike/desktop-sidecar/src-tauri/target/release/bundle/macos/Armature Spike.app/Contents/MacOS/armature-desktop-spike" | tee -a check.jsonl
+      - name: Install and check (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          setup=$(ls spike/desktop-sidecar/src-tauri/target/release/bundle/nsis/*-setup.exe)
+          "$setup" //S
+          sleep 5
+          dir="$LOCALAPPDATA/Armature Spike"
+          ls -la "$dir"
+          exe=$(ls "$dir"/*.exe | grep -vi -e uninstall -e armature-node | head -1)
+          node spike/desktop-sidecar/spike-check.mjs "$exe" | tee -a check.jsonl
+      - name: Install and check (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo dpkg -i spike/desktop-sidecar/src-tauri/target/release/bundle/deb/*.deb
+          dpkg -L armature-spike | grep -E 'bin/|core.mjs'
+          xvfb-run -a node spike/desktop-sidecar/spike-check.mjs /usr/bin/armature-desktop-spike | tee -a check.jsonl
+      - name: Results to the summary
+        if: always()
+        run: |
+          { echo "### spike-check on ${{ matrix.os }}"; echo '```'; cat check.jsonl 2>/dev/null || echo 'no results'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spike-${{ matrix.os }}
+          path: |
+            check.jsonl
+            spike/desktop-sidecar/src-tauri/target/release/bundle/dmg/*.dmg
+            spike/desktop-sidecar/src-tauri/target/release/bundle/nsis/*.exe
+            spike/desktop-sidecar/src-tauri/target/release/bundle/deb/*.deb
+            spike/desktop-sidecar/src-tauri/target/release/bundle/appimage/*.AppImage
+          retention-days: 14
