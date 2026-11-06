@@ -41,6 +41,13 @@ export function hubPublicUrl(): string | undefined {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(url) ? url : undefined;
 }
 
+/**
+ * The link that opens the desktop program at this instance
+ * (docs/desktop-program-plan.md §8). The scheme carries the address and nothing
+ * else: the program reads the profile from it and asks the person to confirm.
+ */
+export const connectLink = (remote: string): string => `armature://connect?remote=${encodeURIComponent(remote)}`;
+
 // One source per process: the token it holds is shared by every page's client.
 let source: TokenSource | undefined | null = null;
 
