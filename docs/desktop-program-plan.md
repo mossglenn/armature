@@ -1,6 +1,6 @@
 # The desktop program: plan
 
-*Status: draft 2026-11-05, for review; the questions in §15 are open, each with a recommendation the plan is written to. The program is step 7 of `docs/workspace-hub-plan.md` §14, the first release candidate of the workspace hub (its §16, question 1, decided 2026-10-30), and the last piece of ADR-0067 (decision 2, the program's own sign-in). When the program exists, this document becomes its description here.*
+*Status: draft 2026-11-05, for review; the questions in §15 each have a recommendation the plan is written to, and five are decided the same day (Amos): the shell is Tauri 2 over the hub on a Node sidecar (question 1), the program lives in this repository (3), the local token is kept across starts (4), the first builds carry the updater's signature only (12), and the shell and its channel get ADR-0069 after the spike (13). The program is step 7 of `docs/workspace-hub-plan.md` §14, the first release candidate of the workspace hub (its §16, question 1, decided 2026-10-30), and the last piece of ADR-0067 (decision 2, the program's own sign-in). When the program exists, this document becomes its description here.*
 
 Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), HTTP (Hypertext Transfer Protocol), JSON (JavaScript Object Notation), OIDC (OpenID Connect), PKCE (Proof Key for Code Exchange), URL (Uniform Resource Locator).
 
@@ -260,7 +260,7 @@ Each with the options and the recommendation the plan above is written to.
    - (b) Electron: Node built in, the hub in the main process, the core a module rather than a process, the keychain through `safeStorage`.
    - (c) No shell: the core alone, installed as a service, with its pages served on loopback and opened in the browser (Syncthing's shape).
 
-   *Recommendation: (a).* (b) is simpler to build, with no channel and no sidecar, and the honest comparison says so; it costs an installer of 100 MB or more and Chromium's memory for a program that mostly sits in the tray, and a second toolchain beside Quiver's. (a) keeps the shell small and the logic in TypeScript where the tests run, and the Node sidecar makes its installer about the size of (b)'s, so its gains are memory and one toolchain, not download. (c) has no keychain, no scheme and no signed update without native modules, and is not a thing a designer installs. If the spike finds the sidecar path blocked on one platform, (b) is the fallback and the core moves across unchanged.
+   *Recommendation: (a).* (b) is simpler to build, with no channel and no sidecar, and the honest comparison says so; it costs an installer of 100 MB or more and Chromium's memory for a program that mostly sits in the tray, and a second toolchain beside Quiver's. (a) keeps the shell small and the logic in TypeScript where the tests run, and the Node sidecar makes its installer about the size of (b)'s, so its gains are memory and one toolchain, not download. (c) has no keychain, no scheme and no signed update without native modules, and is not a thing a designer installs. If the spike finds the sidecar path blocked on one platform, (b) is the fallback and the core moves across unchanged. *Decided 2026-11-05 (Amos): (a), on the comparison of the two forms' costs: no shell loses the keychain, running in the background, installers with updates and a visible program, each with a worse substitute; the core is built to run with no shell first (step 3), and the shell is added for the designer release.*
 
 2. **The sidecar's form.**
    - (a) The Node executable for each target as the sidecar, the bundle as a resource (§5).
@@ -274,14 +274,14 @@ Each with the options and the recommendation the plan above is written to.
    - (b) Its own repository, taking the hub's bundle from a release.
    - (c) Inside Quiver, as plan §16 question 1 first recommended.
 
-   *Recommendation: (a).* The program is a host of the hub, as `app/server.ts` and the images are, not a client; its version is the hub's revision; and the deployment rehearsal rule already applies to a change in how the hub runs. (b) would split one release into two. (c) was right when Quiver was the only local tool; the MCP server and the Storyline bridge now share the hub, and a program Quiver bundles is a program the MCP server cannot find.
+   *Recommendation: (a).* The program is a host of the hub, as `app/server.ts` and the images are, not a client; its version is the hub's revision; and the deployment rehearsal rule already applies to a change in how the hub runs. (b) would split one release into two. (c) was right when Quiver was the only local tool; the MCP server and the Storyline bridge now share the hub, and a program Quiver bundles is a program the MCP server cannot find. *Decided 2026-11-05 (Amos): (a).*
 
 4. **The local token across starts** (§7).
    - (a) Drawn at each start, as decided (ADR-0065 decision 7, note of 2026-10-30).
    - (b) Kept in the keychain across starts; drawn anew on "reset pairing" or when none is kept.
    - (c) Per-tool tokens issued at pairing (the deferred scoped design).
 
-   *Recommendation: (b), as a dated note on the decision.* The threat model is per user and the keychain is per user; (a) makes a paired tool, and the MCP server's static configuration, pair again each morning; (c) is the design the decision deferred until a tool needs a narrower grant. `server.ts` keeps (a).
+   *Recommendation: (b), as a dated note on the decision.* The threat model is per user and the keychain is per user; (a) makes a paired tool, and the MCP server's static configuration, pair again each morning; (c) is the design the decision deferred until a tool needs a narrower grant. `server.ts` keeps (a). *Decided 2026-11-05 (Amos): (b); the dated note on ADR-0065 decision 7 comes with step 1.*
 
 5. **How the shell drives the actions, and the fate of `ARMATURE_WORKSPACE_ACTIONS`.**
    - (a) The control channel over the sidecar's pipes; the routes refused on the program's hub; the setting kept for the compose profile and the suites.
@@ -326,13 +326,13 @@ Each with the options and the recommendation the plan above is written to.
     - (a) The updater's signature only, the two workarounds documented, until an audience beyond Amos and the rehearsal machines.
     - (b) An Apple Developer ID and a Windows certificate or Azure Trusted Signing from the first release.
 
-    *Recommendation: (a).* The certificates are Amos's to obtain and cost money; the updater's signature keeps updates safe meanwhile. The spike checks that Tauri signs the sidecar so (b) is a configuration change, not a build change, when it comes.
+    *Recommendation: (a).* The certificates are Amos's to obtain and cost money; the updater's signature keeps updates safe meanwhile. The spike checks that Tauri signs the sidecar so (b) is a configuration change, not a build change, when it comes. *Decided 2026-11-05 (Amos): (a).*
 
 13. **An ADR.**
     - (a) ADR-0069, "The desktop program: a Tauri shell over the hub on Node", short, in the Nygard form with In brief, Alternatives and Verification (the spike), written after the spike; the other choices as dated notes on ADR-0065 decision 7 (the kept token, the actions over the channel), ADR-0066 (the folder and the warning) and ADR-0067 decisions 2 and 9 (the flow, the profile).
     - (b) Dated notes only.
 
-    *Recommendation: (a).* The shell and the channel are an architecture the hub's later readers will ask "why" of, as ADR-0054 answers for Hono; the notes alone would scatter the answer across three records.
+    *Recommendation: (a).* The shell and the channel are an architecture the hub's later readers will ask "why" of, as ADR-0054 answers for Hono; the notes alone would scatter the answer across three records. *Decided 2026-11-05 (Amos): (a).*
 
 14. **Where this plan lives.** Here, as the workspace hub plan does, since the program is in this repository (question 3); when the program exists, this document becomes its description, and `docs/desktop-program.md` is the person's guide.
 
