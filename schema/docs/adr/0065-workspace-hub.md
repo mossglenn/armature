@@ -332,6 +332,19 @@ Three facts constrain the answer:
    > `localToken: required`. Riding revision 2026-11-03 of `docs/client-changes.md`. Names chosen
    > without a separate decision, open to overrule: `ARMATURE_WORKSPACE_ACTIONS`, `reason`.
 
+   > **Later change (2026-11-05, decided):** the per-launch secret is kept across the desktop
+   > program's starts rather than drawn at each one (Amos, on `docs/desktop-program-plan.md` §15
+   > question 4). Drawn at every start, a tool the program did not launch would pair again each
+   > time, and a tool configured by a static file, as the MCP server is
+   > (`claude_desktop_config.json` with `ARMATURE_LOCAL_TOKEN`), would be edited by hand each
+   > morning. The threat the secret answers, other accounts on the machine and processes the owner
+   > did not start, is answered as well by a value the program keeps in the operating system's
+   > keychain, which is per user as the threat is; it is drawn anew when none is kept or when the
+   > person asks ("reset pairing"), after which every paired tool pairs again. The header, the
+   > variable, the refusal and every other part of this decision stand. `app/server.ts`, which has
+   > no keychain, keeps drawing a value per start when `ARMATURE_LOCAL_TOKEN` is unset. The program
+   > that keeps it is ADR-0069's; not yet built.
+
 8. **The store under a workspace hub is a choice behind the adapter.** TerminusDB as a process
    beside the hub and a file-backed store are both admissible. Decisions 3 and 6 limit what the
    store must do (no merge, no branch creation): documents at the head, a log of local commits,
