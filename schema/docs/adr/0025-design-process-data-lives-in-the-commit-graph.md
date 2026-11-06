@@ -275,6 +275,21 @@ Phase 2's routes land (ADR-0054 consequences).
    > 2026-11-01, on the session's recommendation). The diff between the two heads is the one
    > extra read, on a lost race only. `race.test.ts`.
 
+   > **Note (2026-11-06):** the conditioning of 2026-10-31 does not hold for writes in flight
+   > together. The store compares a data version ahead of what orders its commits, so concurrent
+   > writes at one version all land, each answered as a success, and a replace can lose an update
+   > (check AO; `docs/development-plan.md` §9 has the mechanism by version). The hub's own check
+   > catches a writer arriving after a commit, not one already past it: four `PUT`s of one document
+   > with one `If-Match` were all 200 in one round of five through the API, three in another. Sent
+   > one at a time, the rule stands. **Decided (Amos):** a per-branch write queue in the hub, in
+   > which every write to a branch runs from reading the head to its commit, so the check sees the
+   > state the write lands on; merges, deletes, grants and registrations join it too. Not built;
+   > it follows in its own pull request, this decision's promise being unkept until then. It lives
+   > in one process, so it does not cover a second hub on one store or the operator tools.
+   > Alternatives weighed: leaving it documented (a lost update told 200 is what `If-Match` exists
+   > to prevent), a fix in the store (none on `main` this day, and it would be an upgrade from the
+   > pinned version), and the store's retries set to 0 (`development-plan.md` §9).
+
 8. **History, changes and diff are read routes over the store's endpoints.** A document's
    history returns the commits that touched it, newest first, each with commit id, author,
    message, timestamp and the structural diff. A branch's changes since a commit are the changed
