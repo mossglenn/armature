@@ -54,7 +54,8 @@ const lockOf = (started) => join(started.core.dir, 'lock');
 
 async function timed() {
   const run = launch({ SPIKE_AUTOQUIT: '1' });
-  const ready = await run.until((m) => m.event === 'ready');
+  // A cold machine's first launch is slow (6 s on the macOS runner, 8.5 s to setup on Windows).
+  const ready = await run.until((m) => m.event === 'ready', 60000);
   const started = await run.until((m) => m.event === 'started');
   const exit = await run.exited;
   const ended = run.events().find((m) => m.event === 'core_exited');

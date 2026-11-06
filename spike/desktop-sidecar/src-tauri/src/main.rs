@@ -79,6 +79,17 @@ fn settings(app: &AppHandle) -> Value {
     json!({ "dir": dir, "port": port, "remote": "http://127.0.0.1:3100", "localToken": "spike-not-a-secret" })
 }
 
+// On Windows Tauri resolves a resource as an extended-length path (\\?\C:\...), which Node
+// cannot load as its entry script (EISDIR on `C:`, seen on the Windows runner); the prefix is
+// dropped for Node. The program would use the `dunce` crate, which knows when that is safe.
+fn entry_path(path: &std::path::Path) -> String {
+    let path = path.to_string_lossy().to_string();
+    match path.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => rest.to_string(),
+        _ => path,
+    }
+}
+
 fn spawn_core(app: &AppHandle) -> Result<(), String> {
     let script = app
         .path()
@@ -88,7 +99,7 @@ fn spawn_core(app: &AppHandle) -> Result<(), String> {
         .shell()
         .sidecar("armature-node")
         .map_err(|e| e.to_string())?
-        .args([script.to_string_lossy().to_string()]);
+        .args([entry_path(&script)]);
     let (mut rx, child) = command.spawn().map_err(|e| e.to_string())?;
     let core = app.state::<Core>();
     *core.spawned_at.lock().unwrap() = Some(Instant::now());
