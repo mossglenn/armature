@@ -92,6 +92,13 @@ services:
       - ARMATURE_OIDC_ADMIT=${ARMATURE_OIDC_ADMIT:-}
       - ARMATURE_OIDC_CLIENT_ID=${ARMATURE_OIDC_CLIENT_ID:-}
       - ARMATURE_OIDC_JWKS_URL=${ARMATURE_OIDC_JWKS_URL:-}
+      # The connection profile, `instance` in GET /discover: the name a person
+      # confirms before connecting (the host name when unset), and where a client
+      # beyond this server reaches the hub, by default what Caddy publishes under
+      # `oidc`. The hub reads the address only under `oidc`, since a hub under
+      # `header` has no public name, so this file need not know the resolver.
+      - ARMATURE_INSTANCE_NAME=${ARMATURE_INSTANCE_NAME:-}
+      - ARMATURE_PUBLIC_URL=${ARMATURE_PUBLIC_URL:-${ARMATURE_API_SCHEME:-https}://${ARMATURE_API_HOST:-api.${ARMATURE_SITE:-localhost}}}
       # The loopback boundary (ADR-0067 decision 7): besides loopback, the hub
       # answers only the host names listed here, so a web page that points its
       # own domain at this machine is refused. `hub` is the name the viewer and a
@@ -284,8 +291,8 @@ services:
     # An identity provider for a rehearsal of `oidc` (ADR-0067, open question 2:
     # the ADR names no provider; Keycloak in a profile that ships nowhere by
     # default, decided 2026-11-05), with the realm in docker/rehearsal/: two
-    # clients, `armature-desktop` for people (PKCE, and password sign-in for a
-    # rehearsal's curl) and `armature-viewer` (a service, the client credentials
+    # clients, `armature-desktop` for people (PKCE with `offline_access`, and
+    # password sign-in for a rehearsal's curl) and `armature-viewer` (a service, the client credentials
     # grant), both with the hub as audience; two people, designer and reviewer,
     # whose passwords are their names. KEYCLOAK_HOSTNAME is the issuer's base:
     # tokens say `<it>/realms/armature`, so the hub's ARMATURE_OIDC_ISSUER names
