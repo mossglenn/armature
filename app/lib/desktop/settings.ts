@@ -35,6 +35,12 @@ export interface DesktopSettings {
   remote?: string;
   /** What the remote's `GET /discover` said of the instance when the person confirmed it (plan §8). */
   instance?: InstanceProfile;
+  /**
+   * How the remote knows who calls, from its `GET /discover` when the person confirmed it (ADR-0067
+   * decision 9): `header`, or `oidc` with the issuer and the client id the program signs in with.
+   * Kept so the program starts and works offline without asking the remote again.
+   */
+  identity?: RemoteIdentity;
   /** Where the workspaces live; `<data folder>/workspaces` when unset (plan §9). */
   folder?: string;
   /** The hub's port on 127.0.0.1. */
@@ -47,9 +53,11 @@ export interface DesktopSettings {
   startAtLogin: boolean;
 }
 
+export type RemoteIdentity = { resolver: 'header' } | { resolver: 'oidc'; issuer: string; clientId: string };
+
 export const defaultSettings = (): DesktopSettings => ({ port: DEFAULT_PORT, snapshots: DEFAULT_SNAPSHOT_BUDGET, startAtLogin: false });
 
-const KEYS: ReadonlySet<string> = new Set(['remote', 'instance', 'folder', 'port', 'snapshots', 'user', 'startAtLogin']);
+const KEYS: ReadonlySet<string> = new Set(['remote', 'instance', 'identity', 'folder', 'port', 'snapshots', 'user', 'startAtLogin']);
 
 const bad = (field: string, message: string) => new ApiError(400, 'bad_settings', message, { field });
 
@@ -91,6 +99,14 @@ function instance(value: unknown): InstanceProfile {
   };
 }
 
+function remoteIdentity(value: unknown): RemoteIdentity {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw bad('identity', 'identity must be the object GET /discover gave');
+  const { resolver, issuer, clientId } = value as Record<string, unknown>;
+  if (resolver === 'header') return { resolver };
+  if (resolver === 'oidc') return { resolver, issuer: address('identity.issuer', issuer), clientId: text('identity.clientId', clientId) };
+  throw bad('identity.resolver', `identity.resolver must be header or oidc, not ${JSON.stringify(resolver)}`);
+}
+
 /**
  * Settings as given, checked and with the defaults filled; throws 400
  * `bad_settings` naming the field. A `null` value clears an optional setting
@@ -116,6 +132,7 @@ export function parseSettings(value: unknown, base: DesktopSettings = defaultSet
   };
   set('remote', (raw) => address('remote', raw));
   set('instance', instance);
+  set('identity', remoteIdentity);
   set('folder', (raw) => {
     const folder = text('folder', raw);
     if (!isAbsolute(folder)) throw bad('folder', `folder must be an absolute path, not ${folder}`);

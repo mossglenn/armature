@@ -13,6 +13,7 @@
     "test:files": "vitest run --config vitest.files.config.mts",
     "build:hub": "esbuild server.ts --bundle --platform=node --format=esm --target=node22 --sourcemap --outfile=dist/server.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
     "start:hub": "node dist/server.mjs",
+    "build:desktop": "esbuild desktop.ts --bundle --platform=node --format=esm --target=node22 --sourcemap --outfile=dist/desktop.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
     "build:operator": "esbuild operator.ts --bundle --platform=node --format=esm --target=node22 --sourcemap --outfile=dist/operator.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
     "operator": "npm run build:operator --silent && node --enable-source-maps dist/operator.mjs",
     "test:e2e": "playwright test"

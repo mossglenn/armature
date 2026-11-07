@@ -60,6 +60,18 @@ describe('parseSettings', () => {
     expect(refusalOf(() => parseSettings([])).code).toBe('bad_settings');
   });
 
+  it('keeps how the remote knows who calls, header or oidc with its issuer and client id', () => {
+    expect(parseSettings({ identity: { resolver: 'header' } }).identity).toEqual({ resolver: 'header' });
+    expect(parseSettings({ identity: { resolver: 'oidc', issuer: 'https://login.example.edu/realms/a/', clientId: 'armature-desktop' } }).identity).toEqual({
+      resolver: 'oidc',
+      issuer: 'https://login.example.edu/realms/a',
+      clientId: 'armature-desktop',
+    });
+    expect(refusalOf(() => parseSettings({ identity: { resolver: 'saml' } })).details?.field).toBe('identity.resolver');
+    expect(refusalOf(() => parseSettings({ identity: { resolver: 'oidc', issuer: 'https://x.example.edu' } })).details?.field).toBe('identity.clientId');
+    expect(refusalOf(() => parseSettings({ identity: 'oidc' })).details?.field).toBe('identity');
+  });
+
   it('applies a change over the current settings; null clears an optional one and restores a default', () => {
     const current = parseSettings({ remote: 'https://a.example.edu', user: 'amos', port: 3200 });
     expect(parseSettings({ user: null, port: null, snapshots: 3 }, current)).toEqual({ remote: 'https://a.example.edu', port: DEFAULT_PORT, snapshots: 3, startAtLogin: false });
