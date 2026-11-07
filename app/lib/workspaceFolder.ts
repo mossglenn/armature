@@ -100,7 +100,7 @@ async function renameInto(temporary: string, target: string): Promise<void> {
 }
 
 /** Writes `target` whole and durably: a temporary name, flushed, renamed into place (`renameInto`), the folder flushed where the platform has it. */
-async function writeWhole(target: string, text: string): Promise<void> {
+export async function writeWhole(target: string, text: string): Promise<void> {
   const folder = join(target, '..');
   await mkdir(folder, { recursive: true });
   const temporary = `${target}.${process.pid}.tmp`;
