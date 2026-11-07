@@ -240,6 +240,27 @@ describe('branches', () => {
   });
 });
 
+describe('exclusive, the hub\u2019s write queue (ADR-0025 decision 7, note of 2026-11-06)', () => {
+  it('lets work holding it commit: it is not the queue commits go through', async () => {
+    const { main } = await fresh();
+    const { commit } = await main.exclusive(() => main.putDocuments([thing('held')], by));
+    expect((await main.head())?.id).toBe(commit);
+  });
+
+  it('runs the writers of one branch from reading the head to the commit, one at a time', async () => {
+    const { main } = await fresh();
+    const write = (i: number) =>
+      main.exclusive(async () => {
+        const head = (await main.head())?.id;
+        await new Promise((resolve) => setImmediate(resolve));
+        return main.putDocuments([thing(`w${i}`)], { ...by, ifMatch: head });
+      });
+    const before = (await main.log({ count: 100 })).length;
+    await Promise.all([0, 1, 2, 3].map(write));
+    expect((await main.log({ count: 100 })).length).toBe(before + 4);
+  });
+});
+
 describe('the folder', () => {
   it('is read back whole by a second open, and a commit file that does not match its name is refused', async () => {
     const { files, main } = await fresh();

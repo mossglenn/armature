@@ -29,6 +29,7 @@
  */
 
 import type { FileStore } from './filestore/store';
+import { KeyedQueue } from './queue';
 
 /** A branch head or a commit. Reads accept either; writes need a branch. */
 export type Ref = { branch: string } | { commit: string };
@@ -240,6 +241,20 @@ export interface Store extends DocumentReader {
     opts: { author: string; message: string; ifMatch?: string }
   ): Promise<{ id: string; commit: string }>;
   /**
+   * Runs `work` alone among this process's writes to this branch, in the order
+   * they arrived: the hub's write queue (ADR-0025 decision 7, note of
+   * 2026-11-06). The head `work` reads is the head its commit lands on, as far
+   * as this process can see: a second hub on the store and the operator tools
+   * are not in the queue, which is why a conditional write still reports a
+   * version mismatch. Reads do not join it.
+   *
+   * Not reentrant, so `work` never asks for its own branch again, and queues
+   * are taken in one order, a branch before `main`: `main` is never deleted and
+   * work holding it takes no other queue, so no two writers can wait on each
+   * other. Resolving a caller can write to `main`, so it happens before `work`.
+   */
+  exclusive<T>(work: () => Promise<T>): Promise<T>;
+  /**
    * A commit identifier as this store names it: on a workspace hub a remote
    * commit's local counterpart when the hub holds one (ADR-0065 decision 5,
    * note of 2026-11-01: after a push, either identifier), any other as given.
@@ -411,6 +426,13 @@ interface StoreResponse {
   commit?: string;
 }
 
+/**
+ * The queue of every adapter in this process. A store is made per request, so
+ * the queue cannot be the store's own, and the key names the database as well
+ * as the branch: one process can hold hubs on several (`cycle.test.ts`).
+ */
+const writers = new KeyedQueue();
+
 export class TerminusStore implements OperatorStore {
   constructor(
     private readonly config: TerminusConfig,
@@ -431,6 +453,10 @@ export class TerminusStore implements OperatorStore {
       throw new Error('This store is bound to a commit, which is read-only');
     }
     return this.ref.branch;
+  }
+
+  exclusive<T>(work: () => Promise<T>): Promise<T> {
+    return writers.run(`${this.config.url}/${this.dbPath}/${this.branch}`, work);
   }
 
   private get dbPath(): string {

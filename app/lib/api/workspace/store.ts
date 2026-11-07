@@ -181,6 +181,10 @@ class WorkspaceStore implements Store {
     return this.inner.insertDocument(document, opts);
   }
 
+  exclusive<T>(work: () => Promise<T>): Promise<T> {
+    return this.inner.exclusive(work);
+  }
+
   log(opts?: { start?: number; count?: number }): Promise<Commit[]> {
     return this.inner.log(opts);
   }

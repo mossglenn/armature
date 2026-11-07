@@ -15,7 +15,7 @@ export default defineConfig({
     alias: { '@': here },
   },
   test: {
-    include: ['lib/workspaceFolder.test.ts', 'lib/api/filestore/store.test.ts', 'lib/api/filestore/patch.test.ts'],
+    include: ['lib/workspaceFolder.test.ts', 'lib/api/queue.test.ts', 'lib/api/filestore/store.test.ts', 'lib/api/filestore/patch.test.ts'],
     fileParallelism: false,
     testTimeout: 15_000,
   },
