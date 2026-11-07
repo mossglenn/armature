@@ -320,6 +320,19 @@ Phase 2's routes land (ADR-0054 consequences).
    > are outside the queue; the conditional write, the rerun and the head read before a delete stay
    > for them. No client changes: this is the behavior the contract already promised.
 
+   > **Note (2026-11-07):** TerminusDB's maintainers confirm the store's behavior as a defect: the
+   > data version should be compared at transaction time, whatever the retries, and the fix is
+   > planned for the 12.1.0 series (a reply on TerminusDB's Discord to the question of 2026-11-06;
+   > [terminusdb/terminusdb#2637](https://github.com/terminusdb/terminusdb/issues/2637), filed
+   > 2026-11-07 with the repro, which that day landed all four replaces in each of four rounds on
+   > v12.0.7). Nothing here changes while the store is pinned at v12.0.7. When a release with the
+   > fix is pinned, check AO runs again: AO1 and AO2 landing one writer per round would make
+   > `If-Match` hold for a second hub on one store and for the operator tools, which the queue does
+   > not cover. Whether the queue then stays is decided on that run, not before: it also orders work
+   > that carries no data version (a branch's creation and deletion, a registration, a first
+   > encounter), so the probes of `writeQueue.test.ts` are run against the new version without it
+   > first.
+
 8. **History, changes and diff are read routes over the store's endpoints.** A document's
    history returns the commits that touched it, newest first, each with commit id, author,
    message, timestamp and the structural diff. A branch's changes since a commit are the changed

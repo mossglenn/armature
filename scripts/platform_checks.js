@@ -150,7 +150,9 @@
 //      it is stale on arrival (check M); sent together at one version, whether only one lands,
 //      for inserts of different documents and replaces of one document; and whether concurrent
 //      inserts of one @id leave one winner and refuse the rest as DocumentIdAlreadyExists.
-//      Timing decides the first two, so several rounds, and either answer is recorded as INFO
+//      Timing decides the first two, so several rounds, and either answer is recorded as INFO.
+//      More than one landing is a store defect, terminusdb/terminusdb#2637 (2026-11-07), the fix
+//      planned for 12.1.0; on a release with it, AO1 and AO2 should land one per round
 //
 // Hash identifiers reproduced (ADR-0066 decision 6; the workspace hub plan's step 6), added
 // 2026-11-02:

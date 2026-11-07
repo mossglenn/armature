@@ -1394,7 +1394,10 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   the store refuse the losers on the pinned version, across processes, but it fails plain concurrent
   writes too, answers them 500, and stops working on 12.1, so it is not the fix. *Built (2026-11-06):*
   the hub's per-branch write queue, `Store.exclusive`; the store behaves as AO says, and every write
-  through one hub waits its turn. `writeQueue.test.ts`.
+  through one hub waits its turn. `writeQueue.test.ts`. *Confirmed (2026-11-07):* a defect, by
+  TerminusDB's maintainers, the fix planned for 12.1.0
+  ([terminusdb/terminusdb#2637](https://github.com/terminusdb/terminusdb/issues/2637)); what the hub
+  does when it lands is ADR-0025 decision 7's note of that day.
 - *Verified (2026-10-08, check M):* the token is `branch:<commit-id>` on a branch read and
   `commit:<commit-id>` on a read at a commit, and the id is the log head. A write with a stale
   token is HTTP 400 `api:DataVersionMismatch` (not 409); a bare commit id as the token is HTTP
