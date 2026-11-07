@@ -1392,7 +1392,9 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   `DocumentIdAlreadyExists` (AO3). ADR-0032 decision 3, note of that day, relies on AO3; ADR-0025
   decision 7's note of that day records what the hub does about the rest. Retries at 0 would make
   the store refuse the losers on the pinned version, across processes, but it fails plain concurrent
-  writes too, answers them 500, and stops working on 12.1, so it is not the fix.
+  writes too, answers them 500, and stops working on 12.1, so it is not the fix. *Built (2026-11-06):*
+  the hub's per-branch write queue, `Store.exclusive`; the store behaves as AO says, and every write
+  through one hub waits its turn. `writeQueue.test.ts`.
 - *Verified (2026-10-08, check M):* the token is `branch:<commit-id>` on a branch read and
   `commit:<commit-id>` on a read at a commit, and the id is the log head. A write with a stale
   token is HTTP 400 `api:DataVersionMismatch` (not 409); a bare commit id as the token is HTTP
@@ -1550,4 +1552,5 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   the merge route cannot condition the checked result on the head it checked against; it reads
   the head again before the apply and answers 409 `branch_moved` when it moved, leaving the
   one-request window the operator's repair and a branch delete already accept (ADR-0025
-  decision 5, note).
+  decision 5, note). *Since 2026-11-06* that read and the apply are in the branch's write queue,
+  so the window is a second hub's or the operator's only (decision 7, note of that day).

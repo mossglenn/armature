@@ -290,6 +290,36 @@ Phase 2's routes land (ADR-0054 consequences).
    > to prevent), a fix in the store (none on `main` this day, and it would be an upgrade from the
    > pinned version), and the store's retries set to 0 (`development-plan.md` §9).
 
+   > **Note (2026-11-06), built:** `Store.exclusive` over `queue.ts`, with `writeQueue.test.ts`. The
+   > probes that found the defect are kept as tests, and against the code before the queue they
+   > showed more than a lost update: two placements at one `sequence` both landed, so a rule was
+   > checked on a state the write did not land on; a write and a branch delete were both 200, so a
+   > commit reported as saved went with its branch; the loser of two creations of one branch
+   > revoked the winner's `Owner` grant; and one person became three `User`s. In the queue: the write
+   > pipeline from reading the head to its commit, a registration from looking for the person to
+   > the insert, a first encounter's insert, a branch's creation and its deletion whole, and a
+   > merge's last read of the target with its apply. A merge's check stays outside, since it takes
+   > seconds and writers should not wait on it, so a merge can lose to a write landing during it
+   > (409 `branch_moved`, as before); a dry run commits nothing and does not join. Reads never join.
+   >
+   > The rule of 2026-11-01 needed one change to survive the queue. A write without `If-Match` that
+   > waits its turn reads the new head, so it would no longer lose a race, and would overwrite the
+   > commit ahead of it with a 200. So the hub reads the head as a write arrives, before the queue,
+   > and a commit since then that changed a document the write replaces is 409 `document_moved`.
+   > A write arriving after that commit has landed is not concurrent with it and replaces it, as
+   > ever. The cost is one read per write without `If-Match`.
+   >
+   > A queue is held by one process and is not reentrant. Queues are taken in one order, a
+   > branch's before `main`'s (a deletion revokes grants on `main`, a creation writes one), and
+   > `main` is never deleted and work holding it takes no other queue, so no two writers wait on
+   > each other. Resolving a caller can write to `main`, so it comes before any queue. The key is
+   > the database and the branch, since one process can hold hubs on several. The file-backed store
+   > keeps this queue beside the one that orders its commits, which work holding this one commits
+   > through. There is no limit on the wait: every store call has a deadline, so a turn ends, and a
+   > line long enough to need one has not been seen. A second hub on one store and the operator tools
+   > are outside the queue; the conditional write, the rerun and the head read before a delete stay
+   > for them. No client changes: this is the behavior the contract already promised.
+
 8. **History, changes and diff are read routes over the store's endpoints.** A document's
    history returns the commits that touched it, newest first, each with commit id, author,
    message, timestamp and the structural diff. A branch's changes since a commit are the changed
