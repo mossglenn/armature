@@ -6,6 +6,46 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-06, night (the local store's drift traced to the suites; test isolation; the per-branch write queue; PRs #114 and #115)
+
+**Where things stood at the close.** **Phase 8; the hub's per-branch write queue built (2026-11-06 night; PR #115 merged, CI green on `main` at `d9ddd40`).** `If-Match` now holds for writes in flight together on one hub: `Store.exclusive`, over `queue.ts`, runs a branch's writes one at a time, from reading the head to the commit, on both stores, with registrations, a branch's creation and deletion, and a merge's landing in it too. A write without `If-Match` that waited its turn and finds a document it replaces changed since it arrived is 409 `document_moved`, so the queue does not undo that promise. A second hub on one store and the operator tools stay outside it (ADR-0025 decision 7, notes of 2026-11-06). The local store's drift is traced to the suites, and `TERMINUS_DB=<name> npm test` now keeps a run off `armature` (PR #114). 545 tests. **Next: the desktop plan's step 3, the core (`phase-8/desktop-core`).**
+
+### Done
+
+- **The local store reseeded** to a fresh seed (71 documents, 2 grants, 6 commits), `check` clean, after comparing it with a fresh seed: its content matched apart from `asOf` commit ids and ordering, plus 162 revoked grants from tests.
+- **officepi rebuilt** to `4ef23de`, revision 2026-11-06, in 44 s, the store left running; a write at the current revision passes negotiation, a future one is refused, `check` clean. It holds 72 documents, one past the seed, not looked into. Rebuilt again after the merge to `d9ddd40`, in 42 s, for the queue, its presence checked in the running bundle rather than by concurrent writes, which would have left residue on its `main`.
+- **PR #114, two commits, rebase merged.** `envLocal()` in `app/vitest.env.ts` lets a variable set in the shell win, as `loadEnvLocal` does, in the workers and the global setup; `lib/vitestEnv.test.ts`; both READMEs and CLAUDE.md corrected about what a run leaves on `main`; the test count from 296 to 527.
+- **PR #115, three commits, rebase merged.** (1) `KeyedQueue` in `queue.ts` and `Store.exclusive` on both stores, the adapter's keyed by database and branch, the file store's beside the queue that orders its commits. (2) The write pipeline from the head read to the commit, a registration, a first encounter's insert, a branch's creation and deletion whole and a merge's last read with its apply all in the queue; the head read as a write arrives, with `refuseOverwrite` shared by both cases; `writeQueue.test.ts`. (3) The ADR note, `api.md`, the explainer, plan §9, CLAUDE.md, the count of 545.
+
+### Session notes
+
+- Amos asked first for the drift and officepi. The survey contradicted the last session's note, so the reseed waited for the cause: `deleteScratchBranch` revokes an `Owner` grant and never deletes it, and `TERMINUS_DB=<scratch> npm test` had been writing to `armature` all along, leaving the scratch database clean, which is probably how the note came to read "leaves two".
+- The red baseline for the queue showed more than a lost update: 7 of 9 probes failed, among them two placements at one sequence both landing, a write and a delete both 200, the winner's `Owner` grant revoked by the loser of two creations, and one person as three `User`s.
+- Reading `api.md` before writing the docs caught a regression in the first build: a write without `If-Match` that waited its turn read the new head and overwrote the commit ahead of it with a 200, where it had been `document_moved`. A deterministic test holds the queue until both writers have joined, and showed `[200, 200]` before the arrival read.
+- Two timeouts of the delete test could have been a deadlock; a raised limit ruled that out, every run finishing in 14 to 44 s on a scratch database with a long log. The cost is the existing `branchHolding` walk, not the queue.
+- Claims were corrected along the way: a 404 from a guessed route proved nothing and was rerun, a test's cap of 100 commits failed a count, and a final run that had not run the suite, its log path unset and `| head` hijacked by a shell function of that name, was not reported as a pass.
+
+### Facts from 2026-11-06 night worth keeping
+
+- A fresh seed is 71 documents, 2 grants, 6 commits; 69 is the Design Graph's record count (`app/e2e/graph.spec.ts`), which leaves out the grants. Home: memory (`local-store-drift-from-suites`)
+- Every test branch leaves a revoked `Owner` grant and two commits on `main`; a full run about 32 grants and 77 commits; any vitest run without `TERMINUS_DB` leaves one grant from the warm-up, even over a store-free file. Home: `app/README.md`, CLAUDE.md's Tests
+- `branchHolding`'s walk makes a delete take seconds on a long log when no branch holds the head. It now holds that branch's queue only. The history test takes 12 to 16 s on such a log against a 15-second limit (item 4)
+- `race.test.ts`'s `branch_busy` test failed once in about 42 runs, at 6.2 s, the message lost to a filter; not seen again, in 18 runs with full logs among them. Home: SESSION.md's Blockers
+- Vitest's `test.env` is assigned over `process.env`, so a value read from a file there beats the shell unless the reader lets the shell win
+
+### Decisions taken
+
+- **The head read as a write arrives, so `document_moved` survives the queue**, one read per write without `If-Match`: ADR-0025 decision 7, note of 2026-11-06, built. An existing rule kept, not a new decision
+- **Queues taken a branch before `main`, a caller resolved before any queue**: the same note, `Store.exclusive`'s comment, CLAUDE.md's What Not To Do
+- **Open to overrule:** no limit on the wait; a merge's check and a dry run outside the queue; no client revision, as the behavior the contract already promised
+- **A shell variable wins over `.env.local` in the tests** (Amos, on the session's recommendation): PR #114, CLAUDE.md's Tests. Isolation is asked for, not the default
+
+### Carried here from SESSION.md's Active Decisions at this close
+
+- **Choices of 2026-11-06 evening, open to overrule** (PR #113; HISTORY.md, that entry, Decisions taken): `ARMATURE_PUBLIC_URL` read only under `oidc`, since the compose file cannot branch on the resolver; `instance.name` falling back on the public host, then the request's; `/connect` with the navigation label "Your own machine"; `firstEncounterId`, 32 hexadecimal digits of SHA-256 over `[issuer, sub]`
+
+---
+
 ## 2026-11-06, evening (the connection profile and `/connect`; concurrent first sign-ins fixed; `If-Match` found not to hold under concurrency and a write queue decided; PR #113)
 
 **Where things stood at the close.** **Phase 8; the desktop plan's step 2, the hub's side, done (2026-11-06 evening; PR #113 merged, CI green on `main` at `3041578`).** `GET /discover` carries `instance`, the connection profile a person confirms before connecting (revision 2026-11-06), a workspace hub keeping its remote's at the clone; the viewer's `/connect` offers `armature://connect`; the compose file derives `ARMATURE_PUBLIC_URL`, which the hub reads only under `oidc`; the rehearsal realm offers `offline_access`. The registration test PR #85 narrowed found one person becoming several `User`s under concurrent first sign-ins, fixed by an id derived from `(issuer, sub)`, and behind that a wider defect: **`If-Match` does not hold for writes in flight together**, so an update can be lost with every writer told 200 (check AO; ADR-0025 decision 7, note of 2026-11-06). A per-branch write queue in the hub is decided and not built. 523 tests. **Next: item 34, the write queue, then the plan's step 3, the core (`phase-8/desktop-core`).**
@@ -31,6 +71,7 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 - Keycloak refuses the whole request with `invalid_scope` when a client does not offer `offline_access`, and the token exchange with `not_allowed` when the person lacks the role, which imported users do not get (`deployment.md`; plan §6)
 - A script logging in to Keycloak over plain HTTP must pass its cookies by hand: Python's cookie jar will not send `Secure` cookies
 - The Mac's local `main` holds 197 documents, 128 of them `Grant`s; a full suite run on a fresh seed leaves two, so the suites did not cause it. `TERMINUS_DB=<scratch>` with `load_schema.js --recreate` and `seed_data.js` gives a clean store beside it, and the hub and the viewer read it
+  > **Note (2026-11-06, night):** wrong on both counts. The suites did cause it: each test branch leaves a revoked `Owner` grant on `main`. And `TERMINUS_DB=<scratch>` did not reach the tests until PR #114, so the run measured here wrote to `armature`. A fresh seed is 71 documents; 69 is the Design Graph's record count. The 2026-11-06 night entry has the rest.
 - `gh run watch --exit-status` returned 0 with five of six jobs in progress on `main`, soon after the merge
 
 ### Decisions taken
