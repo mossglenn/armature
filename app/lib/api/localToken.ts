@@ -7,8 +7,9 @@ import { ApiError } from './errors';
  * The per-launch secret of a workspace hub (ADR-0065 decision 7, note of
  * 2026-10-30; ADR-0067 decision 7, note; docs/workspace-hub-plan.md §7).
  *
- * The desktop program draws a random value at each start and keeps it in
- * memory; a tool it launches receives it in its environment as
+ * The desktop program keeps a random value in the system's keychain across
+ * its starts, drawn when none is kept or when the person resets the pairing
+ * (ADR-0065 decision 7, note of 2026-11-05); a tool it launches receives it in its environment as
  * `ARMATURE_LOCAL_TOKEN`, a tool started elsewhere pairs once by pasting the
  * value the program shows, and every write to a workspace carries it as
  * `Armature-Local-Token`. A write without it, or with another value, is 403
@@ -27,12 +28,13 @@ import { ApiError } from './errors';
  * every write, so a misconfigured one fails closed rather than open.
  *
  * Push, bring in and deliver are the program's own actions, not routes a tool
- * may call (the same note). Until the program exists they are served as routes
- * only when the host says so, `ARMATURE_WORKSPACE_ACTIONS=routes`, which the
- * `workspace` compose profile and the suites set; a bare workspace hub refuses
- * them 403 `forbidden` with `reason: program_action`, and `GET /discover` says
- * `actions: program` (decided 2026-11-03). The setting is retired with the
- * program, which calls the push module in-process.
+ * may call (the same note). They are served as routes only when the host says
+ * so, `ARMATURE_WORKSPACE_ACTIONS=routes`, which the `workspace` compose profile
+ * and the suites set; a bare workspace hub refuses them 403 `forbidden` with
+ * `reason: program_action`, and `GET /discover` says `actions: program`
+ * (decided 2026-11-03). The desktop program's hub is such a hub: its core
+ * reaches the routes through a second app over the same configuration, never
+ * served on a port (app/lib/desktop/core.ts; ADR-0069, note of 2026-11-07).
  */
 
 export const LOCAL_TOKEN_HEADER = 'Armature-Local-Token';

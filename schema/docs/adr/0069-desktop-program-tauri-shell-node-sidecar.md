@@ -81,6 +81,23 @@ Three facts bear on the shape:
    `GET /discover` says `actions: program` and the action routes are refused; the core calls
    `pushWorkspace`, `bringIn` and `deliver` as the routes do.
 
+   > **Note (2026-11-07), the core built** (`app/desktop.ts`, `app/lib/desktop/`; the plan's step
+   > 3): three choices made in building it (Amos, on the session's recommendations). (1) The core
+   > reaches the actions through the routes themselves rather than calling the modules: a second
+   > Hono app over the same configuration with `actionRoutes` on, never bound to a port, called
+   > with `app.request()` as the owner with the local token, so a reply is the route's own and the
+   > owner check is the route's, not repeated in the core. The hub on the port is as this decision
+   > says. Both apps share the one file-backed store and its write queue. (2) The settings file
+   > (`settings.json` in the data folder the shell names) is the core's, not the shell's, so the
+   > shell stays the relay decision 1 describes and the core run in a terminal reads the same
+   > file; it also keeps the remote's identity (`header`, or `oidc` with its issuer and client
+   > id), so the program starts offline. (3) A local token the keychain kept is used as sent; when
+   > none is kept, the core draws one and returns it in the reply to `start`, for the shell to
+   > keep, and writes it to no log. Decision 3's replies are `{ id, status, body }`, the status and
+   > body a route would answer, and its events `{ event, ... }`; the requests are `start`, `stop`,
+   > `profile`, `connect`, `settings`, `signIn`, `signOut`, `resetPairing` and the seven workspace
+   > requests, listed in `app/lib/desktop/core.ts`.
+
 6. **Platform rules the spike found.** On Windows the shell gives Node the core's path without the
    extended-length prefix Tauri resolves resources with (`\\?\C:\...`), which Node cannot load as
    its entry script (the `dunce` crate). On macOS the program is signed with the hardened runtime
