@@ -1,5 +1,6 @@
 import { canonical } from '../fragments';
 import { BRANCH_NAME } from '../http';
+import { KeyedQueue } from '../queue';
 import { StoreError, type ApplyResult, type Commit, type HistoryEntry, type OperatorStore, type Ref, type TerminusDocument } from '../store';
 import type { StoreFiles } from './files';
 import { asStored, hashId, randomId, SchemaIndex, sha256Hex } from './ids';
@@ -117,7 +118,10 @@ export class FileStore {
   /** Branch name to head commit id; undefined for a branch with no commit. */
   private readonly branches = new Map<string, string | undefined>();
   private readonly states = new Map<string, State>();
-  private readonly queues = new Map<string, Promise<unknown>>();
+  /** Each branch's commits, in order. */
+  private readonly queue = new KeyedQueue();
+  /** The hub's write queue, `exclusive`: a separate one, since work holding it commits through `queue`. */
+  private readonly writers = new KeyedQueue();
   private marked = false;
 
   constructor(private readonly files: StoreFiles) {}
@@ -175,10 +179,12 @@ export class FileStore {
 
   /** Runs `work` after every earlier write to `branch` in this process has finished. */
   private serialized<T>(branch: string, work: () => Promise<T>): Promise<T> {
-    const previous = this.queues.get(branch) ?? Promise.resolve();
-    const run = previous.then(work, work);
-    this.queues.set(branch, run.catch(() => undefined));
-    return run;
+    return this.queue.run(branch, work);
+  }
+
+  /** Runs `work` alone among the hub's writes to `branch` (`Store.exclusive`). */
+  exclusive<T>(branch: string, work: () => Promise<T>): Promise<T> {
+    return this.writers.run(branch, work);
   }
 
   // --- states --------------------------------------------------------------
@@ -468,6 +474,10 @@ class FileStoreView implements OperatorStore {
   get branch(): string {
     if (!('branch' in this.ref)) throw new Error('This store is bound to a commit, which is read-only');
     return this.ref.branch;
+  }
+
+  exclusive<T>(work: () => Promise<T>): Promise<T> {
+    return this.store.exclusive(this.branch, work);
   }
 
   async localCommit(id: string): Promise<string> {
