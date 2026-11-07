@@ -397,6 +397,25 @@ export function runCore(options: CoreOptions): Core {
       }
     },
 
+    // The keychain's refresh token, which the shell can name only once `start` has said which remote
+    // the settings hold (the keychain keys it by the remote, plan §6). Shell-only: the shell's relay
+    // never forwards it from the webview. Used only when it is for the remote the settings name.
+    credential: async (request) => {
+      const { settings: current } = opened();
+      const remote = text(request, 'remote').replace(/\/+$/, '');
+      const refresh = text(request, 'refreshToken');
+      if (!oidcOf(current.identity)) throw new ApiError(409, 'not_oidc', 'The remote does not sign people in; there is no credential to keep');
+      if (remote !== current.remote) {
+        throw new ApiError(409, 'other_remote', `The settings name the remote ${current.remote}, not ${remote}; that credential is not for it`, { remote: current.remote });
+      }
+      if (refresh !== keptRefresh) {
+        keptRefresh = refresh;
+        held = undefined;
+        me = undefined;
+      }
+      return ok({ signedIn: true });
+    },
+
     signOut: async () => {
       signingIn?.abort();
       held?.clear();

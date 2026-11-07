@@ -226,6 +226,7 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('push', { workspace: 'nothing-here' })).toMatchObject({ status: 404, body: { error: 'not_found' } });
     expect(await driver.ask('push', {})).toMatchObject({ status: 400, body: { error: 'bad_request', field: 'workspace' } });
     expect(await driver.ask('signIn')).toMatchObject({ status: 409, body: { error: 'not_oidc' } });
+    expect(await driver.ask('credential', { remote: headerRemote.url, refreshToken: 'r' })).toMatchObject({ status: 409, body: { error: 'not_oidc' } });
     // The remote stays while a workspace names it.
     expect(await driver.ask('connect', { remote: oidcRemote.url })).toMatchObject({ status: 409, body: { error: 'workspaces_exist', workspaces: [WS] } });
   });
@@ -349,6 +350,21 @@ describe('the sign-in and a push through the token source, against a remote unde
     expect((await driver.ask('start', { dataDir, localToken, refreshToken: 'refresh-1' })).body).toMatchObject({ started: true, signedIn: true });
     expect((await driver.ask('push', { workspace: WS })).status).toBe(200);
     expect(driver.events.filter((m) => m.event === 'credential').map((m) => m.refreshToken)).toEqual(['refresh-2']);
+  });
+
+  it('takes the keychain’s refresh token after start, for the remote the settings name only', async () => {
+    // As the shell does: start, learn the remote from the reply, then send the token the keychain keeps for it.
+    driver.end();
+    await driver.core.closed;
+    driver = drive({ fetch: issuer, now: () => clock });
+    const started = await driver.ask('start', { dataDir, localToken });
+    expect(started.body).toMatchObject({ started: true, remote: oidcRemote.url, signedIn: false });
+    expect(await driver.ask('credential', { remote: 'https://other.example.edu', refreshToken: `refresh-${refreshes}` })).toMatchObject({
+      status: 409,
+      body: { error: 'other_remote', remote: oidcRemote.url },
+    });
+    expect(await driver.ask('credential', { remote: `${oidcRemote.url}/`, refreshToken: `refresh-${refreshes}` })).toMatchObject({ status: 200, body: { signedIn: true } });
+    expect((await driver.ask('push', { workspace: WS })).status).toBe(200);
   });
 
   it('is signed out by a refused refresh and by signOut, each 401 signed_out at the next remote action', async () => {
