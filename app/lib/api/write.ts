@@ -43,10 +43,17 @@ import { changesOf, StoreError, type DocumentReader, type Store, type TerminusDo
  * write replaces, which is 409 `document_moved` rather than a silent
  * overwrite (decision 7, note of 2026-11-01), and answered 409 `branch_moved`
  * when the branch keeps moving; with one, losing the race is the 412 it
- * asked for. Except that a race lost inside the store is not seen here: the
- * store compares a data version ahead of what orders its commits, so writes
- * in flight together at one head can all land (check AO; decision 7, note of
- * 2026-11-06). A per-branch write queue in the hub is decided, not built.
+ * asked for.
+ *
+ * Steps 2 to 5 run inside the branch's write queue (`Store.exclusive`), since
+ * the condition alone is not enough: the store compares a data version ahead of
+ * what orders its commits, so writers in flight together at one head would all
+ * land (check AO; decision 7, note of 2026-11-06). In the queue the head a run
+ * reads is the head it lands on, and the rerun above is left for writers the
+ * queue does not hold, a second hub on the store or the operator tools. The
+ * head is also read as a write arrives, since one without If-Match that waited
+ * its turn would otherwise overwrite the commit ahead of it: a document changed
+ * since it arrived is the same 409 `document_moved`.
  */
 
 export interface WriteOptions {
@@ -143,37 +150,47 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
     });
   // On a workspace hub a client may hold the remote's identifier of a pushed commit (ADR-0065 decision 5, note).
   const ifMatch = opts.ifMatch === undefined ? undefined : await branch.localCommit(opts.ifMatch);
-  for (let attempt = 1; ; attempt++) {
-    const head = (await branch.head())?.id;
-    if (ifMatch && ifMatch !== head) throw moved(head);
-    const state = { replacing: [] as string[] };
-    try {
-      // A fresh copy each run: the pipeline fills fields in as it goes.
-      return await writeAt(structuredClone(documents), head, opts, state);
-    } catch (err) {
-      if (!(err instanceof StoreError && err.kind === 'version_mismatch')) throw err;
-      if (opts.ifMatch) throw moved((await branch.head())?.id);
-      // The race is lost at the document, not only the branch, when the commit
-      // that won changed something this write replaces: a rerun would overwrite
-      // it with no one told. The caller reads again and decides (ADR-0025
-      // decision 7, note of 2026-11-01).
-      const current = (await branch.head())?.id;
-      if (head && current && state.replacing.length) {
-        const changed = new Set(changesOf(await branch.diff(head, current)).map((change) => change.id));
-        const clash = state.replacing.filter((id) => changed.has(id));
-        if (clash.length) {
-          throw new ApiError(
-            409,
-            'document_moved',
-            `${clash.join(', ')} changed on branch ${branch.branch} since commit ${head}, which this write would have overwritten; read again, then write with If-Match`,
-            { documents: clash, checked: head, current }
-          );
+  // The state a write without If-Match arrived at, read before the queue: after
+  // its wait it would read the commit ahead of it as its own head and overwrite
+  // it with no one told (ADR-0025 decision 7, note of 2026-11-06, built).
+  const arrived = ifMatch ? undefined : (await branch.head())?.id;
+  return branch.exclusive(async () => {
+    for (let attempt = 1; ; attempt++) {
+      const head = (await branch.head())?.id;
+      if (ifMatch && ifMatch !== head) throw moved(head);
+      const state = { replacing: [] as string[] };
+      try {
+        // A fresh copy each run: the pipeline fills fields in as it goes.
+        return await writeAt(structuredClone(documents), head, opts, state, arrived);
+      } catch (err) {
+        if (!(err instanceof StoreError && err.kind === 'version_mismatch')) throw err;
+        if (opts.ifMatch) throw moved((await branch.head())?.id);
+        await refuseOverwrite(branch, state.replacing, head, (await branch.head())?.id);
+        if (attempt === WRITE_ATTEMPTS) {
+          throw new ApiError(409, 'branch_moved', `Branch ${branch.branch} moved during each of ${WRITE_ATTEMPTS} attempts at this write; retry`);
         }
       }
-      if (attempt === WRITE_ATTEMPTS) {
-        throw new ApiError(409, 'branch_moved', `Branch ${branch.branch} moved during each of ${WRITE_ATTEMPTS} attempts at this write; retry`);
-      }
     }
+  });
+}
+
+/**
+ * The race is lost at the document, not only the branch, when a commit between
+ * `from` and `to` changed something this write replaces: going on would
+ * overwrite it with no one told. The caller reads again and decides (ADR-0025
+ * decision 7, note of 2026-11-01). One read, only when the head moved.
+ */
+async function refuseOverwrite(branch: Store, replacing: string[], from: string | undefined, to: string | undefined): Promise<void> {
+  if (!from || !to || from === to || !replacing.length) return;
+  const changed = new Set(changesOf(await branch.diff(from, to)).map((change) => change.id));
+  const clash = replacing.filter((id) => changed.has(id));
+  if (clash.length) {
+    throw new ApiError(
+      409,
+      'document_moved',
+      `${clash.join(', ')} changed on branch ${branch.branch} since commit ${from}, which this write would have overwritten; read again, then write with If-Match`,
+      { documents: clash, checked: from, current: to }
+    );
   }
 }
 
@@ -196,9 +213,16 @@ function checkUnique(documents: TerminusDocument[]): void {
 /**
  * One run of steps 2 to 5 at `head`, the commit every read is at and the
  * write is conditioned on. A branch with no commit yet is read and written
- * unconditioned, as there is nothing to race.
+ * unconditioned, as there is nothing to race. `arrived` is the head when the
+ * write reached the hub, absent under If-Match.
  */
-async function writeAt(documents: TerminusDocument[], head: string | undefined, opts: WriteOptions, state: { replacing: string[] }): Promise<WriteResult> {
+async function writeAt(
+  documents: TerminusDocument[],
+  head: string | undefined,
+  opts: WriteOptions,
+  state: { replacing: string[] },
+  arrived: string | undefined
+): Promise<WriteResult> {
   const { branch, who } = opts;
   const at = head ? branch.at({ commit: head }) : branch;
 
@@ -224,6 +248,7 @@ async function writeAt(documents: TerminusDocument[], head: string | undefined, 
     replacing.add(found['@id']);
   });
   state.replacing = [...replacing];
+  await refuseOverwrite(opts.branch, state.replacing, arrived, head);
 
   // Step 3: provenance.
   let carryUser = documents.some((doc) => hasAttestedBy(doc['@type']) && doc.attestedBy === who.id);
