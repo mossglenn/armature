@@ -345,6 +345,16 @@ Three facts constrain the answer:
    > no keychain, keeps drawing a value per start when `ARMATURE_LOCAL_TOKEN` is unset. The program
    > that keeps it is ADR-0069's; not yet built.
 
+   > **Note (2026-11-07):** the program's core is built (ADR-0069, its note of that day), and two
+   > sentences above no longer describe it. The note of 2026-11-03 says the actions setting "is
+   > retired with the program, which calls the push module in-process": the program does not set
+   > it, so its hub on the port refuses the action routes, and the core reaches them through a
+   > second app over the same configuration, reached only through its channel; the setting stays
+   > for the compose profile and the suites (`docs/desktop-program-plan.md` §15 question 5). The
+   > kept value of 2026-11-05 is built on the core's side: a value the shell sends at start is used
+   > as it is, and one is drawn and sent back only when none is kept. The keychain is the shell's,
+   > not yet built.
+
 8. **The store under a workspace hub is a choice behind the adapter.** TerminusDB as a process
    beside the hub and a file-backed store are both admissible. Decisions 3 and 6 limit what the
    store must do (no merge, no branch creation): documents at the head, a log of local commits,

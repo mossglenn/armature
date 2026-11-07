@@ -152,7 +152,7 @@ curl -X PUT "http://localhost:3100/api/v1/documents/DesignNote/my-note?branch=my
 
 Writes need the `Armature-User` header carrying a registered user's external identifier; the seed registers `demo-designer@example.edu`. The [API reference](docs/api.md) documents every route.
 
-**Tests.** `npm test` in `app/` runs the 545 Vitest tests against the running database. They work on scratch branches and delete them, and each branch leaves a revoked `Owner` grant on `main`, since a grant is revoked and never deleted (ADR-0068), so `main` drifts from the seed run by run. `TERMINUS_DB=<name> npm test` runs them on another database, seeded first with the same variable (`app/README.md`).
+**Tests.** `npm test` in `app/` runs the 603 Vitest tests against the running database. They work on scratch branches and delete them, and each branch leaves a revoked `Owner` grant on `main`, since a grant is revoked and never deleted (ADR-0068), so `main` drifts from the seed run by run. `TERMINUS_DB=<name> npm test` runs them on another database, seeded first with the same variable (`app/README.md`).
 
 **After a schema change.** Run `npm run generate:types` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
 
