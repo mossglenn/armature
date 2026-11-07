@@ -16,7 +16,7 @@ export default defineConfig({
     alias: { '@': here },
   },
   test: {
-    include: ['lib/workspaceFolder.test.ts', 'lib/api/queue.test.ts', 'lib/api/filestore/store.test.ts', 'lib/api/filestore/patch.test.ts', 'lib/desktop/protocol.test.ts', 'lib/desktop/settings.test.ts', 'lib/desktop/folder.test.ts'],
+    include: ['lib/workspaceFolder.test.ts', 'lib/api/queue.test.ts', 'lib/api/filestore/store.test.ts', 'lib/api/filestore/patch.test.ts', 'lib/desktop/protocol.test.ts', 'lib/desktop/settings.test.ts', 'lib/desktop/folder.test.ts', 'lib/desktop/signIn.test.ts', 'lib/desktop/credential.test.ts'],
     fileParallelism: false,
     testTimeout: 15_000,
   },
