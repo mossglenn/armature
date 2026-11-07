@@ -5,9 +5,11 @@
 #   app       Guards the contracts that need no store: `schema/schema.json` and the
 #             generated `packages/types` agree (check:types), the app lints clean,
 #             the app and the packages type-check (`tsc`; lint alone missed
-#             an argument-count error once, 2026-10-20), and the standalone hub
-#             and the operator tools bundle (`build:hub` and `build:operator`,
-#             esbuild over app/server.ts and app/operator.ts; ADR-0062).
+#             an argument-count error once, 2026-10-20), and the standalone hub,
+#             the operator tools and the desktop program's core bundle
+#             (`build:hub`, `build:operator` and `build:desktop`, esbuild over
+#             app/server.ts, app/operator.ts and app/desktop.ts; ADR-0062,
+#             ADR-0069).
 #
 # The repository is an npm workspace (root package.json: app and packages/*), so
 # one `npm ci` at the root installs the app and the packages it depends on.
@@ -41,8 +43,9 @@
 #             on @armature/types@0.1.0, which resolves only inside the workspace.
 #
 #   files     The suites that need no store (app/vitest.files.config.mts: the
-#             file-backed store's modules and the workspace folder on disk) on a
-#             Windows runner. ADR-0066's Verification asks that the write-then-rename
+#             file-backed store's modules, the workspace folder on disk, and the
+#             desktop core's modules with its bundle run as a child over pipes)
+#             on a Windows runner. ADR-0066's Verification asks that the write-then-rename
 #             sequence and the lock be proven where rename semantics differ and
 #             Defender's real-time scanning holds new files open; a folder inside a
 #             synced directory (OneDrive) still needs a real machine. Added 2026-11-02.
@@ -70,7 +73,7 @@ on:
 
 jobs:
   app:
-    name: Lint, type-check, generated-types drift check, context budgets and hub bundle
+    name: Lint, type-check, generated-types drift check, context budgets and the bundles
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -87,6 +90,7 @@ jobs:
       - run: npm run check:context
       - run: npm run build:hub --workspace app
       - run: npm run build:operator --workspace app
+      - run: npm run build:desktop --workspace app
 
   client:
     name: The client installed as another repository installs it
@@ -216,7 +220,7 @@ jobs:
           retention-days: 7
 
   files:
-    name: The file-backed store and the workspace folder on Windows
+    name: The file-backed store, the workspace folder and the desktop core on Windows
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
