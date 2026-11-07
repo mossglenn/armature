@@ -330,10 +330,13 @@ async function resolveClaims(c: Context, claims: IdentityClaims, main: Store): P
       ...(claims.issuer ? { issuer: claims.issuer } : {}),
     };
     try {
-      await main.insertDocument(document, {
-        author: id,
-        message: `Register ${claims.externalId} on first encounter`,
-      });
+      // In main's queue, so it cannot land between another write's head and its commit.
+      await main.exclusive(() =>
+        main.insertDocument(document, {
+          author: id,
+          message: `Register ${claims.externalId} on first encounter`,
+        })
+      );
       return { id, user: document };
     } catch (err) {
       // Only the race: the id was taken. Any other refusal is a fault to

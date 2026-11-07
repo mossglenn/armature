@@ -207,22 +207,27 @@ branches.post('/', async (c) => {
   await requirePermission(c, who, { permission: 'create', branch: name });
   const store = storeFor(c, { branch: 'main' });
   if ('commit' in from) await requireCommit(store, from.commit);
-  // Both checked before the grant is written, so the usual refusals write
-  // nothing on main; the store's own refusals below cover a race.
-  const names = await store.listBranches();
-  if (names.includes(name)) throw new ApiError(409, 'branch_exists', `Branch ${name} already exists`);
-  if ('branch' in from && !names.includes(from.branch)) throw new ApiError(404, 'unknown_ref', `No branch ${from.branch}`);
-  await grantOwner(store, who, name);
-  try {
-    await store.createBranch(name, from);
-  } catch (err) {
-    // The grant is taken back, so no one owns a branch they did not make.
-    await revokeGrantsNaming(who, name, 'Branch not created', { main: store }).catch(() => undefined);
-    if (err instanceof StoreError && err.kind === 'exists') {
-      throw new ApiError(409, 'branch_exists', `Branch ${name} already exists`);
+  // In the new branch's queue, so a second creation of the name finds the first
+  // finished: the grant is keyed over the name, and a loser taking its grant
+  // back would take the winner's (ADR-0025 decision 7, note of 2026-11-06).
+  await store.at({ branch: name }).exclusive(async () => {
+    // Both checked before the grant is written, so the usual refusals write
+    // nothing on main; the store's own refusals below cover a second hub.
+    const names = await store.listBranches();
+    if (names.includes(name)) throw new ApiError(409, 'branch_exists', `Branch ${name} already exists`);
+    if ('branch' in from && !names.includes(from.branch)) throw new ApiError(404, 'unknown_ref', `No branch ${from.branch}`);
+    await grantOwner(store, who, name);
+    try {
+      await store.createBranch(name, from);
+    } catch (err) {
+      // The grant is taken back, so no one owns a branch they did not make.
+      await revokeGrantsNaming(who, name, 'Branch not created', { main: store }).catch(() => undefined);
+      if (err instanceof StoreError && err.kind === 'exists') {
+        throw new ApiError(409, 'branch_exists', `Branch ${name} already exists`);
+      }
+      throw err;
     }
-    throw err;
-  }
+  });
   const head = await store.at({ branch: name }).head();
   setEtag(c, head?.id);
   return c.json({ name, from, head: toHead(head) }, 201);
@@ -274,10 +279,12 @@ async function conflictsOf(witnesses: ConflictWitness[], atSource: Store): Promi
  * a violation. The transient branch is deleted on every outcome. `apply`
  * ignores a data-version precondition (platform check AK), so the target's
  * head is read again just before the second apply and a branch that moved is
- * 409 `branch_moved`; the residual window is one request wide, as a branch
- * delete's is. With `dryRun`, the conflicts and the violations are returned
- * and nothing is committed. `If-Match` pins the target head the caller
- * inspected (the review's H3).
+ * 409 `branch_moved`. That read and the apply are in the target's write queue
+ * (ADR-0025 decision 7, note of 2026-11-06), so nothing of this hub's lands
+ * between them; the check stays outside it, since it takes seconds and a dry
+ * run commits nothing, and writers should not wait on either. With `dryRun`,
+ * the conflicts and the violations are returned and nothing is committed.
+ * `If-Match` pins the target head the caller inspected (the review's H3).
  */
 branches.post('/:name/merge', async (c) => {
   const { name: targetName } = c.req.param();
@@ -338,19 +345,21 @@ branches.post('/:name/merge', async (c) => {
   }
 
   // The checked result lands only on the head it was checked against (check AK: apply takes no precondition).
-  const now = await target.head();
-  if (now?.id !== targetHead.id) {
-    throw new ApiError(409, 'branch_moved', `Branch ${targetName} received commit ${now?.id} during the merge check; retry`, { checked: targetHead.id, current: now?.id });
-  }
-  const result = await target.apply(targetName, {
-    base,
-    source: sourceHead.id,
-    author,
-    message: commitMessage(who, envelope.message),
-    metadata: mergeMetadata(sourceHead.id),
+  const result = await target.exclusive(async () => {
+    const now = await target.head();
+    if (now?.id !== targetHead.id) {
+      throw new ApiError(409, 'branch_moved', `Branch ${targetName} received commit ${now?.id} during the merge check; retry`, { checked: targetHead.id, current: now?.id });
+    }
+    return target.apply(targetName, {
+      base,
+      source: sourceHead.id,
+      author,
+      message: commitMessage(who, envelope.message),
+      metadata: mergeMetadata(sourceHead.id),
+    });
   });
   if (!result.ok) {
-    // The one-request window: a commit landed between the read above and the apply.
+    // A second hub or the operator tools landed a commit between the read above and the apply.
     const conflictsNow = await conflictsOf(result.witnesses, target.at({ commit: sourceHead.id }));
     throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflictsNow.length} field(s)`, { ...sides, conflicts: conflictsNow });
   }
@@ -361,11 +370,14 @@ branches.post('/:name/merge', async (c) => {
 /**
  * The store's branch DELETE takes no concurrency token, so the check that
  * another branch holds the head and the deletion itself are separate calls.
- * Two things narrow that window: the caller may pin the head it inspected
- * with If-Match (412 when the branch has moved since), and the head is read
- * again immediately before the delete (409 branch_moved). A commit landing
- * between that final read and the store's delete would still be lost; the
- * window is one request wide and the commit stays readable by id (T2).
+ * Both run in the branch's write queue (ADR-0025 decision 7, note of
+ * 2026-11-06), so a write of this hub's lands before the check or finds the
+ * branch gone, and is never told 200 and lost. For a second hub or the
+ * operator tools, two things narrow the window: the caller may pin the head it
+ * inspected with If-Match (412 when the branch has moved since), and the head
+ * is read again immediately before the delete (409 branch_moved). A commit
+ * landing between that final read and the store's delete would still be lost;
+ * the window is one request wide and the commit stays readable by id (T2).
  * Candidates are searched main first, the usual holder, and the walk stops
  * at the first hit; each log is capped by fullLog.
  */
@@ -374,43 +386,45 @@ branches.delete('/:name', async (c) => {
   if (name === 'main') throw new ApiError(400, 'protected_branch', 'main is never deleted (ADR-0025 decision 6)');
   const who = await resolveUser(c);
   const store = storeFor(c, { branch: 'main' });
-  const names = await store.listBranches();
-  if (!names.includes(name)) throw new ApiError(404, 'unknown_ref', `No branch ${name}`);
-  await requirePermission(c, who, { permission: 'delete', branch: name });
-  const target = store.at({ branch: name });
-  const head = await target.head();
-  const ifMatch = ifMatchFrom(c);
-  if (ifMatch && ifMatch !== head?.id) {
-    throw new ApiError(412, 'precondition_failed', `Branch ${name} has moved since commit ${ifMatch}`, {
-      expected: ifMatch,
-      current: head?.id,
-    });
-  }
-  let heldBy: string | undefined;
-  if (head) {
-    const candidates = ['main', ...names.filter((n) => n !== name && n !== 'main')];
-    heldBy = await branchHolding(head.id, candidates, store);
-    if (!heldBy) {
-      throw new ApiError(
-        409,
-        'unmerged_branch',
-        `Branch ${name} has commits no other branch holds; merge it first, or keep it as the record of that work (ADR-0025 decision 6)`,
-        { head: head.id }
-      );
-    }
-    const now = await target.head();
-    if (now?.id !== head.id) {
-      throw new ApiError(409, 'branch_moved', `Branch ${name} received commit ${now?.id} during the check; retry`, {
-        checked: head.id,
-        current: now?.id,
+  return store.at({ branch: name }).exclusive(async () => {
+    const names = await store.listBranches();
+    if (!names.includes(name)) throw new ApiError(404, 'unknown_ref', `No branch ${name}`);
+    await requirePermission(c, who, { permission: 'delete', branch: name });
+    const target = store.at({ branch: name });
+    const head = await target.head();
+    const ifMatch = ifMatchFrom(c);
+    if (ifMatch && ifMatch !== head?.id) {
+      throw new ApiError(412, 'precondition_failed', `Branch ${name} has moved since commit ${ifMatch}`, {
+        expected: ifMatch,
+        current: head?.id,
       });
     }
-  }
-  // Grants first, then the branch (ADR-0068 decision 3, note): a failure here
-  // leaves a branch nobody owns, which check reports, never one anyone may write.
-  await revokeGrantsNaming(who, name, 'Branch deleted', { main: store });
-  await store.deleteBranch(name);
-  return c.json({ deleted: name, head: head?.id ?? null, heldBy: heldBy ?? null });
+    let heldBy: string | undefined;
+    if (head) {
+      const candidates = ['main', ...names.filter((n) => n !== name && n !== 'main')];
+      heldBy = await branchHolding(head.id, candidates, store);
+      if (!heldBy) {
+        throw new ApiError(
+          409,
+          'unmerged_branch',
+          `Branch ${name} has commits no other branch holds; merge it first, or keep it as the record of that work (ADR-0025 decision 6)`,
+          { head: head.id }
+        );
+      }
+      const now = await target.head();
+      if (now?.id !== head.id) {
+        throw new ApiError(409, 'branch_moved', `Branch ${name} received commit ${now?.id} during the check; retry`, {
+          checked: head.id,
+          current: now?.id,
+        });
+      }
+    }
+    // Grants first, then the branch (ADR-0068 decision 3, note): a failure here
+    // leaves a branch nobody owns, which check reports, never one anyone may write.
+    await revokeGrantsNaming(who, name, 'Branch deleted', { main: store });
+    await store.deleteBranch(name);
+    return c.json({ deleted: name, head: head?.id ?? null, heldBy: heldBy ?? null });
+  });
 });
 
 branches.get('/:name/changes', async (c) => {

@@ -91,52 +91,57 @@ users.post('/', async (c) => {
   const main = registry(c);
   const ifMatch = ifMatchFrom(c);
 
-  // Two passes, as in resolveUser: a registration that loses a race on the
-  // main head re-reads and reports the winner as user_exists.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const { user: taken, commit: head } = await findUserByExternalId(main, externalId);
-    if (taken) {
-      throw new ApiError(409, 'user_exists', `${externalId} is already registered as ${taken['@id']}`, { id: taken['@id'] });
-    }
-    if (id) {
-      try {
-        const held = (await main.getDocument(id)).document;
-        const type = held['@type'];
-        throw new ApiError(409, type === 'User' ? 'user_exists' : 'type_conflict', `${id} already exists as ${type}`);
-      } catch (err) {
-        if (!(err instanceof StoreError && err.kind === 'not_found')) throw err;
+  return main.exclusive(async () => {
+    // Two passes, as in resolveUser: a registration that loses a race on the
+    // main head re-reads and reports the winner as user_exists. In main's write
+    // queue, since nothing in the store settles an externalId among concurrent
+    // writers (check AO) and one person must stay one User; the second pass is
+    // left for a second hub.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { user: taken, commit: head } = await findUserByExternalId(main, externalId);
+      if (taken) {
+        throw new ApiError(409, 'user_exists', `${externalId} is already registered as ${taken['@id']}`, { id: taken['@id'] });
       }
-    }
-    const document: UserDocument = {
-      '@id': id ?? mintUserId(),
-      '@type': 'User',
-      displayName,
-      externalId,
-      ...(email ? { email } : {}),
-      ...(institution ? { institution } : {}),
-      ...(issuer ? { issuer } : {}),
-    };
-    try {
-      const { commit } = await main.insertDocument(document, {
-        author,
-        message: commitMessage(who, envelope.message),
-        ifMatch: ifMatch ?? (head || undefined),
-      });
-      setEtag(c, commit);
-      return c.json({ id: document['@id'], commit }, 201);
-    } catch (err) {
-      if (err instanceof StoreError && err.kind === 'version_mismatch') {
-        if (ifMatch) {
-          const current = await main.head();
-          throw new ApiError(412, 'precondition_failed', `main has moved since commit ${ifMatch}`, {
-            expected: ifMatch,
-            current: current?.id,
-          });
+      if (id) {
+        try {
+          const held = (await main.getDocument(id)).document;
+          const type = held['@type'];
+          throw new ApiError(409, type === 'User' ? 'user_exists' : 'type_conflict', `${id} already exists as ${type}`);
+        } catch (err) {
+          if (!(err instanceof StoreError && err.kind === 'not_found')) throw err;
         }
-        continue;
       }
-      throw err;
+      const document: UserDocument = {
+        '@id': id ?? mintUserId(),
+        '@type': 'User',
+        displayName,
+        externalId,
+        ...(email ? { email } : {}),
+        ...(institution ? { institution } : {}),
+        ...(issuer ? { issuer } : {}),
+      };
+      try {
+        const { commit } = await main.insertDocument(document, {
+          author,
+          message: commitMessage(who, envelope.message),
+          ifMatch: ifMatch ?? (head || undefined),
+        });
+        setEtag(c, commit);
+        return c.json({ id: document['@id'], commit }, 201);
+      } catch (err) {
+        if (err instanceof StoreError && err.kind === 'version_mismatch') {
+          if (ifMatch) {
+            const current = await main.head();
+            throw new ApiError(412, 'precondition_failed', `main has moved since commit ${ifMatch}`, {
+              expected: ifMatch,
+              current: current?.id,
+            });
+          }
+          continue;
+        }
+        throw err;
+      }
     }
-  }
-  throw new ApiError(409, 'registration_conflict', `Could not register ${externalId}; retry`);
+    throw new ApiError(409, 'registration_conflict', `Could not register ${externalId}; retry`);
+  });
 });
