@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.cache/
+# Made by `npm run sidecar`: Node for this machine's target and the core's bundle.
+src-tauri/binaries/
+src-tauri/core/
+src-tauri/target/
+src-tauri/gen/schemas/
