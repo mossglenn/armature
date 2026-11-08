@@ -1,71 +1,106 @@
 import { useEffect, useState } from 'react';
-import type { Backend, CoreEvent, ShellState } from './lib/backend';
+import { Button } from '@/components/ui/button';
+import type { Backend, ShellState } from '@/lib/backend';
+import { useShell } from '@/lib/useShell';
+import { cn } from '@/lib/utils';
+import { Connect } from '@/pages/Connect';
+import { Log } from '@/pages/Log';
+import { Pairing } from '@/pages/Pairing';
+import { Settings } from '@/pages/Settings';
+import { SignIn } from '@/pages/SignIn';
+import { Workspace } from '@/pages/Workspace';
+import { Workspaces } from '@/pages/Workspaces';
+
+type Page = { name: 'connect' } | { name: 'signIn' } | { name: 'workspaces' } | { name: 'workspace'; branch: string } | { name: 'pairing' } | { name: 'settings' } | { name: 'log' };
+
+/** Where the program opens (docs/desktop-program-plan.md §4, in the order a person meets the pages). */
+function firstPage(state: ShellState): Page {
+  const started = state.started;
+  if (!started || started.needs === 'connect' || started.needs === 'user') return { name: 'connect' };
+  if (started.resolver === 'oidc' && started.signedIn !== true) return { name: 'signIn' };
+  return { name: 'workspaces' };
+}
+
+function hubLine(state?: ShellState): string {
+  if (!state) return 'Starting…';
+  if (state.core === 'failed') return state.error ?? 'The hub could not start';
+  if (state.core === 'starting') return 'Starting the hub…';
+  if (state.started?.needs) return 'Not connected yet';
+  return state.core === 'running' ? 'The hub is running' : 'The hub is paused';
+}
 
 /**
- * The shell's first page (step 4a): what the core and its hub are doing,
- * the remote a link asked to connect to, and the core's last log lines. The
- * seven pages of docs/desktop-program-plan.md §4 replace it in step 4b.
+ * The program's window: the seven pages of docs/desktop-program-plan.md §4 behind a sidebar, which
+ * also says what the hub is doing and pauses or resumes it, as the tray does. An `armature://connect`
+ * link opens the connect page with its address filled in.
  */
 export function App({ backend }: { backend: Backend }) {
-  const [state, setState] = useState<ShellState | undefined>();
-  const [lines, setLines] = useState<string[]>([]);
-  const [linked, setLinked] = useState<string | undefined>();
+  const { state, refresh, link } = useShell(backend);
+  const [page, setPage] = useState<Page | undefined>();
 
   useEffect(() => {
-    void backend.state().then((current) => {
-      setState(current);
-      if (current.link) setLinked(current.link);
-    });
-    return backend.onEvent((event: CoreEvent) => {
-      if (event.event === 'log') setLines((all) => [...all.slice(-199), `${String(event.level ?? 'info')}  ${String(event.line)}`]);
-      if (event.event === 'hub' || event.event === 'shell') void backend.state().then(setState);
-      if (event.event === 'deep-link' && typeof event.remote === 'string') setLinked(event.remote);
-    });
-  }, [backend]);
+    if (state && !page) setPage(firstPage(state));
+  }, [state, page]);
+  useEffect(() => {
+    if (link) setPage({ name: 'connect' });
+  }, [link]);
 
-  const started = state?.started;
-  const running = state?.core === 'running' && started?.started === true;
+  const running = state?.core === 'running';
+  const connected = state?.started !== undefined && !state.started.needs;
+  const oidc = state?.started?.resolver === 'oidc';
+  const nav: Array<{ page: Page; label: string; shown: boolean }> = [
+    { page: { name: 'workspaces' }, label: 'Workspaces', shown: connected },
+    { page: { name: 'signIn' }, label: 'Sign in', shown: connected && oidc },
+    { page: { name: 'pairing' }, label: 'Pairing', shown: true },
+    { page: { name: 'settings' }, label: 'Settings', shown: true },
+    { page: { name: 'log' }, label: 'Log', shown: true },
+    { page: { name: 'connect' }, label: 'Connect', shown: !connected },
+  ];
+  const go = (next: Page) => {
+    setPage(next);
+    void refresh();
+  };
+  const current = page?.name === 'workspace' ? 'workspaces' : page?.name;
 
   return (
-    <main className="mx-auto flex h-full max-w-3xl flex-col gap-6 p-8">
-      <header>
-        <h1 className="text-2xl font-semibold">Armature</h1>
-        <p className="text-muted-foreground text-sm">Your workspaces, on this machine.</p>
-      </header>
-
-      <section className="rounded-lg border p-4" aria-label="Hub">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="font-medium">{running ? 'The hub is running' : state?.core === 'failed' ? 'The hub could not start' : started?.needs ? 'Not connected yet' : 'The hub is paused'}</p>
-            <p className="text-muted-foreground text-sm">
-              {running ? `${String(started?.url)}/api/v1, for the tools on this machine` : (state?.error ?? (started?.needs === 'connect' ? 'Connect to your instance to begin.' : started?.needs === 'user' ? 'Set your identifier on the remote.' : ''))}
-            </p>
-          </div>
-          {started?.started !== undefined && (
-            <button
-              type="button"
-              className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
-              onClick={() => void backend.setHub(!running).then(setState)}
-            >
+    <div className="flex h-full">
+      <nav className="bg-muted/40 flex w-52 shrink-0 flex-col border-r p-4" aria-label="Pages">
+        <p className="mb-4 text-lg font-semibold">Armature</p>
+        <ul className="flex flex-col gap-1">
+          {nav
+            .filter((item) => item.shown)
+            .map((item) => (
+              <li key={item.page.name}>
+                <button
+                  type="button"
+                  aria-current={current === item.page.name ? 'page' : undefined}
+                  className={cn('hover:bg-accent w-full rounded-md px-3 py-1.5 text-left text-sm', current === item.page.name && 'bg-accent font-medium')}
+                  onClick={() => go(item.page)}
+                >
+                  {item.label}
+                </button>
+              </li>
+            ))}
+        </ul>
+        <div className="mt-auto text-xs" aria-label="The hub">
+          <p className={cn('font-medium', state?.core === 'failed' && 'text-destructive')}>{hubLine(state)}</p>
+          {running && typeof state?.started?.url === 'string' && <p className="text-muted-foreground font-mono break-all">{state.started.url}</p>}
+          {state?.started?.started !== undefined && (
+            <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => void backend.setHub(!running).then(() => refresh())}>
               {running ? 'Pause the hub' : 'Resume the hub'}
-            </button>
+            </Button>
           )}
         </div>
-        {typeof started?.remote === 'string' && <p className="text-muted-foreground mt-3 text-sm">Remote: {started.remote}</p>}
-      </section>
-
-      {linked && (
-        <section className="rounded-lg border p-4" aria-label="Link">
-          <p className="font-medium">A link asked to connect to</p>
-          <p className="text-sm">{linked}</p>
-          <p className="text-muted-foreground mt-1 text-sm">The connect screen, which reads and shows the instance first, comes with the next step.</p>
-        </section>
-      )}
-
-      <section className="flex min-h-0 flex-1 flex-col rounded-lg border" aria-label="Log">
-        <p className="border-b px-4 py-2 text-sm font-medium">Log{state?.logDir ? <span className="text-muted-foreground font-normal">: {state.logDir}</span> : null}</p>
-        <pre className="min-h-0 flex-1 overflow-auto px-4 py-2 text-xs">{lines.join('\n') || 'Nothing yet.'}</pre>
-      </section>
-    </main>
+      </nav>
+      <main className="min-w-0 flex-1 overflow-auto p-8">
+        {page?.name === 'connect' && <Connect backend={backend} state={state} link={link} onDone={(next) => go({ name: next })} />}
+        {page?.name === 'signIn' && <SignIn backend={backend} state={state} onDone={() => go({ name: 'workspaces' })} />}
+        {page?.name === 'workspaces' && <Workspaces backend={backend} open={(branch) => go({ name: 'workspace', branch })} />}
+        {page?.name === 'workspace' && <Workspace key={page.branch} backend={backend} branch={page.branch} back={() => go({ name: 'workspaces' })} />}
+        {page?.name === 'pairing' && <Pairing backend={backend} />}
+        {page?.name === 'settings' && <Settings backend={backend} state={state} connect={() => go({ name: 'connect' })} signedOut={() => go({ name: 'signIn' })} />}
+        {page?.name === 'log' && <Log backend={backend} state={state} />}
+      </main>
+    </div>
   );
 }
