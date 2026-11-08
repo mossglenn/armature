@@ -27,7 +27,7 @@ export function StatusBadges({ status }: { status?: WorkspaceStatus }) {
  * branch; an existing branch cloned, with the remote's warning when the person may not write it
  * (ADR-0068 decision 9), the workspace made all the same.
  */
-export function Workspaces({ backend, open }: { backend: Backend; open: (branch: string) => void }) {
+export function Workspaces({ backend, open, notice }: { backend: Backend; open: (branch: string) => void; notice?: string }) {
   const { run, busy } = useRequest(backend);
   const [records, setRecords] = useState<WorkspaceRecord[] | undefined>();
   const [statuses, setStatuses] = useState<Record<string, WorkspaceStatus>>({});
@@ -61,6 +61,11 @@ export function Workspaces({ backend, open }: { backend: Backend; open: (branch:
     <section>
       <PageHeader title="Workspaces">Each is a branch of the remote, kept on this machine, where your tools write while you work, online or not.</PageHeader>
 
+      {notice && (
+        <p className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+          {notice}
+        </p>
+      )}
       {records && records.length === 0 && <p className="text-muted-foreground text-sm">No workspace yet. Make one below.</p>}
       {records && records.length > 0 && (
         <ul className="divide-y rounded-lg border" aria-label="Your workspaces">

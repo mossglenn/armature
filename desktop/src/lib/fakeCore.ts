@@ -51,7 +51,8 @@ interface Model {
   settings: Settings;
   running: boolean;
   signedIn?: { id: string; externalId: string; displayName: string };
-  workspaces: Map<string, { record: WorkspaceRecord; commits: CommitEntry[]; pushed: number; remoteMoved: boolean; conflict: boolean }>;
+  /** `deliveredAt`: how many commits the workspace had when it was last delivered, so main holds its head while that is still all. */
+  workspaces: Map<string, { record: WorkspaceRecord; commits: CommitEntry[]; pushed: number; remoteMoved: boolean; conflict: boolean; deliveredAt?: number }>;
   localToken: string;
   log: CoreEvent[];
 }
@@ -296,7 +297,19 @@ export function fakeCore(scenario = 'header'): Backend {
       if (w.remoteMoved) return refuse(409, 'bring_in_first', `main has moved since ${w.record.branch} last brought it in; bring it in, resolve what it reports, then deliver`, { conflicts: [], violations: [] });
       const deleted = fields.deleteWorkspace === true;
       if (deleted) model.workspaces.delete(w.record.branch);
+      else w.deliveredAt = w.commits.length;
       return ok({ workspace: w.record, delivered: { commit: commitId(), base: commitId(), source: commitId(), target: commitId(), upToDate: false }, deleted });
+    },
+    remove: (fields) => {
+      const refused = needsHub() ?? needsOwner();
+      if (refused) return refused;
+      const w = workspaceOf(fields);
+      if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      const unpushed = w.commits.length - w.pushed;
+      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} local commit(s) of ${w.record.branch} are not on the remote; push before removing it`);
+      model.workspaces.delete(w.record.branch);
+      const inMain = w.deliveredAt !== undefined && w.deliveredAt === w.commits.length;
+      return ok({ workspace: w.record, ...(inMain ? { remote: 'deleted' } : { remote: 'kept', reason: 'unmerged' }) });
     },
   };
 

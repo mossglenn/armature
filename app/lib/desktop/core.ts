@@ -443,6 +443,8 @@ export function runCore(options: CoreOptions): Core {
     clone: async (request) => viaProgram('POST', '/workspace', { existing: text(request, 'branch') }, true),
     push: async (request) => viaProgram('POST', `/workspace/${named(request)}/push`, undefined, true),
     bringIn: async (request) => viaProgram('POST', `/workspace/${named(request)}/bring-in`, request.message === undefined ? undefined : { message: request.message }, true),
+    // DELETE /workspace/:name (since 2026-11-07): this machine's copy, and the remote's branch when main holds its head.
+    remove: async (request) => viaProgram('DELETE', `/workspace/${named(request)}`, undefined, true),
     deliver: async (request) =>
       viaProgram('POST', `/workspace/${named(request)}/deliver`, { message: request.message, ...(request.deleteWorkspace !== undefined ? { deleteWorkspace: request.deleteWorkspace } : {}) }, true),
   };

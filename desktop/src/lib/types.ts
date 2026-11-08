@@ -88,6 +88,13 @@ export interface CommitEntry {
   timestamp: number;
 }
 
+/** `remove`'s answer: what became of the branch on the remote (since 2026-11-07). */
+export interface RemoveResult {
+  workspace: WorkspaceRecord;
+  remote: 'deleted' | 'kept' | 'absent';
+  reason?: 'unmerged' | 'forbidden' | 'unreachable';
+}
+
 /** The remote's warning when a cloned branch is one the owner may not write (ADR-0068 decision 9). */
 export interface WorkspaceWarning {
   code: 'forbidden';

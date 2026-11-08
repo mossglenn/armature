@@ -257,6 +257,11 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(again.status).toBe(200);
     expect(again.body).not.toHaveProperty('localToken');
     expect((await driver.ask('status', { workspace: WS })).status).toBe(200);
+    // Removed: refused while the pairing test's write is unpushed; pushed, the branch has work main lacks, so the remote keeps it.
+    expect(await driver.ask('remove', { workspace: WS })).toMatchObject({ status: 409, body: { error: 'unpushed_commits' } });
+    expect((await driver.ask('push', { workspace: WS })).status).toBe(200);
+    expect(await driver.ask('remove', { workspace: WS })).toMatchObject({ status: 200, body: { remote: 'kept', reason: 'unmerged' } });
+    expect((await driver.ask('workspaces')).body).toEqual([]);
     driver.end();
     await driver.core.closed;
     expect(existsSync(join(dataDir, 'workspaces', 'lock'))).toBe(false);

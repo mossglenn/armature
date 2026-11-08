@@ -175,6 +175,43 @@ test.describe('the workspaces', () => {
   });
 });
 
+test.describe('removing a workspace', () => {
+  test('refused with anything unpushed, confirmed first, and the remote keeps the branch until main has its work', async ({ page }) => {
+    await open(page, 'header');
+    await page.evaluate(() => (window as unknown as { __fakeCore: { writeAsTool: (b: string, m: string) => void } }).__fakeCore.writeAsTool('demo-designer_glossary', 'Define "framing"'));
+    const list = page.getByRole('list', { name: 'Your workspaces' });
+    await list.getByRole('button', { name: /demo-designer_glossary/ }).click();
+    const remove = page.getByLabel('Remove', { exact: true });
+    await remove.getByRole('button', { name: 'Remove…' }).click();
+    await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('409 unpushed_commits');
+
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await remove.getByRole('button', { name: 'Remove…' }).click();
+    await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('heading', { name: 'demo-designer_glossary' })).toBeVisible();
+    await remove.getByRole('button', { name: 'Remove…' }).click();
+    await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('The remote keeps the branch, since it has work main does not');
+    await expect(list).not.toContainText('demo-designer_glossary');
+  });
+
+  test('a workspace delivered without deleting it is removed from the remote too', async ({ page }) => {
+    await open(page, 'header');
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_unit-3/ }).click();
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await page.getByRole('button', { name: 'Bring in main' }).click();
+    await expect(page.getByRole('status')).toContainText('Brought main in');
+    await page.getByLabel('Why (required)').fill('Unit 3, reviewed');
+    await page.getByRole('button', { name: 'Deliver', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Delivered into main as');
+    await page.getByLabel('Remove', { exact: true }).getByRole('button', { name: 'Remove…' }).click();
+    await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('removed from this machine and from the remote');
+  });
+});
+
 test.describe('pairing, settings and the log', () => {
   test('the pairing value is shown and copied, and a reset is confirmed first', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);

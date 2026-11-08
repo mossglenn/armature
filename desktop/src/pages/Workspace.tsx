@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Backend } from '@/lib/backend';
-import type { CommitEntry, Refusal, WorkspaceStatus } from '@/lib/types';
+import type { CommitEntry, Refusal, RemoveResult, WorkspaceStatus } from '@/lib/types';
 import { shortCommit } from '@/lib/utils';
 import { useRequest } from '@/lib/useShell';
 import { StatusBadges } from './Workspaces';
@@ -23,6 +23,15 @@ interface DeliverResult {
   deleted: boolean;
 }
 
+/** What a removal says, by what became of the branch on the remote. */
+export function removedSentence(branch: string, result: RemoveResult): string {
+  if (result.remote === 'deleted') return `${branch} is removed from this machine and from the remote: main holds everything it had.`;
+  if (result.remote === 'absent') return `${branch} is removed from this machine; the remote no longer had the branch.`;
+  if (result.reason === 'forbidden') return `${branch} is removed from this machine. The remote keeps the branch: it is not yours to delete.`;
+  if (result.reason === 'unreachable') return `${branch} is removed from this machine. The remote could not be reached, so its branch is still there.`;
+  return `${branch} is removed from this machine. The remote keeps the branch, since it has work main does not; clone it again to go on with it.`;
+}
+
 /** Commit messages are stored with the hub's trailers (Armature-Workspace-Commit and the like); the page shows the person's words. */
 const firstLine = (message: string) => message.split('\n')[0] ?? message;
 
@@ -32,7 +41,7 @@ const firstLine = (message: string) => message.split('\n')[0] ?? message;
  * of deleting the workspace. Each action's refusal is shown as the hub gave it, with its code; a
  * merge's conflicts are listed, and their review is the tool's (plan §6).
  */
-export function Workspace({ backend, branch, back }: { backend: Backend; branch: string; back: () => void }) {
+export function Workspace({ backend, branch, back }: { backend: Backend; branch: string; back: (notice?: string) => void }) {
   const { run, busy } = useRequest(backend);
   const [status, setStatus] = useState<WorkspaceStatus | undefined>();
   const [commits, setCommits] = useState<CommitEntry[]>([]);
@@ -41,6 +50,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   const [bringInMessage, setBringInMessage] = useState('');
   const [deliverMessage, setDeliverMessage] = useState('');
   const [deleteAfter, setDeleteAfter] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const load = useCallback(async () => {
     const [s, c] = await Promise.all([run<WorkspaceStatus>('status', { workspace: branch }), run<{ commits: CommitEntry[] }>('commits', { workspace: branch, count: 50 })]);
@@ -63,7 +73,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   const unpushed = status ? commits.slice(0, status.unpushed) : [];
   return (
     <section>
-      <Button variant="link" className="mb-2 px-0" onClick={back}>
+      <Button variant="link" className="mb-2 px-0" onClick={() => back()}>
         ← Workspaces
       </Button>
       <PageHeader title={branch}>{status ? <StatusBadges status={status} /> : 'Reading the workspace…'}</PageHeader>
@@ -132,7 +142,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
             void act<DeliverResult>('deliver', { message: deliverMessage.trim(), ...(deleteAfter ? { deleteWorkspace: true } : {}) }, (r) =>
               r.deleted ? `Delivered into main as ${shortCommit(r.delivered.commit)}; the workspace is deleted.` : `Delivered into main as ${shortCommit(r.delivered.commit)}.`
             ).then((r) => {
-              if (r?.deleted) back();
+              if (r?.deleted) back(`${branch} is delivered into main and deleted, here and on the remote.`);
               else setDeliverMessage('');
             });
           }}
@@ -148,6 +158,36 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
             {busy === 'deliver' ? 'Delivering…' : 'Deliver'}
           </Button>
         </form>
+      </div>
+
+      <div className="mt-6 rounded-lg border p-4" aria-label="Remove">
+        <p className="font-medium">Remove this workspace</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Takes it off this machine, with nothing left to push. The remote deletes its branch too when main already has everything on it, as after a delivery; otherwise it keeps the branch as the record of that work.
+        </p>
+        {confirmingRemove ? (
+          <div className="mt-3 flex items-center gap-2" role="group" aria-label="Confirm the removal">
+            <span className="text-sm">Remove {branch} from this machine?</span>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy !== undefined}
+              onClick={() => {
+                setConfirmingRemove(false);
+                void act<RemoveResult>('remove', {}, (r) => removedSentence(branch, r)).then((r) => r && back(removedSentence(branch, r)));
+              }}
+            >
+              Remove
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmingRemove(false)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" className="mt-3" disabled={busy !== undefined} onClick={() => setConfirmingRemove(true)}>
+            Remove…
+          </Button>
+        )}
       </div>
     </section>
   );
