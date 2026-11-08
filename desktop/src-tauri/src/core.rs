@@ -13,7 +13,7 @@
 //! input's end or a kill ends it. A core that does not answer is killed and leaves its lock, which
 //! the next start takes over (ADR-0069 decision 4).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 use std::sync::Mutex;
@@ -31,6 +31,9 @@ use tokio::sync::oneshot;
 use crate::keychain;
 use crate::logs::LogFiles;
 use crate::relay::{self, EventAction, LineBuffer};
+
+/// How many of the latest log lines the shell keeps for the log page, which may open after them.
+pub const RECENT_LINES: usize = 500;
 
 /// How long quitting waits for the core to stop the hub before ending it.
 pub const STOP_WAIT: Duration = Duration::from_secs(5);
@@ -65,6 +68,11 @@ pub struct Core {
     remote: Mutex<Option<String>>,
     data_dir: Mutex<Option<PathBuf>>,
     logs: Mutex<Option<LogFiles>>,
+    /// The latest log lines, as the page receives them, for a log page opened after them.
+    recent: Mutex<VecDeque<Value>>,
+    /// The pairing value in force: the keychain's, or the one the core drew or reset to, kept here
+    /// too so the pairing page works when the keychain cannot be written.
+    local_token: Mutex<Option<String>>,
     quitting: AtomicBool,
     /// Set as the core's process ends, before anything else is done about it.
     core_exited: AtomicBool,
@@ -75,6 +83,22 @@ pub struct Core {
 impl Core {
     pub fn state(&self) -> ShellState {
         self.state.lock().unwrap().clone()
+    }
+
+    pub fn recent_lines(&self) -> Vec<Value> {
+        self.recent.lock().unwrap().iter().cloned().collect()
+    }
+
+    pub fn local_token(&self) -> Option<String> {
+        self.local_token.lock().unwrap().clone()
+    }
+
+    fn remember(&self, line: &Value) {
+        let mut recent = self.recent.lock().unwrap();
+        if recent.len() == RECENT_LINES {
+            recent.pop_front();
+        }
+        recent.push_back(line.clone());
     }
 }
 
@@ -95,10 +119,13 @@ pub fn linked(app: &AppHandle, remote: String) {
 
 /// A line in the log files and on the log page, in the shell's own words.
 pub fn say(app: &AppHandle, level: &str, line: &str) {
-    if let Some(logs) = app.state::<Core>().logs.lock().unwrap().as_mut() {
+    let core = app.state::<Core>();
+    if let Some(logs) = core.logs.lock().unwrap().as_mut() {
         logs.write(level, line);
     }
-    let _ = app.emit("core-event", json!({ "event": "log", "level": level, "line": line, "from": "shell" }));
+    let event = json!({ "event": "log", "level": level, "line": line, "from": "shell" });
+    core.remember(&event);
+    let _ = app.emit("core-event", event);
 }
 
 /// Starts the sidecar and the hub. Called once, at setup.
@@ -186,7 +213,10 @@ pub async fn start_hub(app: &AppHandle) {
     set_state(app, |s| s.core = "starting");
     let mut request = json!({ "type": "start", "dataDir": data_dir.display().to_string() });
     match keychain::local_token() {
-        Ok(Some(token)) => request["localToken"] = json!(token),
+        Ok(Some(token)) => {
+            *core.local_token.lock().unwrap() = Some(token.clone());
+            request["localToken"] = json!(token);
+        }
         Ok(None) => {}
         Err(err) => say(app, "warn", &format!("The keychain could not be read ({err}); a new pairing value is drawn at this start")),
     }
@@ -201,6 +231,7 @@ pub async fn start_hub(app: &AppHandle) {
         return set_state(app, |s| { s.core = "failed"; s.error = Some(message); s.started = None; });
     }
     if let Some(token) = body["localToken"].as_str() {
+        *core.local_token.lock().unwrap() = Some(token.to_string());
         if let Err(err) = keychain::keep_local_token(token) {
             say(app, "warn", &format!("The pairing value could not be kept in the keychain ({err}); a new one is drawn at the next start"));
         }
@@ -272,6 +303,7 @@ pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) {
         }
         "resetPairing" => {
             if let Some(token) = reply["body"]["localToken"].as_str() {
+                *core.local_token.lock().unwrap() = Some(token.to_string());
                 if let Err(err) = keychain::keep_local_token(token) {
                     say(app, "warn", &format!("The new pairing value could not be kept in the keychain ({err})"));
                 }
@@ -332,6 +364,7 @@ fn on_line(app: &AppHandle, line: &str) {
             if let Some(logs) = core.logs.lock().unwrap().as_mut() {
                 logs.write(message["level"].as_str().unwrap_or("info"), message["line"].as_str().unwrap_or(""));
             }
+            core.remember(&message);
             let _ = app.emit("core-event", message);
         }
         EventAction::HubAndForward => {
