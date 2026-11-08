@@ -29,6 +29,27 @@ async fn core_request(app: AppHandle, request: Value) -> Result<Value, String> {
     Ok(reply)
 }
 
+/// The latest log lines, for a log page opened after them.
+#[tauri::command]
+fn log_lines(app: AppHandle) -> Vec<Value> {
+    app.state::<Core>().recent_lines()
+}
+
+/// The pairing value every tool on the machine sends as `Armature-Local-Token` (plan §7), for the
+/// pairing page alone; never in the shared state or the log.
+#[tauri::command]
+fn pairing_value(app: AppHandle) -> Option<String> {
+    app.state::<Core>().local_token()
+}
+
+/// Opens the log folder in the system's file manager.
+#[tauri::command]
+fn open_log_folder(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    app.opener().open_path(dir.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn shell_state(app: AppHandle) -> ShellState {
     app.state::<Core>().state()
@@ -70,7 +91,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Core::default())
-        .invoke_handler(tauri::generate_handler![core_request, shell_state, set_hub])
+        .invoke_handler(tauri::generate_handler![core_request, shell_state, set_hub, log_lines, pairing_value, open_log_folder])
         // Closing the window hides it; the program stays in the tray so the tools keep their hub
         // (plan §9, §15 question 10). Quit is the tray's, the menu's, or the system's.
         .on_window_event(|window, event| {
