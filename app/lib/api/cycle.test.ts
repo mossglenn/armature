@@ -170,4 +170,54 @@ describe('over the file-backed store in memory', () => {
     });
   });
 
+  // Removing a workspace (since 2026-11-07): this machine's copy goes with nothing unpushed, and the
+  // remote deletes the branch only when another holds its head (ADR-0025 decision 6).
+  describe('removing a workspace', () => {
+    const KEPT = `${handleOf(DESIGNER)}_${NAME}-kept`;
+    const GONE = `${handleOf(DESIGNER)}_${NAME}-gone`;
+    const write = (branch: string, id: string) => on('PUT', `/documents/LearningNeed/${id}?branch=${branch}`, need(id));
+
+    it('refuses with anything unpushed, then removes only this copy of a branch main does not hold', async () => {
+      expect((await on('POST', '/workspace', { name: `${NAME}-kept` })).status).toBe(201);
+      expect((await write(KEPT, `remove-kept-${stamp}`)).status).toBe(200);
+      const early = await json(await on('DELETE', `/workspace/${KEPT}`));
+      expect(early.status).toBe(409);
+      expect(early.body).toMatchObject({ error: 'unpushed_commits' });
+      expect((await on('POST', `/workspace/${KEPT}/push`)).status).toBe(200);
+
+      const removed = await json(await on('DELETE', `/workspace/${KEPT}`));
+      expect(removed.status).toBe(200);
+      expect(removed.body).toMatchObject({ workspace: { branch: KEPT }, remote: 'kept', reason: 'unmerged' });
+      // Gone here; the remote keeps the branch as the record of that work, and it can be cloned again.
+      expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).not.toContain(KEPT);
+      expect(await localStore('main').listBranches()).not.toContain(KEPT);
+      expect((await onMain.branches.head(KEPT)).data.head.commit).toBeTruthy();
+      expect((await on('POST', '/workspace', { existing: KEPT })).status).toBe(201);
+    });
+
+    it('removes the branch from the remote too once main holds its head, as after a delivery without deleting', async () => {
+      expect((await on('POST', '/workspace', { name: `${NAME}-gone` })).status).toBe(201);
+      expect((await write(GONE, `remove-gone-${stamp}`)).status).toBe(200);
+      expect((await on('POST', `/workspace/${GONE}/push`)).status).toBe(200);
+      expect((await on('POST', `/workspace/${GONE}/bring-in`)).status).toBe(200);
+      const delivered = await json(await on('POST', `/workspace/${GONE}/deliver`, { message: 'Delivered, kept' }));
+      expect(delivered.status, JSON.stringify(delivered.body)).toBe(200);
+      expect(delivered.body.deleted).toBe(false);
+
+      const removed = await json(await on('DELETE', `/workspace/${GONE}`));
+      expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+      expect(removed.body).toMatchObject({ remote: 'deleted' });
+      await expect(onMain.branches.head(GONE)).rejects.toMatchObject({ status: 404 });
+      expect(await localStore('main').listBranches()).not.toContain(GONE);
+      // A second removal finds nothing here to remove.
+      expect((await on('DELETE', `/workspace/${GONE}`)).status).toBe(404);
+    });
+
+    it('is the owner’s alone', async () => {
+      const refused = await json(await on('DELETE', `/workspace/${KEPT}`, undefined, REVIEWER));
+      expect(refused.status).toBe(403);
+      expect(refused.body).toMatchObject({ error: 'forbidden', permission: 'remove', owner: DESIGNER });
+    });
+  });
+
 });

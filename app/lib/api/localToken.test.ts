@@ -87,7 +87,7 @@ describe('every write to a workspace hub carries the token', () => {
   });
 });
 
-describe("push, bring in and deliver are the program's own actions", () => {
+describe("push, bring in, deliver and remove are the program's own actions", () => {
   const WITH = { ...USER, 'Armature-Local-Token': TOKEN };
 
   it('are refused as routes unless the host asked for them, before the workspace is looked up', async () => {
@@ -97,6 +97,9 @@ describe("push, bring in and deliver are the program's own actions", () => {
       // Asked for, the route runs and finds no such workspace.
       expect((await send(withRoutes, 'POST', `/workspace/no-such-ws/${action}`, WITH, JSON.stringify({ message: 'm' }))).status, action).toBe(404);
     }
+    // Remove (2026-11-07), the same way, as DELETE on the workspace itself.
+    expect(await refusal(await send(workspace, 'DELETE', '/workspace/no-such-ws', WITH))).toMatchObject({ status: 403, reason: 'program_action', permission: 'remove' });
+    expect((await send(withRoutes, 'DELETE', '/workspace/no-such-ws', WITH)).status).toBe(404);
   });
 
   it('GET /discover says which, with the token required either way', async () => {

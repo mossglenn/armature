@@ -15,6 +15,25 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-07 · A workspace can be removed: `DELETE /workspace/:name`
+
+**What changed.** A workspace hub removes a workspace with `DELETE /workspace/:name`, a program action
+like push, bring in and deliver: served as a route only where the host asks for the action routes
+(`ARMATURE_WORKSPACE_ACTIONS=routes`), 403 `forbidden` with `reason: program_action` otherwise, and the
+workspace's owner's alone. With anything left to push it is 409 `unpushed_commits`; otherwise the
+workspace goes from this machine, and the hub asks the remote to delete the branch, which the remote
+does when another branch holds its head, as `main` does after a delivery, and keeps otherwise as the
+record of that work (ADR-0025 decision 6). The answer, `{ workspace, remote, reason? }`, says which:
+`remote` is `deleted`, `kept` or `absent`, and a kept branch's `reason` is `unmerged`, `forbidden` or
+`unreachable`. Until now a workspace left the machine only in a delivery with `deleteWorkspace`, so one
+delivered without it, or abandoned, stayed. `@armature/client` has `workspace.remove` and the type,
+`RemoveResult`. A workspace hub at this revision speaks it to its remote too, so the remote is updated
+first.
+
+**What a client does.** Nothing, unless it drives a workspace hub's actions where the host serves them
+as routes: then it may remove a workspace, and reads `remote` to say whether the branch is still on the
+remote. **CoQui** needs nothing: it talks to a remote hub.
+
 ## 2026-11-06 · The connection profile: `instance` in `GET /discover`; one `User` per person at first sign-in
 
 **What changed.** `GET /discover` carries `instance`, what a person confirms before connecting: `name`

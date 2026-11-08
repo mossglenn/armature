@@ -34,6 +34,19 @@ import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
  * decision 4), and the remote's refusal comes back as given. The workspace
  * may then be deleted, on the remote (allowed, since `main` holds its head)
  * and here, or kept.
+ *
+ * Removing a workspace (since 2026-11-07, which the first rehearsal of the
+ * desktop program found missing: a workspace delivered without deleting it
+ * could not be removed, and one abandoned never could) takes it off this
+ * machine with nothing left to push, and asks the remote to delete its branch.
+ * The remote decides by its own rule (ADR-0025 decision 6): it deletes a
+ * branch another branch holds the head of, as `main` does after a delivery,
+ * and keeps one with commits no other branch holds (409 `unmerged_branch`),
+ * and its authorization refuses a branch the owner may not delete (403). Kept,
+ * the branch stays on the remote as the record of that work, cloned again if
+ * wanted; the answer says what became of it. A remote that cannot be reached
+ * keeps it too, and the local copy goes all the same, since nothing on it is
+ * unpushed.
  */
 
 export interface BringInResult {
@@ -44,6 +57,14 @@ export interface BringInResult {
   /** The merge, when one was made, and what it brought into the local branch. */
   merge?: { base: string; source: string; target: string };
   broughtIn?: { local: string; documents: number };
+}
+
+export interface RemoveResult {
+  workspace: WorkspaceRecord;
+  /** What became of the branch on the remote: deleted, kept, or already absent. */
+  remote: 'deleted' | 'kept' | 'absent';
+  /** Why it was kept: commits no other branch holds, the remote's refusal, or no answer. */
+  reason?: 'unmerged' | 'forbidden' | 'unreachable';
 }
 
 export interface DeliverResult {
@@ -148,4 +169,28 @@ export async function deliver(
   await createOperatorStore({ branch }, hub.store()).deleteBranch(branch);
   await records.remove(branch);
   return { ...result, deleted: true };
+}
+
+/** Removes the workspace from this hub, and its branch from the remote when the remote's rule allows. */
+export async function removeWorkspace(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<RemoveResult> {
+  const { branch } = record;
+  await requireNothingUnpushed(hub, records, record, 'removing it');
+  let outcome: Pick<RemoveResult, 'remote' | 'reason'> = { remote: 'deleted' };
+  try {
+    const remote = await ownerClient(hub, record);
+    await fromRemote(hub, () => remote.branches.delete(branch));
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    // The remote's own refusals and silence keep its branch; a refusal of this hub's credential
+    // (remote_identity, signed_out) is the person's to fix, and stops the removal.
+    const fromTheRemote = err.details?.remote === true;
+    if (err.code === 'remote_unreachable') outcome = { remote: 'kept', reason: 'unreachable' };
+    else if (fromTheRemote && err.code === 'unmerged_branch') outcome = { remote: 'kept', reason: 'unmerged' };
+    else if (fromTheRemote && err.code === 'forbidden') outcome = { remote: 'kept', reason: 'forbidden' };
+    else if (fromTheRemote && err.status === 404) outcome = { remote: 'absent' };
+    else throw err;
+  }
+  await createOperatorStore({ branch }, hub.store()).deleteBranch(branch);
+  await records.remove(branch);
+  return { workspace: record, ...outcome };
 }

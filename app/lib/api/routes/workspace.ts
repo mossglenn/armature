@@ -12,7 +12,7 @@ import { requireActionRoutes } from '../localToken';
 
 export { handleOf };
 import { cloneBranch, mirrorMain, type Owner } from '../workspace/clone';
-import { bringIn, deliver } from '../workspace/bringIn';
+import { bringIn, deliver, removeWorkspace } from '../workspace/bringIn';
 import { localCommitsSince, pushWorkspace } from '../workspace/push';
 import type { WorkspaceRecord, WorkspaceRecords } from '../workspace/records';
 import { fromRemote, remoteClient, requireRemoteIdentity } from '../workspace/remote';
@@ -42,6 +42,9 @@ import { ensureSnapshots, fetchRemoteLog, resolvableCommitsOf } from '../workspa
  *   POST /:name/deliver       { message, deleteWorkspace? } the remote's merge
  *                             of the workspace into main, after main was
  *                             brought in cleanly (409 bring_in_first)
+ *   DELETE /:name             removes the workspace here with nothing left to
+ *                             push, and its branch on the remote when the
+ *                             remote's rule allows (since 2026-11-07)
  *
  * Every route but the reads carries the hub's per-launch secret as
  * `Armature-Local-Token` (../localToken.ts; since 2026-11-03). Push, bring in
@@ -196,7 +199,7 @@ workspace.get('/:name/status', async (c) => {
 });
 
 /** The workspace, and the caller as its owner or an agent acting for them; anyone else is 403 naming the owner. */
-async function ownedWorkspace(c: Context, action: 'push' | 'bring-in' | 'deliver'): Promise<WorkspaceRecord> {
+async function ownedWorkspace(c: Context, action: 'push' | 'bring-in' | 'deliver' | 'remove'): Promise<WorkspaceRecord> {
   const { name } = c.req.param();
   const record = await recordOf(c, name);
   const who = await resolveUser(c);
@@ -242,4 +245,10 @@ workspace.post('/:name/deliver', async (c) => {
   if (typeof body.message !== 'string' || !body.message.trim()) throw new ApiError(400, 'message_required', 'A delivery needs a message saying why (ADR-0025)');
   if (body.deleteWorkspace !== undefined && typeof body.deleteWorkspace !== 'boolean') throw new ApiError(400, 'bad_request', 'deleteWorkspace must be a boolean');
   return c.json(await deliver(hubOf(c), recordsOf(c), record, { message: body.message.trim(), deleteWorkspace: body.deleteWorkspace === true }));
+});
+
+workspace.delete('/:name', async (c) => {
+  requireActionRoutes(c, 'remove');
+  const record = await ownedWorkspace(c, 'remove');
+  return c.json(await removeWorkspace(hubOf(c), recordsOf(c), record));
 });

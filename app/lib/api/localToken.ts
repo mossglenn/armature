@@ -83,8 +83,8 @@ export const requireLocalToken: MiddlewareHandler = async (c, next) => {
   await next();
 };
 
-/** Refuses an action of the program's own (push, bring in, deliver) called as a route on a hub whose host did not ask for the routes. */
-export function requireActionRoutes(c: Context, action: 'push' | 'bring-in' | 'deliver'): void {
+/** Refuses an action of the program's own (push, bring in, deliver, remove) called as a route on a hub whose host did not ask for the routes. */
+export function requireActionRoutes(c: Context, action: 'push' | 'bring-in' | 'deliver' | 'remove'): void {
   if (hubOf(c).actionRoutes) return;
   throw new ApiError(
     403,
