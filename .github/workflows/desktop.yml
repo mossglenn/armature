@@ -1,0 +1,86 @@
+# The desktop program's shell (desktop/; ADR-0069; docs/desktop-program-plan.md §10 and §12)
+#
+# On a pull request or a push to main that touches the shell or the core it carries: the pages
+# type-check, the Rust side passes clippy with warnings as errors and its unit tests, and a debug
+# bundle builds on Ubuntu (a .deb, kept for a week for a Linux rehearsal). The release builds for
+# macOS, Windows and Linux come with the release workflow (the plan's step 5). The core's own
+# suites run in ci.yml: its modules in the contract and files jobs, its bundle in the app job.
+#
+# desktop/ is installed on its own, with its own lockfile (decided 2026-11-07), so this is the only
+# job that installs it; the root's workspace is installed too, since the core is bundled there.
+
+name: Desktop
+
+on:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'app/desktop.ts'
+      - 'app/lib/desktop/**'
+      - '.github/workflows/desktop.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'app/desktop.ts'
+      - 'app/lib/desktop/**'
+      - '.github/workflows/desktop.yml'
+
+jobs:
+  shell:
+    name: The desktop shell's checks and debug bundle on Ubuntu
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      # Tauri's Linux prerequisites (WebKitGTK 4.1, the tray's indicator, SVG), and D-Bus for the
+      # keychain's Secret Service backend (the keyring crate).
+      - name: Install the system's libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libdbus-1-dev pkg-config build-essential file
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      # Node for the sidecar, fetched by prepare.mjs and checked against nodejs.org's checksums;
+      # kept between runs until the script (which names the version) changes.
+      - uses: actions/cache@v4
+        with:
+          path: desktop/.cache
+          key: desktop-node-${{ runner.os }}-${{ hashFiles('desktop/scripts/prepare.mjs') }}
+      - name: Install the root's workspace (the core is bundled there)
+        run: npm ci
+      - name: Install the shell's packages
+        run: npm ci
+        working-directory: desktop
+      - name: Type-check the pages
+        run: npm run typecheck
+        working-directory: desktop
+      - name: Prepare the sidecar and the core's bundle
+        run: npm run sidecar
+        working-directory: desktop
+      - name: Clippy, warnings as errors
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: desktop/src-tauri
+      - name: The shell's unit tests
+        run: cargo test
+        working-directory: desktop/src-tauri
+      - name: Build a debug bundle
+        run: npm run tauri build -- --debug --bundles deb
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: armature-desktop-debug-deb
+          path: desktop/src-tauri/target/debug/bundle/deb/*.deb
+          retention-days: 7
+          if-no-files-found: error

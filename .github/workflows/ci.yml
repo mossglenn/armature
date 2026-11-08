@@ -11,6 +11,9 @@
 #             app/server.ts, app/operator.ts and app/desktop.ts; ADR-0062,
 #             ADR-0069).
 #
+# The desktop program's shell (desktop/, outside the workspace) has its own workflow,
+# desktop.yml, run when the shell or the core it carries changes.
+#
 # The repository is an npm workspace (root package.json: app and packages/*), so
 # one `npm ci` at the root installs the app and the packages it depends on.
 # scripts/ is deliberately outside the workspace: the TerminusDB client stays
