@@ -12,7 +12,10 @@ export function App({ backend }: { backend: Backend }) {
   const [linked, setLinked] = useState<string | undefined>();
 
   useEffect(() => {
-    void backend.state().then(setState);
+    void backend.state().then((current) => {
+      setState(current);
+      if (current.link) setLinked(current.link);
+    });
     return backend.onEvent((event: CoreEvent) => {
       if (event.event === 'log') setLines((all) => [...all.slice(-199), `${String(event.level ?? 'info')}  ${String(event.line)}`]);
       if (event.event === 'hub' || event.event === 'shell') void backend.state().then(setState);

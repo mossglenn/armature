@@ -35,6 +35,8 @@ export interface ShellState {
   /** Where the program keeps its data and its logs, for the settings and log pages. */
   dataDir?: string;
   logDir?: string;
+  /** The remote the last `armature://connect` link named, kept for a page opened after it (plan §8). */
+  link?: string;
 }
 
 export interface Backend {

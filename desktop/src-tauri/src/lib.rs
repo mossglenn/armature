@@ -7,10 +7,12 @@ mod core;
 mod keychain;
 mod logs;
 mod relay;
+mod tray;
 
 use serde_json::{json, Value};
 use std::sync::atomic::Ordering::SeqCst;
-use tauri::{AppHandle, Manager, RunEvent};
+use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 use crate::core::{Core, ShellState};
 
@@ -61,16 +63,51 @@ fn quit_on_signals(app: &AppHandle) {
 
 pub fn run() {
     let app = tauri::Builder::default()
+        // First, so a second launch (by a link, or a double click) reaches this program and ends
+        // at once; with the deep-link feature it hands its link on (plan §8).
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| tray::show_window(app)))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Core::default())
         .invoke_handler(tauri::generate_handler![core_request, shell_state, set_hub])
+        // Closing the window hides it; the program stays in the tray so the tools keep their hub
+        // (plan §9, §15 question 10). Quit is the tray's, the menu's, or the system's.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
             #[cfg(unix)]
             quit_on_signals(&handle);
+            tray::build(&handle)?;
+            // macOS registers the scheme from the bundle; Windows and Linux at run time too,
+            // which a development build needs (plan §8).
+            #[cfg(any(windows, target_os = "linux"))]
+            if let Err(err) = app.deep_link().register_all() {
+                core::say(&handle, "warn", &format!("The armature:// links could not be registered ({err})"));
+            }
+            let on_link = handle.clone();
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
+                    if let Some(remote) = relay::connect_remote(url.as_str()) {
+                        core::linked(&on_link, remote);
+                    }
+                }
+            });
             if let Err(err) = core::launch(&handle) {
                 core::say(&handle, "error", &format!("The core could not be started: {err}"));
+            }
+            // A link that launched the program.
+            if let Ok(Some(urls)) = app.deep_link().get_current() {
+                for url in urls {
+                    if let Some(remote) = relay::connect_remote(url.as_str()) {
+                        core::linked(&handle, remote);
+                    }
+                }
             }
             Ok(())
         })
@@ -78,13 +115,24 @@ pub fn run() {
         .expect("the Armature shell failed to build");
 
     app.run(|handle, event| {
+        // macOS: a click on the Dock icon while the window is hidden brings it back.
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Reopen { .. } = event {
+            tray::show_window(handle);
+            return;
+        }
         // Any way out (the last window closed, the menu's Quit, the system) goes through the core's
         // stop first; the shell's own exit, once the core has stopped, passes.
-        if let RunEvent::ExitRequested { api, .. } = event {
-            if !handle.state::<Core>().exiting.load(SeqCst) {
-                api.prevent_exit();
-                core::quit(handle);
+        match event {
+            RunEvent::ExitRequested { api, .. } => {
+                if !handle.state::<Core>().exiting.load(SeqCst) {
+                    api.prevent_exit();
+                    core::quit(handle);
+                }
             }
+            // An exit no one asked for first (macOS's quit): the core is stopped before it ends.
+            RunEvent::Exit => core::stop_before_exit(handle),
+            _ => {}
         }
     });
 }
