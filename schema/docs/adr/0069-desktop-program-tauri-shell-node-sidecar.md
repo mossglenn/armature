@@ -77,6 +77,18 @@ Three facts bear on the shape:
    core killed outright leaves its lock, which the next start takes over (`lockFolder`, ADR-0066
    decision 2).
 
+   > **Note (2026-11-07), the shell built** (`desktop/src-tauri/`; the plan's step 4, its first
+   > part): one exit the spike did not try. macOS's quit, the Apple Event Cmd-Q and the Dock send,
+   > ends Tauri's event loop with `Exit` and no `ExitRequested`, so the quit path above never ran;
+   > run on the Mac's debug bundle, the core stopped and released the lock only because its input
+   > closed when the shell ended, and nothing recorded it. Waiting there for `stop`'s reply
+   > deadlocked: the handler runs on the main thread, which the tray and the page need. So on
+   > `Exit` the shell closes the core's input itself, the stop this decision already defines, and
+   > waits up to five seconds for the process to end, writing only the log file. Run again, the
+   > quit and SIGTERM each left neither process nor lock, both recorded. Also built: the
+   > `credential` request after `start` (the plan's §6), the keychain with the `keyring` crate's
+   > 3.6 line, and the `armature://connect` link taken only as a plain web address.
+
 5. **The hub inside is unchanged.** `actionRoutes` is never set on the program's hub, so its
    `GET /discover` says `actions: program` and the action routes are refused; the core calls
    `pushWorkspace`, `bringIn` and `deliver` as the routes do.
