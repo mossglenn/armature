@@ -144,6 +144,21 @@ Three facts constrain the answer:
    > loading is the one route-side use of ADR-0062's operator methods (its note of this date).
    > Decision 3's refusals and the role in `GET /discover` were built the same day (plan §14 step 2).
 
+   > **Later change (2026-11-07), decided (Amos) and built:** a workspace's end, which this decision
+   > left to delivery alone. The desktop program's first rehearsal found it: a workspace delivered
+   > without `deleteWorkspace` could not be removed, and one abandoned never could. `DELETE
+   > /workspace/:name`, a program action as push is (decision 7, note of 2026-11-03), the owner's
+   > alone: with anything left to push it is 409 `unpushed_commits`; otherwise the workspace goes from
+   > the workspace hub and the hub asks the remote, through its API as delivery does, to delete the
+   > branch, which the remote does by its own rule (ADR-0025 decision 6) when another branch holds its
+   > head, as `main` does after a delivery, and refuses otherwise, keeping the branch as the record of
+   > that work, to be cloned again if wanted. Decision 3 stands: the deletion is the remote's, by its
+   > rule. Chosen over removing the local copy only (delivered branches would collect on the remote)
+   > and over documenting a bring-in and a second delivery as the way (two empty merge commits to
+   > delete one branch). It is revision 2026-11-07 (decided the same day, by the rule that a route a
+   > client could call is a revision), so a workspace hub at it reaches only a remote that serves it;
+   > rehearsed against officepi updated to it, where the branch went and its `Owner` grant was revoked.
+
 3. **A workspace hub refuses what makes history shared.** Branch creation, merge, branch deletion
    and user registration are refused with 400 `remote_only`, naming the remote. Branch reads,
    document reads and writes on a workspace, history, diff, every intelligence read and export

@@ -77,7 +77,7 @@ As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-
 | Stand up an instance on a server, or understand what runs where | [Running an instance](docs/deployment.md) |
 | See which hub capabilities each client tool shows, and the gaps no demo shows | [Demo coverage](docs/demo-coverage.md) |
 | Run the hub on your own machine and push to a shared one (the whole cycle built 2026-11-01, create, clone, push, bring in and deliver, and authorization the same day; the clone's snapshots and forwarding 2026-11-02; ADR-0065, ADR-0067 and ADR-0068 accepted 2026-10-30, ADR-0066 2026-11-02) | [The workspace hub](docs/workspace-hub-plan.md); [running one](docs/deployment.md) |
-| Install the workspace hub as a program on your own machine, signing in to a shared instance (being built: the core and the shell, the pages next) | [The desktop program](docs/desktop-program-plan.md) |
+| Install the workspace hub as a program on your own machine, signing in to a shared instance (being built: the core, the shell and its pages; the release next) | [The desktop program](docs/desktop-program-plan.md) |
 | Ask the graph from an MCP assistant (planned) | [The MCP server](docs/mcp-server-plan.md) |
 | Record Storyline builds in the graph and bring results back (planned) | [The Storyline bridge](docs/storyline-bridge-plan.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
@@ -152,7 +152,7 @@ curl -X PUT "http://localhost:3100/api/v1/documents/DesignNote/my-note?branch=my
 
 Writes need the `Armature-User` header carrying a registered user's external identifier; the seed registers `demo-designer@example.edu`. The [API reference](docs/api.md) documents every route.
 
-**Tests.** `npm test` in `app/` runs the 604 Vitest tests against the running database. They work on scratch branches and delete them, and each branch leaves a revoked `Owner` grant on `main`, since a grant is revoked and never deleted (ADR-0068), so `main` drifts from the seed run by run. `TERMINUS_DB=<name> npm test` runs them on another database, seeded first with the same variable (`app/README.md`).
+**Tests.** `npm test` in `app/` runs the 607 Vitest tests against the running database. They work on scratch branches and delete them, and each branch leaves a revoked `Owner` grant on `main`, since a grant is revoked and never deleted (ADR-0068), so `main` drifts from the seed run by run. `TERMINUS_DB=<name> npm test` runs them on another database, seeded first with the same variable (`app/README.md`).
 
 **After a schema change.** Run `npm run generate:types` and `node scripts/generate-schema-appendix.js` at the root; CI fails if the generated types drift from `schema/schema.json`. A change that is not backward-compatible needs `node scripts/load_schema.js --clear-instances` followed by `node scripts/seed_data.js`.
 
@@ -169,7 +169,7 @@ on one person's machine:  tools  →  a workspace hub (the same API)  →  its o
 - **TerminusDB** stores the design graph as typed documents and keeps every change as a commit, with branches and merges built in.
 - **The Armature API** is a [Hono](https://hono.dev) application in `app/lib/api/` (ADR-0054). It reaches the database only through one small HTTP adapter (`app/lib/api/store.ts`, ADR-0055). `app/server.ts` serves it as a standalone Node process, bundled into the container image `docker/hub.Dockerfile` builds (ADR-0026; Phase 7). A running API in front of a store is a **hub**: one address, `/api/v1`, that every client talks to.
 - **The Armature viewer** is the Next.js app's read-only pages (`app/app/`: the Design Graph, the module index, the Coverage View and the link to the desktop program), a client of a hub like any plugin: it reads over HTTP through `@armature/client` and knows only the hub's address; the browser never calls the hub.
-- **A hub has two roles** (ADR-0065): a **remote hub**, every hub on a server, and a **workspace hub**, the same code on one person's machine, which clones workspaces from a remote and leaves branch creation, merges and registration to it. Creating, cloning, pushing, bringing in `main` and delivering a workspace are built (2026-11-01), and the file-backed store (2026-11-02); the desktop program that hosts a workspace hub on a person's machine is being built (`desktop/` and `app/desktop.ts`, ADR-0069: the core and the shell since 2026-11-07, its pages next; `docs/desktop-program-plan.md` §14).
+- **A hub has two roles** (ADR-0065): a **remote hub**, every hub on a server, and a **workspace hub**, the same code on one person's machine, which clones workspaces from a remote and leaves branch creation, merges and registration to it. Creating, cloning, pushing, bringing in `main` and delivering a workspace are built (2026-11-01), and the file-backed store (2026-11-02); the desktop program that hosts a workspace hub on a person's machine is being built (`desktop/` and `app/desktop.ts`, ADR-0069: the core, the shell and its pages since 2026-11-07, the release next; `docs/desktop-program-plan.md` §14).
 - **Plugins never talk to the database directly.** The API is where the rules, identity and history are enforced.
 - **The schema is the single source of truth.** Type definitions, request validation and the schema appendix are generated from `schema/schema.json`.
 
