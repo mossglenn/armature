@@ -6,3 +6,5 @@ src-tauri/binaries/
 src-tauri/core/
 src-tauri/target/
 src-tauri/gen/schemas/
+test-results/
+playwright-report/
