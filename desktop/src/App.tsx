@@ -11,7 +11,7 @@ import { SignIn } from '@/pages/SignIn';
 import { Workspace } from '@/pages/Workspace';
 import { Workspaces } from '@/pages/Workspaces';
 
-type Page = { name: 'connect' } | { name: 'signIn' } | { name: 'workspaces' } | { name: 'workspace'; branch: string } | { name: 'pairing' } | { name: 'settings' } | { name: 'log' };
+type Page = { name: 'connect' } | { name: 'signIn' } | { name: 'workspaces'; notice?: string } | { name: 'workspace'; branch: string } | { name: 'pairing' } | { name: 'settings' } | { name: 'log' };
 
 /** Where the program opens (docs/desktop-program-plan.md §4, in the order a person meets the pages). */
 function firstPage(state: ShellState): Page {
@@ -95,8 +95,8 @@ export function App({ backend }: { backend: Backend }) {
       <main className="min-w-0 flex-1 overflow-auto p-8">
         {page?.name === 'connect' && <Connect backend={backend} state={state} link={link} onDone={(next) => go({ name: next })} />}
         {page?.name === 'signIn' && <SignIn backend={backend} state={state} onDone={() => go({ name: 'workspaces' })} />}
-        {page?.name === 'workspaces' && <Workspaces backend={backend} open={(branch) => go({ name: 'workspace', branch })} />}
-        {page?.name === 'workspace' && <Workspace key={page.branch} backend={backend} branch={page.branch} back={() => go({ name: 'workspaces' })} />}
+        {page?.name === 'workspaces' && <Workspaces backend={backend} notice={page.notice} open={(branch) => go({ name: 'workspace', branch })} />}
+        {page?.name === 'workspace' && <Workspace key={page.branch} backend={backend} branch={page.branch} back={(notice) => go({ name: 'workspaces', notice })} />}
         {page?.name === 'pairing' && <Pairing backend={backend} />}
         {page?.name === 'settings' && <Settings backend={backend} state={state} connect={() => go({ name: 'connect' })} signedOut={() => go({ name: 'signIn' })} />}
         {page?.name === 'log' && <Log backend={backend} state={state} />}
