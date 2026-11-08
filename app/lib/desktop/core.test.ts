@@ -205,6 +205,11 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect((await driver.ask('workspaces')).body).toEqual([expect.objectContaining({ branch: WS })]);
     expect((await tool('PUT', `/documents/${MINE}?branch=${WS}`, { message: 'Mine', document: { label: 'mine', rationale: 'r' } })).status).toBe(200);
     expect(await driver.ask('status', { workspace: WS })).toMatchObject({ status: 200, body: { localCommits: 1, unpushed: 1 } });
+    // The unpushed commit with its message, newest first, as the workspace page shows it.
+    const commits = await driver.ask('commits', { workspace: WS, count: 5 });
+    expect(commits).toMatchObject({ status: 200, body: { branch: WS } });
+    expect((commits.body!.commits as Array<{ message: string }>)[0].message).toBe('Mine');
+    expect(await driver.ask('commits', { workspace: WS, count: 0 })).toMatchObject({ status: 400, body: { field: 'count' } });
   });
 
   it('pushes, brings in main after it moved and delivers, each as the route answers', async () => {

@@ -433,6 +433,12 @@ export function runCore(options: CoreOptions): Core {
 
     workspaces: async () => viaProgram('GET', '/workspace'),
     status: async (request) => viaProgram('GET', `/workspace/${named(request)}/status`),
+    // A workspace's commits, newest first (GET /branches/:name/log), so a page can show the unpushed ones with their messages.
+    commits: async (request) => {
+      const count = request.count === undefined ? 20 : request.count;
+      if (typeof count !== 'number' || !Number.isInteger(count) || count < 1) throw new ApiError(400, 'bad_request', 'count must be a whole number of commits', { field: 'count' });
+      return viaProgram('GET', `/branches/${named(request)}/log?count=${count}`);
+    },
     create: async (request) => viaProgram('POST', '/workspace', { name: text(request, 'name'), ...(request.from !== undefined ? { from: text(request, 'from') } : {}) }, true),
     clone: async (request) => viaProgram('POST', '/workspace', { existing: text(request, 'branch') }, true),
     push: async (request) => viaProgram('POST', `/workspace/${named(request)}/push`, undefined, true),
