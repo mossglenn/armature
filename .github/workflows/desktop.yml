@@ -1,8 +1,9 @@
 # The desktop program's shell (desktop/; ADR-0069; docs/desktop-program-plan.md §10 and §12)
 #
 # On a pull request or a push to main that touches the shell or the core it carries: the pages
-# type-check, the Rust side passes clippy with warnings as errors and its unit tests, and a debug
-# bundle builds on Ubuntu (a .deb, kept for a week for a Linux rehearsal). The release builds for
+# type-check and pass their browser tests against the fake core (e2e/), the Rust side passes
+# clippy with warnings as errors and its unit tests, and a debug bundle builds on Ubuntu (a .deb,
+# kept for a week for a Linux rehearsal). The release builds for
 # macOS, Windows and Linux come with the release workflow (the plan's step 5). The core's own
 # suites run in ci.yml: its modules in the contract and files jobs, its bundle in the app job.
 #
@@ -65,6 +66,12 @@ jobs:
         working-directory: desktop
       - name: Type-check the pages
         run: npm run typecheck
+        working-directory: desktop
+      - name: Install the browser for the page tests
+        run: npx playwright install --with-deps chromium
+        working-directory: desktop
+      - name: The pages in Chromium against the fake core
+        run: npm run test:e2e
         working-directory: desktop
       - name: Prepare the sidecar and the core's bundle
         run: npm run sidecar
