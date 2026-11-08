@@ -28,7 +28,7 @@
 import type { ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-06';
+export const CLIENT_REVISION = '2026-11-07';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -478,6 +478,14 @@ export interface DeliverResult {
   deleted: boolean;
 }
 
+/** `DELETE /workspace/:name` (2026-11-07): the workspace removed here, and what became of its branch on the remote. */
+export interface RemoveResult {
+  workspace: WorkspaceRecord;
+  remote: 'deleted' | 'kept' | 'absent';
+  /** Why the remote kept it: commits no other branch holds, its refusal, or no answer. */
+  reason?: 'unmerged' | 'forbidden' | 'unreachable';
+}
+
 export type ExportProfile = 'full' | 'pseudonymous' | 'institutional';
 
 export interface ExportOptions extends AtRef {
@@ -778,6 +786,10 @@ export function createClient(options: ClientOptions) {
       /** `POST /workspace/:name/deliver`: the remote merges the workspace into `main` after `main` was brought in cleanly (409 `bring_in_first`); `deleteWorkspace` removes it there and here. */
       deliver(name: string, opts: { message: string; deleteWorkspace?: boolean }) {
         return call<DeliverResult>(`/workspace/${encodeURIComponent(name)}/deliver`, { method: 'POST', body: opts });
+      },
+      /** `DELETE /workspace/:name`: removes the workspace here with nothing left to push (409 `unpushed_commits`), and its branch on the remote when the remote's rule allows (2026-11-07). */
+      remove(name: string) {
+        return call<RemoveResult>(`/workspace/${encodeURIComponent(name)}`, { method: 'DELETE' });
       },
       /** `GET /workspace/:name/status`: the record, the local head, the local commits since the clone, and the remote's head. */
       status(name: string) {
