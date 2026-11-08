@@ -1,9 +1,9 @@
 /**
  * How the pages reach the core (docs/desktop-program-plan.md §4, §5): in the
- * Tauri shell, through its one command, `core_request`, which forwards a
- * request to the core over the sidecar's pipes and answers with the core's
- * reply, and through the events the shell re-emits; in a plain browser
- * (`npm run dev`, the page tests), through a fake core with scripted answers,
+ * Tauri shell, through its commands (`core_request`, which forwards a request
+ * to the core over the sidecar's pipes and answers with the core's reply, and
+ * the few that are the shell's own) and the events it re-emits; in a plain
+ * browser (`npm run dev`, the page tests), through a fake core (./fakeCore.ts),
  * so the pages run without the shell, as Quiver's do (its `backend.ts`).
  *
  * A reply is `{ status, body }`, what the hub's route would answer
@@ -46,13 +46,20 @@ export interface Backend {
   /** Pauses or resumes the hub, as the tray's item does: the shell sends the core `stop` or `start`. */
   setHub(running: boolean): Promise<ShellState>;
   onEvent(listener: (event: CoreEvent) => void): () => void;
+  /** The latest log lines the shell kept, for a log page opened after them. */
+  logLines(): Promise<CoreEvent[]>;
+  /** The pairing value in force, for the pairing page alone. */
+  pairingValue(): Promise<string | null>;
+  openLogFolder(): Promise<void>;
+  /** The program's own version, for the settings page. */
+  version(): Promise<string>;
 }
 
 export const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export async function createBackend(): Promise<Backend> {
-  if (!isTauri()) return (await import('./fakeCore')).fakeCore();
-  const [{ invoke }, { listen }] = await Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event')]);
+  if (!isTauri()) return (await import('./fakeCore')).fakeCore(new URLSearchParams(window.location.search).get('scenario') ?? undefined);
+  const [{ invoke }, { listen }, { getVersion }] = await Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event'), import('@tauri-apps/api/app')]);
   return {
     kind: 'tauri',
     request: (type, fields = {}) => invoke('core_request', { request: { type, ...fields } }),
@@ -62,5 +69,9 @@ export async function createBackend(): Promise<Backend> {
       const stop = listen<CoreEvent>('core-event', (e) => listener(e.payload));
       return () => void stop.then((unlisten) => unlisten());
     },
+    logLines: () => invoke('log_lines'),
+    pairingValue: () => invoke('pairing_value'),
+    openLogFolder: () => invoke('open_log_folder'),
+    version: () => getVersion(),
   };
 }
