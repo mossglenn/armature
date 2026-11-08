@@ -64,6 +64,26 @@ pub fn without_local_token(mut body: Value) -> Value {
     body
 }
 
+/// The remote an `armature://connect?remote=<address>` link names, or None for any other link
+/// (docs/desktop-program-plan.md §8). The link is untrusted input: only an http or https address
+/// without credentials, a query or a fragment is taken, and nothing is connected until the person
+/// confirms the instance's profile on the connect page.
+pub fn connect_remote(link: &str) -> Option<String> {
+    let url = url::Url::parse(link).ok()?;
+    if url.scheme() != "armature" || url.host_str() != Some("connect") {
+        return None;
+    }
+    let remote = url.query_pairs().find(|(key, _)| key == "remote")?.1.into_owned();
+    let address = url::Url::parse(&remote).ok()?;
+    let plain = matches!(address.scheme(), "http" | "https")
+        && address.host_str().is_some()
+        && address.username().is_empty()
+        && address.password().is_none()
+        && address.query().is_none()
+        && address.fragment().is_none();
+    plain.then(|| remote.trim_end_matches('/').to_string())
+}
+
 /// The core's standard output as whole lines, however the pipe delivers it.
 #[derive(Default)]
 pub struct LineBuffer {
@@ -132,6 +152,25 @@ mod tests {
     fn the_local_token_stays_out_of_the_shared_state() {
         let body = without_local_token(json!({ "started": true, "localToken": "secret", "url": "http://127.0.0.1:3101" }));
         assert_eq!(body, json!({ "started": true, "url": "http://127.0.0.1:3101" }));
+    }
+
+    #[test]
+    fn a_connect_link_names_a_plain_web_address_or_nothing() {
+        assert_eq!(connect_remote("armature://connect?remote=https://api.armature.example.edu/").as_deref(), Some("https://api.armature.example.edu"));
+        assert_eq!(connect_remote("armature://connect?remote=https%3A%2F%2Fapi.example.edu%3A8443").as_deref(), Some("https://api.example.edu:8443"));
+        assert_eq!(connect_remote("armature://connect?remote=http://100.70.195.100:3100").as_deref(), Some("http://100.70.195.100:3100"));
+        for refused in [
+            "armature://connect",
+            "armature://connect?remote=file:///etc/passwd",
+            "armature://connect?remote=javascript:alert(1)",
+            "armature://connect?remote=https://user:pass@api.example.edu",
+            "armature://connect?remote=https://api.example.edu/?next=x",
+            "armature://elsewhere?remote=https://api.example.edu",
+            "https://connect?remote=https://api.example.edu",
+            "not a link",
+        ] {
+            assert_eq!(connect_remote(refused), None, "{refused}");
+        }
     }
 
     #[test]

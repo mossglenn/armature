@@ -48,6 +48,10 @@ pub struct ShellState {
     pub data_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log_dir: Option<String>,
+    /// The remote the last `armature://connect` link named, kept so a page opened after the link
+    /// (a cold launch by the link) still sees it; the connect page clears nothing, it confirms.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
 }
 
 #[derive(Default)]
@@ -62,6 +66,8 @@ pub struct Core {
     data_dir: Mutex<Option<PathBuf>>,
     logs: Mutex<Option<LogFiles>>,
     quitting: AtomicBool,
+    /// Set as the core's process ends, before anything else is done about it.
+    core_exited: AtomicBool,
     /// Set just before the shell exits, so its own exit is not taken for a request to quit.
     pub exiting: AtomicBool,
 }
@@ -75,7 +81,16 @@ impl Core {
 fn set_state(app: &AppHandle, update: impl FnOnce(&mut ShellState)) {
     let core = app.state::<Core>();
     update(&mut core.state.lock().unwrap());
+    crate::tray::refresh(app);
     let _ = app.emit("core-event", json!({ "event": "shell" }));
+}
+
+/// A connect link's remote: kept in the state, announced to the page, and the window brought forward.
+pub fn linked(app: &AppHandle, remote: String) {
+    say(app, "info", &format!("A link asked to connect to {remote}"));
+    set_state(app, |s| s.link = Some(remote.clone()));
+    let _ = app.emit("core-event", json!({ "event": "deep-link", "remote": remote }));
+    crate::tray::show_window(app);
 }
 
 /// A line in the log files and on the log page, in the shell's own words.
@@ -271,6 +286,19 @@ fn on_line(app: &AppHandle, line: &str) {
         return say(app, "warn", &format!("The core wrote a line that is not JSON: {line}"));
     };
     let core = app.state::<Core>();
+    // Once the program is ending, the main thread may be waiting on the core: only the log file is
+    // written, since the tray and the page are reached through that thread.
+    if core.exiting.load(SeqCst) {
+        if relay::classify(&message) == EventAction::LogAndForward {
+            if let Some(logs) = core.logs.lock().unwrap().as_mut() {
+                logs.write(message["level"].as_str().unwrap_or("info"), message["line"].as_str().unwrap_or(""));
+            }
+        }
+        if let Some(tx) = message.get("id").and_then(Value::as_u64).and_then(|id| core.pending.lock().unwrap().remove(&id)) {
+            let _ = tx.send(message);
+        }
+        return;
+    }
     if let Some(id) = message.get("id") {
         if let Some(tx) = id.as_u64().and_then(|id| core.pending.lock().unwrap().remove(&id)) {
             let _ = tx.send(message);
@@ -320,9 +348,13 @@ fn on_line(app: &AppHandle, line: &str) {
 
 fn on_terminated(app: &AppHandle, code: Option<i32>) {
     let core = app.state::<Core>();
+    core.core_exited.store(true, SeqCst);
     core.child.lock().unwrap().take();
     // Every request waiting on the core learns it is gone.
     core.pending.lock().unwrap().clear();
+    if core.exiting.load(SeqCst) {
+        return;
+    }
     if core.quitting.load(SeqCst) {
         core.exiting.store(true, SeqCst);
         return app.exit(0);
@@ -330,6 +362,34 @@ fn on_terminated(app: &AppHandle, code: Option<i32>) {
     let message = format!("The core ended unexpectedly (exit code {}); quit and open the program again", code.map_or("none".to_string(), |c| c.to_string()));
     say(app, "error", &message);
     set_state(app, |s| { s.core = "failed"; s.error = Some(message); });
+}
+
+/// The last chance when the program ends without asking (macOS's quit, the Apple Event Cmd-Q
+/// sends, ends the event loop with `Exit` and no `ExitRequested`). This runs on the main thread,
+/// which the tray and the page need, so it does not ask the core and wait for a reply: it closes
+/// the core's input, on which the core stops the hub and releases the folder's lock by itself
+/// (ADR-0069 decision 4), and waits up to five seconds for its process to end. Nothing to do when
+/// `quit` already ran.
+pub fn stop_before_exit(app: &AppHandle) {
+    let core = app.state::<Core>();
+    if core.exiting.swap(true, SeqCst) {
+        return;
+    }
+    if let Some(logs) = core.logs.lock().unwrap().as_mut() {
+        logs.write("info", "The program is ending; the core stops the hub and releases the lock");
+    }
+    // Dropped, the child's end of the pipe closes; it is not killed (kill_on_drop is off).
+    let child = core.child.lock().unwrap().take();
+    drop(child);
+    let deadline = std::time::Instant::now() + STOP_WAIT;
+    while !core.core_exited.load(SeqCst) && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    if !core.core_exited.load(SeqCst) {
+        if let Some(logs) = core.logs.lock().unwrap().as_mut() {
+            logs.write("warn", "The core had not ended when the program did; it stops on its own, or the next start takes over its lock");
+        }
+    }
 }
 
 /// Quits: `stop`, up to five seconds, then the sidecar is ended and the program exits.
