@@ -89,7 +89,7 @@ app/vitest.config.mts      # '@' alias; reads .env.local; files run one at a tim
 docs/                      # how-armature-works.md (the explainer), api.md (the reference), schema-guide.md (for tool authors), client-changes.md (the revision list),
                            #   SCHEMA_APPENDIX.md (GENERATED), development-plan.md (§2 clients, §6 questions, §9 platform facts), deployment.md, research-path.md,
                            #   the plans (workspace-hub, desktop-program, graph-view, mcp-server, storyline-bridge, context-files), visual-language.md, demo-coverage.md,
-                           #   the kept records with banners (armature-asks-from-Coqui.md, armature-deep-review-2026-10-30.md, demo-api.md RETIRED),
+                           #   the kept records with banners (armature-asks-from-Coqui.md, armature-deep-review-2026-10-30.md, armature-code-review-2026-11-09.md, demo-api.md RETIRED),
                            #   positionpaper/, research/, figures/, vendor/terminusdb/ (GENERATED; _all/ gitignored)
 .claude/                   # CLAUDE.md (this file), PROJECT_CONTEXT.md, SESSION.md (the state), HISTORY.md (the log, read on demand),
                            #   prompts/ (update-session.md, commit-message-guide.md), skills/terminusdb/

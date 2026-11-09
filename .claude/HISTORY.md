@@ -6,6 +6,31 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-09 (the code review of 2026-11-05 to 2026-11-08: `55af9d3..da09c9d` and `phase-8/desktop-release`; the record kept in `docs/`; branch `docs/code-review-2026-11-09`, no PR yet)
+
+**Where things stood at the close.** **Phase 8; the desktop program's step 5, the release, built on `phase-8/desktop-release` (eight commits, pushed, no pull request yet) and rehearsed on the Mac and the Windows laptop; its acceptance, the Droplet run under `oidc`, is next, after the review's release-branch findings (2026-11-09).** The code of 2026-11-05 to 2026-11-08 was reviewed whole and the record kept as `docs/armature-code-review-2026-11-09.md` on `docs/code-review-2026-11-09` (one commit, not pushed; What's Next item 36 carries its order). Nothing is built or decided from it. `main` is unchanged at `da09c9d` but for the session-close commit; officepi runs `0098fda`, serving 2026-11-07, still the program's revision.
+
+### Done
+
+- `docs/armature-code-review-2026-11-09.md` (about 60 KB): a status banner, "In brief", the method, eleven sections by identifier (A hub authentication, Q the write queue and the operator, E export, W the workspace hub and the file store, C the desktop core, V the viewer's credential, S the shell on `main`, R the release branch, P the pages, T test gaps, D eight decisions with options and a recommendation each), a suggested order, what was found sound, the limits. Listed in CLAUDE.md's `docs/` line and SESSION.md item 36; commit `98951b5`.
+
+### Session notes
+
+- Amos asked for a review of everything pushed in the last four days: improvements, security risks, alternatives not considered. The scope was `55af9d3..origin/main` plus the one branch not on `main` by content, about 9,500 lines, read whole in five disjoint slices (one the lead's, four readers') against one brief, as CLAUDE.md's review rule has it; every high finding and the mediums that mattered were checked against the code by the lead, and A1 (a JWKS fetch failing with 503 answered 401 `invalid_token`, `malformed`) was reproduced with a script.
+- The highest findings: the Connect card shows the hub's self-declared `instance.api` and the core stores a second `/discover` read (C1, C2); the file store's `deleteBranch` racing a write deletes the commit file (W1) and Remove and bring-in commit outside `Store.exclusive` (W2 to W4); the release workflow holds the signing key and a `contents: write` token in the whole build step, `update.rs` takes every HTTP error for "no update", and the feed is the repository's `releases/latest` (R1 to R3); a nameless person token is taken for a service and a missing `email_verified` admits (A3, A4); a refresh failing with 502 or 429 signs the person out (C4).
+- One pattern recurred across three authors' code: a transient failure classified as a refusal (`reasonOf` in `oidc.ts`, `tokensFrom` in `signIn.ts`, `ReleaseNotFound` in `update.rs`). Found sound: the write queue, the resolver's core checks, the shell's CSP, capabilities, relay allowlist and deep link, the updater's signature chain.
+- Two reader errors the lead caught before the commit: D7 cited workflow rule 5 (which covers how an instance runs, not the desktop release); A5's line range was wrong. A security hook flagged the Write for the text `NODE_TLS_REJECT_UNAUTHORIZED=0`, which the document names as a risk (S1), not a setting.
+- The identifiers skip B and H, the deep review's, so the two records can be cited side by side. Amos said "end this session" with the review branch unpushed and no pull request.
+
+### Facts from 2026-11-09 worth keeping
+
+- The review's order, in SESSION.md item 36: R1 to R3 and C1, C2 before the release branch's pull request; W1 to W4 before real work is kept in a workspace hub; A1, A2, A4 to A6 as one authentication change. The eight decisions D1 to D8 are Amos's, each with a recommendation in the document.
+- The findings' scratch scripts (the JWKS reproduction, the file store race, the Remove replay, the handle) were in the session's scratchpad and are not kept; the document says how each was reproduced.
+
+### Decisions taken
+
+- None. The two 2026-11-05 Active Decisions bullets (the names lists of PRs #105 to #109) were collapsed into the "Earlier choices and names" bullet at this close; both lists stand word for word in this file's entries of 2026-11-05 and 2026-11-05 evening, Decisions taken.
+
 ## 2026-11-08, night (the desktop program's release: the updater, starting at login, the release workflow, the guide; rehearsed on the Mac and the Windows laptop; branch `phase-8/desktop-release`, no PR yet)
 
 **Where things stood at the close.** **Phase 8; the desktop program's step 5 built on `phase-8/desktop-release` (eight commits, pushed, no pull request yet) and rehearsed; its acceptance, the Droplet run under `oidc`, is the next session's.** The shell checks this repository's latest release's `latest.json` at start and daily, shows an available update above every page and installs it when asked (`desktop/src-tauri/src/update.rs`); it starts at login when the setting says so (`login.rs`); a tag `desktop-v<version>` builds macOS for Apple silicon and Intel, the Windows NSIS installer and the Linux AppImage and `.deb` into a draft release with the updater's signed artifacts (`.github/workflows/desktop-release.yml`), and a tag `desktop-rehearsal-<n>` does the same from a branch. `docs/desktop-program.md` is the person's guide. `main` is unchanged at `90f03ad`; officepi runs `0098fda`, serving 2026-11-07, still the program's revision.
