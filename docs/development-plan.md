@@ -1153,6 +1153,24 @@ what evidence would be enough.
   issuer) before its release. Still open in the two records: several issuers on one instance,
   the provider for a hosted demonstration, and revocation (ADR-0067); read permissions and a
   request for delivery (ADR-0068).
+- **One person, several logins, and affiliation over time.** *Raised 2026-11-08 (Amos, after the
+  desktop program's Keycloak rehearsal), left open.* What is settled: the identity is the `User`
+  document, whose `@id` every attribution names (commit authors, `createdBy`, `attestedBy`,
+  grants) and history never rewrites; a login is bound to it by `(issuer, externalId)`, the
+  provider's `sub`, which only an administrator changes (ADR-0067 decision 1, note of
+  2026-10-30); `displayName`, `email` and `institution` are attributes, matched by nothing, and
+  since `User` lives on a versioned `main` their value at any commit is a read at that commit.
+  So a changed email needs nothing under `oidc`, whose `sub` does not change with it (under
+  `header` the email is the identifier, a development arrangement). What is not settled: a
+  person who changes provider on one instance (a move between institutions behind a federating
+  issuer such as CILogon) gets a second `User` with nothing joining the two; there is no
+  identifier that crosses instances (ORCID is the research world's, the research exporter's
+  likely ask); and an export at a recent commit shows a person's current `institution` beside
+  work done elsewhere. The usual shape is several `(issuer, sub)` bindings under one `User`, a
+  schema change with an ADR. *Evidence that would settle it:* a person changing provider on one
+  instance, or a study that must match contributors across instances or by affiliation at the
+  time of the work. Until then a person's own edits of their attributes wait with `User` edits
+  (the operator's `put` on `main`).
 - **Which store the hub operates for attachments, and when.** The reference shape (ADR-0030) is
   backend-neutral and versioned-tree-capable on purpose, so this question is about operations
   and timing, not about what the graph can express. Two workloads are in view and they want

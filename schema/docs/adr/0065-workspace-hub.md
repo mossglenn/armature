@@ -144,6 +144,18 @@ Three facts constrain the answer:
    > loading is the one route-side use of ADR-0062's operator methods (its note of this date).
    > Decision 3's refusals and the role in `GET /discover` were built the same day (plan §14 step 2).
 
+   > **Note (2026-11-08):** `<handle>` is the local part of the person's email as the remote
+   > records it, and the external identifier's only when the record has no email (`handleFor` in
+   > `identity.ts`). The desktop program's Keycloak rehearsal created `fcf303f1-…_Kc-rehearsal`:
+   > under `oidc` the external identifier is the provider's `sub`, often a UUID, which no reader of
+   > a branch list recognizes. The handle stays a label taken when the branch is created, not the
+   > identity, which is the `User` the Owner grant names (ADR-0068 decision 3); an email changed
+   > later leaves older branch names as they were, and two people whose emails share a local part
+   > share a handle, the second one's branch refused as existing. Under `header`, where the email is
+   > the identifier, no name changes. Decided by Amos; no contract revision, since a client reads
+   > the branch from the response and never derives it (`docs/client-changes.md`, the note on
+   > 2026-11-01's entry).
+
    > **Later change (2026-11-07), decided (Amos) and built:** a workspace's end, which this decision
    > left to delivery alone. The desktop program's first rehearsal found it: a workspace delivered
    > without `deleteWorkspace` could not be removed, and one abandoned never could. `DELETE

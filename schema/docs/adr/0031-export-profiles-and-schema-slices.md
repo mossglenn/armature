@@ -30,6 +30,11 @@ anticipated; ADR-0021 carries a dated note. Verified by `scripts/platform_checks
 > part. Free text is never rewritten, so the hub's own grant rationales name neither a branch
 > nor a person.
 
+> **Note (2026-11-08):** since that date a workspace branch's handle is the local part of the
+> person's email, and the external identifier's only for a record without one (ADR-0065, note of
+> that date), so the profiles rewrite a branch that begins with either handle; a branch made
+> before, under `oidc`, begins with the identifier's.
+
 ## Context
 
 The position paper's §5 and §6 (plan principles P7 and P8) want learning scientists to adopt

@@ -342,6 +342,13 @@ branch as to any branch; `main` stays read-only. Push, bring in and deliver are 
 calls (ADR-0065 decision 7, note). **CoQui:** nothing. **Quiver:** the routes its workspace
 manager will call, once resumed.
 
+> **Note (2026-11-08):** `<handle>` is now the local part of the caller's email as the remote
+> records it, and the external identifier's only when the record has no email; under `oidc` the
+> external identifier is the provider's `sub`, which made branch names unreadable (ADR-0065, note
+> of that date). Not a revision: a client reads the branch from the reply and never derives it, and
+> under `header`, where the email is the identifier, no name changes. **CoQui:** nothing.
+> **Quiver:** take the branch from the reply, as its plan already does.
+
 ## 2026-11-01 · A hub's role in discovery; `remote_only`
 
 **What changed.** A hub now has a role, `remote` (every hub so far) or `workspace`: the same

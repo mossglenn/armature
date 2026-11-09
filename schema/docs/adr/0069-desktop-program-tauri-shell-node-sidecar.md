@@ -110,6 +110,14 @@ Three facts bear on the shape:
    > `profile`, `connect`, `settings`, `signIn`, `signOut`, `resetPairing` and the seven workspace
    > requests, listed in `app/lib/desktop/core.ts`.
 
+   > **Note (2026-11-08), after the Keycloak rehearsal:** one request more, `toolIdentity`,
+   > answering `{ user }`, what a paired tool sends as `Armature-User` beside the pairing value: the
+   > identifier under `header`, the remote's `externalId` for the signed-in person under `oidc`
+   > (the provider's `sub`, which a person found only as the grey line on Signed in); the pairing
+   > page shows it with a copy button, and the shell's relay lets a page send it. And `connect` to
+   > a remote under `oidc` drops an identifier kept for one under `header`, which had stayed in the
+   > settings file.
+
 6. **Platform rules the spike found.** On Windows the shell gives Node the core's path without the
    extended-length prefix Tauri resolves resources with (`\\?\C:\...`), which Node cannot load as
    its entry script (the `dunce` crate). On macOS the program is signed with the hardened runtime
