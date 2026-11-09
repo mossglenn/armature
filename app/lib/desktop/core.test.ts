@@ -203,6 +203,8 @@ describe('the cycle through the protocol, against a remote under header', () => 
     const created = await driver.ask('create', { name: NAME });
     expect(created).toMatchObject({ status: 201, body: { branch: WS, ownerExternalId: DESIGNER, remote: headerRemote.url } });
     expect((await driver.ask('workspaces')).body).toEqual([expect.objectContaining({ branch: WS })]);
+    // What the pairing page shows a tool must send beside the value: under header, the identifier set.
+    expect(await driver.ask('toolIdentity')).toMatchObject({ status: 200, body: { user: DESIGNER } });
     expect((await tool('PUT', `/documents/${MINE}?branch=${WS}`, { message: 'Mine', document: { label: 'mine', rationale: 'r' } })).status).toBe(200);
     expect(await driver.ask('status', { workspace: WS })).toMatchObject({ status: 200, body: { localCommits: 1, unpushed: 1 } });
     // The unpushed commit with its message, newest first, as the workspace page shows it.
@@ -300,7 +302,12 @@ describe('the sign-in and a push through the token source, against a remote unde
     driver = drive({ fetch: issuer, now: () => clock });
     dataDir = await dataFolder();
     expect((await driver.ask('start', { dataDir })).body).toMatchObject({ needs: 'connect' });
-    expect(await driver.ask('connect', { remote: oidcRemote.url })).toMatchObject({ status: 200, body: { settings: { identity: { resolver: 'oidc', issuer: ISSUER, clientId: CLIENT_ID } } } });
+    // An identifier kept for a remote under header is dropped on connecting to one that signs people in.
+    expect((await driver.ask('connect', { remote: headerRemote.url })).status).toBe(200);
+    expect((await driver.ask('settings', { set: { user: DESIGNER } })).body).toMatchObject({ settings: { user: DESIGNER } });
+    const connected = await driver.ask('connect', { remote: oidcRemote.url });
+    expect(connected).toMatchObject({ status: 200, body: { settings: { identity: { resolver: 'oidc', issuer: ISSUER, clientId: CLIENT_ID } } } });
+    expect(connected.body!.settings).not.toHaveProperty('user');
     expect((await driver.ask('settings', { set: { port: await freePort() } })).status).toBe(200);
   });
 
@@ -316,6 +323,7 @@ describe('the sign-in and a push through the token source, against a remote unde
     localToken = started.body!.localToken as string;
     expect(exchanges).toHaveLength(0);
     expect(await driver.ask('create', { name: NAME })).toMatchObject({ status: 401, body: { error: 'signed_out' } });
+    expect(await driver.ask('toolIdentity')).toMatchObject({ status: 401, body: { error: 'signed_out' } });
   });
 
   it('signs in: the browser opened at the provider, the refresh token sent for the keychain, the person the remote resolves', async () => {
@@ -329,6 +337,8 @@ describe('the sign-in and a push through the token source, against a remote unde
     expect((await fetch(callback)).status).toBe(200);
     expect(await reply).toMatchObject({ status: 200, body: { signedIn: true, staysSignedIn: true, person: { id: ownerId, externalId: OWNER } } });
     expect(driver.events.filter((m) => m.event === 'credential').map((m) => m.refreshToken)).toEqual(['refresh-0']);
+    // Under oidc a tool sends the remote's externalId for the person, the provider's sub, which only the pairing page shows.
+    expect(await driver.ask('toolIdentity')).toMatchObject({ status: 200, body: { user: OWNER } });
   });
 
   it('creates the workspace and pushes as the token’s subject: the remote records the owner as author', async () => {

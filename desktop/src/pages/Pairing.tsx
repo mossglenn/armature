@@ -10,26 +10,35 @@ import { useRequest } from '@/lib/useShell';
  * Pairing (docs/desktop-program-plan.md §4, item 5; §7; ADR-0065 decision 7, notes): the value every
  * tool on this machine sends with its writes, kept across the program's starts. A tool pairs once by
  * pasting it; resetting draws a new one, after which every paired tool pairs again, so the reset is
- * confirmed on the page first.
+ * confirmed on the page first. Beside it, the identifier a tool sends as Armature-User: under oidc
+ * that is the provider's sub, which a person sees nowhere else (the Keycloak rehearsal, 2026-11-08);
+ * shown only when the core can say it (signed in, or an identifier set under header).
  */
 export function Pairing({ backend }: { backend: Backend }) {
   const { run, busy } = useRequest(backend);
   const [value, setValue] = useState<string | null | undefined>();
-  const [copied, setCopied] = useState(false);
+  const [toolUser, setToolUser] = useState<string | undefined>();
+  const [copied, setCopied] = useState<'pairing-value' | 'tool-user' | undefined>();
   const [confirming, setConfirming] = useState(false);
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
 
   useEffect(() => void backend.pairingValue().then(setValue), [backend]);
+  useEffect(() => {
+    void backend
+      .request<{ user: string }>('toolIdentity')
+      .then((reply) => setToolUser(reply.status === 200 ? reply.body.user : undefined))
+      .catch(() => setToolUser(undefined));
+  }, [backend]);
 
-  const copy = async () => {
-    if (!value) return;
+  const copy = async (field: 'pairing-value' | 'tool-user', text: string | null | undefined) => {
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopied(field);
+      setTimeout(() => setCopied(undefined), 2000);
     } catch {
       // The clipboard can be refused; the value is selectable in the field.
-      (document.getElementById('pairing-value') as HTMLInputElement | null)?.select();
+      (document.getElementById(field) as HTMLInputElement | null)?.select();
     }
   };
 
@@ -49,9 +58,23 @@ export function Pairing({ backend }: { backend: Backend }) {
       ) : (
         <div className="flex max-w-2xl gap-2">
           <input id="pairing-value" readOnly value={value ?? ''} aria-label="The pairing value" className="bg-muted min-w-0 flex-1 rounded-md border px-3 py-2 font-mono text-xs" onFocus={(e) => e.target.select()} />
-          <Button onClick={() => void copy()} disabled={!value}>
-            {copied ? 'Copied' : 'Copy'}
+          <Button onClick={() => void copy('pairing-value', value)} disabled={!value}>
+            {copied === 'pairing-value' ? 'Copied' : 'Copy'}
           </Button>
+        </div>
+      )}
+
+      {toolUser && (
+        <div className="mt-6 max-w-2xl">
+          <p className="text-sm">
+            A tool also sends who you are, as <code className="font-mono text-xs">Armature-User</code>:
+          </p>
+          <div className="mt-2 flex gap-2">
+            <input id="tool-user" readOnly value={toolUser} aria-label="Your identifier for tools" className="bg-muted min-w-0 flex-1 rounded-md border px-3 py-2 font-mono text-xs" onFocus={(e) => e.target.select()} />
+            <Button variant="outline" onClick={() => void copy('tool-user', toolUser)} aria-label="Copy your identifier">
+              {copied === 'tool-user' ? 'Copied' : 'Copy'}
+            </Button>
+          </div>
         </div>
       )}
 

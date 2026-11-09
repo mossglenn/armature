@@ -220,9 +220,13 @@ test.describe('pairing, settings and the log', () => {
     const value = page.getByLabel('The pairing value');
     const before = await value.inputValue();
     expect(before).toMatch(/^[0-9a-f]{64}$/);
-    await page.getByRole('button', { name: 'Copy' }).click();
+    await page.getByRole('button', { name: 'Copy', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(before);
+    // Beside it, what a tool sends as Armature-User: under header, the identifier set for the remote.
+    await expect(page.getByLabel('Your identifier for tools')).toHaveValue('demo-designer@example.edu');
+    await page.getByRole('button', { name: 'Copy your identifier' }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('demo-designer@example.edu');
 
     await page.getByRole('button', { name: 'Reset…' }).click();
     await page.getByRole('group', { name: 'Confirm the reset' }).getByRole('button', { name: 'Cancel' }).click();
@@ -231,6 +235,18 @@ test.describe('pairing, settings and the log', () => {
     await page.getByRole('button', { name: 'Reset the pairing' }).click();
     await expect(value).not.toHaveValue(before);
     await expect(value).toHaveValue(/^[0-9a-f]{64}$/);
+  });
+
+  test('under oidc the identifier for tools is the one the remote resolves, shown once signed in', async ({ page }) => {
+    await open(page, 'oidc');
+    await nav(page, 'Pairing').click();
+    await expect(page.getByLabel('The pairing value')).toHaveValue(/^[0-9a-f]{64}$/);
+    await expect(page.getByLabel('Your identifier for tools')).toHaveCount(0);
+    await nav(page, 'Sign in').click();
+    await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Signed in' })).toBeVisible();
+    await nav(page, 'Pairing').click();
+    await expect(page.getByLabel('Your identifier for tools')).toHaveValue('someone@example.edu');
   });
 
   test('settings: a synced folder is warned of, a change the hub needs a restart for offers one, a bad port is refused', async ({ page }) => {

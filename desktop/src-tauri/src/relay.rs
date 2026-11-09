@@ -11,7 +11,7 @@ use serde_json::Value;
 
 /// The requests a page may send the core: everything but the shell's own.
 pub const WEBVIEW_REQUESTS: &[&str] = &[
-    "profile", "connect", "settings", "signIn", "signOut", "resetPairing", "workspaces", "status", "commits", "create", "clone", "push", "bringIn", "deliver", "remove",
+    "profile", "connect", "settings", "signIn", "signOut", "resetPairing", "toolIdentity", "workspaces", "status", "commits", "create", "clone", "push", "bringIn", "deliver", "remove",
 ];
 
 /// Whether a page may send the core a request of this type.
@@ -115,7 +115,7 @@ mod tests {
         for own in ["start", "stop", "credential"] {
             assert!(!allowed_from_webview(own), "{own}");
         }
-        for page in ["connect", "signIn", "push", "deliver", "resetPairing", "commits", "remove"] {
+        for page in ["connect", "signIn", "push", "deliver", "resetPairing", "toolIdentity", "commits", "remove"] {
             assert!(allowed_from_webview(page), "{page}");
         }
         assert!(!allowed_from_webview(""));

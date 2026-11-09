@@ -172,6 +172,8 @@ export function fakeCore(scenario = 'header'): Backend {
       }
       const changed = model.settings.remote !== address;
       model.settings = { ...model.settings, remote: address, instance: profile.instance, identity: profile.identity };
+      // As the core: a remote that signs people in names them itself, so a header identifier is dropped.
+      if (profile.identity.resolver === 'oidc') delete model.settings.user;
       if (changed) model.signedIn = undefined;
       return ok({ settings: model.settings, profile, restart: model.running && changed });
     },
@@ -219,6 +221,13 @@ export function fakeCore(scenario = 'header'): Backend {
     resetPairing: () => {
       model.localToken = Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('');
       return ok({ localToken: model.localToken });
+    },
+    toolIdentity: () => {
+      const user = ownerOf();
+      if (user) return ok({ user });
+      return model.settings.identity?.resolver === 'oidc'
+        ? refuse(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in')
+        : refuse(409, 'no_user', 'The remote runs under header; set your identifier on it in the settings (user)');
     },
     workspaces: () => needsHub() ?? ok([...model.workspaces.values()].map((w) => w.record)),
     status: (fields) => needsHub() ?? (workspaceOf(fields) ? ok(statusOf(String(fields.workspace))) : refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`)),
