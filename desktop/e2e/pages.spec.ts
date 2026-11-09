@@ -7,6 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const HEADER_REMOTE = 'http://hub.example.test:3100';
 const OIDC_REMOTE = 'https://api.armature.example.edu';
+const HOSTILE_REMOTE = 'https://api.armature-x.example.net';
 const open = (page: Page, scenario: string) => page.goto(`/?scenario=${scenario}`);
 const nav = (page: Page, name: string) => page.getByRole('navigation', { name: 'Pages' }).getByRole('button', { name, exact: true });
 
@@ -44,6 +45,35 @@ test.describe('connecting', () => {
     await expect(page.getByLabel('The instance', { exact: true })).toContainText('https://login.example.edu/realms/armature');
     await page.getByRole('button', { name: 'Connect to Armature at Example University' }).click();
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    // The sign-in page names the provider the browser will open at, as the card did.
+    await expect(page.getByRole('main')).toContainText('at https://login.example.edu/realms/armature');
+  });
+
+  test('a hub that claims another instance’s address is shown at the address dialed, with the warning, and the card goes when the address changes', async ({ page }) => {
+    await open(page, 'fresh');
+    await page.getByLabel("The instance's address").fill(HOSTILE_REMOTE);
+    await page.getByRole('button', { name: 'Read' }).click();
+    const instance = page.getByLabel('The instance', { exact: true });
+    // The hub declares the real instance's name and address; the card shows the address dialed and says what the hub claimed.
+    await expect(instance).toContainText('Armature at Example University');
+    await expect(instance.locator('dd').first()).toHaveText(HOSTILE_REMOTE);
+    await expect(instance).toContainText(`says its address is ${OIDC_REMOTE}`);
+    await expect(instance).toContainText('Connect only if');
+    // Editing the address withdraws the card, so a confirmation never outlives what it was read for.
+    await page.getByLabel("The instance's address").fill(OIDC_REMOTE);
+    await expect(instance).toHaveCount(0);
+  });
+
+  test('connect carries the profile confirmed, and a hub that then answers differently is refused', async ({ page }) => {
+    await open(page, 'fresh');
+    await page.getByLabel("The instance's address").fill(OIDC_REMOTE);
+    await page.getByRole('button', { name: 'Read' }).click();
+    await expect(page.getByLabel('The instance', { exact: true })).toContainText('Compatible');
+    // The fake's remote changes its provider between the two reads, as a hostile hub could.
+    await page.evaluate((issuer) => (window as unknown as { __fakeCore: { changeIssuer: (i: string) => void } }).__fakeCore.changeIssuer(issuer), 'https://login.attacker.example/realms/armature');
+    await page.getByRole('button', { name: 'Connect to Armature at Example University' }).click();
+    await expect(page.getByRole('alert')).toContainText('409 profile_changed');
+    await expect(page.getByRole('alert')).toContainText('differs from the one confirmed');
   });
 
   test('a link fills the address and connects nothing until the person reads and confirms', async ({ page }) => {

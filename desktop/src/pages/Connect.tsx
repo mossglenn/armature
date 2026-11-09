@@ -14,8 +14,11 @@ import { useRequest } from '@/lib/useShell';
  * Connect (docs/desktop-program-plan.md §4, item 1; §8): the remote's address, typed or brought by an
  * `armature://connect` link, read and shown before anything is connected. The profile is what the
  * remote's GET /discover says; the person confirms the instance's name, its address and how it signs
- * people in. A remote under header asks for the person's identifier instead, and says it is a
- * development arrangement. The link is untrusted: it only fills the address field.
+ * people in. The address shown is always the one dialed, never the one the hub declares for itself,
+ * and the card goes when the field changes; `connect` carries the identity and instance confirmed,
+ * so the core keeps nothing else (the 2026-11-09 review's C1 and C2). A remote under header asks
+ * for the person's identifier instead, and says it is a development arrangement. The link is
+ * untrusted: it only fills the address field.
  */
 export function Connect({ backend, state, link, onDone }: { backend: Backend; state?: ShellState; link?: string; onDone: (next: 'signIn' | 'workspaces') => void }) {
   const { run, busy } = useRequest(backend);
@@ -52,7 +55,7 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
   const confirm = async () => {
     if (!profile) return;
     setRefusal(undefined);
-    const outcome = await run<SettingsReply>('connect', { remote: profile.remote });
+    const outcome = await run<SettingsReply>('connect', { remote: profile.remote, identity: profile.identity, ...(profile.instance ? { instance: profile.instance } : {}) });
     if (!outcome.ok) return setRefusal(outcome);
     if (profile.identity.resolver === 'header' && !outcome.body.settings.user) return setAskUser(true);
     await restartHub();
@@ -106,7 +109,17 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
         <Label htmlFor="remote" className="sr-only">
           The instance's address
         </Label>
-        <Input id="remote" {...verbatim} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="https://api.armature.example.edu" autoFocus={!link} />
+        <Input
+          id="remote"
+          {...verbatim}
+          value={address}
+          onChange={(e) => {
+            setAddress(e.target.value);
+            setProfile(undefined);
+          }}
+          placeholder="https://api.armature.example.edu"
+          autoFocus={!link}
+        />
         <Button type="submit" variant="outline" disabled={!address.trim() || busy !== undefined}>
           {busy === 'profile' ? 'Reading…' : 'Read'}
         </Button>
@@ -118,7 +131,7 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
           <p className="text-lg font-medium">{profile.instance?.name ?? profile.remote}</p>
           <dl className="mt-3 grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1 text-sm">
             <dt className="text-muted-foreground">Address</dt>
-            <dd className="font-mono break-all">{profile.instance?.api ?? profile.remote}</dd>
+            <dd className="font-mono break-all">{profile.remote}</dd>
             <dt className="text-muted-foreground">Signs you in at</dt>
             <dd className="break-all">{profile.identity.resolver === 'oidc' ? profile.identity.issuer : 'No sign-in: you say who you are'}</dd>
             <dt className="text-muted-foreground">Versions</dt>
