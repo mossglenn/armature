@@ -161,6 +161,12 @@ test.describe('the workspaces', () => {
 
   test('a workspace is made from main, and a branch someone else owns is cloned with the remote’s warning', async ({ page }) => {
     await open(page, 'header');
+    // Names are kept as typed: the system may not capitalize or correct them (the Keycloak rehearsal, 2026-11-08).
+    for (const field of ['Name', 'From', 'Branch']) {
+      const box = page.getByRole('textbox', { name: field, exact: true });
+      await expect(box).toHaveAttribute('autocapitalize', 'off');
+      await expect(box).toHaveAttribute('spellcheck', 'false');
+    }
     await page.getByRole('textbox', { name: 'Name' }).fill('unit-6');
     await page.getByRole('button', { name: 'Make the workspace' }).click();
     await expect(page.getByRole('list', { name: 'Your workspaces' })).toContainText('demo-designer_unit-6');
