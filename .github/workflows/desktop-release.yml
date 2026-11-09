@@ -135,7 +135,7 @@ jobs:
           releaseBody: |
             The Armature desktop program: a workspace hub on your machine for your tools, connected to your instance. What it does, how to install it and what each message means: https://github.com/mossglenn/armature/blob/main/docs/desktop-program.md
 
-            These builds are not signed by Apple or Microsoft yet. On macOS, the first time, right-click Armature in Applications and choose Open; on Windows, choose More info, then Run anyway. Updates are signed and checked before they install.
+            These builds are not signed by Apple or Microsoft yet. On macOS, the first time, open it, then choose Open Anyway in System Settings, Privacy & Security; on Windows, choose More info, then Run anyway. The guide has the details. Updates are signed and checked before they install.
           releaseDraft: true
           prerelease: false
           # The updater on Windows installs the NSIS installer, the only Windows bundle built.
