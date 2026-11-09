@@ -20,7 +20,6 @@ import { configFromEnv, type HubConfig } from './config';
 import { localStoreConfig } from './filestore/testing';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from './store';
 import { memoryRecords } from './workspace/records';
-import { handleOf } from './routes/workspace';
 
 const stamp = Date.now().toString(36);
 const REMOTE_DB = `${process.env.TERMINUS_DB}_wstoken_${stamp}`;
@@ -31,7 +30,10 @@ const OTHER = `other-${stamp}`;
 const SEED_DESIGNER = 'demo-designer@example.edu';
 const TOKEN = `ws-token-${stamp}`;
 const NAME = `test-token-${stamp}`;
-const BRANCH = `${handleOf(OWNER)}_${NAME}`;
+// The owner's email differs from their sub, as a provider's does: the branch takes the email's
+// handle from the remote's record of the person, never the sub (decided 2026-11-08).
+const OWNER_EMAIL = `the-owner-${stamp}@example.edu`;
+const BRANCH = `the-owner-${stamp}_${NAME}`;
 
 let remote: RunningHub;
 let workspace: ReturnType<typeof createApp>;
@@ -77,7 +79,9 @@ beforeAll(async () => {
   const operator = createApp(remoteConfig);
   const asOperator = (method: string, path: string, body: unknown) =>
     operator.request(`/api/v1${path}`, { method, headers: { 'Content-Type': 'application/json', 'Armature-User': SEED_DESIGNER }, body: JSON.stringify(body) });
-  const registered = await json(await asOperator('POST', '/users', { message: 'The workspace owner', user: { displayName: 'The Owner', externalId: OWNER, issuer: ISSUER } }));
+  const registered = await json(
+    await asOperator('POST', '/users', { message: 'The workspace owner', user: { displayName: 'The Owner', externalId: OWNER, email: OWNER_EMAIL, issuer: ISSUER } })
+  );
   expect(registered.status).toBe(201);
   ownerId = registered.body.id;
   // A second person the remote knows, whose token this hub might be left holding.

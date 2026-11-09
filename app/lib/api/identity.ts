@@ -69,6 +69,22 @@ export function handleOf(externalId: string): string {
   return local || 'user';
 }
 
+/**
+ * A person's handle: from their email when the record has one, else from the
+ * external identifier (decided 2026-11-08, after the Keycloak rehearsal).
+ * Under header the two are usually the same address; under oidc the external
+ * identifier is the provider's `sub`, often a UUID, which would make every
+ * workspace branch's name unreadable. The handle is a label taken when the
+ * branch is created and kept in its name; it is not the identity, which is
+ * the `User` the Owner grant names (ADR-0068), so a later change of email
+ * leaves older branch names as they were. Two people whose emails share a
+ * local part share a handle; the remote then refuses the second one's
+ * branch as existing, and they choose another name.
+ */
+export function handleFor(user: { externalId: string; email?: unknown }): string {
+  return handleOf(typeof user.email === 'string' && user.email.trim() ? user.email : user.externalId);
+}
+
 /** An agent is a `User` whose externalId begins with this (ADR-0032 decision 7). */
 export const AGENT_PREFIX = 'agent:';
 export const isAgentExternalId = (externalId: unknown): boolean =>
