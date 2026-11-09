@@ -19,6 +19,8 @@ export function SignIn({ backend, state, onDone }: { backend: Backend; state?: S
   const [person, setPerson] = useState<{ person: Person; staysSignedIn: boolean } | undefined>();
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
   const remote = typeof state?.started?.remote === 'string' ? state.started.remote : 'the remote';
+  // Where the browser opens, as the settings keep it, so the person sees the provider before it does.
+  const issuer = typeof state?.started?.issuer === 'string' ? state.started.issuer : undefined;
 
   useEffect(
     () =>
@@ -57,7 +59,9 @@ export function SignIn({ backend, state, onDone }: { backend: Backend; state?: S
   const unregistered = refusal?.refusal.error === 'not_registered';
   return (
     <section>
-      <PageHeader title="Sign in">Sign in to {remote} in your browser. The program keeps you signed in until you sign out.</PageHeader>
+      <PageHeader title="Sign in">
+        Sign in to {remote} in your browser{issuer ? <>, at <span className="break-all">{issuer}</span></> : ''}. The program keeps you signed in until you sign out.
+      </PageHeader>
       {busy === 'signIn' ? (
         <div className="max-w-xl rounded-lg border p-4" aria-live="polite">
           <p className="font-medium">Continue in your browser</p>

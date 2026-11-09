@@ -22,12 +22,15 @@ import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus }
  *   fails       the same, and its install fails (the signature, say), the update still offered
  *   no_release  the channel answers without a release (none published, or an error status)
  *
- * Two remotes answer `profile`: https://api.armature.example.edu (oidc) and
- * http://hub.example.test:3100 (header); any other address is unreachable.
+ * Three remotes answer `profile`: https://api.armature.example.edu (oidc),
+ * http://hub.example.test:3100 (header), and https://api.armature-x.example.net, a
+ * hub that declares the first one's name and address as its own (the
+ * 2026-11-09 review's C1); any other address is unreachable.
  */
 
 const OIDC_REMOTE = 'https://api.armature.example.edu';
 const HEADER_REMOTE = 'http://hub.example.test:3100';
+const HOSTILE_REMOTE = 'https://api.armature-x.example.net';
 const HUB_URL = 'http://127.0.0.1:3101';
 const REVISION = '2026-11-06';
 const DATA_DIR = '/Users/someone/Library/Application Support/com.mossglenn.armature';
@@ -51,6 +54,16 @@ const profiles: Record<string, Profile> = {
     revision: REVISION,
     compatible: true,
     warning: 'This remote trusts whoever reaches it to say who they are: a development arrangement, not one for real work (ADR-0067 decision 8)',
+  },
+  // As the core answers: the address is the one dialed, and the hub's claim to another is a warning.
+  [HOSTILE_REMOTE]: {
+    remote: HOSTILE_REMOTE,
+    instance: { name: 'Armature at Example University', api: OIDC_REMOTE, program: { releases: 'https://github.com/mossglenn/armature/releases' } },
+    identity: { resolver: 'oidc', issuer: ISSUER, clientId: 'armature-desktop' },
+    versions: [REVISION],
+    revision: REVISION,
+    compatible: true,
+    warning: `The hub at ${HOSTILE_REMOTE} says its address is ${OIDC_REMOTE}. Connect only if ${HOSTILE_REMOTE} is the address your administrator gave you.`,
   },
 };
 
@@ -141,7 +154,7 @@ export function fakeCore(scenario = 'header', update?: string): Backend {
       folder: s.folder ?? `${DATA_DIR}/workspaces`,
       remote: s.remote,
       resolver: s.identity.resolver,
-      ...(s.identity.resolver === 'oidc' ? { signedIn: model.signedIn !== undefined } : { user: s.user }),
+      ...(s.identity.resolver === 'oidc' ? { signedIn: model.signedIn !== undefined, issuer: s.identity.issuer } : { user: s.user }),
     };
   };
   const state = (): ShellState => {
@@ -175,12 +188,24 @@ export function fakeCore(scenario = 'header', update?: string): Backend {
       const address = String(remote ?? '').trim().replace(/\/+$/, '');
       if (!/^https?:\/\/[^/]+/.test(address)) return refuse(400, 'bad_settings', `remote=${address} is not an http or https address`, { field: 'remote' });
       const profile = profiles[address];
-      return profile ? ok(profile) : refuse(502, 'remote_unreachable', `The remote at ${address} could not be reached`, { remote: true });
+      // A copy, as the real reply is JSON over a pipe: the page's profile does not change when the fake's remote does.
+      return profile ? ok(structuredClone(profile)) : refuse(502, 'remote_unreachable', `The remote at ${address} could not be reached`, { remote: true });
     },
-    connect: ({ remote }) => {
+    connect: ({ remote, identity, instance }) => {
       const address = String(remote ?? '').trim().replace(/\/+$/, '');
+      // As the core: the profile confirmed comes with the request, and the re-read must agree with it (C2).
+      if (identity === undefined) {
+        return refuse(400, 'bad_request', 'connect takes the identity (and the instance, when the profile had one) the profile showed, so what is kept is what was confirmed; read the profile first', { field: 'identity' });
+      }
       const profile = profiles[address];
       if (!profile) return refuse(502, 'remote_unreachable', `The remote at ${address} could not be reached`, { remote: true });
+      if (JSON.stringify(identity) !== JSON.stringify(profile.identity) || JSON.stringify(instance ?? null) !== JSON.stringify(profile.instance ?? null)) {
+        return refuse(409, 'profile_changed', `The remote at ${address} now answers with a profile that differs from the one confirmed; read it again and check it before connecting`, {
+          remote: address,
+          confirmed: { identity, instance: instance ?? null },
+          found: { identity: profile.identity, instance: profile.instance ?? null },
+        });
+      }
       if (model.settings.remote && model.settings.remote !== address && model.workspaces.size > 0) {
         return refuse(409, 'workspaces_exist', `The remote is ${model.settings.remote}, which ${model.workspaces.size} workspaces name; deliver or delete them before connecting elsewhere`, {
           field: 'remote',
@@ -344,7 +369,13 @@ export function fakeCore(scenario = 'header', update?: string): Backend {
     const w = model.workspaces.get(branch);
     if (w) w.commits.unshift({ commit: commitId(), author: w.record.owner, message, timestamp: Date.now() / 1000 });
   };
-  const testHooks = { writeAsTool, conflictOn: (branch: string) => void (model.workspaces.get(branch) && (model.workspaces.get(branch)!.conflict = true)), link: (remote: string) => emit({ event: 'deep-link', remote }) };
+  const testHooks = {
+    writeAsTool,
+    conflictOn: (branch: string) => void (model.workspaces.get(branch) && (model.workspaces.get(branch)!.conflict = true)),
+    link: (remote: string) => emit({ event: 'deep-link', remote }),
+    // The oidc remote's provider changes between a page's read and its connect, as a hostile hub's could (C2).
+    changeIssuer: (issuer: string) => void (profiles[OIDC_REMOTE]!.identity = { resolver: 'oidc', issuer, clientId: 'armature-desktop' }),
+  };
   (window as unknown as { __fakeCore?: typeof testHooks }).__fakeCore = testHooks;
 
   return {

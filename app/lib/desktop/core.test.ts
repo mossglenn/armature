@@ -14,6 +14,7 @@
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,6 +26,7 @@ import { app, createApp } from '../api/app';
 import { configFromEnv, type HubConfig } from '../api/config';
 import { handleOf } from '../api/routes/workspace';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from '../api/store';
+import { CURRENT_REVISION } from '../api/version';
 import { startHub, type RunningHub } from '../hub';
 import { runCore, type Core } from './core';
 import type { FetchLike } from './signIn';
@@ -36,6 +38,7 @@ const ISSUER = 'https://login.example.edu/realms/armature';
 const AUDIENCE = 'armature-hub';
 const CLIENT_ID = 'armature-desktop';
 const OWNER = `desktop-owner-${stamp}`;
+const OIDC_IDENTITY = { resolver: 'oidc', issuer: ISSUER, clientId: CLIENT_ID };
 
 let headerRemote: RunningHub;
 let oidcRemote: RunningHub;
@@ -64,6 +67,25 @@ const dataFolder = async () => {
   folders.push(dir);
   return dir;
 };
+
+/**
+ * A hub that says of itself whatever it is told: `GET /discover` answers from a script, one body
+ * per read, the last repeated. For what the program must not take at a hub's word (the 2026-11-09
+ * review's C1 and C2).
+ */
+async function impostor(answers: Array<Record<string, unknown>>): Promise<{ url: string; close: () => Promise<void> }> {
+  let reads = 0;
+  const server = createHttpServer((req, res) => {
+    if (req.url !== '/api/v1/discover') {
+      res.writeHead(404).end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(answers[Math.min(reads++, answers.length - 1)]));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as { port: number };
+  return { url: `http://127.0.0.1:${port}`, close: () => new Promise((resolve) => server.close(() => resolve())) };
+}
 
 type Message = Record<string, unknown> & { id?: unknown; status?: number; body?: Record<string, unknown>; event?: string };
 
@@ -168,7 +190,7 @@ describe('the cycle through the protocol, against a remote under header', () => 
   });
 
   it('opens the data folder, and asks to connect before it starts a hub', async () => {
-    expect(await driver.ask('connect', { remote: headerRemote.url })).toMatchObject({ status: 409, body: { error: 'not_opened' } });
+    expect(await driver.ask('connect', { remote: headerRemote.url, identity: { resolver: 'header' } })).toMatchObject({ status: 409, body: { error: 'not_opened' } });
     expect(await driver.ask('start', { dataDir })).toMatchObject({ status: 200, body: { started: false, needs: 'connect' } });
   });
 
@@ -178,7 +200,9 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(profile.body?.warning).toContain('development arrangement');
     expect(await driver.ask('profile', { remote: 'http://127.0.0.1:9' })).toMatchObject({ status: 502, body: { error: 'remote_unreachable' } });
 
-    const connected = await driver.ask('connect', { remote: headerRemote.url });
+    // Connecting carries the profile confirmed; without it the core refuses, since it would otherwise keep whatever the second read said (C2).
+    expect(await driver.ask('connect', { remote: headerRemote.url })).toMatchObject({ status: 400, body: { error: 'bad_request', field: 'identity' } });
+    const connected = await driver.ask('connect', { remote: headerRemote.url, identity: profile.body!.identity, instance: profile.body!.instance });
     expect(connected).toMatchObject({ status: 200, body: { settings: { remote: headerRemote.url, identity: { resolver: 'header' } }, restart: false } });
     expect(await driver.ask('start', { dataDir })).toMatchObject({ status: 200, body: { started: false, needs: 'user' } });
     expect(await driver.ask('settings', { set: { remote: 'https://elsewhere.example.edu' } })).toMatchObject({ status: 400, body: { error: 'use_connect' } });
@@ -235,7 +259,8 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('signIn')).toMatchObject({ status: 409, body: { error: 'not_oidc' } });
     expect(await driver.ask('credential', { remote: headerRemote.url, refreshToken: 'r' })).toMatchObject({ status: 409, body: { error: 'not_oidc' } });
     // The remote stays while a workspace names it.
-    expect(await driver.ask('connect', { remote: oidcRemote.url })).toMatchObject({ status: 409, body: { error: 'workspaces_exist', workspaces: [WS] } });
+    const away = await driver.ask('profile', { remote: oidcRemote.url });
+    expect(await driver.ask('connect', { remote: oidcRemote.url, identity: away.body!.identity, instance: away.body!.instance })).toMatchObject({ status: 409, body: { error: 'workspaces_exist', workspaces: [WS] } });
   });
 
   it('resets the pairing: the new token is the hub’s at once, the old one refused', async () => {
@@ -267,6 +292,67 @@ describe('the cycle through the protocol, against a remote under header', () => 
     driver.end();
     await driver.core.closed;
     expect(existsSync(join(dataDir, 'workspaces', 'lock'))).toBe(false);
+  });
+});
+
+describe('a hub’s account of itself is checked against the address dialed (the 2026-11-09 review’s C1 and C2)', () => {
+  const RELEASES = 'https://github.com/mossglenn/armature/releases';
+  const declares = (identity: Record<string, unknown>, instance: Record<string, unknown>) => ({ role: 'remote', versions: [CURRENT_REVISION], identity, instance, capabilities: {}, schema: {} });
+  let driver: ReturnType<typeof drive>;
+  let dataDir: string;
+  const impostors: Array<{ close: () => Promise<void> }> = [];
+  const hub = async (answers: Array<Record<string, unknown>>) => {
+    const made = await impostor(answers);
+    impostors.push(made);
+    return made.url;
+  };
+
+  beforeAll(async () => {
+    driver = drive();
+    dataDir = await dataFolder();
+    expect((await driver.ask('start', { dataDir })).body).toMatchObject({ needs: 'connect' });
+  });
+
+  afterAll(async () => {
+    driver?.end();
+    await driver?.core.closed;
+    await Promise.all(impostors.map((i) => i.close()));
+  });
+
+  it('shows the address dialed, and warns when the hub declares the real instance’s address as its own', async () => {
+    // The impostor declares the real instance's name, its address and its provider (C1's scenario); the program keeps the address it dialed.
+    const hostile = await hub([declares(OIDC_IDENTITY, { name: 'Armature at Example University', api: oidcRemote.url, program: { releases: RELEASES } })]);
+    const profile = await driver.ask('profile', { remote: hostile });
+    expect(profile).toMatchObject({ status: 200, body: { remote: hostile, instance: { name: 'Armature at Example University', api: oidcRemote.url }, identity: OIDC_IDENTITY } });
+    expect(profile.body!.warning).toContain(`The hub at ${hostile} says its address is ${oidcRemote.url}`);
+    // The real remote declares no other address, so no warning.
+    expect((await driver.ask('profile', { remote: oidcRemote.url })).body).not.toHaveProperty('warning');
+  });
+
+  it('refuses a profile the program cannot use, naming what is wrong', async () => {
+    const broken = await hub([declares(OIDC_IDENTITY, { name: 'Broken', api: 'not an address', program: { releases: RELEASES } })]);
+    expect(await driver.ask('profile', { remote: broken })).toMatchObject({ status: 400, body: { error: 'bad_profile', field: 'instance.api', remote: broken } });
+  });
+
+  it('connects only to the profile confirmed: a hub that answers the second read differently is refused and nothing is kept', async () => {
+    const instance = { name: 'Armature at Example University', program: { releases: RELEASES } };
+    const flipping = await hub([declares(OIDC_IDENTITY, instance), declares({ ...OIDC_IDENTITY, issuer: 'https://login.attacker.example/realms/armature' }, instance)]);
+    const profile = await driver.ask('profile', { remote: flipping });
+    expect(profile).toMatchObject({ status: 200, body: { identity: OIDC_IDENTITY } });
+    const refused = await driver.ask('connect', { remote: flipping, identity: profile.body!.identity, instance: profile.body!.instance });
+    expect(refused).toMatchObject({
+      status: 409,
+      body: { error: 'profile_changed', remote: flipping, confirmed: { identity: OIDC_IDENTITY }, found: { identity: { issuer: 'https://login.attacker.example/realms/armature' } } },
+    });
+    expect((await driver.ask('start', { dataDir })).body).toMatchObject({ started: false, needs: 'connect' });
+
+    // A hub answering alike is connected, and the start reply names the issuer for the sign-in page.
+    const steady = await hub([declares(OIDC_IDENTITY, instance)]);
+    const read = await driver.ask('profile', { remote: steady });
+    expect(await driver.ask('connect', { remote: steady, identity: read.body!.identity, instance: read.body!.instance })).toMatchObject({ status: 200, body: { settings: { remote: steady } } });
+    expect((await driver.ask('settings', { set: { port: await freePort() } })).status).toBe(200);
+    expect(await driver.ask('start', { dataDir })).toMatchObject({ status: 200, body: { started: true, resolver: 'oidc', issuer: ISSUER } });
+    expect(await driver.ask('stop')).toMatchObject({ status: 200 });
   });
 });
 
@@ -303,9 +389,9 @@ describe('the sign-in and a push through the token source, against a remote unde
     dataDir = await dataFolder();
     expect((await driver.ask('start', { dataDir })).body).toMatchObject({ needs: 'connect' });
     // An identifier kept for a remote under header is dropped on connecting to one that signs people in.
-    expect((await driver.ask('connect', { remote: headerRemote.url })).status).toBe(200);
+    expect((await driver.ask('connect', { remote: headerRemote.url, identity: { resolver: 'header' }, instance: (await driver.ask('profile', { remote: headerRemote.url })).body!.instance })).status).toBe(200);
     expect((await driver.ask('settings', { set: { user: DESIGNER } })).body).toMatchObject({ settings: { user: DESIGNER } });
-    const connected = await driver.ask('connect', { remote: oidcRemote.url });
+    const connected = await driver.ask('connect', { remote: oidcRemote.url, identity: OIDC_IDENTITY, instance: (await driver.ask('profile', { remote: oidcRemote.url })).body!.instance });
     expect(connected).toMatchObject({ status: 200, body: { settings: { identity: { resolver: 'oidc', issuer: ISSUER, clientId: CLIENT_ID } } } });
     expect(connected.body!.settings).not.toHaveProperty('user');
     expect((await driver.ask('settings', { set: { port: await freePort() } })).status).toBe(200);

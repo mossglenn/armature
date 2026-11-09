@@ -247,7 +247,8 @@ export function runCore(options: CoreOptions): Core {
       folder,
       remote: current.remote,
       resolver: current.identity.resolver,
-      ...(current.identity.resolver === 'oidc' ? { signedIn: held?.signedIn ?? keptRefresh !== undefined } : { user: current.user }),
+      // The issuer the browser will open at, so the sign-in page can show where it sends the person.
+      ...(current.identity.resolver === 'oidc' ? { signedIn: held?.signedIn ?? keptRefresh !== undefined, issuer: current.identity.issuer } : { user: current.user }),
       // Drawn here, so the shell keeps it in the keychain; never written to the log (plan §9).
       ...(drawn ? { localToken: drawn } : {}),
       ...(warning ? { warning } : {}),
@@ -267,7 +268,13 @@ export function runCore(options: CoreOptions): Core {
     return true;
   };
 
-  /** What a remote's `GET /discover` says, checked as the program can use it. */
+  /**
+   * What a remote's `GET /discover` says, checked as the program can use it. The hub's account of
+   * itself is data, not the address: `remote` is always the address dialed, and an `instance.api`
+   * on another origin is a claim the warning names, since a hostile hub can declare the real
+   * instance's name, address and provider and would otherwise be shown as the real one (the
+   * 2026-11-09 review's C1).
+   */
   const readProfile = async (given: unknown) => {
     const { remote } = parseSettings({ remote: given });
     const address = remote!;
@@ -289,15 +296,28 @@ export function runCore(options: CoreOptions): Core {
     } else {
       throw new ApiError(400, 'unknown_resolver', `${address} runs under ${resolver}, which this program does not know`, { remote: address });
     }
+    // The identity and the instance in the shape the settings keep, so what the page confirms and what `connect` re-reads compare alike.
+    let checked: DesktopSettings;
+    try {
+      checked = parseSettings({ remote: address, identity, instance: discovery.instance ?? null });
+    } catch (err) {
+      if (err instanceof ApiError) throw new ApiError(400, 'bad_profile', `${address} answered with a profile this program cannot use: ${err.message}`, { ...err.details, remote: address });
+      throw err;
+    }
+    const warnings: string[] = [];
+    if (resolver === 'header') warnings.push('This remote trusts whoever reaches it to say who they are: a development arrangement, not one for real work (ADR-0067 decision 8)');
+    if (checked.instance?.api && new URL(checked.instance.api).origin !== new URL(address).origin) {
+      warnings.push(`The hub at ${address} says its address is ${checked.instance.api}. Connect only if ${address} is the address your administrator gave you.`);
+    }
     return {
       remote: address,
-      instance: discovery.instance,
-      identity,
+      ...(checked.instance ? { instance: checked.instance } : {}),
+      identity: checked.identity!,
       versions: discovery.versions,
       revision: CURRENT_REVISION,
       // The remote serves the revision this program's hub speaks, or the program is too new or too old for it (plan §8).
       compatible: discovery.versions.includes(CURRENT_REVISION),
-      ...(resolver === 'header' ? { warning: 'This remote trusts whoever reaches it to say who they are: a development arrangement, not one for real work (ADR-0067 decision 8)' } : {}),
+      ...(warnings.length ? { warning: warnings.join(' ') } : {}),
     };
   };
 
@@ -333,10 +353,24 @@ export function runCore(options: CoreOptions): Core {
 
     connect: async (request) => {
       const { dataDir: dir, settings: current } = opened();
+      // The profile the person confirmed comes with the request, and the re-read must agree with it:
+      // a hub may answer the confirming read with the real provider and the connecting read with a
+      // look-alike, and the settings would keep the look-alike (the 2026-11-09 review's C2).
+      if (request.identity === undefined) {
+        throw new ApiError(400, 'bad_request', 'connect takes the identity (and the instance, when the profile had one) the profile showed, so what is kept is what was confirmed; read the profile first', { field: 'identity' });
+      }
+      const confirmed = parseSettings({ identity: request.identity, instance: request.instance ?? null });
       const profile = await readProfile(request.remote);
       // A remote that signs people in names them itself, so an identifier kept for a remote under header is dropped.
       const user = profile.identity.resolver === 'oidc' ? { user: null } : {};
       const next = parseSettings({ remote: profile.remote, instance: profile.instance ?? null, identity: profile.identity, ...user }, current);
+      if (JSON.stringify(next.identity) !== JSON.stringify(confirmed.identity) || JSON.stringify(next.instance ?? null) !== JSON.stringify(confirmed.instance ?? null)) {
+        throw new ApiError(409, 'profile_changed', `The remote at ${profile.remote} now answers with a profile that differs from the one confirmed; read it again and check it before connecting`, {
+          remote: profile.remote,
+          confirmed: { identity: confirmed.identity, instance: confirmed.instance ?? null },
+          found: { identity: next.identity, instance: next.instance ?? null },
+        });
+      }
       const refusal = changeRefusal(current, next, await workspaceNames());
       if (refusal) throw refusal;
       if (next.remote !== current.remote || JSON.stringify(next.identity) !== JSON.stringify(current.identity)) {

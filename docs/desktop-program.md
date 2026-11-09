@@ -29,7 +29,7 @@ Download the program from your instance's "Work from your own machine" page, or 
 
 The program opens on **Connect**. The easiest way in is the link on your instance's "Work from your own machine" page, which opens the program with the address filled in; or paste the address your administrator gave you (it usually begins `https://api.`) and choose **Read**.
 
-The program shows what it found: the instance's name, its address, and who signs you in. Check them before you choose **Connect**: a link can come from anywhere, and the program connects to nothing until you confirm.
+The program shows what it found: the instance's name, the address you gave, and who signs you in. Check them before you choose **Connect**: a link can come from anywhere, and the program connects to nothing until you confirm. The address shown is always the one you typed or the link brought; if the instance says its address is a different one, the program warns you, and you should connect only if the address you gave is the one your administrator gave you. Changing the address withdraws what was shown, and the program connects only to exactly what it showed you: an instance that answers differently when you connect is refused (`profile_changed`), so read it again.
 
 An instance that says **"No sign-in: you say who you are"** is a development or rehearsal arrangement, not one for real work; the program then asks for your identifier instead of signing you in.
 
@@ -88,6 +88,7 @@ Every refusal shows the message, a code and whether your instance or this machin
 |---|---|---|
 | `remote_unreachable` | The instance did not answer | Check your connection; offline, everything but push, bring in, deliver and remove still works |
 | `insecure_remote` | An instance that signs people in was given as `http://` | Use its `https://` address |
+| `profile_changed` | The instance answered differently when you connected than when you read it | Choose **Read** again and check what it shows before connecting |
 | `not_registered` | You signed in, but the instance does not know you | Ask your administrator to register you |
 | `sign_in_refused`, `sign_in_timeout` | The sign-in did not complete in the browser | Sign in again |
 | `signed_out` | The instance no longer accepts your sign-in | Sign in again |
