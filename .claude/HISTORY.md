@@ -6,6 +6,48 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-08, night (the desktop program's release: the updater, starting at login, the release workflow, the guide; rehearsed on the Mac and the Windows laptop; branch `phase-8/desktop-release`, no PR yet)
+
+**Where things stood at the close.** **Phase 8; the desktop program's step 5 built on `phase-8/desktop-release` (eight commits, pushed, no pull request yet) and rehearsed; its acceptance, the Droplet run under `oidc`, is the next session's.** The shell checks this repository's latest release's `latest.json` at start and daily, shows an available update above every page and installs it when asked (`desktop/src-tauri/src/update.rs`); it starts at login when the setting says so (`login.rs`); a tag `desktop-v<version>` builds macOS for Apple silicon and Intel, the Windows NSIS installer and the Linux AppImage and `.deb` into a draft release with the updater's signed artifacts (`.github/workflows/desktop-release.yml`), and a tag `desktop-rehearsal-<n>` does the same from a branch. `docs/desktop-program.md` is the person's guide. `main` is unchanged at `90f03ad`; officepi runs `0098fda`, serving 2026-11-07, still the program's revision.
+
+### Done
+
+- `c445a75` the updater and starting at login in the shell: `update.rs` (the release channel checked ten seconds after start and whenever a day has passed by the wall clock; an install downloads while the hub serves, ends the core as quitting does, installs, restarts; a failed install starts the core again), `login.rs` (the system's entry follows the core's `startAtLogin`, a start at login passes `--hidden` and stays in the tray), the window hidden at start, `tauri-plugin-updater` 2.14.1 and `tauri-plugin-autostart` 2.7.0, `plugins.updater` with the public key `BE8193D83FACC5C1`, the feed and `requireSignedVersion`
+- `dd9a6ca` the pages: `UpdateNotice.tsx` above every page, Settings' start-at-login checkbox and Check for updates, the fake core's `?update=available|fails`, four page tests (twenty)
+- `1b342d4` a placeholder icon (`icons/source.svg`, a design graph in the visual language's colors) and its six sizes
+- `6551a40` the release workflow on four runners, `tauri.release.conf.json` (the updater's artifacts only in a release), `prepare.mjs` taking Node for `TAURI_ENV_TARGET_TRIPLE`; `10ed649` its notes' macOS step
+- `6991b9a` and `7063b4a` the documents: `docs/desktop-program.md`; `deployment.md`'s loopback redirect, where people get the program and the sign-in as built; the plan's step 5 note and question 12's evidence; the READMEs (the releasing steps, the key, trying the updater without a release); the explainer; CLAUDE.md
+- `43b1c8a` the fix the Mac's install found: a feed with no published release (404, the plugin's `ReleaseNotFound`) is no update, not "could not be reached"
+- Fourteen Rust tests, twenty page tests, clippy with warnings as errors
+
+### Session notes
+
+- Amos approved the order proposed at the start (the updater, start at login, icons, the workflow, the documents, the Droplet run) without choosing between one pull request or two and on the Intel build; the defaults were taken, one pull request and Intel kept. No artwork exists, so the icon is a placeholder.
+- The updater was rehearsed on the Mac before any release: version 0.1.0 built with a `--config` overlay pointing at a feed on loopback with a scratch key, 0.1.1 signed with it, Amos's click on Install and restart; the hub stopped, the install, the restart into 0.1.1 with one core, then a clean Cmd-Q. Reading the source first found that a restart off the main thread arrives as `ExitRequested`, which the shell takes for a quit, so `exiting` is set before it.
+- `desktop-rehearsal-1` built all four on the runners; every signature was made by Amos's key and records its version; the Intel bundle's shell and Node are both `x86_64`. Installed through a browser on the Mac: Gatekeeper's "cannot verify", Open Anyway, then the keychain asking for the login password (Always Allow chosen). On the laptop through Edge from the tailnet: SmartScreen's "Windows protected your PC", More info, Run anyway; a reinstall prompt over the debug build of the same version; no console window; the new icon in the window and tray, the old one on the taskbar (Windows' icon cache by path; no pinned shortcut). The draft and its tag were deleted at the close.
+- Step 5's Droplet run was held to the next session (Amos).
+
+### Facts from 2026-11-08 night worth keeping
+
+- `releases/latest/download/latest.json` sees only a published release, never a draft; until one is published the feed is 404 (`docs/desktop-program.md`, `update.rs`'s comment).
+- A workflow started by hand must first exist on `main`; a tag runs the workflow file at its own commit, hence rehearsal tags (the workflow's header).
+- Tauri passes `TAURI_ENV_TARGET_TRIPLE` (and `_ARCH`, `_PLATFORM`, `_DEBUG`) to `beforeBuildCommand` (`prepare.mjs`).
+- macOS ties a keychain item to its maker's designated requirement, a build's own hash under an ad-hoc signature, so an update is expected to ask for the password again; to be seen when `desktop-v0.1.1` installs (plan §15 question 12, evidence note).
+- macOS 15 removed right-click Open for an unchecked program; Open Anyway in Privacy & Security is the way (the guide).
+- `tauri signer generate` records the version in the signature's trusted comment from CLI 2.12.4, which `requireSignedVersion` checks.
+- The updater key is `~/.tauri/armature.key` on the Mac, mode 600; the secrets were set 2026-11-09 04:02 UTC (`desktop/README.md`).
+- The Mac's program points at officepi under `header` since 2026-11-08 22:39 (its log), not the stopped local `oidc` remote; a scratch copy at 0.1.1 is in the session's scratch folder. The laptop runs the 0.1.0 release build.
+
+### Decisions taken
+
+- One pull request for step 5; the Intel Mac build kept (the defaults, the order approved by Amos).
+- The update notice above every page rather than on the workspaces page alone; a branch rehearsed by a `desktop-rehearsal-<n>` tag; Windows NSIS only; the updater's artifacts only in `tauri.release.conf.json`; `requireSignedVersion` from the first release (the plan's step 5 note).
+- `ReleaseNotFound` is no update, said once in the log (`43b1c8a`).
+- The keychain prompt recorded as evidence under question 12; the decision stays (a) until Amos reopens it.
+- Names, open to overrule: `update.rs`, `login.rs`, `check_update`, `install_update`, `--hidden`, `UpdateState` and its four states, `desktop-release.yml`, `tauri.release.conf.json`, `desktop-rehearsal-<n>`, `?update=`.
+
+---
+
 ## 2026-11-08, evening (step 4's last rehearsals: the Windows laptop and the Keycloak realm; the run's four findings fixed; PRs #120 and #121)
 
 **Where things stood at the close.** **Phase 8; the desktop program's steps 1 to 4 built and accepted (2026-11-07 and 08; PRs #116 to #121 merged, CI green on `main` at `ee7ef48`).** The core (`app/desktop.ts`, `app/lib/desktop/`) hosts a workspace hub over the file-backed store behind the Tauri shell (`desktop/`), with the PKCE sign-in, the keychain, the tray, the `armature://connect` link and the seven pages. Step 4's rehearsals are done: the Windows laptop against officepi from a debug NSIS installer `desktop.yml` builds when started by hand (PR #120), and the Keycloak realm on the Mac with a remote under `oidc`, whose four findings were fixed and rerun (PR #121): a workspace branch's handle is the email's local part, the Pairing page shows the identifier a tool sends (`toolIdentity`), connecting to a remote under `oidc` drops an identifier kept for `header`, and the name, address and identifier fields opt out of macOS's capitalization. 611 contract tests, 16 page tests, 10 Rust tests. **Next: step 5, the release.**
