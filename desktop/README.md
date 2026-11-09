@@ -2,7 +2,7 @@
 
 The program a designer installs to work on their own machine (ADR-0069; [the plan](../docs/desktop-program-plan.md)). It is a [Tauri 2](https://tauri.app) shell over the **core**, `app/desktop.ts`, which hosts a workspace hub on `127.0.0.1:3101` over the file-backed store in the program's data folder. The shell owns what needs the operating system: the window and the tray, the keychain, the `armature://` link, opening the browser for the sign-in, and starting and stopping the core. It holds no logic about workspaces, tokens or the hub beyond relaying: the core decides, and answers as the hub's routes would.
 
-Status: the shell and its seven pages are built (the plan's step 4) and rehearsed on the Mac against a remote on the tailnet; the updater and the release builds come with step 5.
+Status: the shell and its seven pages are built (the plan's step 4), rehearsed on the Mac and a Windows laptop against a remote on the tailnet and under the Keycloak realm; the updater, starting at login and the release workflow are built (step 5, 2026-11-08), the Droplet run their acceptance. [`docs/desktop-program.md`](../docs/desktop-program.md) is the guide for the person who installs it.
 
 ## How it fits together
 
@@ -13,7 +13,7 @@ the page (src/, React)  ──invoke core_request──▶  the shell (src-tauri
 
 - **The core** runs as a sidecar: Node itself, named `armature-node`, with the core's bundle as its one argument. It reads requests on its standard input and writes replies and events on its standard output (`app/lib/desktop/protocol.ts`). Nothing secret goes in its arguments or environment.
 - **The shell** (`src-tauri/src/`) starts the core and sends it `start` with the data folder and the keychain's local token, then `credential` with the refresh token the keychain keeps for the remote. It keeps what the core hands back in the keychain: a drawn local token and a rotated refresh token. A page reaches the core only through `core_request`, which refuses the shell's own requests (`start`, `stop`, `credential`; `relay.rs`). The core's `credential` events never reach the page.
-- **The pages** (`src/pages/`: Connect, Sign in, Workspaces, a workspace, Pairing, Settings, Log) call the core only through `src/lib/backend.ts`: Tauri's `invoke` in the shell, a fake core in a plain browser (`src/lib/fakeCore.ts`, a small model of the core with its replies' shapes and refusal codes), so the pages run and are tested without the shell, as Quiver's are. `?scenario=fresh|header|oidc|oidc-scope|oidc-unregistered` in the address picks where the fake core starts.
+- **The pages** (`src/pages/`: Connect, Sign in, Workspaces, a workspace, Pairing, Settings, Log) call the core only through `src/lib/backend.ts`: Tauri's `invoke` in the shell, a fake core in a plain browser (`src/lib/fakeCore.ts`, a small model of the core with its replies' shapes and refusal codes), so the pages run and are tested without the shell, as Quiver's are. `?scenario=fresh|header|oidc|oidc-scope|oidc-unregistered` in the address picks where the fake core starts, and `?update=available|fails` adds an update on offer.
 
 | Module | What it does |
 |---|---|
@@ -22,6 +22,8 @@ the page (src/, React)  ──invoke core_request──▶  the shell (src-tauri
 | `src-tauri/src/keychain.rs` | The refresh token under `refresh:<remote>` and the local token under `local-token`, service `com.mossglenn.armature` |
 | `src-tauri/src/logs.rs` | The core's log, one file per day, seven kept |
 | `src-tauri/src/tray.rs` | The tray: Open, Pause or Resume the hub, Quit |
+| `src-tauri/src/update.rs` | The updater: the release channel checked at start and daily, an update installed when asked (downloaded, the core ended, installed, restarted) |
+| `src-tauri/src/login.rs` | Starting at login: the system's entry follows the core's `startAtLogin`; a start at login passes `--hidden` and stays in the tray |
 | `scripts/prepare.mjs` | `npm run sidecar`: bundles the core with app's `build:desktop` and fetches Node 22.23.4 for the target, checked against nodejs.org's checksums |
 
 ## Running it
@@ -49,7 +51,21 @@ To start from nothing, quit the program, remove the data folder, and remove the 
 | `npm run typecheck` | The pages |
 | `npm run test:e2e` | The pages in Chromium against the fake core (`e2e/`; `npx playwright install chromium` once) |
 | `cargo clippy --all-targets -- -D warnings` (in `src-tauri/`) | The Rust side, warnings as errors |
-| `cargo test` (in `src-tauri/`) | The relay's rules, the link, the keychain's naming, the log files |
+| `cargo test` (in `src-tauri/`) | The relay's rules, the link, the keychain's naming, the log files, the update check's timing, the start at login's argument |
 | `npm run tauri build -- --debug` | A debug bundle |
 
 CI runs all five on Ubuntu (`../.github/workflows/desktop.yml`) when the shell or the core changes; the core's own suites run in `ci.yml`. A Windows debug installer (NSIS, per user) is built only when the workflow is started by hand, `gh workflow run desktop.yml --ref <branch>`, and kept as the run's artifact `armature-desktop-debug-windows` for a week.
+
+## Releasing
+
+A release is a commit of this repository: the shell and the hub it carries come from the same tag (plan §10).
+
+1. Set the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json` (the workflow refuses a tag when they differ), merge, then on `main`: `git tag desktop-v<version> && git push origin desktop-v<version>`.
+2. `../.github/workflows/desktop-release.yml` builds macOS for Apple silicon and Intel, the Windows NSIS installer and the Linux AppImage and `.deb`, each with the updater's artifact and signature, into a **draft** release with `latest.json`. Try the installers, then publish the draft: only then does an installed program see the update (its feed is `releases/latest/download/latest.json`).
+3. A branch is rehearsed before it merges by a tag `desktop-rehearsal-<n>` on its head, which builds the same into a draft of that name; delete both afterwards, `gh release delete desktop-rehearsal-<n> --cleanup-tag`.
+
+The updater's key is `~/.tauri/armature.key` on Amos's Mac, its public half in `tauri.conf.json`, the private half and its password the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. A lost key means every installed program must be reinstalled by hand, since it accepts only updates signed by it. `requireSignedVersion` is on: the signature names the version it was made for, so a feed cannot offer an older genuine build as a newer one.
+
+The updater can be tried without a release: build an older version with a `--config` overlay pointing `plugins.updater` at a feed on loopback (`dangerousInsecureTransportProtocol`, a scratch key's `pubkey`), build a newer one signed with that key (`TAURI_SIGNING_PRIVATE_KEY`, the overlay with `createUpdaterArtifacts`), serve its `.app.tar.gz` and a `latest.json` naming it, and open the older one (rehearsed on the Mac 2026-11-08).
+
+The icon is a placeholder (`src-tauri/icons/source.svg`, which says how every size is made from it).

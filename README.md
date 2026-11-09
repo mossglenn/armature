@@ -77,7 +77,7 @@ As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-
 | Stand up an instance on a server, or understand what runs where | [Running an instance](docs/deployment.md) |
 | See which hub capabilities each client tool shows, and the gaps no demo shows | [Demo coverage](docs/demo-coverage.md) |
 | Run the hub on your own machine and push to a shared one (the whole cycle built 2026-11-01, create, clone, push, bring in and deliver, and authorization the same day; the clone's snapshots and forwarding 2026-11-02; ADR-0065, ADR-0067 and ADR-0068 accepted 2026-10-30, ADR-0066 2026-11-02) | [The workspace hub](docs/workspace-hub-plan.md); [running one](docs/deployment.md) |
-| Install the workspace hub as a program on your own machine, signing in to a shared instance (being built: the core, the shell and its pages; the release next) | [The desktop program](docs/desktop-program-plan.md) |
+| Install the workspace hub as a program on your own machine, signing in to a shared instance (built; the first release follows its rehearsal on a hosted instance) | [The desktop program](docs/desktop-program.md), [its plan](docs/desktop-program-plan.md) |
 | Ask the graph from an MCP assistant (planned) | [The MCP server](docs/mcp-server-plan.md) |
 | Record Storyline builds in the graph and bring results back (planned) | [The Storyline bridge](docs/storyline-bridge-plan.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
@@ -193,6 +193,7 @@ docs/
   client-changes.md           What client tools must act on, newest first: each change to /api/v1 or the schema, and what a client does about it
   demo-coverage.md            Which hub capabilities each built, planned or proposed client tool shows, and the gaps no demo shows (2026-10-27)
   workspace-hub-plan.md       The workspace hub (draft 2026-10-28; ADR-0065, 0067 and 0068 accepted 2026-10-30, ADR-0066 2026-11-02): the hub's own code in a second mode on one person's machine, pushing to a remote through /api/v1
+  desktop-program.md          The desktop program, for the person who installs it: installing, connecting, signing in, the workspaces, pairing, updates, each refusal
   desktop-program-plan.md     The desktop program (draft 2026-11-05): the host of a workspace hub a designer installs, with its sign-in, its pairing screen and its actions; the workspace hub plan's step 7
   mcp-server-plan.md          The Armature MCP server (draft 2026-10-27): a client that asks the graph through the intelligence reads at a named commit
   storyline-bridge-plan.md    The Storyline bridge (draft 2026-10-27): a client that records each Storyline build in the graph by hash and brings results back as metrics
