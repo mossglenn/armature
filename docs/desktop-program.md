@@ -21,7 +21,7 @@ Download the program from your instance's "Work from your own machine" page, or 
 
 **The first time you open it,** your system warns that it does not know who made the program, since these builds are not yet signed by Apple or Microsoft. The program's updates are signed and checked before they install; only the first install asks you to vouch for it.
 
-- **macOS:** open Armature from Applications. When macOS says it cannot verify the program, choose **Done**, then open **System Settings → Privacy & Security**, scroll to the line about Armature, and choose **Open Anyway**. If macOS instead says the program "is damaged", it was quarantined by the browser that downloaded it: run `xattr -dr com.apple.quarantine /Applications/Armature.app` in Terminal, then open it again.
+- **macOS:** open Armature from Applications. When macOS says it cannot verify the program, choose **Done**, then open **System Settings → Privacy & Security**, scroll to the line about Armature, and choose **Open Anyway**. If macOS instead says the program "is damaged", it was quarantined by the browser that downloaded it: run `xattr -dr com.apple.quarantine /Applications/Armature.app` in Terminal, then open it again. Once it is open, macOS may ask for your login password so that Armature can use the items it keeps in your keychain (your sign-in and the pairing value): enter it and choose **Always Allow**. Until the program is signed by Apple, macOS may ask this again after an update, since it ties those items to the exact build that made them.
 - **Windows:** when SmartScreen says "Windows protected your PC", choose **More info**, then **Run anyway**.
 - **Linux:** make the AppImage executable (`chmod +x Armature_*.AppImage`) and run it; or `sudo apt install ./Armature_*.deb`.
 
@@ -78,7 +78,7 @@ Closing the window does not stop the program: it stays in the tray (the menu bar
 
 The program checks for a new version when it starts and once a day. When there is one, a notice at the top of the window says which version, with its notes; choose **Install and restart** when it suits you. The hub stops while the update installs, which takes a few seconds, and your tools reach it again once the program is back. **Settings → Check for updates** checks at once.
 
-An update is installed only if its signature verifies. If an install fails, the program keeps running the version you have, says why, and offers to try again.
+On macOS, the first start after an update may ask for your login password for the keychain again; enter it and choose **Always Allow** (§ "Installing it" says why). An update is installed only if its signature verifies. If an install fails, the program keeps running the version you have, says why, and offers to try again.
 
 ## When something is refused
 
