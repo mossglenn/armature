@@ -1,4 +1,4 @@
-import type { Backend, CoreEvent, CoreReply, ShellState } from './backend';
+import type { Backend, CoreEvent, CoreReply, ShellState, UpdateState } from './backend';
 import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus } from './types';
 
 /**
@@ -14,6 +14,12 @@ import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus }
  *   oidc               connected to a remote that signs people in, signed out
  *   oidc-scope         the same, and the provider refuses offline_access
  *   oidc-unregistered  the same, and the remote does not know the person
+ *
+ * `?update=` adds the release channel's answer, with any scenario:
+ *
+ *   (absent)    this is the latest version
+ *   available   version 0.2.0 is offered from the start, and installs
+ *   fails       the same, and its install fails (the signature, say), the update still offered
  *
  * Two remotes answer `profile`: https://api.armature.example.edu (oidc) and
  * http://hub.example.test:3100 (header); any other address is unreachable.
@@ -55,6 +61,7 @@ interface Model {
   workspaces: Map<string, { record: WorkspaceRecord; commits: CommitEntry[]; pushed: number; remoteMoved: boolean; conflict: boolean; deliveredAt?: number }>;
   localToken: string;
   log: CoreEvent[];
+  update?: UpdateState;
 }
 
 const refuse = (status: number, error: string, message: string, details: Record<string, unknown> = {}): CoreReply => ({ status, body: { error, message, ...details } });
@@ -109,8 +116,11 @@ function modelFor(scenario: string): Model {
   return { settings: { ...base, remote: HEADER_REMOTE, instance: p.instance, identity: p.identity, user }, running: true, workspaces: seededWorkspaces(user, HEADER_REMOTE), localToken, log };
 }
 
-export function fakeCore(scenario = 'header'): Backend {
+const OFFERED: UpdateState = { version: '0.2.0', current: '0.1.0', date: '2026-11-20T15:00:00Z', notes: 'Starts at login when asked.\nShows an available update.', state: 'available' };
+
+export function fakeCore(scenario = 'header', update?: string): Backend {
   const model = modelFor(scenario);
+  if (update === 'available' || update === 'fails') model.update = { ...OFFERED };
   const listeners = new Set<(event: CoreEvent) => void>();
   const emit = (event: CoreEvent) => {
     if (event.event === 'log') model.log.push(event);
@@ -135,7 +145,13 @@ export function fakeCore(scenario = 'header'): Backend {
   };
   const state = (): ShellState => {
     const body = started();
-    return { core: body.started === true ? 'running' : 'stopped', started: body, dataDir: DATA_DIR, logDir: '/Users/someone/Library/Logs/com.mossglenn.armature' };
+    return {
+      core: body.started === true ? 'running' : 'stopped',
+      started: body,
+      dataDir: DATA_DIR,
+      logDir: '/Users/someone/Library/Logs/com.mossglenn.armature',
+      ...(model.update ? { update: model.update } : {}),
+    };
   };
   const statusOf = (branch: string): WorkspaceStatus => {
     const w = model.workspaces.get(branch)!;
@@ -352,5 +368,28 @@ export function fakeCore(scenario = 'header'): Backend {
     pairingValue: async () => model.localToken,
     openLogFolder: async () => undefined,
     version: async () => '0.1.0',
+    checkUpdate: async () => {
+      if (update === 'available' || update === 'fails') model.update ??= { ...OFFERED };
+      emit({ event: 'shell' });
+      return state();
+    },
+    installUpdate: async () => {
+      if (!model.update) throw new Error('No update is waiting; check for updates first');
+      const offered = model.update;
+      model.update = { ...offered, state: 'downloading', progress: 40 };
+      emit({ event: 'shell' });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (update === 'fails') {
+        const error = 'the signature of the downloaded update does not verify';
+        model.update = { ...offered, state: 'failed', error };
+        emit({ event: 'log', level: 'error', line: `The update to ${offered.version} failed: ${error}` });
+        emit({ event: 'shell' });
+        throw new Error(error);
+      }
+      // The real shell restarts here; the fake stays at installing, as the window does until then.
+      model.running = false;
+      model.update = { ...offered, state: 'installing' };
+      emit({ event: 'shell' });
+    },
   };
 }

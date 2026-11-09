@@ -25,6 +25,21 @@ export interface CoreEvent {
   [field: string]: unknown;
 }
 
+/** An update the release channel offers, and how its install is going (src-tauri/src/update.rs). */
+export interface UpdateState {
+  version: string;
+  /** The version running now. */
+  current: string;
+  /** When the release was published (RFC 3339). */
+  date?: string;
+  notes?: string;
+  /** `failed` keeps the update available to try again, with `error` saying why. */
+  state: 'available' | 'downloading' | 'installing' | 'failed';
+  /** The share downloaded, in whole percent, when the size is known. */
+  progress?: number;
+  error?: string;
+}
+
 /** What the shell knows of the core and its hub. */
 export interface ShellState {
   core: 'starting' | 'running' | 'stopped' | 'failed';
@@ -37,6 +52,8 @@ export interface ShellState {
   logDir?: string;
   /** The remote the last `armature://connect` link named, kept for a page opened after it (plan §8). */
   link?: string;
+  /** An update the release channel offers (docs/desktop-program-plan.md §10). */
+  update?: UpdateState;
 }
 
 export interface Backend {
@@ -53,12 +70,19 @@ export interface Backend {
   openLogFolder(): Promise<void>;
   /** The program's own version, for the settings page. */
   version(): Promise<string>;
+  /** Asks the release channel now, as the daily check does; the state then names the update, or none. */
+  checkUpdate(): Promise<ShellState>;
+  /** Installs the update the last check found. On success the program starts again into the new version, so this settles only when the install failed. */
+  installUpdate(): Promise<void>;
 }
 
 export const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export async function createBackend(): Promise<Backend> {
-  if (!isTauri()) return (await import('./fakeCore')).fakeCore(new URLSearchParams(window.location.search).get('scenario') ?? undefined);
+  if (!isTauri()) {
+    const query = new URLSearchParams(window.location.search);
+    return (await import('./fakeCore')).fakeCore(query.get('scenario') ?? undefined, query.get('update') ?? undefined);
+  }
   const [{ invoke }, { listen }, { getVersion }] = await Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event'), import('@tauri-apps/api/app')]);
   return {
     kind: 'tauri',
@@ -73,5 +97,7 @@ export async function createBackend(): Promise<Backend> {
     pairingValue: () => invoke('pairing_value'),
     openLogFolder: () => invoke('open_log_folder'),
     version: () => getVersion(),
+    checkUpdate: () => invoke('check_update'),
+    installUpdate: () => invoke('install_update'),
   };
 }

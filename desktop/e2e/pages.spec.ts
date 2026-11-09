@@ -273,7 +273,6 @@ test.describe('pairing, settings and the log', () => {
     await page.getByLabel('Port').fill('70000');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('alert')).toContainText('400 bad_settings');
-    await expect(page.getByText('Start at login (comes with the release)')).toBeVisible();
   });
 
   test('the log keeps the earlier lines and follows the hub, paused and resumed from the sidebar', async ({ page }) => {
@@ -286,5 +285,52 @@ test.describe('pairing, settings and the log', () => {
     await expect(lines).toContainText('Armature hub stopped');
     await page.getByRole('button', { name: 'Resume the hub' }).click();
     await expect(page.getByText('The hub is running')).toBeVisible();
+  });
+});
+
+test.describe('updates and starting at login', () => {
+  test('starting at login is off by default, saved as it is ticked, and kept', async ({ page }) => {
+    await open(page, 'header');
+    await nav(page, 'Settings').click();
+    const box = page.getByRole('checkbox', { name: /Start at login/ });
+    await expect(box).not.toBeChecked();
+    await box.check();
+    await expect(box).toBeChecked();
+    await nav(page, 'Workspaces').click();
+    await nav(page, 'Settings').click();
+    await expect(page.getByRole('checkbox', { name: /Start at login/ })).toBeChecked();
+  });
+
+  test('an available update is offered on every page and installed only when asked', async ({ page }) => {
+    await page.goto('/?scenario=header&update=available');
+    const notice = page.getByRole('status', { name: 'Update' });
+    await expect(notice).toContainText('Version 0.2.0 is available (this is 0.1.0)');
+    await expect(notice).toContainText('Starts at login when asked.');
+    await expect(notice).toContainText('The hub stops while it installs');
+    await nav(page, 'Pairing').click();
+    await expect(notice).toBeVisible();
+    await expect(page.getByText('The hub is running')).toBeVisible();
+
+    await notice.getByRole('button', { name: 'Install and restart' }).click();
+    await expect(notice).toContainText('Installing version 0.2.0; the program starts again in a moment');
+    await expect(notice.getByRole('button')).toHaveCount(0);
+  });
+
+  test('an update that fails to install says why, and stays offered to try again', async ({ page }) => {
+    await page.goto('/?scenario=header&update=fails');
+    const notice = page.getByRole('status', { name: 'Update' });
+    await notice.getByRole('button', { name: 'Install and restart' }).click();
+    await expect(notice.getByRole('alert')).toContainText('the signature of the downloaded update does not verify');
+    await expect(notice.getByRole('button', { name: 'Try again' })).toBeEnabled();
+    await nav(page, 'Log').click();
+    await expect(page.getByLabel('Log lines')).toContainText('The update to 0.2.0 failed');
+  });
+
+  test('the settings page checks the release channel on demand', async ({ page }) => {
+    await open(page, 'header');
+    await nav(page, 'Settings').click();
+    await expect(page.getByRole('status', { name: 'Update' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Check for updates' }).click();
+    await expect(page.getByText('This is the latest version.')).toBeVisible();
   });
 });

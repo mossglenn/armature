@@ -13,8 +13,9 @@ import { useRequest } from '@/lib/useShell';
  * Settings (docs/desktop-program-plan.md §4, item 6; §9): the remote (changed on the connect page,
  * and only while no workspace exists), the folder with the synced-folder warning, the port, the
  * snapshot budget, the identifier under header; a change the hub needs a restart for says so and
- * offers it; sign out; and the versions: the program's, the hub revision it carries, the remote's.
- * Starting at login comes with the release (step 5).
+ * offers it; starting at login, saved as it is ticked (the shell makes the system's entry follow it,
+ * src-tauri/src/login.rs); sign out; and the versions: the program's, the hub revision it carries,
+ * the remote's, with a check of the release channel on demand (the daily one is the shell's).
  */
 export function Settings({ backend, state, connect, signedOut }: { backend: Backend; state?: ShellState; connect: () => void; signedOut: () => void }) {
   const { run, busy } = useRequest(backend);
@@ -26,6 +27,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
   const [version, setVersion] = useState<string | undefined>();
   const [remoteVersions, setRemoteVersions] = useState<string[] | 'unreachable' | undefined>();
+  const [checked, setChecked] = useState<{ busy: boolean; line?: string }>({ busy: false });
 
   const show = (reply: SettingsReply) => {
     setSettings(reply.settings);
@@ -59,6 +61,23 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
     show(outcome.body);
     setRestart(outcome.body.restart === true);
     setSaved(true);
+  };
+
+  const startAtLogin = async (on: boolean) => {
+    setRefusal(undefined);
+    const outcome = await run<SettingsReply>('settings', { set: { startAtLogin: on } });
+    if (!outcome.ok) return setRefusal(outcome);
+    setSettings(outcome.body.settings);
+  };
+
+  const checkUpdate = async () => {
+    setChecked({ busy: true });
+    try {
+      const after = await backend.checkUpdate();
+      setChecked({ busy: false, line: after.update ? `Version ${after.update.version} is available; it is offered at the top of the window.` : 'This is the latest version.' });
+    } catch (err) {
+      setChecked({ busy: false, line: `The release channel could not be reached (${err instanceof Error ? err.message : String(err)}).` });
+    }
   };
 
   const restartHub = async () => {
@@ -124,9 +143,9 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
             <Input id="settings-user" {...verbatim} {...field('user')} />
           </>
         )}
-        <label className="text-muted-foreground flex items-center gap-2 text-sm">
-          <input type="checkbox" disabled checked={settings?.startAtLogin ?? false} readOnly />
-          Start at login (comes with the release)
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" disabled={!settings || busy !== undefined} checked={settings?.startAtLogin ?? false} onChange={(e) => void startAtLogin(e.target.checked)} />
+          Start at login, in the tray
         </label>
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={busy !== undefined || !settings}>
@@ -155,6 +174,16 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
           <dt className="text-muted-foreground">The remote serves</dt>
           <dd>{remoteVersions === 'unreachable' ? 'Cannot be reached' : (remoteVersions?.join(', ') ?? '…')}</dd>
         </dl>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Button variant="outline" size="sm" disabled={checked.busy} onClick={() => void checkUpdate()}>
+            {checked.busy ? 'Checking…' : 'Check for updates'}
+          </Button>
+          {checked.line && (
+            <span className="text-muted-foreground" role="status">
+              {checked.line}
+            </span>
+          )}
+        </div>
       </div>
     </section>
   );
