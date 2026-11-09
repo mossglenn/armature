@@ -6,6 +6,48 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-07 to 08 (TerminusDB confirms the race, #2637; the desktop program's core, shell and pages; Remove, revision 2026-11-07; PRs #116 to #119)
+
+**Where things stood at the close.** **Phase 8; the desktop program's steps 1 to 4 built (2026-11-07 and 08; PRs #116 to #119 merged, CI green on `main` at `0098fda`).** The core (`app/desktop.ts`, `app/lib/desktop/`) hosts a workspace hub over the file-backed store, driven by JSON lines on its standard input and output, with the PKCE sign-in and the credential behind `hub.remoteToken`; the shell (`desktop/`, Tauri 2, installed on its own) runs it as the sidecar `armature-node`, keeps the refresh token and the pairing value in the keychain, and has the tray, the `armature://connect` link and the seven pages of the plan's §4. A workspace can be removed (`DELETE /workspace/:name`, revision 2026-11-07), which the first rehearsal found missing. Rehearsed on the Mac against officepi, which now runs `main` at `0098fda`. 607 contract tests, 15 page tests in Chromium, 10 Rust tests. **Next: §12's remaining rehearsals, the Windows laptop and the Keycloak sign-in, then step 5, the release.**
+
+### Done
+
+- **#116**: TerminusDB's maintainers confirmed the data-version race as a defect on Discord, the fix planned for 12.1.0; filed by Amos as terminusdb/terminusdb#2637 with the repro, run again on v12.0.7 (four writers landing in each of four rounds). ADR-0025 decision 7, note of 2026-11-07; `docs/development-plan.md` §9; check AO's header.
+- **#117, the desktop plan's step 3, the core**: `protocol.ts` (requests `{ id, type }`, replies `{ id, status, body }` as a route answers, events `{ event }`, concurrent, the input's end closing it, EPIPE absorbed), `settings.ts`, `folder.ts` (the synced-folder warning), `signIn.ts` (PKCE on an ephemeral loopback port, the issuer's metadata checked, `invalid_scope` answered with `offlineAccess: true`), `credential.ts` (the refresh 30 s before expiry, one in flight, rotation reported, a refused refresh `signed_out`), `core.ts` and `desktop.ts`; `build:desktop` in CI; `core.test.ts` the acceptance (the cycle through the protocol, a push through the credential to an `oidc` remote), `bundle.test.ts` the built core over pipes, which the Windows job runs.
+- **#118, step 4a, the shell**: the core's `credential` request after `start` (the shell learns the remote only from `start`'s reply); `desktop/` with Vite, React and Tailwind at Quiver's versions, `scripts/prepare.mjs` (the core's bundle and Node 22.23.4, checksummed); the Rust side (`core.rs`, `relay.rs`, `keychain.rs`, `logs.rs`, `tray.rs`); the deep link, single instance, the tray; `desktop.yml` on Ubuntu (clippy, the Rust tests, a debug `.deb`). Run on the Mac: the hub on 3101 through the sidecar, a link reaching the running program, quit and SIGTERM leaving neither process nor lock; Amos checked the tray, the hidden window and the Dock by eye.
+- **#119, step 4b, the pages**: Connect, Sign in, Workspaces, a workspace (push, bring in, deliver, remove), Pairing, Settings, Log; the fake core as a model with `?scenario=`; 15 Playwright paths in `desktop.yml`; the core's `commits` request, the shell's `log_lines`, `pairing_value`, `open_log_folder`. **Remove**: `DELETE /workspace/:name`, a program action, 409 `unpushed_commits`, the remote deleting the branch by its own rule (409 `unmerged_branch` otherwise), `{ workspace, remote: deleted | kept | absent, reason? }`; revision 2026-11-07 (`REVISIONS`, `CLIENT_REVISION`, `workspace.remove`, `client-changes.md`, `api.md`; ADR-0065 decision 2, later change).
+- The rehearsal on the Mac against officepi (updated to the branch, then to `main`): connect through the page, create, a tool's write with the pairing value, push, `bring_in_first`, bring in, deliver; then Remove of the delivered workspace, the branch deleted on officepi and its `Owner` grant revoked.
+
+### Session notes
+
+- The core went as planned, three choices made on the session's recommendations; the acceptance tests passed but one, which was the test's own assumption (a warm credential in the same process is not a restart).
+- 4a found a real defect on the Mac's bundle: macOS's quit, the Apple Event Cmd-Q sends, ends Tauri's loop with `Exit` and no `ExitRequested`, and waiting there for the stop's reply deadlocked on the main thread the tray needs. Three diagnostic log lines located it; the shell now closes the core's input on `Exit` (ADR-0069 decision 4, note).
+- The session recommended putting `desktop/` in the npm workspace, then reversed on finding that both Dockerfiles run `npm ci` from the root lockfile with only `app/` and `packages/` copied, so a workspace member would have changed the images and called for a VM rehearsal.
+- The rehearsal found what no test asked: Amos delivered without ticking "delete" and had no way to remove the workspace. Remove was designed (three options), decided as (a), built with its revision and rehearsed the same night.
+- The pages' first test run failed 9 of 13: eight were Playwright selectors matching substrings, one a real bug: recent Chromium returns a Promise from `scrollIntoView`, which an arrow-function effect handed React as its cleanup.
+
+### Facts from 2026-11-07 and 08 worth keeping
+
+- macOS's quit gives `RunEvent::Exit` without `ExitRequested`; a handler on `Exit` runs on the main thread, so nothing there may wait on work that needs it (menus, emits) (ADR-0069 decision 4, note; `desktop/src-tauri/src/core.rs`).
+- `tauri-plugin-shell`'s `CommandChild` closes the child's input when dropped and kills it only with `kill_on_drop`, off by default (`core.rs`).
+- Deep links on macOS reach only a bundled `.app`, the scheme registered from `Info.plist`; `open -n --args` is not how a link arrives there (`desktop/README.md`).
+- `keyring` 4 splits the stores into separate crates; 3.6 keeps `Entry::new(service, user)` (`desktop/src-tauri/Cargo.toml`).
+- Recent Chromium's `scrollIntoView` returns a Promise; an effect must not return it (the Log page's commit).
+- Playwright's `getByLabel` matches substrings unless `exact`; a region and a field whose labels share words collide.
+- After many suite runs `armature_test`'s `main` grows long enough that history, race and merge tests time out at 15 s (six on 2026-11-08); `load_schema.js --recreate` and `seed_data.js` with `TERMINUS_DB=armature_test` clear it (SESSION.md item 20).
+- A debug macOS bundle is 149 MiB, the Ubuntu debug `.deb` 101 MiB; `desktop.yml` takes about six minutes with a cold Rust cache.
+- A workspace hub's served revision is also the one its client sends its remote, so a revision for a workspace-only route forces every remote to update first (SESSION.md item 35).
+
+### Decisions taken
+
+- The core answers the workspace requests through an in-process second app with the action routes on (ADR-0069, note of 2026-11-07).
+- The settings file is the core's; it keeps the remote's identity so the program starts offline (ADR-0069 note; plan §9 and §11).
+- The core draws the local token only when none is kept and returns it in `start`'s reply (ADR-0069 note).
+- Step 4 as two pull requests; the updater moved to step 5; `desktop/` installed on its own with its own lockfile; the CI debug build on Ubuntu (plan §14).
+- Remove, option (a), the remote deleting the branch by its own rule; as revision 2026-11-07 by the rule, remotes updated first (ADR-0065 decision 2, later change of 2026-11-07; `client-changes.md`).
+- The write queue stays until a TerminusDB release with the fix is pinned; then check AO runs again and the queue is reconsidered, since it also orders work with no data version (ADR-0025 decision 7, note of 2026-11-07).
+- **Names chosen without a separate decision, open to overrule:** the requests `credential`, `commits`, `remove`; the core's codes `not_opened`, `not_started`, `already_started`, `folder_locked`, `port_in_use`, `insecure_remote`, `no_client_id`, `not_a_remote`, `use_connect`, `other_remote`, `not_oidc`, `no_user`, `sign_in_refused`, `sign_in_timeout`, `sign_in_cancelled`, `issuer_unreachable`, `issuer_error`, `signed_out`, `bad_settings`, `workspaces_exist`; Remove's `remote` and `reason` values; the keychain accounts `refresh:<remote>` and `local-token`; keyring 3.6, Node 22.23.4, port 1430 for the pages' dev server; start at login shown and deferred to the release.
+
 ## 2026-11-06, night (the local store's drift traced to the suites; test isolation; the per-branch write queue; PRs #114 and #115)
 
 **Where things stood at the close.** **Phase 8; the hub's per-branch write queue built (2026-11-06 night; PR #115 merged, CI green on `main` at `d9ddd40`).** `If-Match` now holds for writes in flight together on one hub: `Store.exclusive`, over `queue.ts`, runs a branch's writes one at a time, from reading the head to the commit, on both stores, with registrations, a branch's creation and deletion, and a merge's landing in it too. A write without `If-Match` that waited its turn and finds a document it replaces changed since it arrived is 409 `document_moved`, so the queue does not undo that promise. A second hub on one store and the operator tools stay outside it (ADR-0025 decision 7, notes of 2026-11-06). The local store's drift is traced to the suites, and `TERMINUS_DB=<name> npm test` now keeps a run off `armature` (PR #114). 545 tests. **Next: the desktop plan's step 3, the core (`phase-8/desktop-core`).**
