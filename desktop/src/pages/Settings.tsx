@@ -3,6 +3,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { RefusalNotice } from '@/components/RefusalNotice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend, ShellState } from '@/lib/backend';
 import type { Profile, Refusal, Settings as SettingsShape, SettingsReply } from '@/lib/types';
@@ -105,7 +106,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
       >
         <p className="font-medium">This machine</p>
         <Label htmlFor="folder">Workspaces folder</Label>
-        <Input id="folder" placeholder={state?.dataDir ? `${state.dataDir}/workspaces` : 'In the program’s data folder'} {...field('folder')} />
+        <Input id="folder" {...verbatim} placeholder={state?.dataDir ? `${state.dataDir}/workspaces` : 'In the program’s data folder'} {...field('folder')} />
         {warning && <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">{warning}</p>}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
@@ -120,7 +121,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
         {settings?.identity?.resolver === 'header' && (
           <>
             <Label htmlFor="settings-user">Your identifier on the remote</Label>
-            <Input id="settings-user" {...field('user')} />
+            <Input id="settings-user" {...verbatim} {...field('user')} />
           </>
         )}
         <label className="text-muted-foreground flex items-center gap-2 text-sm">

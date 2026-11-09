@@ -4,6 +4,7 @@ import { RefusalNotice } from '@/components/RefusalNotice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend, ShellState } from '@/lib/backend';
 import type { Profile, Refusal, SettingsReply } from '@/lib/types';
@@ -80,7 +81,7 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
           }}
         >
           <Label htmlFor="user">Your identifier on the remote</Label>
-          <Input id="user" value={user} onChange={(e) => setUser(e.target.value)} placeholder="you@example.edu" autoFocus />
+          <Input id="user" {...verbatim} value={user} onChange={(e) => setUser(e.target.value)} placeholder="you@example.edu" autoFocus />
           <Button type="submit" disabled={!user.trim() || busy !== undefined}>
             {busy ? 'Starting the hub…' : 'Continue'}
           </Button>
@@ -105,7 +106,7 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
         <Label htmlFor="remote" className="sr-only">
           The instance's address
         </Label>
-        <Input id="remote" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="https://api.armature.example.edu" autoFocus={!link} />
+        <Input id="remote" {...verbatim} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="https://api.armature.example.edu" autoFocus={!link} />
         <Button type="submit" variant="outline" disabled={!address.trim() || busy !== undefined}>
           {busy === 'profile' ? 'Reading…' : 'Read'}
         </Button>

@@ -4,6 +4,7 @@ import { RefusalNotice } from '@/components/RefusalNotice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend } from '@/lib/backend';
 import type { Refusal, WorkspaceRecord, WorkspaceStatus, WorkspaceWarning } from '@/lib/types';
@@ -108,9 +109,9 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
         >
           <p className="font-medium">New workspace</p>
           <Label htmlFor="ws-name">Name</Label>
-          <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="unit-3" />
+          <Input id="ws-name" {...verbatim} value={name} onChange={(e) => setName(e.target.value)} placeholder="unit-3" />
           <Label htmlFor="ws-from">From</Label>
-          <Input id="ws-from" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <Input id="ws-from" {...verbatim} value={from} onChange={(e) => setFrom(e.target.value)} />
           <Button type="submit" disabled={!name.trim() || busy !== undefined}>
             {busy === 'create' ? 'Making it…' : 'Make the workspace'}
           </Button>
@@ -126,7 +127,7 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
         >
           <p className="font-medium">Clone a branch the remote has</p>
           <Label htmlFor="ws-existing">Branch</Label>
-          <Input id="ws-existing" value={existing} onChange={(e) => setExisting(e.target.value)} placeholder="someone_unit-3" />
+          <Input id="ws-existing" {...verbatim} value={existing} onChange={(e) => setExisting(e.target.value)} placeholder="someone_unit-3" />
           <Button type="submit" variant="outline" disabled={!existing.trim() || busy !== undefined}>
             {busy === 'clone' ? 'Cloning…' : 'Clone it'}
           </Button>
