@@ -78,7 +78,7 @@ Closing the window does not stop the program: it stays in the tray (the menu bar
 
 The program checks for a new version when it starts and once a day. When there is one, a notice at the top of the window says which version, with its notes; choose **Install and restart** when it suits you. The hub stops while the update installs, which takes a few seconds, and your tools reach it again once the program is back. **Settings → Check for updates** checks at once.
 
-On macOS, the first start after an update may ask for your login password for the keychain again; enter it and choose **Always Allow** (§ "Installing it" says why). An update is installed only if its signature verifies. If an install fails, the program keeps running the version you have, says why, and offers to try again.
+On macOS, the first start after an update may ask for your login password for the keychain again; enter it and choose **Always Allow** (§ "Installing it" says why). An update is installed only if its signature verifies. If an install fails, the program keeps running the version you have, says why, and offers to try again. If the release channel cannot be reached, or answers without a release, the program says so rather than calling your version the latest, and tries again within the hour.
 
 ## When something is refused
 

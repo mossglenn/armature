@@ -1,4 +1,4 @@
-import type { Backend, CoreEvent, CoreReply, ShellState, UpdateState } from './backend';
+import type { Backend, CoreEvent, CoreReply, ShellState, UpdateCheck, UpdateState } from './backend';
 import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus } from './types';
 
 /**
@@ -20,6 +20,7 @@ import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus }
  *   (absent)    this is the latest version
  *   available   version 0.2.0 is offered from the start, and installs
  *   fails       the same, and its install fails (the signature, say), the update still offered
+ *   no_release  the channel answers without a release (none published, or an error status)
  *
  * Two remotes answer `profile`: https://api.armature.example.edu (oidc) and
  * http://hub.example.test:3100 (header); any other address is unreachable.
@@ -368,10 +369,12 @@ export function fakeCore(scenario = 'header', update?: string): Backend {
     pairingValue: async () => model.localToken,
     openLogFolder: async () => undefined,
     version: async () => '0.1.0',
-    checkUpdate: async () => {
+    checkUpdate: async (): Promise<UpdateCheck> => {
       if (update === 'available' || update === 'fails') model.update ??= { ...OFFERED };
       emit({ event: 'shell' });
-      return state();
+      // As the shell: an answer without a release is neither an update nor the latest version.
+      const found = model.update ? 'update' : update === 'no_release' ? 'no_release' : 'latest';
+      return { found, state: state() };
     },
     installUpdate: async () => {
       if (!model.update) throw new Error('No update is waiting; check for updates first');

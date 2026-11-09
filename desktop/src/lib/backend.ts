@@ -56,6 +56,16 @@ export interface ShellState {
   update?: UpdateState;
 }
 
+/**
+ * What a check of the release channel found (src-tauri/src/update.rs): an update, now in the state;
+ * that this is the latest version; or no release at all, which is not the same as the latest
+ * version, since the channel reports an error status the same way as an empty feed.
+ */
+export interface UpdateCheck {
+  found: 'update' | 'latest' | 'no_release';
+  state: ShellState;
+}
+
 export interface Backend {
   kind: 'tauri' | 'browser';
   request<T = unknown>(type: string, fields?: Record<string, unknown>): Promise<CoreReply<T>>;
@@ -70,8 +80,8 @@ export interface Backend {
   openLogFolder(): Promise<void>;
   /** The program's own version, for the settings page. */
   version(): Promise<string>;
-  /** Asks the release channel now, as the daily check does; the state then names the update, or none. */
-  checkUpdate(): Promise<ShellState>;
+  /** Asks the release channel now, as the daily check does; the answer says what it found, with the state after it. */
+  checkUpdate(): Promise<UpdateCheck>;
   /** Installs the update the last check found. On success the program starts again into the new version, so this settles only when the install failed. */
   installUpdate(): Promise<void>;
 }
