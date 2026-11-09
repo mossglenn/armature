@@ -210,7 +210,7 @@ package.json                  The npm workspace root (app and packages/*)
 scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync (its own package)
 docker/                       Docker Compose for the store; --profile hub adds the hub and viewer, --profile public Caddy in front; their Dockerfiles, the Caddyfile, the operator entrypoint
 .github/workflows/ci.yml      CI, six jobs: lint, type-check, the generated-types drift check, the context files' budgets and the bundles (hub, operator tools, desktop core); the contract suite against a TerminusDB service container; the viewer's browser smoke test (Playwright over the built viewer and the bundled hub); @armature/client installed as another repository installs it; the suites that need no store on Windows; both container images built and started
-.github/workflows/desktop.yml The desktop shell, when it or the core changes: clippy, its unit tests, the pages' type-check and a debug bundle on Ubuntu
+.github/workflows/desktop.yml The desktop shell, when it or the core changes: clippy, its unit tests, the pages' type-check and a debug bundle on Ubuntu; run by hand, a Windows debug installer for a rehearsal
 .claude/                      Context for AI-assisted development sessions: CLAUDE.md, PROJECT_CONTEXT.md, SESSION.md
 ```
 
