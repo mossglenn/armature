@@ -1,0 +1,20 @@
+<!--
+  The desktop program's icon, a placeholder until there is artwork (2026-11-08): an objective at the
+  center joined to three artifacts by gray edges, in the Design Graph's colors (app/lib/graph/stages.ts:
+  blue, aqua, orange, violet, gray). The squircle sits on Apple's grid, 824 of 1024 with a 100 margin.
+  Every size the bundle uses is generated from this file:
+    rsvg-convert -w 1024 -h 1024 icons/source.svg -o /tmp/icon.png && npx tauri icon /tmp/icon.png -o <dir>
+  then 32x32.png, 128x128.png, 128x128@2x.png, icon.png, icon.icns and icon.ico copied here.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#1d2330"/>
+  <g stroke="#898781" stroke-width="44" stroke-linecap="round">
+    <line x1="512" y1="540" x2="300" y2="330"/>
+    <line x1="512" y1="540" x2="724" y2="330"/>
+    <line x1="512" y1="540" x2="512" y2="790"/>
+  </g>
+  <circle cx="300" cy="330" r="78" fill="#1baf7a"/>
+  <circle cx="724" cy="330" r="78" fill="#eb6834"/>
+  <circle cx="512" cy="790" r="78" fill="#9085e9"/>
+  <circle cx="512" cy="540" r="112" fill="#3987e5"/>
+</svg>
