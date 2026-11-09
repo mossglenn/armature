@@ -76,7 +76,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
       const after = await backend.checkUpdate();
       setChecked({ busy: false, line: after.update ? `Version ${after.update.version} is available; it is offered at the top of the window.` : 'This is the latest version.' });
     } catch (err) {
-      setChecked({ busy: false, line: `The release channel could not be reached (${err instanceof Error ? err.message : String(err)}).` });
+      setChecked({ busy: false, line: `The release channel could not be checked (${err instanceof Error ? err.message : String(err)}).` });
     }
   };
 

@@ -126,7 +126,20 @@ pub async fn check(app: &AppHandle) -> Result<Option<UpdateState>, String> {
         .on_before_exit(move || on_exit.state::<Core>().exiting.store(true, SeqCst))
         .build()
         .map_err(|e| e.to_string())?;
-    let found = updater.check().await.map_err(|e| e.to_string())?;
+    // A feed that answers without a release (no release published yet, so `releases/latest` is 404,
+    // or a release without latest.json) is the plugin's ReleaseNotFound, distinct from a network
+    // failure: there is nothing to install, so it is no update, said once in the log for whoever
+    // looks into a feed that should have one.
+    let found = match updater.check().await {
+        Ok(found) => found,
+        Err(tauri_plugin_updater::Error::ReleaseNotFound) => {
+            if updates.last_check.lock().unwrap().is_none() {
+                core::say(app, "info", "The release channel has no published release; nothing to install");
+            }
+            None
+        }
+        Err(err) => return Err(err.to_string()),
+    };
     *updates.last_check.lock().unwrap() = Some(SystemTime::now());
     let state = found.as_ref().map(available);
     let before = app.state::<Core>().state().update.map(|u| u.version);
