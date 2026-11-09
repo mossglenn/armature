@@ -17,7 +17,8 @@
         "width": 900,
         "height": 640,
         "minWidth": 640,
-        "minHeight": 480
+        "minHeight": 480,
+        "visible": false
       }
     ],
     "security": {
@@ -55,6 +56,13 @@
           "armature"
         ]
       }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJFODE5M0Q4M0ZBQ0M1QzEKUldUQnhhdy8ySk9CdnJub3gvMm9aa0NpS2tsNUFXNUZIakM1ZWdrbHd3enZkeENBZG4vVU9iVFQK",
+      "endpoints": [
+        "https://github.com/mossglenn/armature/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true
     }
   }
 }

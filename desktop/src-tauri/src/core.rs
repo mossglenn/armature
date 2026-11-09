@@ -11,7 +11,8 @@
 //! Quitting sends `stop`, waits up to five seconds for the hub to close and the folder's lock to be
 //! released, then ends the sidecar: the core stays alive after `stop` (a paused hub), and only its
 //! input's end or a kill ends it. A core that does not answer is killed and leaves its lock, which
-//! the next start takes over (ADR-0069 decision 4).
+//! the next start takes over (ADR-0069 decision 4). An update ends the core the same way before it
+//! installs (`end_for_update`; update.rs).
 
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -55,6 +56,9 @@ pub struct ShellState {
     /// (a cold launch by the link) still sees it; the connect page clears nothing, it confirms.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link: Option<String>,
+    /// An update the release channel offers, and how its install is going (update.rs).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update: Option<crate::update::UpdateState>,
 }
 
 #[derive(Default)]
@@ -76,6 +80,8 @@ pub struct Core {
     quitting: AtomicBool,
     /// Set as the core's process ends, before anything else is done about it.
     core_exited: AtomicBool,
+    /// Set while an update ends the core to install itself, so its end is not taken for a failure.
+    updating: AtomicBool,
     /// Set just before the shell exits, so its own exit is not taken for a request to quit.
     pub exiting: AtomicBool,
 }
@@ -102,7 +108,7 @@ impl Core {
     }
 }
 
-fn set_state(app: &AppHandle, update: impl FnOnce(&mut ShellState)) {
+pub(crate) fn set_state(app: &AppHandle, update: impl FnOnce(&mut ShellState)) {
     let core = app.state::<Core>();
     update(&mut core.state.lock().unwrap());
     crate::tray::refresh(app);
@@ -128,7 +134,7 @@ pub fn say(app: &AppHandle, level: &str, line: &str) {
     let _ = app.emit("core-event", event);
 }
 
-/// Starts the sidecar and the hub. Called once, at setup.
+/// Starts the sidecar and the hub: at setup, and again after an update that failed to install.
 pub fn launch(app: &AppHandle) -> Result<(), String> {
     let core = app.state::<Core>();
     let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
@@ -154,6 +160,8 @@ pub fn launch(app: &AppHandle) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     say(app, "info", &format!("The core started (process {})", child.pid()));
+    core.core_exited.store(false, SeqCst);
+    core.updating.store(false, SeqCst);
     *core.child.lock().unwrap() = Some(child);
 
     let handle = app.clone();
@@ -244,6 +252,7 @@ pub async fn start_hub(app: &AppHandle) {
         s.error = None;
         s.started = Some(relay::without_local_token(body.clone()));
     });
+    crate::login::follow(app, &body["settings"]);
     if body["resolver"] == "oidc" {
         if let Some(remote) = remote {
             send_credential(app, &remote).await;
@@ -294,6 +303,7 @@ pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) {
         "connect" => {
             *core.remote.lock().unwrap() = reply["body"]["settings"]["remote"].as_str().map(str::to_string);
         }
+        "settings" => crate::login::follow(app, &reply["body"]["settings"]),
         "signOut" => {
             if let Some(remote) = core.remote.lock().unwrap().clone() {
                 if let Err(err) = keychain::forget_refresh_token(&remote) {
@@ -385,7 +395,7 @@ fn on_terminated(app: &AppHandle, code: Option<i32>) {
     core.child.lock().unwrap().take();
     // Every request waiting on the core learns it is gone.
     core.pending.lock().unwrap().clear();
-    if core.exiting.load(SeqCst) {
+    if core.exiting.load(SeqCst) || core.updating.load(SeqCst) {
         return;
     }
     if core.quitting.load(SeqCst) {
@@ -444,4 +454,31 @@ pub fn quit(app: &AppHandle) {
         }
         handle.exit(0);
     });
+}
+
+/// Ends the core for an update's install (update.rs): `stop`, as quitting sends, up to five
+/// seconds, then its process, and up to five seconds more for the process to be gone, so the
+/// installer replaces no file a running process holds (Windows refuses to).
+pub async fn end_for_update(app: &AppHandle) {
+    let core = app.state::<Core>();
+    core.updating.store(true, SeqCst);
+    if !matches!(tokio::time::timeout(STOP_WAIT, stop_hub(app)).await, Ok(Ok(()))) {
+        say(app, "warn", "The core did not stop the hub in time; it is ended, and the next start takes over its lock");
+    }
+    let child = core.child.lock().unwrap().take();
+    if let Some(child) = child {
+        let _ = child.kill();
+    }
+    let deadline = tokio::time::Instant::now() + STOP_WAIT;
+    while !core.core_exited.load(SeqCst) && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
+/// The core and its hub started again after an update that did not install.
+pub fn relaunch(app: &AppHandle) {
+    if let Err(err) = launch(app) {
+        say(app, "error", &format!("The core could not be started again: {err}"));
+        set_state(app, |s| { s.core = "failed"; s.error = Some(err); });
+    }
 }

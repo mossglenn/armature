@@ -5,9 +5,11 @@
 
 mod core;
 mod keychain;
+mod login;
 mod logs;
 mod relay;
 mod tray;
+mod update;
 
 use serde_json::{json, Value};
 use std::sync::atomic::Ordering::SeqCst;
@@ -15,6 +17,7 @@ use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 use crate::core::{Core, ShellState};
+use crate::update::Updates;
 
 /// A page's request to the core, forwarded when the page may send it; the reply is the core's,
 /// `{ status, body }`, as the hub's route would answer.
@@ -66,6 +69,20 @@ async fn set_hub(app: AppHandle, running: bool) -> Result<ShellState, String> {
     Ok(app.state::<Core>().state())
 }
 
+/// Asks the release channel now, as the daily check does; the state then names the update, or none.
+#[tauri::command]
+async fn check_update(app: AppHandle) -> Result<ShellState, String> {
+    update::check(&app).await?;
+    Ok(app.state::<Core>().state())
+}
+
+/// Installs the update the last check found: downloaded, the hub stopped, installed, and the
+/// program started again (update.rs). Returns only when the install failed, with the reason.
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    update::install(&app).await
+}
+
 /// The system's request to end the program (SIGTERM, and SIGINT from a terminal) is a quit, so the
 /// hub stops and the lock is released; Tauri does not treat it as one (the spike, ADR-0069 decision 4).
 #[cfg(unix)]
@@ -90,8 +107,11 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![login::HIDDEN])))
         .manage(Core::default())
-        .invoke_handler(tauri::generate_handler![core_request, shell_state, set_hub, log_lines, pairing_value, open_log_folder])
+        .manage(Updates::default())
+        .invoke_handler(tauri::generate_handler![core_request, shell_state, set_hub, log_lines, pairing_value, open_log_folder, check_update, install_update])
         // Closing the window hides it; the program stays in the tray so the tools keep their hub
         // (plan §9, §15 question 10). Quit is the tray's, the menu's, or the system's.
         .on_window_event(|window, event| {
@@ -105,6 +125,11 @@ pub fn run() {
             #[cfg(unix)]
             quit_on_signals(&handle);
             tray::build(&handle)?;
+            // The window starts hidden (tauri.conf.json) and is shown unless the system started
+            // the program at login, when the tray is enough (login.rs).
+            if !login::launched_hidden(std::env::args()) {
+                tray::show_window(&handle);
+            }
             // macOS registers the scheme from the bundle; Windows and Linux at run time too,
             // which a development build needs (plan §8).
             #[cfg(any(windows, target_os = "linux"))]
@@ -122,6 +147,7 @@ pub fn run() {
             if let Err(err) = core::launch(&handle) {
                 core::say(&handle, "error", &format!("The core could not be started: {err}"));
             }
+            update::watch(&handle);
             // A link that launched the program.
             if let Ok(Some(urls)) = app.deep_link().get_current() {
                 for url in urls {
