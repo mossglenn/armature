@@ -52,4 +52,4 @@ To start from nothing, quit the program, remove the data folder, and remove the 
 | `cargo test` (in `src-tauri/`) | The relay's rules, the link, the keychain's naming, the log files |
 | `npm run tauri build -- --debug` | A debug bundle |
 
-CI runs all five on Ubuntu (`../.github/workflows/desktop.yml`) when the shell or the core changes; the core's own suites run in `ci.yml`.
+CI runs all five on Ubuntu (`../.github/workflows/desktop.yml`) when the shell or the core changes; the core's own suites run in `ci.yml`. A Windows debug installer (NSIS, per user) is built only when the workflow is started by hand, `gh workflow run desktop.yml --ref <branch>`, and kept as the run's artifact `armature-desktop-debug-windows` for a week.
