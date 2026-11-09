@@ -69,11 +69,19 @@ async fn set_hub(app: AppHandle, running: bool) -> Result<ShellState, String> {
     Ok(app.state::<Core>().state())
 }
 
-/// Asks the release channel now, as the daily check does; the state then names the update, or none.
+/// What a check of the release channel found, with the shell's state after it (update.rs).
+#[derive(serde::Serialize)]
+struct Checked {
+    found: update::Found,
+    state: ShellState,
+}
+
+/// Asks the release channel now, as the daily check does; the answer says whether it found an
+/// update, that this is the latest version, or no release at all, since the last is not the second.
 #[tauri::command]
-async fn check_update(app: AppHandle) -> Result<ShellState, String> {
-    update::check(&app).await?;
-    Ok(app.state::<Core>().state())
+async fn check_update(app: AppHandle) -> Result<Checked, String> {
+    let found = update::check(&app).await?;
+    Ok(Checked { found, state: app.state::<Core>().state() })
 }
 
 /// Installs the update the last check found: downloaded, the hub stopped, installed, and the

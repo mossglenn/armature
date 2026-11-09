@@ -1,10 +1,18 @@
 //! The program's own updates (docs/desktop-program-plan.md §10): the release channel checked at
 //! start and daily, an available update shown in the window, and installed only when the person
-//! asks. The feed and the key are the configuration's (`plugins.updater` in tauri.conf.json: this
-//! repository's latest release's `latest.json`, the updater's minisign public key, and
+//! asks. The feed and the key are the configuration's (`plugins.updater` in tauri.conf.json: the
+//! `latest.json` of this repository's `desktop-channel` release, which only a published program
+//! release moves (.github/workflows/desktop-channel.yml), the updater's minisign public key, and
 //! `requireSignedVersion`, so a feed cannot pair a newer version number with an older release's
 //! genuine artifact). An update whose signature does not verify is never installed (the plugin's
 //! own check, on download and again on install).
+//!
+//! A feed that answers without a release is not "the latest version": the plugin (2.14.1,
+//! `updater.rs`) reports every status but 2xx as `ReleaseNotFound`, a 404 for a channel with no
+//! release yet and a 503 or a proxy's 502 alike. On that answer nothing is known, so nothing
+//! changes: an update already found stays offered, the check is not recorded (the watcher tries
+//! again within the hour), and the page is told the channel had no release to offer (the 2026-11-09
+//! review's R2).
 //!
 //! Installing downloads the update while the hub still serves the tools, then ends the core as
 //! quitting does (`stop`, so the folder's lock is released and no write is cut off, then its
@@ -60,7 +68,35 @@ pub struct UpdateState {
 pub struct Updates {
     pending: Mutex<Option<Update>>,
     installing: AtomicBool,
+    /// When the channel last answered with or without an update; an answer without a release is not recorded.
     last_check: Mutex<Option<SystemTime>>,
+    /// Whether the log has said, this run, that the channel answered without a release.
+    warned_no_release: AtomicBool,
+}
+
+/// What a check found, for the page that asked (lib.rs's `check_update`).
+#[derive(Clone, Copy, Serialize, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Found {
+    /// A newer version, now in the shell's state and waiting to be installed.
+    Update,
+    /// The feed names this version or an older one: nothing to install.
+    Latest,
+    /// The feed answered without a release: none is published, or it answered an error status
+    /// (the module's header). Nothing is known, so the pending update and the last check stay.
+    NoRelease,
+}
+
+/// The plugin's answer, sorted into what the program does with it. `ReleaseNotFound` is the one
+/// error that is not a failure of the check: a feed with nothing on it, or one that answered a
+/// status the plugin folds into the same error, is an answer without a release.
+fn classify(result: &Result<Option<Update>, tauri_plugin_updater::Error>) -> Result<Found, String> {
+    match result {
+        Ok(Some(_)) => Ok(Found::Update),
+        Ok(None) => Ok(Found::Latest),
+        Err(tauri_plugin_updater::Error::ReleaseNotFound) => Ok(Found::NoRelease),
+        Err(err) => Err(err.to_string()),
+    }
 }
 
 /// Whether a daily check is due: none yet, or the last a day ago or more; a clock set back is
@@ -112,11 +148,12 @@ pub fn watch(app: &AppHandle) {
     });
 }
 
-/// Asks the release channel; the shell's state then names the update, or none.
-pub async fn check(app: &AppHandle) -> Result<Option<UpdateState>, String> {
+/// Asks the release channel; the shell's state then names the update, or none, and the answer says
+/// which of the three the channel gave.
+pub async fn check(app: &AppHandle) -> Result<Found, String> {
     let updates = app.state::<Updates>();
     if updates.installing.load(SeqCst) {
-        return Ok(app.state::<Core>().state().update);
+        return Ok(Found::Update);
     }
     // Windows: the plugin ends the program once the installer has started, without the exit
     // events; the shell is then exiting, not quitting (lib.rs's ExitRequested passes).
@@ -126,32 +163,28 @@ pub async fn check(app: &AppHandle) -> Result<Option<UpdateState>, String> {
         .on_before_exit(move || on_exit.state::<Core>().exiting.store(true, SeqCst))
         .build()
         .map_err(|e| e.to_string())?;
-    // A feed that answers without a release (no release published yet, so `releases/latest` is 404,
-    // or a release without latest.json) is the plugin's ReleaseNotFound, distinct from a network
-    // failure: there is nothing to install, so it is no update, said once in the log for whoever
-    // looks into a feed that should have one.
-    let found = match updater.check().await {
-        Ok(found) => found,
-        Err(tauri_plugin_updater::Error::ReleaseNotFound) => {
-            if updates.last_check.lock().unwrap().is_none() {
-                core::say(app, "info", "The release channel has no published release; nothing to install");
-            }
-            None
+    let result = updater.check().await;
+    let found = classify(&result)?;
+    if found == Found::NoRelease {
+        // Said once a run, for whoever looks into a feed that should have a release; the state, the
+        // pending update and the last check stay as they were (the module's header).
+        if !updates.warned_no_release.swap(true, SeqCst) {
+            core::say(app, "info", "The release channel answered without a release (none is published, or it did not answer); the program tries again within the hour");
         }
-        Err(err) => return Err(err.to_string()),
-    };
+        return Ok(found);
+    }
+    let update = result.unwrap_or_default();
     *updates.last_check.lock().unwrap() = Some(SystemTime::now());
-    let state = found.as_ref().map(available);
+    let state = update.as_ref().map(available);
     let before = app.state::<Core>().state().update.map(|u| u.version);
     if let Some(update) = &state {
         if before.as_deref() != Some(update.version.as_str()) {
             core::say(app, "info", &format!("Version {} is available (this is {})", update.version, update.current));
         }
     }
-    *updates.pending.lock().unwrap() = found;
-    let shown = state.clone();
-    core::set_state(app, |s| s.update = shown);
-    Ok(state)
+    *updates.pending.lock().unwrap() = update;
+    core::set_state(app, |s| s.update = state);
+    Ok(found)
 }
 
 /// Downloads, ends the core, installs and restarts; on failure the core starts again and the
@@ -223,6 +256,18 @@ mod tests {
         assert!(due(Some(now - Duration::from_secs(3 * 24 * 60 * 60)), now));
         // A clock set back: the last check looks like the future, and a check is made.
         assert!(due(Some(now + Duration::from_secs(60)), now));
+    }
+
+    #[test]
+    fn an_answer_without_a_release_is_neither_the_latest_version_nor_a_failed_check() {
+        use tauri_plugin_updater::Error;
+        assert_eq!(classify(&Ok(None)), Ok(Found::Latest));
+        // The plugin's one error for a 404 and for every other status but 2xx (its updater.rs).
+        assert_eq!(classify(&Err(Error::ReleaseNotFound)), Ok(Found::NoRelease));
+        // Any other error is the check failing, with its reason for the log and the page.
+        let failed = classify(&Err(Error::EmptyEndpoints));
+        assert!(failed.is_err(), "{failed:?}");
+        assert!(failed.unwrap_err().to_lowercase().contains("endpoint"));
     }
 
     #[test]

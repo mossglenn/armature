@@ -333,4 +333,12 @@ test.describe('updates and starting at login', () => {
     await page.getByRole('button', { name: 'Check for updates' }).click();
     await expect(page.getByText('This is the latest version.')).toBeVisible();
   });
+
+  test('a channel that answers without a release is not called the latest version', async ({ page }) => {
+    await page.goto('/?scenario=header&update=no_release');
+    await nav(page, 'Settings').click();
+    await page.getByRole('button', { name: 'Check for updates' }).click();
+    await expect(page.getByText('The release channel answered without a release')).toBeVisible();
+    await expect(page.getByText('This is the latest version.')).toHaveCount(0);
+  });
 });

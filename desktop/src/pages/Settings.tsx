@@ -74,7 +74,13 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
     setChecked({ busy: true });
     try {
       const after = await backend.checkUpdate();
-      setChecked({ busy: false, line: after.update ? `Version ${after.update.version} is available; it is offered at the top of the window.` : 'This is the latest version.' });
+      const line = {
+        update: `Version ${after.state.update?.version ?? ''} is available; it is offered at the top of the window.`,
+        latest: 'This is the latest version.',
+        // Not "the latest version": the channel answered without a release, which is also what an error status looks like to the updater.
+        no_release: 'The release channel answered without a release (none is published yet, or it did not answer); the program tries again within the hour.',
+      }[after.found];
+      setChecked({ busy: false, line });
     } catch (err) {
       setChecked({ busy: false, line: `The release channel could not be checked (${err instanceof Error ? err.message : String(err)}).` });
     }
