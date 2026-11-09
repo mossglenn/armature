@@ -1,29 +1,48 @@
 # The desktop program's release (docs/desktop-program-plan.md §10, §14 step 5; ADR-0069).
 #
-# On a tag `desktop-v<version>` matching desktop/src-tauri/tauri.conf.json: the program built on its
-# own runner for each target, each an installer plus the updater's artifact with its signature,
-# attached to one GitHub release as a draft with the latest.json the updater reads
-# (https://github.com/mossglenn/armature/releases/latest/download/latest.json, tauri.conf.json's
-# plugins.updater). The release is published by hand once the installers have been tried; a draft is
-# invisible to the updater, so nothing reaches an installed program until then.
+# On a tag `desktop-v<version>` matching desktop/src-tauri/tauri.conf.json, two jobs:
 #
-#   macOS, Apple silicon   .dmg and .app, aarch64-apple-darwin
-#   macOS, Intel           .dmg and .app, x86_64-apple-darwin, cross-built on the same runner; one
-#                          per architecture, not universal, since a universal build carries two copies
-#                          of Node (plan §10); prepare.mjs takes Node for the build's target from
-#                          TAURI_ENV_TARGET_TRIPLE
-#   Windows x64            the NSIS installer, per user, no administrator needed
+#   build     The program built on its own runner for each target, with no secret in reach: the
+#             job's token can read the repository and nothing else, and the signing key is not in
+#             its environment, so none of the build's dependencies (prepare.mjs, esbuild, Vite and
+#             its plugins, every crate's build script and procedural macro) can read it. The
+#             installers and the updater's artifacts are kept as workflow artifacts for the next job.
+#   publish   On one runner, under a GitHub environment that holds the signing key: the updater's
+#             artifacts signed (`tauri signer sign`, bound to the version), latest.json written from
+#             the signatures, and one GitHub release created as a draft with everything attached.
+#             Nothing is built here and no dependency's code runs: the Tauri CLI is installed alone,
+#             with scripts off, and the rest is `gh`. This is the only job with `contents: write`.
+#
+# The two environments (plan §10; the 2026-11-09 review's R1 and D7): `release`, for `desktop-v*`
+# tags, holds the production key and requires Amos's approval before the job runs, so a key read
+# is impossible without a reviewed run; `rehearsal`, for `desktop-rehearsal-*` tags, holds a scratch
+# key, whose public half is in tauri.rehearsal.conf.json, so a rehearsal build never carries the
+# production key's signature and never offers itself to an installed program. Each environment
+# admits only its own tags.
+#
+#   macOS, Apple silicon   .dmg; the updater's .app.tar.gz, aarch64-apple-darwin
+#   macOS, Intel           .dmg; .app.tar.gz, x86_64-apple-darwin, cross-built on the same runner;
+#                          one per architecture, not universal, since a universal build carries two
+#                          copies of Node (plan §10); prepare.mjs takes Node for the build's target
+#                          from TAURI_ENV_TARGET_TRIPLE
+#   Windows x64            the NSIS installer, per user, no administrator needed; the updater installs
+#                          the same file
 #   Linux x64              the AppImage, which the updater replaces, and a .deb, which it does not;
 #                          on Ubuntu 22.04 so the AppImage runs on the older glibc
 #
+# The release is published by hand once the installers have been tried. Publishing moves the update
+# channel (desktop-channel.yml): the updater reads a fixed release's latest.json, not the
+# repository's "latest release", so a hub or client release never becomes the program's feed, and a
+# draft stays invisible to every installed program until then (the review's R3).
+#
 # On a tag `desktop-rehearsal-<n>` (on a branch, before it merges: a tag runs the workflow file at its
-# own commit, which running a workflow by hand cannot do until the file is on main), it builds the
-# same into a draft of that name, for trying the installers and the release itself; delete the draft
-# and the tag afterwards (gh release delete desktop-rehearsal-<n> --cleanup-tag). The version check
-# then only asks the three files to agree.
+# own commit, which running a workflow by hand cannot do until the file is on main), the same into a
+# prerelease draft of that name, signed with the scratch key and pointing at the rehearsal channel;
+# delete the draft and the tag afterwards (gh release delete desktop-rehearsal-<n> --cleanup-tag). The
+# version check then only asks the three files to agree.
 #
 # Signing (plan §15 question 12, decided 2026-11-05: the updater's signature only, until an audience
-# beyond Amos and the rehearsal machines): the repository's secrets TAURI_SIGNING_PRIVATE_KEY (the
+# beyond Amos and the rehearsal machines): the `release` environment's TAURI_SIGNING_PRIVATE_KEY (the
 # private half of ~/.tauri/armature.key, whose public half is in tauri.conf.json) and
 # TAURI_SIGNING_PRIVATE_KEY_PASSWORD. An update whose signature does not verify is never installed.
 # macOS builds are signed ad hoc (signingIdentity "-"), which Apple silicon requires to open at all;
@@ -31,8 +50,7 @@
 # An Apple Developer ID or a Windows certificate is a configuration change when it comes (the spike).
 #
 # The third-party actions are pinned to commits (the version beside each, the pins Quiver's release
-# workflow uses), since a moving tag would let a compromised action read the signing key; GitHub's
-# own actions stay on their major tags, as ci.yml has them.
+# workflow uses); GitHub's own actions stay on their major tags, as ci.yml has them.
 
 name: Desktop release
 
@@ -41,7 +59,7 @@ on:
     tags: ['desktop-v*', 'desktop-rehearsal-*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -53,26 +71,30 @@ jobs:
           - name: macOS (Apple silicon)
             os: macos-latest
             target: aarch64-apple-darwin
-            args: --target aarch64-apple-darwin --bundles app,dmg
+            bundles: app,dmg
           - name: macOS (Intel)
             os: macos-latest
             target: x86_64-apple-darwin
-            args: --target x86_64-apple-darwin --bundles app,dmg
+            bundles: app,dmg
           - name: Windows (x64)
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            args: --bundles nsis
+            bundles: nsis
           - name: Linux (x64)
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            args: --bundles appimage,deb
+            bundles: appimage,deb
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      title: ${{ steps.version.outputs.title }}
     steps:
       - uses: actions/checkout@v4
 
       # A tag names the version the program says it is; the three files that carry it agree with it.
       - name: Check the version
+        id: version
         shell: bash
         run: |
           conf=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
@@ -83,10 +105,12 @@ jobs:
             echo "::error::The program's version differs between tauri.conf.json, package.json and Cargo.toml"; exit 1
           fi
           case "$GITHUB_REF_NAME" in
-            desktop-rehearsal-*) echo "TITLE=Armature desktop $conf, $GITHUB_REF_NAME" >> "$GITHUB_ENV" ;;
-            "desktop-v$conf") echo "TITLE=Armature desktop $conf" >> "$GITHUB_ENV" ;;
+            desktop-rehearsal-*) title="Armature desktop $conf, $GITHUB_REF_NAME" ;;
+            "desktop-v$conf") title="Armature desktop $conf" ;;
             *) echo "::error::The tag $GITHUB_REF_NAME does not name the program's version, $conf (desktop-v$conf)"; exit 1 ;;
           esac
+          echo "version=$conf" >> "$GITHUB_OUTPUT"
+          echo "title=$title" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v4
         with:
@@ -120,24 +144,118 @@ jobs:
         run: npm ci
         working-directory: desktop
 
-      # tauri.release.conf.json turns on the updater's artifacts, which need the signing key, so the
-      # pull requests' debug builds (desktop.yml) build without it.
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0, 2026-10-27
+      # The plain bundles, no updater artifact and no key: a rehearsal tag adds the overlay that points
+      # the program at the rehearsal channel with the scratch key's public half.
+      - name: Build the program
+        shell: bash
+        working-directory: desktop
+        run: |
+          overlay=""
+          case "$GITHUB_REF_NAME" in
+            desktop-rehearsal-*) overlay="--config $GITHUB_WORKSPACE/desktop/src-tauri/tauri.rehearsal.conf.json" ;;
+          esac
+          npm run tauri build -- --target "${{ matrix.target }}" --bundles "${{ matrix.bundles }}" $overlay
+
+      # What the release carries, under the names tauri-bundler gives them, plus the updater's artifact
+      # for the target: on macOS the .app as a gzipped tar, as createUpdaterArtifacts would make it (the
+      # updater unpacks it skipping the first path component, so the archive holds Armature.app at its
+      # root; COPYFILE_DISABLE keeps macOS tar from adding AppleDouble files); on Windows the NSIS
+      # installer itself; on Linux the AppImage itself. The signatures are the publish job's.
+      - name: Collect the bundles
+        shell: bash
+        working-directory: desktop
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COPYFILE_DISABLE: '1'
+        run: |
+          set -euo pipefail
+          bundle="src-tauri/target/$TARGET/release/bundle"
+          mkdir -p out
+          case "$TARGET" in
+            aarch64-apple-darwin|x86_64-apple-darwin)
+              arch=aarch64; [ "$TARGET" = x86_64-apple-darwin ] && arch=x64
+              cp "$bundle"/dmg/*.dmg out/
+              tar -czf "out/Armature_${VERSION}_${arch}.app.tar.gz" -C "$bundle/macos" Armature.app
+              ;;
+            x86_64-pc-windows-msvc) cp "$bundle"/nsis/*-setup.exe out/ ;;
+            x86_64-unknown-linux-gnu) cp "$bundle"/appimage/*.AppImage "$bundle"/deb/*.deb out/ ;;
+          esac
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.target }}
+          path: desktop/out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Sign and publish the draft
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The environment holds the key: `release` asks Amos to approve the run first; `rehearsal` holds
+    # the scratch key. Each admits only its own tags, so a tag of the other kind fails here.
+    environment: ${{ startsWith(github.ref_name, 'desktop-rehearsal-') && 'rehearsal' || 'release' }}
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.build.outputs.version }}
+      TITLE: ${{ needs.build.outputs.title }}
+    steps:
+      # For desktop/package.json (the CLI's pinned version) and desktop/scripts/latest-json.mjs; nothing is installed from it.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          path: bundles
+          merge-multiple: true
+
+      # The CLI alone, at the version the shell pins, with install scripts off: the one program that
+      # runs beside gh in reach of the key, the same published package the build job's CLI came from.
+      - name: Install the Tauri CLI alone
+        run: |
+          mkdir tools && cd tools && npm init -y >/dev/null
+          npm install --no-save --ignore-scripts --no-audit --no-fund "@tauri-apps/cli@$(node -p "require('../desktop/package.json').devDependencies['@tauri-apps/cli']")"
+
+      # Each signature is bound to the version (`--app-version`), which requireSignedVersion checks, so
+      # a feed cannot offer an older genuine artifact under a newer number.
+      - name: Sign the updater's artifacts
+        env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: ${{ env.TITLE }}
-          releaseCommitish: ${{ github.sha }}
-          releaseBody: |
-            The Armature desktop program: a workspace hub on your machine for your tools, connected to your instance. What it does, how to install it and what each message means: https://github.com/mossglenn/armature/blob/main/docs/desktop-program.md
+        run: |
+          set -euo pipefail
+          for f in bundles/*.app.tar.gz bundles/*-setup.exe bundles/*.AppImage; do
+            ./tools/node_modules/.bin/tauri signer sign --app-version "$VERSION" "$f"
+          done
+          ls -l bundles
 
-            These builds are not signed by Apple or Microsoft yet. On macOS, the first time, open it, then choose Open Anyway in System Settings, Privacy & Security; on Windows, choose More info, then Run anyway. The guide has the details. Updates are signed and checked before they install.
-          releaseDraft: true
-          prerelease: false
-          # The updater on Windows installs the NSIS installer, the only Windows bundle built.
-          updaterJsonPreferNsis: true
-          args: ${{ matrix.args }} --config ${{ github.workspace }}/desktop/src-tauri/tauri.release.conf.json
+      - name: Write the release notes and latest.json
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'EOF'
+          The Armature desktop program: a workspace hub on your machine for your tools, connected to your instance. What it does, how to install it and what each message means: https://github.com/mossglenn/armature/blob/main/docs/desktop-program.md
+
+          These builds are not signed by Apple or Microsoft yet. On macOS, the first time, open it, then choose Open Anyway in System Settings, Privacy & Security; on Windows, choose More info, then Run anyway. The guide has the details. Updates are signed and checked before they install.
+          EOF
+          node desktop/scripts/latest-json.mjs bundles "$TAG" "$VERSION" notes.md > latest.json
+          cat latest.json
+
+      # One draft per tag: a run repeated for the same tag adds to the draft rather than making a second.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prerelease=""
+          case "$TAG" in desktop-rehearsal-*) prerelease="--prerelease" ;; esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" --clobber bundles/* latest.json
+          else
+            gh release create "$TAG" --draft $prerelease --title "$TITLE" --notes-file notes.md --target "$GITHUB_SHA" bundles/* latest.json
+          fi
+          gh release view "$TAG"

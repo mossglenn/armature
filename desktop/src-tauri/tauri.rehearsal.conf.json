@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFDMTg4MDdDODUxNUQ1MDAKUldRQTFSV0ZmSUFZSER2eFZzbTd5N1Jzc2x2V1ZnSEVlSCsyWVNNRkRFekhrU1dYZ3llVlBNV3EK",
+      "endpoints": [
+        "https://github.com/mossglenn/armature/releases/download/desktop-rehearsal-channel/latest.json"
+      ]
+    }
+  }
+}
