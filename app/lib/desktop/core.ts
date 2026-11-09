@@ -334,7 +334,9 @@ export function runCore(options: CoreOptions): Core {
     connect: async (request) => {
       const { dataDir: dir, settings: current } = opened();
       const profile = await readProfile(request.remote);
-      const next = parseSettings({ remote: profile.remote, instance: profile.instance ?? null, identity: profile.identity }, current);
+      // A remote that signs people in names them itself, so an identifier kept for a remote under header is dropped.
+      const user = profile.identity.resolver === 'oidc' ? { user: null } : {};
+      const next = parseSettings({ remote: profile.remote, instance: profile.instance ?? null, identity: profile.identity, ...user }, current);
       const refusal = changeRefusal(current, next, await workspaceNames());
       if (refusal) throw refusal;
       if (next.remote !== current.remote || JSON.stringify(next.identity) !== JSON.stringify(current.identity)) {
@@ -430,6 +432,11 @@ export function runCore(options: CoreOptions): Core {
       if (running) running.config.localToken = localToken;
       return ok({ localToken });
     },
+
+    // What a paired tool sends as Armature-User beside the pairing value, for the pairing page: the
+    // identifier under header, the remote's externalId for the signed-in person under oidc, which is
+    // the provider's sub and found nowhere else a person looks (the Keycloak rehearsal, 2026-11-08).
+    toolIdentity: async () => ok({ user: await owner() }),
 
     workspaces: async () => viaProgram('GET', '/workspace'),
     status: async (request) => viaProgram('GET', `/workspace/${named(request)}/status`),
