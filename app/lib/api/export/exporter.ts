@@ -1,6 +1,6 @@
 import { CLASS_ANCESTORS, CLASS_FIELDS, type FieldShape } from '@armature/types';
 import type { TerminusDocument } from '../store';
-import { handleOf } from '../identity';
+import { handleFor, handleOf } from '../identity';
 import slicesJson from './slices.json';
 
 /**
@@ -156,10 +156,15 @@ export async function applyProfile(
     return token;
   };
 
-  // Handles by their owner, longest first so `ab_` is not taken for `a`'s.
+  // Handles by their owner, longest first so `ab_` is not taken for `a`'s. A person's branches
+  // may begin with either handle: the email's (since 2026-11-08) or the external identifier's
+  // (before, and for a record without an email), so both are rewritten.
   const handles = documents
     .filter((d) => d['@type'] === 'User' && typeof d.externalId === 'string')
-    .map((d) => ({ handle: handleOf(d.externalId as string), userId: d['@id'] }))
+    .flatMap((d) => {
+      const user = { externalId: d.externalId as string, email: d.email };
+      return [...new Set([handleFor(user), handleOf(user.externalId)])].map((handle) => ({ handle, userId: d['@id'] }));
+    })
     .sort((a, b) => b.handle.length - a.handle.length);
   const rewriteBranch = async (branch: string): Promise<string> => {
     const owner = handles.find(({ handle }) => branch.startsWith(`${handle}_`));

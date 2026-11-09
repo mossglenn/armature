@@ -7,10 +7,13 @@ import { ApiError } from '../errors';
 import { isActive, type GrantDocument } from '../grants';
 import { BRANCH_NAME, readJson } from '../http';
 import { isRecord } from '../store';
-import { handleOf, principalOf, requireClaims, resolveUser, type UserDocument } from '../identity';
+import { handleFor, handleOf, principalOf, requireClaims, resolveUser, type UserDocument } from '../identity';
 import { requireActionRoutes } from '../localToken';
 
-export { handleOf };
+export { handleFor, handleOf };
+
+/** A new workspace's name, the part after `<handle>_`: the characters a branch name allows (BRANCH_NAME checks the whole). */
+const WORKSPACE_NAME = /^[A-Za-z0-9._-]{1,99}$/;
 import { cloneBranch, mirrorMain, type Owner } from '../workspace/clone';
 import { bringIn, deliver, removeWorkspace } from '../workspace/bringIn';
 import { localCommitsSince, pushWorkspace } from '../workspace/push';
@@ -115,12 +118,19 @@ workspace.post('/', async (c) => {
 
   const hub = hubOf(c);
   const { externalId } = await requireClaims(c);
-  const branch = typeof existing === 'string' ? existing : `${handleOf(externalId)}_${name as string}`;
-  if (!BRANCH_NAME.test(branch)) {
-    throw new ApiError(400, 'bad_name', `The workspace's branch, ${branch}, must match ${BRANCH_NAME.source}`);
-  }
   const records = recordsOf(c);
-  if (await records.get(branch)) throw new ApiError(409, 'workspace_exists', `This hub already holds the workspace ${branch}`);
+  const checkBranch = async (branch: string) => {
+    if (!BRANCH_NAME.test(branch)) {
+      throw new ApiError(400, 'bad_name', `The workspace's branch, ${branch}, must match ${BRANCH_NAME.source}`);
+    }
+    if (await records.get(branch)) throw new ApiError(409, 'workspace_exists', `This hub already holds the workspace ${branch}`);
+  };
+  // A new workspace's name is checked before the remote is asked, so a bad one is refused offline too;
+  // the whole branch name waits for the remote's record of the person, whose email gives the handle.
+  if (typeof existing === 'string') await checkBranch(existing);
+  else if (!WORKSPACE_NAME.test(name as string)) {
+    throw new ApiError(400, 'bad_name', `The workspace's name, ${name as string}, must match ${WORKSPACE_NAME.source}`);
+  }
 
   // The remote is the registry: the owner is whoever it resolves the caller to,
   // and under a token that must be the person this request names (remote.ts).
@@ -128,6 +138,8 @@ workspace.post('/', async (c) => {
   const remote = remoteClient(hub, externalId);
   const me = await fromRemote(hub, () => remote.users.me());
   const owner: Owner = { id: me.data['@id'], externalId };
+  const branch = typeof existing === 'string' ? existing : `${handleFor({ externalId, email: me.data.email })}_${name as string}`;
+  if (typeof existing !== 'string') await checkBranch(branch);
 
   await mirrorMain(hub, remote, owner);
   const start = typeof from === 'string' ? from : 'main';
