@@ -3,9 +3,11 @@
 # On a pull request or a push to main that touches the shell or the core it carries: the pages
 # type-check and pass their browser tests against the fake core (e2e/), the Rust side passes
 # clippy with warnings as errors and its unit tests, and a debug bundle builds on Ubuntu (a .deb,
-# kept for a week for a Linux rehearsal). The release builds for
-# macOS, Windows and Linux come with the release workflow (the plan's step 5). The core's own
-# suites run in ci.yml: its modules in the contract and files jobs, its bundle in the app job.
+# kept for a week for a Linux rehearsal). Run by hand (workflow_dispatch), it builds instead a
+# Windows debug installer for a rehearsal on a real machine (§12; decided 2026-11-08), kept for a
+# week; Windows is not built on every pull request, since the release workflow (the plan's step 5)
+# builds macOS, Windows and Linux on their own runners. The core's own suites run in ci.yml: its
+# modules in the contract and files jobs, its bundle in the app job.
 #
 # desktop/ is installed on its own, with its own lockfile (decided 2026-11-07), so this is the only
 # job that installs it; the root's workspace is installed too, since the core is bundled there.
@@ -26,10 +28,13 @@ on:
       - 'app/desktop.ts'
       - 'app/lib/desktop/**'
       - '.github/workflows/desktop.yml'
+  # gh workflow run desktop.yml --ref <branch>: the Windows installer only.
+  workflow_dispatch:
 
 jobs:
   shell:
     name: The desktop shell's checks and debug bundle on Ubuntu
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -89,5 +94,46 @@ jobs:
         with:
           name: armature-desktop-debug-deb
           path: desktop/src-tauri/target/debug/bundle/deb/*.deb
+          retention-days: 7
+          if-no-files-found: error
+
+  windows:
+    name: A Windows debug installer for a rehearsal
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - uses: actions/cache@v4
+        with:
+          path: desktop/.cache
+          key: desktop-node-${{ runner.os }}-${{ hashFiles('desktop/scripts/prepare.mjs') }}
+      - name: Install the root's workspace (the core is bundled there)
+        run: npm ci
+      - name: Install the shell's packages
+        run: npm ci
+        working-directory: desktop
+      # The build's beforeBuildCommand prepares the sidecar (Node's win-x64 zip, checksum verified)
+      # and the core's bundle, then the pages. NSIS's installer is per user, so the laptop needs no
+      # administrator; WebView2 ships with Windows 10 and 11. A debug build keeps its console
+      # window (main.rs sets the windows subsystem for release only), which shows the shell's log.
+      - name: Build a debug installer
+        run: npm run tauri build -- --debug --bundles nsis
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: armature-desktop-debug-windows
+          path: desktop/src-tauri/target/debug/bundle/nsis/*.exe
           retention-days: 7
           if-no-files-found: error
