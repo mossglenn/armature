@@ -11,7 +11,12 @@
 // SHASUMS256.txt. The root's workspace must be installed (`npm ci` at the repository root), since
 // the core is built there. Run by `npm run sidecar`, and by tauri.conf.json before dev and build.
 //
-//   node scripts/prepare.mjs [--target <rust target triple>]   the host's triple by default
+//   node scripts/prepare.mjs [--target <rust target triple>]
+//
+// The target is the flag's, else the build's: Tauri names it to its hook commands as
+// TAURI_ENV_TARGET_TRIPLE, so `tauri build --target x86_64-apple-darwin` on an Apple silicon runner
+// carries Intel Node, not the runner's (the release workflow, .github/workflows/desktop-release.yml);
+// else the host's.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -37,7 +42,7 @@ copyFileSync(join(root, 'app', 'dist', 'desktop.mjs'), join(tauri, 'core', 'desk
 console.log(`src-tauri/core/desktop.mjs: ${(statSync(join(tauri, 'core', 'desktop.mjs')).size / 1048576).toFixed(2)} MiB`);
 
 const flag = process.argv.indexOf('--target');
-const triple = flag >= 0 ? process.argv[flag + 1] : execFileSync('rustc', ['--print', 'host-tuple'], { encoding: 'utf8' }).trim();
+const triple = flag >= 0 ? process.argv[flag + 1] : process.env.TAURI_ENV_TARGET_TRIPLE || execFileSync('rustc', ['--print', 'host-tuple'], { encoding: 'utf8' }).trim();
 const dists = {
   'aarch64-apple-darwin': { name: 'darwin-arm64', ext: 'tar.gz', inner: 'bin/node' },
   'x86_64-apple-darwin': { name: 'darwin-x64', ext: 'tar.gz', inner: 'bin/node' },
