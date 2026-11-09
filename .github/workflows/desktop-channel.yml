@@ -1,0 +1,56 @@
+# The desktop program's update channel (docs/desktop-program-plan.md §10; the 2026-11-09 review's R3).
+#
+# An installed program reads one fixed release's latest.json (tauri.conf.json's plugins.updater:
+# the `desktop-channel` release; a rehearsal build, the `desktop-rehearsal-channel` release), not the
+# repository's "latest release", which any later release of the hub, the schema or a client would
+# become, leaving every installed program with a feed that names no update at all. Only publishing
+# a program release moves the channel: when a `desktop-v*` release is published (a draft made by
+# desktop-release.yml, tried, then published by hand), its latest.json is copied onto the channel
+# release; a `desktop-rehearsal-*` prerelease moves the rehearsal channel alone, and a `desktop-v*`
+# release marked as a prerelease moves nothing. The channel releases are prereleases themselves,
+# so GitHub never shows one as the repository's latest, and they hold latest.json alone: the
+# manifest's addresses point at the versioned release's assets.
+#
+# This job runs no dependency code, only gh; `contents: write` is what uploading an asset needs.
+
+name: Desktop update channel
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  channel:
+    name: Move the channel to the published release
+    if: startsWith(github.event.release.tag_name, 'desktop-v') || startsWith(github.event.release.tag_name, 'desktop-rehearsal-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Copy latest.json onto the channel release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            desktop-v*)
+              if [ "$PRERELEASE" != "false" ]; then echo "$TAG is a prerelease; the channel stays where it is"; exit 0; fi
+              channel=desktop-channel ;;
+            desktop-rehearsal-*) channel=desktop-rehearsal-channel ;;
+            *) echo "$TAG is not the program's"; exit 0 ;;
+          esac
+          gh release download "$TAG" --repo "$REPO" --pattern latest.json --dir feed
+          echo "The channel $channel will offer:"; cat feed/latest.json
+          if ! gh release view "$channel" --repo "$REPO" >/dev/null 2>&1; then
+            gh release create "$channel" --repo "$REPO" --prerelease --target "$SHA" \
+              --title "Desktop update channel ($channel)" \
+              --notes "The desktop program's update feed: latest.json here names the published release an installed program updates to (.github/workflows/desktop-channel.yml). Not a release to install; those are the desktop-v* releases."
+          fi
+          gh release upload "$channel" feed/latest.json --clobber --repo "$REPO"
+          gh release view "$channel" --repo "$REPO"
