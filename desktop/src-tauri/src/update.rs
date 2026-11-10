@@ -39,6 +39,7 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::core::{self, Core};
+use crate::login;
 
 /// How often the release channel is asked, by the wall clock.
 pub const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
@@ -47,12 +48,12 @@ pub const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
 const WAKE_EVERY: Duration = Duration::from_secs(60 * 60);
 /// The first check waits for the hub's start, which the person is waiting on.
 const FIRST_CHECK_AFTER: Duration = Duration::from_secs(10);
-
 /// How long a check waits for the channel's answer, a small JSON document, before it is a failed
 /// check (the watcher tries again within the hour; a page is told).
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 /// How long a download may go without a byte before it is given up and the update offered again.
 const DOWNLOAD_STALL: Duration = Duration::from_secs(60);
+
 /// An available update as the pages see it, in the shell's state.
 #[derive(Clone, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -172,8 +173,8 @@ pub async fn check(app: &AppHandle) -> Result<Found, String> {
     let updater = app
         .updater_builder()
         .on_before_exit(move || on_exit.state::<Core>().exiting.store(true, SeqCst))
-        .build()
         .timeout(CHECK_TIMEOUT)
+        .build()
         .map_err(|e| e.to_string())?;
     let result = updater.check().await;
     let found = classify(&result)?;
@@ -206,10 +207,10 @@ pub async fn install(app: &AppHandle) -> Result<(), String> {
     let Some(mut update) = updates.pending.lock().unwrap().clone() else {
         return Err("No update is waiting; check for updates first".to_string());
     };
-    if updates.installing.swap(true, SeqCst) {
     // The check's timeout came with the update and would bound the whole download (the module's
     // header); the stall watchdog in `run_install` takes its place.
     update.timeout = None;
+    if updates.installing.swap(true, SeqCst) {
         return Err("The update is already being installed".to_string());
     }
     let mut core_ended = false;
@@ -254,11 +255,38 @@ async fn run_install(app: &AppHandle, update: &Update, core_ended: &mut bool) ->
     *core_ended = true;
     update.install(&bytes).map_err(|e| e.to_string())?;
 
-    // macOS and Linux: the new version is in place; the program starts again into it. The shell is
-    // exiting, so lib.rs's ExitRequested lets the restart through rather than taking it for a quit.
+    // macOS and Linux: the new version is in place; the program starts again into it, as Tauri's
+    // own restart on the main thread does (its cleanup, then the process replaced), but with this
+    // start's arguments less `--hidden`, since a restart the person asked for should bring the window
+    // back even when the session began at login (login.rs; the review's R7). Tauri's `restart`
+    // re-reads the process's own arguments, so it cannot be told otherwise. The shell is marked
+    // exiting so nothing takes the end for a quit.
     core::say(app, "info", &format!("Version {} is installed; the program starts again", update.version));
     app.state::<Core>().exiting.store(true, SeqCst);
-    app.restart()
+    let mut env = app.env();
+    env.args_os = login::restart_arguments(env.args_os);
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        handle.cleanup_before_exit();
+        tauri::process::restart(&env);
+    })
+    .map_err(|e| e.to_string())?;
+    // The restart ends this process from the main thread; this task waits for it.
+    std::future::pending().await
+}
+
+/// Resolves when `received`, the bytes so far, has not moved for `patience`: the stream is taken as
+/// dead. Checked every `patience`, so a stall is noticed between one and two of them.
+async fn stalled(received: &AtomicU64, patience: Duration) {
+    let mut seen = received.load(SeqCst);
+    loop {
+        tokio::time::sleep(patience).await;
+        let now = received.load(SeqCst);
+        if now == seen {
+            return;
+        }
+        seen = now;
+    }
 }
 
 #[cfg(test)]
@@ -289,16 +317,6 @@ mod tests {
         assert!(failed.unwrap_err().to_lowercase().contains("endpoint"));
     }
 
-    #[test]
-    fn progress_is_a_whole_percent_of_a_known_size() {
-        assert_eq!(percent(0, Some(200)), Some(0));
-        assert_eq!(percent(50, Some(200)), Some(25));
-        assert_eq!(percent(199, Some(200)), Some(99));
-        assert_eq!(percent(300, Some(200)), Some(100));
-        assert_eq!(percent(10, None), None);
-        assert_eq!(percent(10, Some(0)), None);
-    }
-}
     /// Virtual time: bytes every 30 seconds for three minutes, then silence. The watchdog must not
     /// fire while bytes arrive, and must fire within two patiences of the last one.
     #[tokio::test(start_paused = true)]
@@ -322,3 +340,13 @@ mod tests {
         assert!(elapsed >= last_byte + patience && elapsed <= last_byte + 2 * patience, "{elapsed:?}");
     }
 
+    #[test]
+    fn progress_is_a_whole_percent_of_a_known_size() {
+        assert_eq!(percent(0, Some(200)), Some(0));
+        assert_eq!(percent(50, Some(200)), Some(25));
+        assert_eq!(percent(199, Some(200)), Some(99));
+        assert_eq!(percent(300, Some(200)), Some(100));
+        assert_eq!(percent(10, None), None);
+        assert_eq!(percent(10, Some(0)), None);
+    }
+}

@@ -6,7 +6,10 @@
 //! removed by hand comes back only when the setting says so.
 //!
 //! A program started at login starts hidden, in the tray or menu bar: the hub is what is wanted
-//! then, for the tools, not the window.
+//! then, for the tools, not the window. A restart the person asked for, after an update, drops the
+//! argument, so the window comes back (`restart_arguments`; the 2026-11-09 review's R7).
+
+use std::ffi::OsString;
 
 use serde_json::Value;
 use tauri::AppHandle;
@@ -25,6 +28,13 @@ pub fn wanted(settings: &Value) -> Option<bool> {
 /// Whether this start is the system's at login (the program's own path first, then its arguments).
 pub fn launched_hidden<I: IntoIterator<Item = String>>(args: I) -> bool {
     args.into_iter().skip(1).any(|arg| arg == HIDDEN)
+}
+
+/// The arguments a restart the person asked for passes on: this start's, less `--hidden`, since a
+/// program updated in a session that began at login should come back with its window, not only in
+/// the tray (update.rs).
+pub fn restart_arguments<I: IntoIterator<Item = OsString>>(args: I) -> Vec<OsString> {
+    args.into_iter().filter(|arg| arg != HIDDEN).collect()
 }
 
 /// Brings the system's entry into line with the settings, saying so when it changes.
@@ -57,6 +67,14 @@ mod tests {
         assert_eq!(wanted(&json!({ "port": 3101 })), None);
         assert_eq!(wanted(&json!({ "startAtLogin": "yes" })), None);
         assert_eq!(wanted(&Value::Null), None);
+    }
+
+    #[test]
+    fn a_restart_keeps_every_argument_but_the_login_start_s() {
+        let args = |list: &[&str]| list.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_eq!(restart_arguments(args(&["/Applications/Armature.app/Contents/MacOS/armature", "--hidden"])), args(&["/Applications/Armature.app/Contents/MacOS/armature"]));
+        assert_eq!(restart_arguments(args(&["armature", "--other", "--hidden", "x"])), args(&["armature", "--other", "x"]));
+        assert_eq!(restart_arguments(args(&["armature"])), args(&["armature"]));
     }
 
     #[test]
