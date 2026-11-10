@@ -13,8 +13,12 @@
 //! input's end or a kill ends it. A core that does not answer is killed and leaves its lock, which
 //! the next start takes over (ADR-0069 decision 4). An update ends the core the same way before it
 //! installs (`end_for_update`; update.rs).
+//!
+//! The core's environment is cleared and only `KEPT_ENVIRONMENT` passed (the code review of
+//! 2026-11-09, S1): the core reads no setting from it, and Node's own variables stay outside.
 
 use std::collections::{HashMap, VecDeque};
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 use std::sync::Mutex;
@@ -134,6 +138,41 @@ pub fn say(app: &AppHandle, level: &str, line: &str) {
     let _ = app.emit("core-event", event);
 }
 
+/// The environment variables the shell passes to the core; everything else is cleared (the code
+/// review of 2026-11-09, S1). The core itself reads none of its settings from the environment (they
+/// come over the channel), but Node reads `NODE_OPTIONS` and `NODE_TLS_REJECT_UNAUTHORIZED`, which
+/// on a developer's machine would open a debugger in the process that holds the tokens, or turn
+/// off certificate checks toward the remote and the identity provider. What is kept: the home
+/// folder, which `os.homedir()` reads for the synced-folder warning (`app/lib/desktop/folder.ts`);
+/// the folders the OneDrive client names, which the same warning reads; `SystemRoot`, without which
+/// Node on Windows cannot open a socket; the temporary folder; and `NODE_EXTRA_CA_CERTS`, the one
+/// Node setting kept, since it adds a certificate authority rather than removing a check, and is
+/// how the program reaches an instance behind an institution's TLS inspection until the carried
+/// Node trusts the system's store (the review's S7).
+const KEPT_ENVIRONMENT: &[&str] = &[
+    "HOME",
+    "USERPROFILE",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "SystemRoot",
+    "OneDrive",
+    "OneDriveCommercial",
+    "OneDriveConsumer",
+    "NODE_EXTRA_CA_CERTS",
+];
+
+/// The variables of `all` the core receives: those `KEPT_ENVIRONMENT` names, matched without regard
+/// to case, since Windows names them so. A name that is not Unicode is not one of them.
+fn kept_environment<I: IntoIterator<Item = (OsString, OsString)>>(all: I) -> Vec<(OsString, OsString)> {
+    all.into_iter()
+        .filter(|(name, _)| {
+            name.to_str()
+                .is_some_and(|name| KEPT_ENVIRONMENT.iter().any(|kept| kept.eq_ignore_ascii_case(name)))
+        })
+        .collect()
+}
+
 /// Starts the sidecar and the hub: at setup, and again after an update that failed to install.
 pub fn launch(app: &AppHandle) -> Result<(), String> {
     let core = app.state::<Core>();
@@ -157,6 +196,8 @@ pub fn launch(app: &AppHandle) -> Result<(), String> {
         .sidecar("armature-node")
         .map_err(|e| e.to_string())?
         .args([script])
+        .env_clear()
+        .envs(kept_environment(std::env::vars_os()))
         .spawn()
         .map_err(|e| e.to_string())?;
     say(app, "info", &format!("The core started (process {})", child.pid()));
@@ -480,5 +521,39 @@ pub fn relaunch(app: &AppHandle) {
     if let Err(err) = launch(app) {
         say(app, "error", &format!("The core could not be started again: {err}"));
         set_state(app, |s| { s.core = "failed"; s.error = Some(err); });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn environment(pairs: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
+        pairs.iter().map(|(name, value)| (OsString::from(name), OsString::from(value))).collect()
+    }
+
+    fn names(kept: &[(OsString, OsString)]) -> Vec<String> {
+        kept.iter().map(|(name, _)| name.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn passes_the_folders_the_core_reads_and_no_node_setting_but_the_extra_authorities() {
+        let kept = kept_environment(environment(&[
+            ("HOME", "/Users/a"),
+            ("PATH", "/usr/bin"),
+            ("NODE_OPTIONS", "--inspect"),
+            ("NODE_TLS_REJECT_UNAUTHORIZED", "0"),
+            ("NODE_EXTRA_CA_CERTS", "/etc/institution.pem"),
+            ("OneDrive", "C:\\Users\\a\\OneDrive"),
+            ("ARMATURE_LOCAL_TOKEN", "never"),
+            ("TMPDIR", "/tmp"),
+        ]));
+        assert_eq!(names(&kept), ["HOME", "NODE_EXTRA_CA_CERTS", "OneDrive", "TMPDIR"]);
+    }
+
+    #[test]
+    fn matches_windows_names_without_regard_to_case() {
+        let kept = kept_environment(environment(&[("SYSTEMROOT", "C:\\Windows"), ("userprofile", "C:\\Users\\a"), ("Path", "C:\\Windows")]));
+        assert_eq!(names(&kept), ["SYSTEMROOT", "userprofile"]);
     }
 }
