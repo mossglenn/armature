@@ -14,6 +14,11 @@
 
 name: Desktop
 
+# The job's token reads only, and the third-party actions are pinned to the commits the release
+# workflow pins (the 2026-11-09 review's S11).
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
@@ -52,10 +57,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libdbus-1-dev pkg-config build-essential file
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, 2026-10-27
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: desktop/src-tauri
       # Node for the sidecar, fetched by prepare.mjs and checked against the checksum pinned in it;
@@ -111,8 +116,8 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             desktop/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, 2026-10-27
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: desktop/src-tauri
       - uses: actions/cache@v4
