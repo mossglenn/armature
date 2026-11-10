@@ -117,18 +117,25 @@ jobs:
           echo "title=$title" >> "$GITHUB_OUTPUT"
 
       # A release is a commit of main (desktop/README.md, Releasing): a program tag elsewhere fails here,
-      # before anything is built; a rehearsal tag sits on its branch by design. The compare says
-      # `identical` or `behind` when the tagged commit is an ancestor of main.
+      # before anything is built. The compare says `identical` or `behind` when the tagged commit is an
+      # ancestor of main. The step runs on a rehearsal tag too, which sits on its branch by design and
+      # is not required to pass, so a rehearsal exercises the script: the first release tag found it
+      # running under PowerShell on Windows, where the rehearsal had skipped it (2026-11-09).
       - name: Check that the tag is on main
-        if: startsWith(github.ref_name, 'desktop-v')
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status)
           echo "main...$GITHUB_SHA: $status"
-          case "$status" in
-            identical|behind) ;;
-            *) echo "::error::The tag $GITHUB_REF_NAME names $GITHUB_SHA, which is not on main ($status); a release is a commit of main"; exit 1 ;;
+          case "$GITHUB_REF_NAME" in
+            desktop-rehearsal-*) echo "A rehearsal tag; being on main is not required of it" ;;
+            *)
+              case "$status" in
+                identical|behind) ;;
+                *) echo "::error::The tag $GITHUB_REF_NAME names $GITHUB_SHA, which is not on main ($status); a release is a commit of main"; exit 1 ;;
+              esac
+              ;;
           esac
 
       - uses: actions/setup-node@v4
