@@ -21,6 +21,7 @@ import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus }
  *   available   version 0.2.0 is offered from the start, and installs
  *   fails       the same, and its install fails (the signature, say), the update still offered
  *   no_release  the channel answers without a release (none published, or an error status)
+ *   packaged    this install is a system package (a .deb): the channel is not checked
  *
  * Three remotes answer `profile`: https://api.armature.example.edu (oidc),
  * http://hub.example.test:3100 (header), and https://api.armature-x.example.net, a
@@ -404,7 +405,7 @@ export function fakeCore(scenario = 'header', update?: string): Backend {
       if (update === 'available' || update === 'fails') model.update ??= { ...OFFERED };
       emit({ event: 'shell' });
       // As the shell: an answer without a release is neither an update nor the latest version.
-      const found = model.update ? 'update' : update === 'no_release' ? 'no_release' : 'latest';
+      const found = model.update ? 'update' : update === 'no_release' ? 'no_release' : update === 'packaged' ? 'packaged' : 'latest';
       return { found, state: state() };
     },
     installUpdate: async () => {

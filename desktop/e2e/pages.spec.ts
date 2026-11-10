@@ -371,4 +371,12 @@ test.describe('updates and starting at login', () => {
     await expect(page.getByText('The release channel answered without a release')).toBeVisible();
     await expect(page.getByText('This is the latest version.')).toHaveCount(0);
   });
+
+  test('a system package is not checked and says how it is updated', async ({ page }) => {
+    await page.goto('/?scenario=header&update=packaged');
+    await nav(page, 'Settings').click();
+    await page.getByRole('button', { name: 'Check for updates' }).click();
+    await expect(page.getByText('This install is a system package')).toBeVisible();
+    await expect(page.getByText('This is the latest version.')).toHaveCount(0);
+  });
 });

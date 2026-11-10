@@ -79,6 +79,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
         latest: 'This is the latest version.',
         // Not "the latest version": the channel answered without a release, which is also what an error status looks like to the updater.
         no_release: 'The release channel answered without a release (none is published yet, or it did not answer); the program tries again within the hour.',
+        packaged: 'This install is a system package; it is updated by installing the next package, and the program does not check the release channel.',
       }[after.found];
       setChecked({ busy: false, line });
     } catch (err) {
