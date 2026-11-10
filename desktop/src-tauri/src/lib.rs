@@ -77,7 +77,8 @@ struct Checked {
 }
 
 /// Asks the release channel now, as the daily check does; the answer says whether it found an
-/// update, that this is the latest version, or no release at all, since the last is not the second.
+/// update, that this is the latest version, or no release at all, since the last is not the second;
+/// or that this install is a system package, which is not checked (update.rs).
 #[tauri::command]
 async fn check_update(app: AppHandle) -> Result<Checked, String> {
     let found = update::check(&app).await?;

@@ -27,6 +27,12 @@
 //! finds into the download as a bound on the whole request, so the update's copy is cleared before
 //! the download and the watchdog stands in its place.
 //!
+//! An install that is a system package (`.deb`, `.rpm`) is not checked at all (the review's R5):
+//! the feed carries the AppImage for Linux, and the plugin, finding no `linux-x86_64-deb` entry,
+//! would fall back to it, download it and fail at the install, after the hub had been stopped. The
+//! guide says such an install is updated by installing the next package, and the program says so
+//! when asked (`Found::Packaged`).
+//!
 //! The pages reach this through `check_update` and `install_update` (lib.rs); the plugin's own
 //! JavaScript commands are not granted to the window (capabilities/default.json).
 
@@ -35,6 +41,8 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
+use tauri::utils::config::BundleType;
+use tauri::utils::platform::bundle_type;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -97,6 +105,15 @@ pub enum Found {
     /// The feed answered without a release: none is published, or it answered an error status
     /// (the module's header). Nothing is known, so the pending update and the last check stay.
     NoRelease,
+    /// This install is a system package, which the package manager updates; the channel was not
+    /// asked (the module's header).
+    Packaged,
+}
+
+/// Whether this install is a system package, told as the plugin tells it: the bundle type baked in
+/// when the package was made. An AppImage, a macOS app and a Windows install are not.
+pub fn packaged() -> bool {
+    matches!(bundle_type(), Some(BundleType::Deb | BundleType::Rpm))
 }
 
 /// The plugin's answer, sorted into what the program does with it. `ReleaseNotFound` is the one
@@ -145,6 +162,10 @@ fn show(app: &AppHandle, update: &Update, state: &'static str, progress: Option<
 
 /// Checks at start, then whenever a day has passed since the last check that answered.
 pub fn watch(app: &AppHandle) {
+    if packaged() {
+        core::say(app, "info", "This install is a system package, updated by installing the next package; the release channel is not checked");
+        return;
+    }
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST_CHECK_AFTER).await;
@@ -163,6 +184,9 @@ pub fn watch(app: &AppHandle) {
 /// Asks the release channel; the shell's state then names the update, or none, and the answer says
 /// which of the three the channel gave.
 pub async fn check(app: &AppHandle) -> Result<Found, String> {
+    if packaged() {
+        return Ok(Found::Packaged);
+    }
     let updates = app.state::<Updates>();
     if updates.installing.load(SeqCst) {
         return Ok(Found::Update);

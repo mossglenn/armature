@@ -58,11 +58,12 @@ export interface ShellState {
 
 /**
  * What a check of the release channel found (src-tauri/src/update.rs): an update, now in the state;
- * that this is the latest version; or no release at all, which is not the same as the latest
- * version, since the channel reports an error status the same way as an empty feed.
+ * that this is the latest version; no release at all, which is not the same as the latest version,
+ * since the channel reports an error status the same way as an empty feed; or that this install is
+ * a system package (a `.deb`), which the package manager updates and the program does not check.
  */
 export interface UpdateCheck {
-  found: 'update' | 'latest' | 'no_release';
+  found: 'update' | 'latest' | 'no_release' | 'packaged';
   state: ShellState;
 }
 
