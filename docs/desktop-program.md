@@ -72,7 +72,7 @@ Your workspaces are in the workspaces folder: by default inside the program's da
 
 Closing the window does not stop the program: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first.
 
-**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on.
+**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. An update you install in such a session brings the window back when the program starts again.
 
 ## Updates
 
