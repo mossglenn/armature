@@ -58,7 +58,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
-      # Node for the sidecar, fetched by prepare.mjs and checked against nodejs.org's checksums;
+      # Node for the sidecar, fetched by prepare.mjs and checked against the checksum pinned in it;
       # kept between runs until the script (which names the version) changes.
       - uses: actions/cache@v4
         with:
@@ -124,7 +124,7 @@ jobs:
       - name: Install the shell's packages
         run: npm ci
         working-directory: desktop
-      # The build's beforeBuildCommand prepares the sidecar (Node's win-x64 zip, checksum verified)
+      # The build's beforeBuildCommand prepares the sidecar (Node's win-x64 zip, its pinned checksum checked)
       # and the core's bundle, then the pages. NSIS's installer is per user, so the laptop needs no
       # administrator; WebView2 ships with Windows 10 and 11. A debug build keeps its console
       # window (main.rs sets the windows subsystem for release only), which shows the shell's log.
