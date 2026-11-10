@@ -56,7 +56,8 @@ afterAll(async () => {
 
 /** The core started as the shell starts it, and its standard output read as lines. */
 function launch(): { child: ChildProcessWithoutNullStreams; lines: string[]; next: (match: (m: Record<string, unknown>) => boolean) => Promise<Record<string, unknown>>; exited: Promise<number | null> } {
-  // Nothing in its environment but what Windows needs to open a socket: no credential travels there (plan §5).
+  // Nothing in its environment but what Windows needs to open a socket: no credential travels there (plan §5),
+  // and the shell itself passes only the folders the core reads and `SystemRoot` (`KEPT_ENVIRONMENT` in core.rs).
   // (Cast: the project's types make NODE_ENV required in an environment, which this one deliberately lacks.)
   const env = (process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows' } : {}) as NodeJS.ProcessEnv;
   const child = spawn(process.execPath, [bundle], { env, stdio: ['pipe', 'pipe', 'pipe'] });
