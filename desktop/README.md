@@ -11,7 +11,7 @@ the page (src/, React)  ──invoke core_request──▶  the shell (src-tauri
                         ◀──── core-event ───────                                ◀──────────────
 ```
 
-- **The core** runs as a sidecar: Node itself, named `armature-node`, with the core's bundle as its one argument. It reads requests on its standard input and writes replies and events on its standard output (`app/lib/desktop/protocol.ts`). Nothing secret goes in its arguments or environment.
+- **The core** runs as a sidecar: Node itself, named `armature-node`, with the core's bundle as its one argument. It reads requests on its standard input and writes replies and events on its standard output (`app/lib/desktop/protocol.ts`). Nothing secret goes in its arguments or environment, and the shell clears that environment before the start, passing only the home and temporary folders, the OneDrive client's folders (for the synced-folder warning), `SystemRoot` and `NODE_EXTRA_CA_CERTS`, so a `NODE_OPTIONS` or `NODE_TLS_REJECT_UNAUTHORIZED` set on the machine never reaches the process that holds the tokens (`KEPT_ENVIRONMENT` in `core.rs`; since 2026-11-09, the review's S1).
 - **The shell** (`src-tauri/src/`) starts the core and sends it `start` with the data folder and the keychain's local token, then `credential` with the refresh token the keychain keeps for the remote. It keeps what the core hands back in the keychain: a drawn local token and a rotated refresh token. A page reaches the core only through `core_request`, which refuses the shell's own requests (`start`, `stop`, `credential`; `relay.rs`). The core's `credential` events never reach the page.
 - **The pages** (`src/pages/`: Connect, Sign in, Workspaces, a workspace, Pairing, Settings, Log) call the core only through `src/lib/backend.ts`: Tauri's `invoke` in the shell, a fake core in a plain browser (`src/lib/fakeCore.ts`, a small model of the core with its replies' shapes and refusal codes), so the pages run and are tested without the shell, as Quiver's are. `?scenario=fresh|header|oidc|oidc-scope|oidc-unregistered` in the address picks where the fake core starts, and `?update=available|fails` adds an update on offer.
 
@@ -24,7 +24,7 @@ the page (src/, React)  ──invoke core_request──▶  the shell (src-tauri
 | `src-tauri/src/tray.rs` | The tray: Open, Pause or Resume the hub, Quit |
 | `src-tauri/src/update.rs` | The updater: the release channel checked at start and daily, an update installed when asked (downloaded, the core ended, installed, restarted) |
 | `src-tauri/src/login.rs` | Starting at login: the system's entry follows the core's `startAtLogin`; a start at login passes `--hidden` and stays in the tray |
-| `scripts/prepare.mjs` | `npm run sidecar`: bundles the core with app's `build:desktop` and fetches Node 22.23.4 for the target, checked against nodejs.org's checksums |
+| `scripts/prepare.mjs` | `npm run sidecar`: bundles the core with app's `build:desktop` and fetches Node 22.23.4 for the target, checked against the checksum pinned in the script (since 2026-11-09, the review's S6) |
 
 ## Running it
 

@@ -70,6 +70,13 @@ Three facts bear on the shape:
    child's pipes are readable by its parent alone, so nothing crosses the network or a file, and
    no secret is put in the sidecar's arguments or environment.
 
+   > **Note (2026-11-09):** the shell also clears the sidecar's environment and passes only what
+   > the core and Node need (the home and temporary folders, the OneDrive client's folders,
+   > `SystemRoot`, `NODE_EXTRA_CA_CERTS`; `KEPT_ENVIRONMENT` in `core.rs`), since Node reads
+   > `NODE_OPTIONS` and `NODE_TLS_REJECT_UNAUTHORIZED` from it, and a developer's machine may set
+   > either (the code review of 2026-11-09, S1). The carried Node is checked against a checksum
+   > pinned in `prepare.mjs` rather than one fetched from the same origin (S6).
+
 4. **The core's life is bound to the shell's.** The core treats its standard input closing as a
    `stop`: it closes the listener and releases the folder's lock, so a shell killed outright leaves
    neither a process nor a lock. The shell's quit sends `stop` and waits for the core to exit, up
