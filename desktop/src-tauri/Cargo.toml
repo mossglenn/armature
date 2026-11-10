@@ -22,10 +22,14 @@ tauri-plugin-opener = "2"
 # 3.6, not 4: the plan's API (Entry::new(service, user)); 4 split the stores into separate crates.
 keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 dunce = "1"
-tokio = { version = "1", features = ["sync", "time", "signal"] }
+tokio = { version = "1", features = ["sync", "time", "signal", "macros"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 url = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-autostart = "2"
+
+[dev-dependencies]
+# The updater's watchdog test runs on virtual time.
+tokio = { version = "1", features = ["test-util", "rt", "macros"] }

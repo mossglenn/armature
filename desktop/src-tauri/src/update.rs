@@ -21,10 +21,16 @@
 //! installer has started); on macOS and Linux the shell restarts into the new version. An install
 //! that fails starts the core and its hub again and says why.
 //!
+//! A check waits `CHECK_TIMEOUT` for the channel's answer, and a download is given up when no data
+//! has arrived for `DOWNLOAD_STALL`, not after a total time, since a slow link is not a dead one
+//! (the review's R4). The plugin has one timeout, set on the builder and carried by the update it
+//! finds into the download as a bound on the whole request, so the update's copy is cleared before
+//! the download and the watchdog stands in its place.
+//!
 //! The pages reach this through `check_update` and `install_update` (lib.rs); the plugin's own
 //! JavaScript commands are not granted to the window (capabilities/default.json).
 
-use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
@@ -42,6 +48,11 @@ const WAKE_EVERY: Duration = Duration::from_secs(60 * 60);
 /// The first check waits for the hub's start, which the person is waiting on.
 const FIRST_CHECK_AFTER: Duration = Duration::from_secs(10);
 
+/// How long a check waits for the channel's answer, a small JSON document, before it is a failed
+/// check (the watcher tries again within the hour; a page is told).
+const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long a download may go without a byte before it is given up and the update offered again.
+const DOWNLOAD_STALL: Duration = Duration::from_secs(60);
 /// An available update as the pages see it, in the shell's state.
 #[derive(Clone, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -162,6 +173,7 @@ pub async fn check(app: &AppHandle) -> Result<Found, String> {
         .updater_builder()
         .on_before_exit(move || on_exit.state::<Core>().exiting.store(true, SeqCst))
         .build()
+        .timeout(CHECK_TIMEOUT)
         .map_err(|e| e.to_string())?;
     let result = updater.check().await;
     let found = classify(&result)?;
@@ -191,10 +203,13 @@ pub async fn check(app: &AppHandle) -> Result<Found, String> {
 /// update stays available with the reason.
 pub async fn install(app: &AppHandle) -> Result<(), String> {
     let updates = app.state::<Updates>();
-    let Some(update) = updates.pending.lock().unwrap().clone() else {
+    let Some(mut update) = updates.pending.lock().unwrap().clone() else {
         return Err("No update is waiting; check for updates first".to_string());
     };
     if updates.installing.swap(true, SeqCst) {
+    // The check's timeout came with the update and would bound the whole download (the module's
+    // header); the stall watchdog in `run_install` takes its place.
+    update.timeout = None;
         return Err("The update is already being installed".to_string());
     }
     let mut core_ended = false;
@@ -213,21 +228,25 @@ pub async fn install(app: &AppHandle) -> Result<(), String> {
 async fn run_install(app: &AppHandle, update: &Update, core_ended: &mut bool) -> Result<(), String> {
     core::say(app, "info", &format!("Downloading version {}", update.version));
     show(app, update, "downloading", Some(0), None);
-    let (mut received, mut shown) = (0u64, Some(0u8));
-    let bytes = update
-        .download(
-            |chunk, total| {
-                received += chunk as u64;
-                let now = percent(received, total);
-                if now != shown {
-                    shown = now;
-                    show(app, update, "downloading", now, None);
-                }
-            },
-            || {},
-        )
-        .await
-        .map_err(|e| e.to_string())?;
+    let received = AtomicU64::new(0);
+    let mut shown = Some(0u8);
+    let download = update.download(
+        |chunk, total| {
+            let so_far = received.fetch_add(chunk as u64, SeqCst) + chunk as u64;
+            let now = percent(so_far, total);
+            if now != shown {
+                shown = now;
+                show(app, update, "downloading", now, None);
+            }
+        },
+        || {},
+    );
+    let bytes = tokio::select! {
+        result = download => result.map_err(|e| e.to_string())?,
+        _ = stalled(&received, DOWNLOAD_STALL) => {
+            return Err(format!("the download received nothing for {} seconds", DOWNLOAD_STALL.as_secs()));
+        }
+    };
 
     show(app, update, "installing", None, None);
     core::say(app, "info", &format!("Stopping the hub to install version {}", update.version));
@@ -280,3 +299,26 @@ mod tests {
         assert_eq!(percent(10, Some(0)), None);
     }
 }
+    /// Virtual time: bytes every 30 seconds for three minutes, then silence. The watchdog must not
+    /// fire while bytes arrive, and must fire within two patiences of the last one.
+    #[tokio::test(start_paused = true)]
+    async fn a_download_is_stalled_only_when_no_byte_arrives_for_the_patience() {
+        let received = AtomicU64::new(0);
+        let patience = Duration::from_secs(60);
+        let feeding = async {
+            for i in 1..=6u64 {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                received.store(i * 1000, SeqCst);
+            }
+            tokio::time::sleep(Duration::from_secs(600)).await;
+        };
+        let started = tokio::time::Instant::now();
+        tokio::select! {
+            _ = feeding => panic!("the watchdog did not fire after the bytes stopped"),
+            _ = stalled(&received, patience) => {}
+        }
+        let elapsed = started.elapsed();
+        let last_byte = Duration::from_secs(180);
+        assert!(elapsed >= last_byte + patience && elapsed <= last_byte + 2 * patience, "{elapsed:?}");
+    }
+
