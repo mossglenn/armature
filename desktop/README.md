@@ -23,7 +23,7 @@ the page (src/, React)  ──invoke core_request──▶  the shell (src-tauri
 | `src-tauri/src/logs.rs` | The core's log, one file per day, seven kept |
 | `src-tauri/src/tray.rs` | The tray: Open, Pause or Resume the hub, Quit |
 | `src-tauri/src/update.rs` | The updater: the release channel checked at start and daily, an update installed when asked (downloaded, the core ended, installed, restarted) |
-| `src-tauri/src/login.rs` | Starting at login: the system's entry follows the core's `startAtLogin`; a start at login passes `--hidden` and stays in the tray; a restart after an update drops it |
+| `src-tauri/src/login.rs` | Starting at login: the system's entry follows the core's `startAtLogin`, made again at every start so it names the program where it is; a start at login passes `--hidden` and stays in the tray; a restart after an update drops it |
 | `scripts/prepare.mjs` | `npm run sidecar`: bundles the core with app's `build:desktop` and fetches Node 22.23.4 for the target, checked against the checksum pinned in the script (since 2026-11-09, the review's S6) |
 
 ## Running it

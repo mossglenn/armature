@@ -102,4 +102,4 @@ Every refusal shows the message, a code and whether your instance or this machin
 
 ## Removing the program
 
-Deliver or push what you want to keep, then quit the program and delete it as you would any other (drag it to the Trash on macOS; **Settings → Apps** on Windows; delete the AppImage or `sudo apt remove armature` on Linux). Its data and logs stay in the folders above until you delete them, and its keychain items (service `com.mossglenn.armature`) until you remove them in your system's keychain.
+Deliver or push what you want to keep, turn off **Settings → Start at login** if you turned it on (on macOS and Linux the system's entry would otherwise outlive the program), then quit the program and delete it as you would any other (drag it to the Trash on macOS; **Settings → Apps** on Windows; delete the AppImage or `sudo apt remove armature` on Linux). Its data and logs stay in the folders above until you delete them, and its keychain items (service `com.mossglenn.armature`) until you remove them in your system's keychain.
