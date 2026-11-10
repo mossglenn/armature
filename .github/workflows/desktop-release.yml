@@ -50,7 +50,11 @@
 # An Apple Developer ID or a Windows certificate is a configuration change when it comes (the spike).
 #
 # The third-party actions are pinned to commits (the version beside each, the pins Quiver's release
-# workflow uses); GitHub's own actions stay on their major tags, as ci.yml has them.
+# workflow uses); GitHub's own actions stay on their major tags, as ci.yml has them. Nothing is
+# restored from a cache: a cache made on one tag is not readable from the next, so a cache here
+# shortens nothing and only adds a path into a signed build; Cargo runs `--locked`, so a build whose
+# lockfile would change fails rather than resolving anew; and a `desktop-v*` tag must name a commit
+# on main (the 2026-11-09 review's R9).
 
 name: Desktop release
 
@@ -112,32 +116,35 @@ jobs:
           echo "version=$conf" >> "$GITHUB_OUTPUT"
           echo "title=$title" >> "$GITHUB_OUTPUT"
 
+      # A release is a commit of main (desktop/README.md, Releasing): a program tag elsewhere fails here,
+      # before anything is built; a rehearsal tag sits on its branch by design. The compare says
+      # `identical` or `behind` when the tagged commit is an ancestor of main.
+      - name: Check that the tag is on main
+        if: startsWith(github.ref_name, 'desktop-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status)
+          echo "main...$GITHUB_SHA: $status"
+          case "$status" in
+            identical|behind) ;;
+            *) echo "::error::The tag $GITHUB_REF_NAME names $GITHUB_SHA, which is not on main ($status); a release is a commit of main"; exit 1 ;;
+          esac
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, 2026-10-27
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          workspaces: desktop/src-tauri
-          key: ${{ matrix.target }}
       # Tauri's Linux prerequisites, as desktop.yml installs them.
       - name: Install the system's libraries
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libdbus-1-dev pkg-config build-essential file
-      # Node for the sidecar, fetched by prepare.mjs (the build's beforeBuildCommand) for the target
+      # Node for the sidecar is fetched by prepare.mjs (the build's beforeBuildCommand) for the target
       # and checked against the checksum pinned in the script.
-      - uses: actions/cache@v4
-        with:
-          path: desktop/.cache
-          key: desktop-node-${{ matrix.target }}-${{ hashFiles('desktop/scripts/prepare.mjs') }}
       - name: Install the root's workspace (the core is bundled there)
         run: npm ci
       - name: Install the shell's packages
@@ -145,7 +152,8 @@ jobs:
         working-directory: desktop
 
       # The plain bundles, no updater artifact and no key: a rehearsal tag adds the overlay that points
-      # the program at the rehearsal channel with the scratch key's public half.
+      # the program at the rehearsal channel with the scratch key's public half. What follows the second
+      # `--` goes to cargo: `--locked`, so the build uses Cargo.lock as committed or fails.
       - name: Build the program
         shell: bash
         working-directory: desktop
@@ -154,7 +162,7 @@ jobs:
           case "$GITHUB_REF_NAME" in
             desktop-rehearsal-*) overlay="--config $GITHUB_WORKSPACE/desktop/src-tauri/tauri.rehearsal.conf.json" ;;
           esac
-          npm run tauri build -- --target "${{ matrix.target }}" --bundles "${{ matrix.bundles }}" $overlay
+          npm run tauri build -- --target "${{ matrix.target }}" --bundles "${{ matrix.bundles }}" $overlay -- --locked
 
       # What the release carries, under the names tauri-bundler gives them, plus the updater's artifact
       # for the target: on macOS the .app as a gzipped tar, as createUpdaterArtifacts would make it (the
