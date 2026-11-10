@@ -7,9 +7,11 @@
 //                                                   package installs a sidecar under its own name in
 //                                                   /usr/bin, beside the system's node
 //
-// Node is fetched from nodejs.org once per version and target and checked against its
-// SHASUMS256.txt. The root's workspace must be installed (`npm ci` at the repository root), since
-// the core is built there. Run by `npm run sidecar`, and by tauri.conf.json before dev and build.
+// Node is fetched from nodejs.org once per version and target and checked against the checksum
+// pinned beside the version below, taken from the release's SHASUMS256.txt when the version was
+// chosen; so a changed binary at the origin is refused, and a new Node is a reviewed diff of six
+// hashes (the code review of 2026-11-09, S6). The root's workspace must be installed (`npm ci` at
+// the repository root), since the core is built there. Run by `npm run sidecar`, and by tauri.conf.json before dev and build.
 //
 //   node scripts/prepare.mjs [--target <rust target triple>]
 //
@@ -23,7 +25,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, s
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** The Node the program carries: the line CI runs the suites on (ADR-0069 decision 2), the spike's release. */
+/** The Node the program carries: the line CI runs the suites on (ADR-0069 decision 2), the spike's release. Its checksums are in `dists`; change both together. */
 const NODE = 'v22.23.4';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,13 +45,14 @@ console.log(`src-tauri/core/desktop.mjs: ${(statSync(join(tauri, 'core', 'deskto
 
 const flag = process.argv.indexOf('--target');
 const triple = flag >= 0 ? process.argv[flag + 1] : process.env.TAURI_ENV_TARGET_TRIPLE || execFileSync('rustc', ['--print', 'host-tuple'], { encoding: 'utf8' }).trim();
+// `sha256` is the archive's line in https://nodejs.org/dist/<NODE>/SHASUMS256.txt.
 const dists = {
-  'aarch64-apple-darwin': { name: 'darwin-arm64', ext: 'tar.gz', inner: 'bin/node' },
-  'x86_64-apple-darwin': { name: 'darwin-x64', ext: 'tar.gz', inner: 'bin/node' },
-  'x86_64-pc-windows-msvc': { name: 'win-x64', ext: 'zip', inner: 'node.exe' },
-  'aarch64-pc-windows-msvc': { name: 'win-arm64', ext: 'zip', inner: 'node.exe' },
-  'x86_64-unknown-linux-gnu': { name: 'linux-x64', ext: 'tar.gz', inner: 'bin/node' },
-  'aarch64-unknown-linux-gnu': { name: 'linux-arm64', ext: 'tar.gz', inner: 'bin/node' },
+  'aarch64-apple-darwin': { name: 'darwin-arm64', ext: 'tar.gz', inner: 'bin/node', sha256: 'c9e1dbc748b33ed2d14f42445191ecaf14c56259c7a9a26d0042c49ec2b66428' },
+  'x86_64-apple-darwin': { name: 'darwin-x64', ext: 'tar.gz', inner: 'bin/node', sha256: 'efcc2b0db6f94bf53eddb038fe2b370277a042bd29e4f19b8f8e23598795b819' },
+  'x86_64-pc-windows-msvc': { name: 'win-x64', ext: 'zip', inner: 'node.exe', sha256: 'cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20' },
+  'aarch64-pc-windows-msvc': { name: 'win-arm64', ext: 'zip', inner: 'node.exe', sha256: 'a8b8cd79cbbb3062435f449591d98dd63730bbbf30ce2d7cc3a6376c236cb111' },
+  'x86_64-unknown-linux-gnu': { name: 'linux-x64', ext: 'tar.gz', inner: 'bin/node', sha256: 'b8492284c76a54baf58d61668dd0e41ee0fc98adabf9503d30f05d08f55b4406' },
+  'aarch64-unknown-linux-gnu': { name: 'linux-arm64', ext: 'tar.gz', inner: 'bin/node', sha256: 'f7a1e486dbc8b286847815b477d4fb5e9fb963ed4489c3e1588853d685f589f9' },
 };
 const dist = dists[triple];
 if (!dist) throw new Error(`No Node distribution is mapped for ${triple}`);
@@ -70,12 +73,10 @@ if (existsSync(target) && existsSync(stamp) && readFileSync(stamp, 'utf8').trim(
     if (!res.ok) throw new Error(`${file}: ${res.status}`);
     writeFileSync(archive, Buffer.from(await res.arrayBuffer()));
   }
-  const sums = await (await fetch(`https://nodejs.org/dist/${NODE}/SHASUMS256.txt`)).text();
-  const expected = sums.split('\n').find((line) => line.endsWith(`  ${file}`))?.split(' ')[0];
   const actual = createHash('sha256').update(readFileSync(archive)).digest('hex');
-  if (!expected || expected !== actual) {
+  if (actual !== dist.sha256) {
     rmSync(archive, { force: true });
-    throw new Error(`${file}: its checksum ${actual} is not nodejs.org's ${expected}; the download was removed`);
+    throw new Error(`${file}: its checksum ${actual} is not the pinned ${dist.sha256}; the download was removed`);
   }
   const out = join(cache, 'x');
   rmSync(out, { recursive: true, force: true });
@@ -88,5 +89,5 @@ if (existsSync(target) && existsSync(stamp) && readFileSync(stamp, 'utf8').trim(
   copyFileSync(join(out, base, dist.inner), target);
   if (!exe) chmodSync(target, 0o755);
   writeFileSync(stamp, `${NODE}\n`);
-  console.log(`${target}: Node ${NODE}, ${(statSync(target).size / 1048576).toFixed(1)} MiB, checksum verified`);
+  console.log(`${target}: Node ${NODE}, ${(statSync(target).size / 1048576).toFixed(1)} MiB, checksum as pinned`);
 }
