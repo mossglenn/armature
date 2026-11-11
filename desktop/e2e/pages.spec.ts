@@ -333,7 +333,7 @@ test.describe('updates and starting at login', () => {
 
   test('an available update is offered on every page and installed only when asked', async ({ page }) => {
     await page.goto('/?scenario=header&update=available');
-    const notice = page.getByRole('status', { name: 'Update' });
+    const notice = page.getByRole('region', { name: 'Update' });
     await expect(notice).toContainText('Version 0.2.0 is available (this is 0.1.0)');
     await expect(notice).toContainText('Starts at login when asked.');
     await expect(notice).toContainText('The hub stops while it installs');
@@ -348,7 +348,7 @@ test.describe('updates and starting at login', () => {
 
   test('an update that fails to install says why, and stays offered to try again', async ({ page }) => {
     await page.goto('/?scenario=header&update=fails');
-    const notice = page.getByRole('status', { name: 'Update' });
+    const notice = page.getByRole('region', { name: 'Update' });
     await notice.getByRole('button', { name: 'Install and restart' }).click();
     await expect(notice.getByRole('alert')).toContainText('the signature of the downloaded update does not verify');
     await expect(notice.getByRole('button', { name: 'Try again' })).toBeEnabled();
@@ -356,10 +356,32 @@ test.describe('updates and starting at login', () => {
     await expect(page.getByLabel('Log lines')).toContainText('The update to 0.2.0 failed');
   });
 
+  test('the install button waits while a push is running, and the shell is told so', async ({ page }) => {
+    await page.goto('/?scenario=header&update=available&slow');
+    const notice = page.getByRole('region', { name: 'Update' });
+    await expect(notice.getByRole('button', { name: 'Install and restart' })).toBeEnabled();
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_unit-3/ }).click();
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(notice.getByRole('button', { name: 'Install and restart' })).toBeDisabled();
+    await expect(notice).toContainText('Install when the push finishes');
+    await expect(page.getByRole('status').filter({ hasText: 'Pushed 2 commits.' })).toBeVisible();
+    await expect(notice.getByRole('button', { name: 'Install and restart' })).toBeEnabled();
+    await expect(notice).toContainText('The hub stops while it installs');
+  });
+
+  test('a start-at-login entry the system refused is said beside the box, which still shows the setting', async ({ page }) => {
+    await page.goto('/?scenario=header&login=fails');
+    await nav(page, 'Settings').click();
+    const box = page.getByRole('checkbox', { name: /Start at login/ });
+    await box.check();
+    await expect(box).toBeChecked();
+    await expect(page.getByRole('alert')).toContainText('Starting at login could not be turned on (the Launch Agent could not be written)');
+  });
+
   test('the settings page checks the release channel on demand', async ({ page }) => {
     await open(page, 'header');
     await nav(page, 'Settings').click();
-    await expect(page.getByRole('status', { name: 'Update' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Update' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Check for updates' }).click();
     await expect(page.getByText('This is the latest version.')).toBeVisible();
   });

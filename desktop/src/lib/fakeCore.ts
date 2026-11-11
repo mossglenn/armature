@@ -23,6 +23,10 @@ import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus }
  *   no_release  the channel answers without a release (none published, or an error status)
  *   packaged    this install is a system package (a .deb): the channel is not checked
  *
+ * `?slow` makes each long action (push, bring in, deliver, create, clone, remove) take a moment and
+ * show in the state as the shell shows it, so a page's holding of the install button meanwhile can be
+ * seen; `?login=fails` makes the system refuse the start-at-login entry, as the shell reports it.
+ *
  * Three remotes answer `profile`: https://api.armature.example.edu (oidc),
  * http://hub.example.test:3100 (header), and https://api.armature-x.example.net, a
  * hub that declares the first one's name and address as its own (the
@@ -133,9 +137,13 @@ function modelFor(scenario: string): Model {
 
 const OFFERED: UpdateState = { version: '0.2.0', current: '0.1.0', date: '2026-11-20T15:00:00Z', notes: 'Starts at login when asked.\nShows an available update.', state: 'available' };
 
-export function fakeCore(scenario = 'header', update?: string): Backend {
+/** The requests the shell counts as actions in flight (src-tauri/src/core.rs `ACTIONS`). */
+const ACTIONS = ['create', 'clone', 'push', 'bringIn', 'deliver', 'remove'];
+
+export function fakeCore(scenario = 'header', update?: string, options: { slow?: boolean; login?: string } = {}): Backend {
   const model = modelFor(scenario);
   if (update === 'available' || update === 'fails') model.update = { ...OFFERED };
+  const actions: string[] = [];
   const listeners = new Set<(event: CoreEvent) => void>();
   const emit = (event: CoreEvent) => {
     if (event.event === 'log') model.log.push(event);
@@ -166,6 +174,10 @@ export function fakeCore(scenario = 'header', update?: string): Backend {
       dataDir: DATA_DIR,
       logDir: '/Users/someone/Library/Logs/com.mossglenn.armature',
       ...(model.update ? { update: model.update } : {}),
+      ...(actions.length ? { actions: [...actions] } : {}),
+      ...(options.login === 'fails' && model.settings.startAtLogin
+        ? { loginEntry: { wanted: true, enabled: false, error: 'Starting at login could not be turned on (the Launch Agent could not be written)' } }
+        : {}),
     };
   };
   const statusOf = (branch: string): WorkspaceStatus => {
@@ -383,7 +395,24 @@ export function fakeCore(scenario = 'header', update?: string): Backend {
     kind: 'browser',
     request: async <T>(type: string, fields: Record<string, unknown> = {}) => {
       const handler = handlers[type];
-      return (handler ? await handler(fields) : refuse(400, 'unknown_request', `The core answers no request of type ${type}`)) as CoreReply<T>;
+      if (!handler) return refuse(400, 'unknown_request', `The core answers no request of type ${type}`) as CoreReply<T>;
+      // As the shell: an action is in the state while it runs, and the state is announced at both ends.
+      const action = ACTIONS.includes(type);
+      if (action) {
+        actions.push(type);
+        emit({ event: 'shell' });
+        if (options.slow) await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      try {
+        return (await handler(fields)) as CoreReply<T>;
+      } finally {
+        if (action) {
+          actions.splice(actions.indexOf(type), 1);
+          emit({ event: 'shell' });
+        }
+        // The shell brings the login entry into line after a settings change and announces the state.
+        if (type === 'settings' && options.login) emit({ event: 'shell' });
+      }
     },
     state: async () => state(),
     setHub: async (running) => {

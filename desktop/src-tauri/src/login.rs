@@ -11,9 +11,14 @@
 //! A program started at login starts hidden, in the tray or menu bar: the hub is what is wanted
 //! then, for the tools, not the window. A restart the person asked for, after an update, drops the
 //! argument, so the window comes back (`restart_arguments`; the 2026-11-09 review's R7).
+//!
+//! What the system's entry is after each attempt goes into the shell's state (`LoginEntry`), so the
+//! settings page shows the box as the setting is saved and says beside it when the entry could not be
+//! made or removed, rather than a tick over an entry that is not there (the review's R10).
 
 use std::ffi::OsString;
 
+use serde::Serialize;
 use serde_json::Value;
 use tauri::AppHandle;
 use tauri_plugin_autostart::ManagerExt;
@@ -40,6 +45,18 @@ pub fn restart_arguments<I: IntoIterator<Item = OsString>>(args: I) -> Vec<OsStr
     args.into_iter().filter(|arg| arg != HIDDEN).collect()
 }
 
+/// The system's entry as the shell last left it (the module's header): whether it is wanted, whether
+/// it exists (`None` when that cannot be read), and the sentence of what went wrong, if anything.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginEntry {
+    pub wanted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 /// What is done to the system's entry.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Change {
@@ -59,28 +76,35 @@ pub fn change(enabled: Option<bool>, wanted: bool) -> Option<(Change, bool)> {
     }
 }
 
-/// Brings the system's entry into line with the settings, saying so when it changes.
+/// Brings the system's entry into line with the settings, saying so when it changes, and puts what
+/// the entry then is into the shell's state for the settings page.
 pub fn follow(app: &AppHandle, settings: &Value) {
     let Some(wanted) = wanted(settings) else { return };
     let launcher = app.autolaunch();
-    let Some((change, news)) = change(launcher.is_enabled().ok(), wanted) else { return };
-    let result = match change {
-        Change::Enable => launcher.enable(),
-        Change::Disable => launcher.disable(),
-    };
-    match result {
-        Ok(()) if !news => {}
-        Ok(()) if wanted => core::say(app, "info", "The program now starts at login, in the tray"),
-        Ok(()) => core::say(app, "info", "The program no longer starts at login"),
-        Err(err) => {
-            let what = match (news, wanted) {
-                (true, true) => "turned on",
-                (true, false) => "turned off",
-                (false, _) => "kept up to date",
-            };
-            core::say(app, "warn", &format!("Starting at login could not be {what} ({err})"));
+    let mut error = None;
+    if let Some((change, news)) = change(launcher.is_enabled().ok(), wanted) {
+        let result = match change {
+            Change::Enable => launcher.enable(),
+            Change::Disable => launcher.disable(),
+        };
+        match result {
+            Ok(()) if !news => {}
+            Ok(()) if wanted => core::say(app, "info", "The program now starts at login, in the tray"),
+            Ok(()) => core::say(app, "info", "The program no longer starts at login"),
+            Err(err) => {
+                let what = match (news, wanted) {
+                    (true, true) => "turned on",
+                    (true, false) => "turned off",
+                    (false, _) => "kept up to date",
+                };
+                let line = format!("Starting at login could not be {what} ({err})");
+                core::say(app, "warn", &line);
+                error = Some(line);
+            }
         }
     }
+    let entry = LoginEntry { wanted, enabled: launcher.is_enabled().ok(), error };
+    core::set_state(app, |s| s.login_entry = Some(entry));
 }
 
 #[cfg(test)]
@@ -107,6 +131,16 @@ mod tests {
         assert_eq!(change(Some(false), false), None);
         // An entry that cannot be read is not removed.
         assert_eq!(change(None, false), None);
+    }
+
+    #[test]
+    fn the_entry_s_state_is_told_in_the_page_s_terms_and_says_nothing_it_does_not_know() {
+        let made = serde_json::to_value(LoginEntry { wanted: true, enabled: Some(true), error: None }).unwrap();
+        assert_eq!(made, json!({ "wanted": true, "enabled": true }));
+        let refused = serde_json::to_value(LoginEntry { wanted: true, enabled: Some(false), error: Some("Starting at login could not be turned on (denied)".to_string()) }).unwrap();
+        assert_eq!(refused, json!({ "wanted": true, "enabled": false, "error": "Starting at login could not be turned on (denied)" }));
+        let unread = serde_json::to_value(LoginEntry { wanted: false, enabled: None, error: None }).unwrap();
+        assert_eq!(unread, json!({ "wanted": false }));
     }
 
     #[test]

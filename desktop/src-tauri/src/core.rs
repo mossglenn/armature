@@ -14,15 +14,25 @@
 //! the next start takes over (ADR-0069 decision 4). An update ends the core the same way before it
 //! installs (`end_for_update`; update.rs).
 //!
+//! A push, bring-in, deliver, create, clone or remove in flight (`ACTIONS`) finishes first: quitting
+//! waits up to `ACTION_WAIT` for it, an update's install the same before it ends the core (and gives
+//! up instead), and the pages hold the install button while one runs, since the core's `stop` closes
+//! the hub at once and a push cut off is recovered only at the next start (the 2026-11-09 review's S3
+//! and R10). macOS's own quit, which ends the event loop without asking, sends `stop` and ends the
+//! process on the main thread the same way, bounded (`stop_before_exit`; the review's S2).
+//!
 //! The core's environment is cleared and only `KEPT_ENVIRONMENT` passed (the code review of
-//! 2026-11-09, S1): the core reads no setting from it, and Node's own variables stay outside.
+//! 2026-11-09, S1): the core reads no setting from it, and Node's own variables stay outside. Node
+//! runs with `--use-system-ca` (`sidecar_arguments`; the review's S7), so the certificate authorities
+//! the machine trusts, an institution's TLS inspection among them, are trusted beside Node's own
+//! list, as the browser that reached the instance trusts them; `NODE_EXTRA_CA_CERTS` still adds one.
 
 use std::collections::{HashMap, VecDeque};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -42,6 +52,38 @@ pub const RECENT_LINES: usize = 500;
 
 /// How long quitting waits for the core to stop the hub before ending it.
 pub const STOP_WAIT: Duration = Duration::from_secs(5);
+
+/// How long quitting, and an update about to end the core, wait for an action in flight to finish.
+pub const ACTION_WAIT: Duration = Duration::from_secs(30);
+
+/// The requests that change a workspace or its remote, the core's long actions
+/// (app/lib/desktop/core.ts): the hub is not stopped under one, and the pages hold the install
+/// button while one runs (the module's header).
+pub const ACTIONS: &[&str] = &["create", "clone", "push", "bringIn", "deliver", "remove"];
+
+/// Whether a request is one of `ACTIONS`.
+pub fn is_action(request_type: &str) -> bool {
+    ACTIONS.contains(&request_type)
+}
+
+/// An action named for the middle of a sentence: "the push", "the bring-in".
+pub fn describe(action: &str) -> &'static str {
+    match action {
+        "create" => "the workspace being created",
+        "clone" => "the clone",
+        "push" => "the push",
+        "bringIn" => "the bring-in",
+        "deliver" => "the delivery",
+        "remove" => "the removal",
+        _ => "the action",
+    }
+}
+
+/// Node's arguments: `--use-system-ca`, so the machine's trusted certificate authorities are trusted
+/// beside Node's own list (the module's header; the review's S7), then the core's bundle.
+pub fn sidecar_arguments(script: &str) -> [String; 2] {
+    ["--use-system-ca".to_string(), script.to_string()]
+}
 
 /// What the shell knows of the core and its hub; what `shell_state` answers the pages.
 #[derive(Clone, Serialize, Default)]
@@ -63,12 +105,21 @@ pub struct ShellState {
     /// An update the release channel offers, and how its install is going (update.rs).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update: Option<crate::update::UpdateState>,
+    /// The actions in flight (`ACTIONS`), oldest first, while there are any: the pages hold the
+    /// install button for them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<String>,
+    /// The system's start-at-login entry as the shell last left it (login.rs; the review's R10).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub login_entry: Option<crate::login::LoginEntry>,
 }
 
 #[derive(Default)]
 pub struct Core {
     child: Mutex<Option<CommandChild>>,
     pending: Mutex<HashMap<u64, oneshot::Sender<Value>>>,
+    /// The requests in flight that are `ACTIONS`, by id, in the order sent.
+    actions: Mutex<Vec<(u64, String)>>,
     next_id: AtomicU64,
     lines: Mutex<LineBuffer>,
     state: Mutex<ShellState>,
@@ -93,6 +144,19 @@ pub struct Core {
 impl Core {
     pub fn state(&self) -> ShellState {
         self.state.lock().unwrap().clone()
+    }
+
+    /// The actions in flight, oldest first.
+    pub fn actions_in_flight(&self) -> Vec<String> {
+        self.actions.lock().unwrap().iter().map(|(_, action)| action.clone()).collect()
+    }
+
+    /// Takes a reply's waiting sender; whether the request was an action, so the state is refreshed.
+    fn settle(&self, id: u64) -> (Option<oneshot::Sender<Value>>, bool) {
+        let tx = self.pending.lock().unwrap().remove(&id);
+        let mut actions = self.actions.lock().unwrap();
+        let was_action = actions.iter().position(|(sent, _)| *sent == id).map(|at| actions.remove(at)).is_some();
+        (tx, was_action)
     }
 
     pub fn recent_lines(&self) -> Vec<Value> {
@@ -195,7 +259,7 @@ pub fn launch(app: &AppHandle) -> Result<(), String> {
         .shell()
         .sidecar("armature-node")
         .map_err(|e| e.to_string())?
-        .args([script])
+        .args(sidecar_arguments(&script))
         .env_clear()
         .envs(kept_environment(std::env::vars_os()))
         .spawn()
@@ -242,6 +306,11 @@ pub async fn ask(app: &AppHandle, mut request: Value) -> Result<Value, String> {
     request["id"] = json!(id);
     let (tx, rx) = oneshot::channel();
     core.pending.lock().unwrap().insert(id, tx);
+    let action = request["type"].as_str().filter(|t| is_action(t)).map(str::to_string);
+    if let Some(action) = &action {
+        core.actions.lock().unwrap().push((id, action.clone()));
+        refresh_actions(app);
+    }
     let mut line = request.to_string();
     line.push('\n');
     let written = match core.child.lock().unwrap().as_mut() {
@@ -249,17 +318,45 @@ pub async fn ask(app: &AppHandle, mut request: Value) -> Result<Value, String> {
         None => Err("The core is not running".to_string()),
     };
     if let Err(err) = written {
-        core.pending.lock().unwrap().remove(&id);
+        if core.settle(id).1 {
+            refresh_actions(app);
+        }
         return Err(err);
     }
     rx.await.map_err(|_| "The core ended before it answered".to_string())
+}
+
+/// The state's list of actions brought up to date with the core's, and the pages told.
+fn refresh_actions(app: &AppHandle) {
+    let actions = app.state::<Core>().actions_in_flight();
+    set_state(app, |s| s.actions = actions);
+}
+
+/// Waits up to `ACTION_WAIT` for the actions in flight to finish, saying so, since the hub stops
+/// next; `Err` names the first of them when they did not, for the caller to say what it does then.
+pub async fn await_actions(app: &AppHandle) -> Result<(), &'static str> {
+    let core = app.state::<Core>();
+    let Some(first) = core.actions_in_flight().into_iter().next() else { return Ok(()) };
+    let first = describe(&first);
+    say(app, "info", &format!("Waiting for {first} to finish before the hub stops"));
+    let deadline = tokio::time::Instant::now() + ACTION_WAIT;
+    while !core.actions_in_flight().is_empty() {
+        if tokio::time::Instant::now() >= deadline {
+            return Err(first);
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    Ok(())
 }
 
 /// `start`, then the keychain's refresh token for the remote it names; the shell's state follows.
 pub async fn start_hub(app: &AppHandle) {
     let core = app.state::<Core>();
     let Some(data_dir) = core.data_dir.lock().unwrap().clone() else { return };
-    set_state(app, |s| s.core = "starting");
+    set_state(app, |s| {
+        s.core = "starting";
+        s.actions.clear();
+    });
     let mut request = json!({ "type": "start", "dataDir": data_dir.display().to_string() });
     match keychain::local_token() {
         Ok(Some(token)) => {
@@ -377,16 +474,20 @@ fn on_line(app: &AppHandle, line: &str) {
                 logs.write(message["level"].as_str().unwrap_or("info"), message["line"].as_str().unwrap_or(""));
             }
         }
-        if let Some(tx) = message.get("id").and_then(Value::as_u64).and_then(|id| core.pending.lock().unwrap().remove(&id)) {
+        if let Some((Some(tx), _)) = message.get("id").and_then(Value::as_u64).map(|id| core.settle(id)) {
             let _ = tx.send(message);
         }
         return;
     }
     if let Some(id) = message.get("id") {
-        if let Some(tx) = id.as_u64().and_then(|id| core.pending.lock().unwrap().remove(&id)) {
-            let _ = tx.send(message);
-        } else {
-            say(app, "warn", &format!("The core answered a request the shell did not send: {line}"));
+        match id.as_u64().map(|id| core.settle(id)) {
+            Some((Some(tx), was_action)) => {
+                let _ = tx.send(message);
+                if was_action {
+                    refresh_actions(app);
+                }
+            }
+            _ => say(app, "warn", &format!("The core answered a request the shell did not send: {line}")),
         }
         return;
     }
@@ -436,6 +537,7 @@ fn on_terminated(app: &AppHandle, code: Option<i32>) {
     core.child.lock().unwrap().take();
     // Every request waiting on the core learns it is gone.
     core.pending.lock().unwrap().clear();
+    core.actions.lock().unwrap().clear();
     if core.exiting.load(SeqCst) || core.updating.load(SeqCst) {
         return;
     }
@@ -445,38 +547,63 @@ fn on_terminated(app: &AppHandle, code: Option<i32>) {
     }
     let message = format!("The core ended unexpectedly (exit code {}); quit and open the program again", code.map_or("none".to_string(), |c| c.to_string()));
     say(app, "error", &message);
-    set_state(app, |s| { s.core = "failed"; s.error = Some(message); });
+    set_state(app, |s| { s.core = "failed"; s.error = Some(message); s.actions.clear(); });
 }
 
 /// The last chance when the program ends without asking (macOS's quit, the Apple Event Cmd-Q
 /// sends, ends the event loop with `Exit` and no `ExitRequested`). This runs on the main thread,
-/// which the tray and the page need, so it does not ask the core and wait for a reply: it closes
-/// the core's input, on which the core stops the hub and releases the folder's lock by itself
-/// (ADR-0069 decision 4), and waits up to five seconds for its process to end. Nothing to do when
-/// `quit` already ran.
+/// which the tray and the page need, so it cannot await a reply through the runtime: it does what
+/// `quit` does, step by step, watching the shared state instead. An action in flight finishes first,
+/// up to `ACTION_WAIT`; then `stop` is written, and its reply, which the reader task takes off the
+/// pending map from its own thread, waited for up to `STOP_WAIT`, so the hub closes and the folder's
+/// lock is released (ADR-0069 decision 4); then the process is ended, so none outlives the program
+/// (the 2026-11-09 review's S2: closing its input alone left a core that had not ended in time
+/// running, with only a log line). Nothing to do when `quit` already ran.
 pub fn stop_before_exit(app: &AppHandle) {
     let core = app.state::<Core>();
     if core.exiting.swap(true, SeqCst) {
         return;
     }
-    if let Some(logs) = core.logs.lock().unwrap().as_mut() {
-        logs.write("info", "The program is ending; the core stops the hub and releases the lock");
-    }
-    // Dropped, the child's end of the pipe closes; it is not killed (kill_on_drop is off).
-    let child = core.child.lock().unwrap().take();
-    drop(child);
-    let deadline = std::time::Instant::now() + STOP_WAIT;
-    while !core.core_exited.load(SeqCst) && std::time::Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    if !core.core_exited.load(SeqCst) {
+    let log = |level: &str, line: &str| {
         if let Some(logs) = core.logs.lock().unwrap().as_mut() {
-            logs.write("warn", "The core had not ended when the program did; it stops on its own, or the next start takes over its lock");
+            logs.write(level, line);
+        }
+    };
+    let wait_while = |condition: &dyn Fn() -> bool, at_most: Duration| {
+        let deadline = Instant::now() + at_most;
+        while condition() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    };
+    log("info", "The program is ending; the core stops the hub and releases the lock");
+    if let Some(first) = core.actions_in_flight().into_iter().next() {
+        let first = describe(&first);
+        log("info", &format!("Waiting for {first} to finish before the hub stops"));
+        wait_while(&|| !core.actions_in_flight().is_empty(), ACTION_WAIT);
+        if !core.actions_in_flight().is_empty() {
+            log("warn", &format!("The hub stops with {first} still running after {} seconds; a push is recovered at the next start", ACTION_WAIT.as_secs()));
         }
     }
+    let id = core.next_id.fetch_add(1, SeqCst) + 1;
+    let (tx, _unread) = oneshot::channel();
+    core.pending.lock().unwrap().insert(id, tx);
+    let mut line = json!({ "type": "stop", "id": id }).to_string();
+    line.push('\n');
+    let written = core.child.lock().unwrap().as_mut().is_some_and(|child| child.write(line.as_bytes()).is_ok());
+    if written {
+        wait_while(&|| core.pending.lock().unwrap().contains_key(&id) && !core.core_exited.load(SeqCst), STOP_WAIT);
+        if core.pending.lock().unwrap().contains_key(&id) && !core.core_exited.load(SeqCst) {
+            log("warn", "The core did not stop the hub in time; it is ended, and the next start takes over its lock");
+        }
+    }
+    if let Some(child) = core.child.lock().unwrap().take() {
+        let _ = child.kill();
+    }
+    wait_while(&|| !core.core_exited.load(SeqCst), Duration::from_secs(1));
 }
 
-/// Quits: `stop`, up to five seconds, then the sidecar is ended and the program exits.
+/// Quits: an action in flight finishes first (`ACTION_WAIT`), then `stop`, up to five seconds,
+/// then the sidecar is ended and the program exits.
 pub fn quit(app: &AppHandle) {
     let core = app.state::<Core>();
     if core.quitting.swap(true, SeqCst) {
@@ -484,6 +611,9 @@ pub fn quit(app: &AppHandle) {
     }
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
+        if let Err(action) = await_actions(&handle).await {
+            say(&handle, "warn", &format!("The hub stops with {action} still running after {} seconds; a push is recovered at the next start", ACTION_WAIT.as_secs()));
+        }
         let stopped = tokio::time::timeout(STOP_WAIT, stop_hub(&handle)).await;
         let core = handle.state::<Core>();
         if !matches!(stopped, Ok(Ok(()))) {
@@ -555,5 +685,33 @@ mod tests {
     fn matches_windows_names_without_regard_to_case() {
         let kept = kept_environment(environment(&[("SYSTEMROOT", "C:\\Windows"), ("userprofile", "C:\\Users\\a"), ("Path", "C:\\Windows")]));
         assert_eq!(names(&kept), ["SYSTEMROOT", "userprofile"]);
+    }
+
+    #[test]
+    fn the_long_actions_are_known_by_name_and_described_for_a_sentence() {
+        for action in ["create", "clone", "push", "bringIn", "deliver", "remove"] {
+            assert!(is_action(action), "{action}");
+            assert_ne!(describe(action), "the action", "{action}");
+        }
+        for request in ["settings", "workspaces", "status", "commits", "signOut", "stop", "resetPairing"] {
+            assert!(!is_action(request), "{request}");
+        }
+        assert_eq!(describe("bringIn"), "the bring-in");
+        assert_eq!(describe("deliver"), "the delivery");
+    }
+
+    #[test]
+    fn the_sidecar_runs_node_with_the_system_s_certificate_authorities_then_the_core() {
+        let args = sidecar_arguments("C:\\Program Files\\Armature\\resources\\core\\desktop.mjs");
+        assert_eq!(args, ["--use-system-ca".to_string(), "C:\\Program Files\\Armature\\resources\\core\\desktop.mjs".to_string()]);
+    }
+
+    #[test]
+    fn the_state_names_the_actions_only_while_there_are_any() {
+        let empty = serde_json::to_value(ShellState::default()).unwrap();
+        assert!(empty.get("actions").is_none());
+        assert!(empty.get("loginEntry").is_none());
+        let busy = serde_json::to_value(ShellState { actions: vec!["push".to_string()], ..ShellState::default() }).unwrap();
+        assert_eq!(busy["actions"], serde_json::json!(["push"]));
     }
 }
