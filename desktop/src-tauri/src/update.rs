@@ -14,9 +14,12 @@
 //! again within the hour), and the page is told the channel had no release to offer (the 2026-11-09
 //! review's R2).
 //!
-//! Installing downloads the update while the hub still serves the tools, then ends the core as
-//! quitting does (`stop`, so the folder's lock is released and no write is cut off, then its
-//! process), then installs: Windows refuses to replace an executable that is running, and the
+//! Installing is refused while a push, bring-in, deliver, create, clone or remove is running
+//! (`core::ACTIONS`; the pages hold the button too), downloads the update while the hub still
+//! serves the tools, waits for an action begun meanwhile (`core::ACTION_WAIT`; one still running
+//! then keeps this version, the update offered again), then ends the core as quitting does (`stop`,
+//! so the folder's lock is released, then its process; the 2026-11-09 review's S3), then installs:
+//! Windows refuses to replace an executable that is running, and the
 //! sidecar is one. On Windows the installer ends the program itself (the plugin exits once the
 //! installer has started); on macOS and Linux the shell restarts into the new version. An install
 //! that fails starts the core and its hub again and says why.
@@ -231,6 +234,13 @@ pub async fn install(app: &AppHandle) -> Result<(), String> {
     let Some(mut update) = updates.pending.lock().unwrap().clone() else {
         return Err("No update is waiting; check for updates first".to_string());
     };
+    // The pages hold the button while an action runs; this is the backstop, shown as a failed
+    // install so a page that did ask is told why (the module's header).
+    if let Some(action) = app.state::<Core>().actions_in_flight().into_iter().next() {
+        let reason = format!("install it when {} finishes; it is running now", core::describe(&action));
+        show(app, &update, "failed", None, Some(reason.clone()));
+        return Err(reason);
+    }
     // The check's timeout came with the update and would bound the whole download (the module's
     // header); the stall watchdog in `run_install` takes its place.
     update.timeout = None;
@@ -273,6 +283,11 @@ async fn run_install(app: &AppHandle, update: &Update, core_ended: &mut bool) ->
         }
     };
 
+    // An action begun during the download finishes first; one still running keeps this version
+    // (the module's header). The download is let go; the update stays offered.
+    if let Err(action) = core::await_actions(app).await {
+        return Err(format!("{action} was still running after {} seconds; nothing was stopped", core::ACTION_WAIT.as_secs()));
+    }
     show(app, update, "installing", None, None);
     core::say(app, "info", &format!("Stopping the hub to install version {}", update.version));
     core::end_for_update(app).await;

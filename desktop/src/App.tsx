@@ -94,7 +94,7 @@ export function App({ backend }: { backend: Backend }) {
         </div>
       </nav>
       <main className="min-w-0 flex-1 overflow-auto p-8">
-        {state?.update && <UpdateNotice backend={backend} update={state.update} refresh={() => void refresh()} />}
+        {state?.update && <UpdateNotice backend={backend} update={state.update} blocked={state.actions?.[0]} refresh={() => void refresh()} />}
         {page?.name === 'connect' && <Connect backend={backend} state={state} link={link} onDone={(next) => go({ name: next })} />}
         {page?.name === 'signIn' && <SignIn backend={backend} state={state} onDone={() => go({ name: 'workspaces' })} />}
         {page?.name === 'workspaces' && <Workspaces backend={backend} notice={page.notice} open={(branch) => go({ name: 'workspace', branch })} />}

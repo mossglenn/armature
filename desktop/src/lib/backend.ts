@@ -54,6 +54,10 @@ export interface ShellState {
   link?: string;
   /** An update the release channel offers (docs/desktop-program-plan.md §10). */
   update?: UpdateState;
+  /** The core's long actions in flight (`create`, `clone`, `push`, `bringIn`, `deliver`, `remove`), oldest first, while there are any: the install button waits for them (src-tauri/src/core.rs `ACTIONS`). */
+  actions?: string[];
+  /** The system's start-at-login entry as the shell last left it (src-tauri/src/login.rs): wanted by the setting, whether it exists when that can be read, and what went wrong. */
+  loginEntry?: { wanted: boolean; enabled?: boolean; error?: string };
 }
 
 /**
@@ -92,7 +96,7 @@ export const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_
 export async function createBackend(): Promise<Backend> {
   if (!isTauri()) {
     const query = new URLSearchParams(window.location.search);
-    return (await import('./fakeCore')).fakeCore(query.get('scenario') ?? undefined, query.get('update') ?? undefined);
+    return (await import('./fakeCore')).fakeCore(query.get('scenario') ?? undefined, query.get('update') ?? undefined, { slow: query.has('slow'), login: query.get('login') ?? undefined });
   }
   const [{ invoke }, { listen }, { getVersion }] = await Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event'), import('@tauri-apps/api/app')]);
   return {

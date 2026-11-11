@@ -14,7 +14,8 @@ import { useRequest } from '@/lib/useShell';
  * and only while no workspace exists), the folder with the synced-folder warning, the port, the
  * snapshot budget, the identifier under header; a change the hub needs a restart for says so and
  * offers it; starting at login, saved as it is ticked (the shell makes the system's entry follow it,
- * src-tauri/src/login.rs); sign out; and the versions: the program's, the hub revision it carries,
+ * src-tauri/src/login.rs, and the state says what the entry then is, shown beside the box when it
+ * differs from the setting; the 2026-11-09 review's R10); sign out; and the versions: the program's, the hub revision it carries,
  * the remote's, with a check of the release channel on demand (the daily one is the shell's).
  */
 export function Settings({ backend, state, connect, signedOut }: { backend: Backend; state?: ShellState; connect: () => void; signedOut: () => void }) {
@@ -87,6 +88,18 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
     }
   };
 
+  // The system's entry against the setting: the error the shell met, or the difference it found.
+  const entry = state?.loginEntry;
+  const entryProblem =
+    entry && settings
+      ? (entry.error ??
+        (entry.enabled !== undefined && entry.enabled !== (settings.startAtLogin ?? false)
+          ? settings.startAtLogin
+            ? 'The system has no entry to start the program at login; it is made again at the next start.'
+            : 'The system still has an entry starting the program at login; it is removed at the next start.'
+          : undefined))
+      : undefined;
+
   const restartHub = async () => {
     await backend.setHub(false);
     await backend.setHub(true);
@@ -154,6 +167,11 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
           <input type="checkbox" disabled={!settings || busy !== undefined} checked={settings?.startAtLogin ?? false} onChange={(e) => void startAtLogin(e.target.checked)} />
           Start at login, in the tray
         </label>
+        {entryProblem && (
+          <p className="text-destructive text-sm" role="alert">
+            {entryProblem}
+          </p>
+        )}
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={busy !== undefined || !settings}>
             Save
