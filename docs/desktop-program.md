@@ -72,11 +72,11 @@ Your workspaces are in the workspaces folder: by default inside the program's da
 
 Closing the window does not stop the program: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first.
 
-**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. An update you install in such a session brings the window back when the program starts again.
+**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the program tries again at its next start. An update you install in such a session brings the window back when the program starts again.
 
 ## Updates
 
-The program checks for a new version when it starts and once a day. When there is one, a notice at the top of the window says which version, with its notes; choose **Install and restart** when it suits you. The hub stops while the update installs, which takes a few seconds, and your tools reach it again once the program is back. **Settings → Check for updates** checks at once.
+The program checks for a new version when it starts and once a day. When there is one, a notice at the top of the window says which version, with its notes; choose **Install and restart** when it suits you. The hub stops while the update installs, which takes a few seconds, and your tools reach it again once the program is back. While a push, bring-in, delivery, clone or removal is running, the button waits for it, and so does quitting (up to half a minute), so nothing is cut off under it. **Settings → Check for updates** checks at once.
 
 On macOS, the first start after an update may ask for your login password for the keychain again; enter it and choose **Always Allow** (§ "Installing it" says why). An update is installed only if its signature verifies. If an install fails, or a download goes a minute without receiving anything, the program keeps running the version you have, says why, and offers to try again. If the release channel cannot be reached, or answers without a release, the program says so rather than calling your version the latest, and tries again within the hour. A `.deb` install does not check the channel at all: install the next package when one is released, as the table above says.
 
@@ -86,7 +86,7 @@ Every refusal shows the message, a code and whether your instance or this machin
 
 | Code | What it means | What to do |
 |---|---|---|
-| `remote_unreachable` | The instance did not answer | Check your connection; offline, everything but push, bring in, deliver and remove still works |
+| `remote_unreachable` | The instance did not answer | Check your connection; offline, everything but push, bring in, deliver and remove still works. Behind an institution's TLS inspection the program trusts the certificate authorities your system trusts, as your browser does (since 0.1.1); if your browser reaches the instance and the program does not, ask your administrator for the authority's certificate and set `NODE_EXTRA_CA_CERTS` to its file |
 | `insecure_remote` | An instance that signs people in was given as `http://` | Use its `https://` address |
 | `profile_changed` | The instance answered differently when you connected than when you read it | Choose **Read** again and check what it shows before connecting |
 | `not_registered` | You signed in, but the instance does not know you | Ask your administrator to register you |
