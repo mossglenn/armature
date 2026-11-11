@@ -58,7 +58,7 @@ No single division of plugins holds: designer against administrator, or who inst
 | Whyfinder | Interactive | Nobody | The reader's browser |
 | MCP server | Agent | Nobody when reading; an agent `User` when writes are on | The person's machine (stdio), through a workspace hub (ADR-0065, accepted 2026-10-30); beside the hub over HTTP |
 | Formalizer | Agent | An agent `User` | Beside the hub |
-| Storyline bridge | Batch | The person running it | The designer's Windows machine (through a workspace hub, ADR-0065, accepted 2026-10-30) |
+| Storyline bridge | Batch | The person running it | The designer's Windows PC (through a workspace hub, ADR-0065, accepted 2026-10-30) |
 | DataShop bridge | Batch | A service `User` | Beside the hub |
 | Q-matrix exporter | Batch | Nobody | Anywhere the export reaches |
 | Experiment bridge | Batch | The person setting up conditions | Beside the hub |

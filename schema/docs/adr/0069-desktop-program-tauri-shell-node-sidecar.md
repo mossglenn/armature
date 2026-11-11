@@ -163,11 +163,11 @@ installed program.
 
 > **Note (2026-11-06):** `fd50f8c` was the commit's identifier on the spike's branch, which is
 > deleted; the rebase merge (PR #111) gave the commits new identifiers. On `main` the spike is
-> `6be705f` (the code, the build step and the check script) to `81014e7` (the laptop's results in
+> `6be705f` (the code, the build step and the check script) to `81014e7` (the Windows PC's results in
 > its README), and `aa6035d` removes it; `git show 81014e7:spike/desktop-sidecar/README.md` reads
 > the findings as the spike left them.
 
-| | The Mac (M2, macOS, arm64) | GitHub's macOS runner | GitHub's Windows runner | The Windows laptop (Windows 11 Pro, i7-8700) | GitHub's Ubuntu 22.04 runner, Xvfb |
+| | The Mac (M2, macOS, arm64) | GitHub's macOS runner | GitHub's Windows runner | The Windows PC (Windows 11 Pro, i7-8700) | GitHub's Ubuntu 22.04 runner, Xvfb |
 |---|---|---|---|---|---|
 | What a person downloads | `.dmg` 38 MiB | `.dmg` 38 MiB | installer 24 MiB | installer 24 MiB | `.deb` 47 MiB, AppImage 117 MiB |
 | Launch to a listening hub, first | 0.59 s | 6.1 s | 9.8 s | 1.4 s | 0.50 s |
@@ -190,7 +190,7 @@ installed program.
   bundle, which verified, and the hub, `fetch`, a WebAssembly compile and `node:crypto` worked.
   Notarization itself is untested until there is a Developer ID.
 - **Windows:** the extended-length path failed the core at once on the first Windows run (decision
-  6); the laptop's install and collection ran over SSH, the checks at its desktop.
+  6); the Windows PC's install and collection ran over SSH, the checks at its desktop.
 - Not observed: SmartScreen on a double-clicked unsigned installer, a console window beside the
   shell, closing the window with its X on Windows. WebKitGTK under Xvfb needed its GPU paths off; a
   Linux desktop is unrehearsed.

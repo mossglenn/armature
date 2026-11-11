@@ -78,7 +78,7 @@ Written with ADR-0068 (authorization), which says what a resolved identity may d
 says how the identity is established and what the hub records about it. The trigger is What's
 Next item 3 in `.claude/SESSION.md`: a writing client that runs somewhere other than the hub's
 server (Quiver on a second machine, the MCP server's remote mode, the Storyline bridge on a
-designer's Windows machine, and a workspace hub's push, ADR-0065). Adopts the delegation half of
+designer's Windows PC, and a workspace hub's push, ADR-0065). Adopts the delegation half of
 research candidate 0025 (`docs/research/adr-candidates.md`: an `On-behalf-of:` trailer, after W3C
 PROV-O's `actedOnBehalfOf`). On acceptance it would amend or annotate:
 

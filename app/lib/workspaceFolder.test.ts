@@ -127,7 +127,7 @@ describe('the folder on this file system', () => {
 });
 
 // A process killed between the temporary write and the rename (ADR-0066
-// Verification; rehearsed on a Windows laptop 2026-11-03 and kept here): a
+// Verification; rehearsed on a Windows PC 2026-11-03 and kept here): a
 // child built from these very modules writes three versions of one document,
 // then dies by SIGKILL (TerminateProcess on Windows) the moment `rename` would
 // move the next commit file, or the next head, into place. The folder must
@@ -211,7 +211,7 @@ describe('unwritable', () => {
 });
 
 // A rename refused while another program holds the target (ADR-0066
-// Verification; met inside OneDrive on a Windows laptop 2026-11-03, where the
+// Verification; met inside OneDrive on a Windows PC 2026-11-03, where the
 // sync client holds a file it was just handed): the same child as above, its
 // `rename` refusing the next head with EPERM a given number of times, or every
 // time. A refusal that clears must leave the write landed and no temporary

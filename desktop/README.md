@@ -2,7 +2,7 @@
 
 The program a designer installs to work on their own machine (ADR-0069; [the plan](../docs/desktop-program-plan.md)). It is a [Tauri 2](https://tauri.app) shell over the **core**, `app/desktop.ts`, which hosts a workspace hub on `127.0.0.1:3101` over the file-backed store in the program's data folder. The shell owns what needs the operating system: the window and the tray, the keychain, the `armature://` link, opening the browser for the sign-in, and starting and stopping the core. It holds no logic about workspaces, tokens or the hub beyond relaying: the core decides, and answers as the hub's routes would.
 
-Status: the shell and its seven pages are built (the plan's step 4), rehearsed on the Mac and a Windows laptop against a remote on the tailnet and under the Keycloak realm; the updater, starting at login and the release workflow are built (step 5, 2026-11-08), the Droplet run their acceptance. [`docs/desktop-program.md`](../docs/desktop-program.md) is the guide for the person who installs it.
+Status: the shell and its seven pages are built (the plan's step 4), rehearsed on the Mac and a Windows PC against a remote on the tailnet and under the Keycloak realm; the updater, starting at login and the release workflow are built (step 5, 2026-11-08), the Droplet run their acceptance. [`docs/desktop-program.md`](../docs/desktop-program.md) is the guide for the person who installs it.
 
 ## How it fits together
 

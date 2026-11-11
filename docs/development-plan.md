@@ -125,7 +125,7 @@ adopted into the hub when at least two reference clients would need the same cap
 | **The viewer** (built; this repository) | Armature's own read-only pages: the module index, the Coverage View, the Design Graph | Coverage, item statistics, module content, export and branches, every read at a ref; no write |
 | **Quiver** (built 2026-10-26 to 28, paused 2026-10-30; `mossglenn/quiver`) | A local-first item manager: a workspace bound to a branch, offline writes, push with `If-Match`, merge review | What ADR-0065 proposes: a hub on the person's machine, workspaces as branches cloned from the remote and pushed back through its API, the rules run locally |
 | **MCP server** (planned; `docs/mcp-server-plan.md`) | Lets an assistant ask the graph through a Model Context Protocol (MCP) server on the person's machine | The intelligence reads at a named commit; discovery (`GET /discover`); notes and findings written as an agent acting for a person (ADR-0067 decision 3) |
-| **Storyline bridge** (planned; `docs/storyline-bridge-plan.md`) | Records each Storyline build in the graph by hash and maps its interactions to items | A hub on the designer's Windows machine; findings for differences; metrics at a build's commit (`asOf`) |
+| **Storyline bridge** (planned; `docs/storyline-bridge-plan.md`) | Records each Storyline build in the graph by hash and maps its interactions to items | A hub on the designer's Windows PC; findings for differences; metrics at a build's commit (`asOf`) |
 
 Three of these need **binary attachments** today or soon: the needs-analysis intake tool
 (evidence documents), CoQui (item media, eventually), and the outcomes importer (raw dataset

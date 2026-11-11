@@ -130,7 +130,7 @@ jobs:
         run: npm ci
         working-directory: desktop
       # The build's beforeBuildCommand prepares the sidecar (Node's win-x64 zip, its pinned checksum checked)
-      # and the core's bundle, then the pages. NSIS's installer is per user, so the laptop needs no
+      # and the core's bundle, then the pages. NSIS's installer is per user, so the PC needs no
       # administrator; WebView2 ships with Windows 10 and 11. A debug build keeps its console
       # window (main.rs sets the windows subsystem for release only), which shows the shell's log.
       - name: Build a debug installer

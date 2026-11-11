@@ -312,7 +312,7 @@ Check AI and the contract test are done (2026-11-02); the other two run before s
   (`app/lib/workspaceFolder.ts`, `syncFolder`), NTFS journaling the rename itself. Still for a
   real machine: a folder inside a synced directory (OneDrive, Files On-Demand) and a process
   killed between the temporary write and the rename.* *Run on a real machine 2026-11-03 (a
-  Windows 11 laptop, NTFS, Defender on, OneDrive signed in with Files On-Demand; the harness a
+  Windows 11 PC, NTFS, Defender on, OneDrive signed in with Files On-Demand; the harness a
   child bundled over the real `folderFiles` and file store, terminated by `TerminateProcess` at
   the moment `rename` is about to move the temporary file into place): killed before the rename
   of a commit file and before the rename of `head.json`, on NTFS and inside OneDrive alike, the

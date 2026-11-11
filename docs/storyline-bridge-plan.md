@@ -10,7 +10,7 @@ Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (appl
 
 - **The package carries a stamp.** The first draft kept everything in the graph because Articulate does not support changes to published output. Amos chose a middle course: one file, `armature.json`, added at the package's root, naming the build, the design commit and the map from interactions to items. It changes nothing a learner's browser runs, and it names the files it describes, so a stamp that no longer matches its package is detected rather than trusted (§4).
 - **Two homes for one tool.** The bridge is a core library with three front ends: a CLI; a local page the desktop program launches, writing into a workspace on the designer's machine; and a service deployed beside a remote hub, where a person signs in, uploads an export and downloads it stamped. Both pages take a zip or a folder Storyline published (§9).
-- **The hosting problem the first draft hedged is answered.** Since 2026-10-27: the workspace hub's cycle (2026-11-01), its file-backed store rehearsed on a Windows machine (2026-11-03), the `oidc` resolver and relays (2026-11-05), and the desktop program through its release, sign-in included (2026-11-06 to 09). A designer's Windows machine needs the program and the bridge, and no container.
+- **The hosting problem the first draft hedged is answered.** Since 2026-10-27: the workspace hub's cycle (2026-11-01), its file-backed store rehearsed on a Windows PC (2026-11-03), the `oidc` resolver and relays (2026-11-05), and the desktop program through its release, sign-in included (2026-11-06 to 09). A designer's Windows PC needs the program and the bridge, and no container.
 - **One case added to M0** from Amos's own Storyline work: slides imported, copied or moved between scenes, which a routine fix does and which may give slides new ids (§2, §14).
 - **No change to the hub, the API or the schema is required**, as before. What this plan asks of Armature's repository is the desktop program's list of launched tools and the documents that describe the bridge; one read on a workspace hub may become an ask if M2 shows it is needed (§13).
 
@@ -325,7 +325,7 @@ Nothing in the hub, the API or the schema is required. Three things, one of them
 
 Milestones in the bridge's repository, `mossglenn/armature-storyline`, each a pull request with its tests, except M3's second half, which is a pull request here.
 
-**Before M0.** A Windows machine with a Storyline 360 license to publish the fixtures, and SCORM Cloud and Moodle accounts for the upload checks.
+**Before M0.** A Windows PC with a Storyline 360 license to publish the fixtures, and SCORM Cloud and Moodle accounts for the upload checks.
 
 **M0 · Verify the package.** Publish the fixture project in all five forms and confirm what the plan rests on: the slide map and slide ids in `data.js`, the per-slide question data, that a reorder keeps slide ids, what happens to a slide's id when it is imported from another scene or project, where interaction ids can be predicted from the data files, whether SCORM Cloud, Moodle and Canvas accept and launch a package with an unlisted `armature.json`, and what a republish into the same folder does to it. Acceptance: a written note of what holds, with the fixtures committed. If slide ids are not readable, §6 falls back to text matching with confirmation at every rebuild; if an LMS rejects the unlisted file, §16 question 14 is reopened; either way the plan is revised before M1.
 
@@ -333,7 +333,7 @@ Milestones in the bridge's repository, `mossglenn/armature-storyline`, each a pu
 
 **M2 · Record to the graph.** `publish` with §6's matching, the difference findings, the attachments and `ExternalRef`s in one commit; `identify` and `status` against a hub; against a seeded hub and a workspace hub. Acceptance: beats 2 (by CLI) and 3 against a seeded hub; a stamp's local commit resolved after a push.
 
-**M3 · On the designer's machine.** The page and the local server with its boundary; the Windows executable. Here, the desktop program's tool list (§13 item 1). Acceptance: beats 2 and 3 on the Windows laptop, the bridge opened from the program and its writes pushed by it.
+**M3 · On the designer's machine.** The page and the local server with its boundary; the Windows executable. Here, the desktop program's tool list (§13 item 1). Acceptance: beats 2 and 3 on the Windows PC, the bridge opened from the program and its writes pushed by it.
 
 **M4 · Results.** `results` with SCORM Cloud first, then Moodle's report, on the CLI and the page. Acceptance: beat 4; the dataset's `asOf` is the build's design commit and the Walkthrough runs from its metric.
 

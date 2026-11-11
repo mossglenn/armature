@@ -17,7 +17,7 @@
  * is reported as such (`unreadable`), not as an internal error; a rename
  * refused while another program holds the file is tried again for a few
  * seconds before it is reported (`unwritable`). All from the rehearsal on a
- * Windows laptop (ADR-0066 Verification, 2026-11-03).
+ * Windows PC (ADR-0066 Verification, 2026-11-03).
  */
 import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { join, sep } from 'node:path';

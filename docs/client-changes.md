@@ -183,7 +183,7 @@ such as a commit file a sync service (OneDrive with Files On-Demand) has made cl
 service is stopped or the machine offline, answered **500** `internal_error` on every request until
 it was restarted. It now answers **503** `store_unreadable` with `path` naming the file and
 `Retry-After`, and reads its folder again on the next request, so a request after the file is back
-on disk succeeds without a restart. Found by ADR-0066's rehearsal on a Windows laptop (its
+on disk succeeds without a restart. Found by ADR-0066's rehearsal on a Windows PC (its
 Verification, note of 2026-11-03); [the deployment guide](deployment.md) says to keep the folder
 outside a synced directory. Also since that day, a temporary file a process killed mid-write left
 behind is removed when the next hub takes the folder's lock.
