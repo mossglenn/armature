@@ -38,9 +38,15 @@ import { diffDocument, diffDocuments } from './patch';
  * 0), which run before any write reaches a store. A merge (`apply`) is not
  * implemented: a workspace hub never merges (ADR-0065 decision 3).
  *
- * One writer: writes to a branch run one at a time within the process, the
- * commit file is durable before the head moves, and the host's folder takes
- * a lock against a second process (`app/lib/workspaceFolder.ts`).
+ * One writer: everything that changes the folder (a commit, a branch made or
+ * deleted, the store marked or removed) runs one at a time within the
+ * process, whatever branch it is for, the commit file is durable before the
+ * head moves, and the host's folder takes a lock against a second process
+ * (`app/lib/workspaceFolder.ts`). One line for the whole store, not one per
+ * branch, since a branch's deletion removes commit files from every branch's
+ * folder: beside a write in flight on another branch it removed that write's
+ * commit, written and not yet under a head (the 2026-11-09 review's W1;
+ * ADR-0066 decision 2, note of 2026-11-11).
  */
 
 /** One commit as its file holds it. */
@@ -118,7 +124,7 @@ export class FileStore {
   /** Branch name to head commit id; undefined for a branch with no commit. */
   private readonly branches = new Map<string, string | undefined>();
   private readonly states = new Map<string, State>();
-  /** Each branch's commits, in order. */
+  /** Every change to the folder, in order: one line for the whole store. */
   private readonly queue = new KeyedQueue();
   /** The hub's write queue, `exclusive`: a separate one, since work holding it commits through `queue`. */
   private readonly writers = new KeyedQueue();
@@ -177,9 +183,9 @@ export class FileStore {
     this.branches.set(branch, head);
   }
 
-  /** Runs `work` after every earlier write to `branch` in this process has finished. */
-  private serialized<T>(branch: string, work: () => Promise<T>): Promise<T> {
-    return this.queue.run(branch, work);
+  /** Runs `work` after every earlier change to the folder in this process has finished. Not reentrant. */
+  private serialized<T>(work: () => Promise<T>): Promise<T> {
+    return this.queue.run('', work);
   }
 
   /** Runs `work` alone among the hub's writes to `branch` (`Store.exclusive`). */
@@ -285,7 +291,7 @@ export class FileStore {
 
   /**
    * One commit on `branch`: `build` prepares what it writes from the state at
-   * the head, under the branch's queue, after the `ifMatch` check; the commit
+   * the head, in the store's line, after the `ifMatch` check; the commit
    * file is written, then the head.
    */
   write(
@@ -293,7 +299,7 @@ export class FileStore {
     opts: { author: string; message: string; ifMatch?: string },
     build: (state: State) => Promise<Written>
   ): Promise<{ commit: string; ids: string[] }> {
-    return this.serialized(branch, async () => {
+    return this.serialized(async () => {
       await this.load();
       if (!this.branches.has(branch)) throw unknownRef(`branch ${branch}`);
       const head = this.branches.get(branch);
@@ -324,16 +330,26 @@ export class FileStore {
 
   // --- branches ------------------------------------------------------------
 
-  async createBranch(name: string, origin?: Ref): Promise<void> {
-    await this.load();
-    if (!BRANCH_NAME.test(name)) throw refusal(400, 'bad_branch_name', { name });
-    if (this.branches.has(name)) throw refusal(400, 'exists', { branch: name }, 'exists');
-    const head = origin ? await this.resolve(origin) : undefined;
-    await this.writeHead(name, head);
+  createBranch(name: string, origin?: Ref): Promise<void> {
+    return this.serialized(async () => {
+      await this.load();
+      if (!BRANCH_NAME.test(name)) throw refusal(400, 'bad_branch_name', { name });
+      if (this.branches.has(name)) throw refusal(400, 'exists', { branch: name }, 'exists');
+      const head = origin ? await this.resolve(origin) : undefined;
+      await this.writeHead(name, head);
+    });
   }
 
-  /** Removes the branch, then every commit file no remaining branch reaches, wherever its folder is. */
-  async deleteBranch(name: string): Promise<void> {
+  /**
+   * Removes the branch, then every commit file no remaining branch reaches,
+   * wherever its folder is. In the store's line, so no write is between its
+   * commit file and its head while the files are swept.
+   */
+  deleteBranch(name: string): Promise<void> {
+    return this.serialized(() => this.removeBranch(name));
+  }
+
+  private async removeBranch(name: string): Promise<void> {
     await this.load();
     if (!this.branches.has(name)) throw unknownRef(`branch ${name}`);
     await this.files.remove(`${name}/${HEAD}`);
@@ -360,28 +376,32 @@ export class FileStore {
   // --- the store -----------------------------------------------------------
 
   /** Marks the folder as a store with a `main` branch when it is not one yet; true when it did. */
-  async ensureDatabase(): Promise<boolean> {
-    await this.load();
-    if (this.marked) return false;
-    await this.files.write(MARKER, `${JSON.stringify({ format: FORMAT }, null, 2)}\n`);
-    this.marked = true;
-    if (!this.branches.has(MAIN)) await this.writeHead(MAIN, undefined);
-    return true;
+  ensureDatabase(): Promise<boolean> {
+    return this.serialized(async () => {
+      await this.load();
+      if (this.marked) return false;
+      await this.files.write(MARKER, `${JSON.stringify({ format: FORMAT }, null, 2)}\n`);
+      this.marked = true;
+      if (!this.branches.has(MAIN)) await this.writeHead(MAIN, undefined);
+      return true;
+    });
   }
 
   /** Removes everything the store wrote: every branch's head and commits, and the marker; records beside them stay. */
-  async deleteDatabase(): Promise<void> {
-    await this.load();
-    for (const name of [...this.branches.keys()]) {
-      await this.files.remove(`${name}/${HEAD}`);
-      await this.files.remove(`${name}/${COMMITS}`);
-    }
-    await this.files.remove(MARKER);
-    this.branches.clear();
-    this.commits.clear();
-    this.folders.clear();
-    this.states.clear();
-    this.marked = false;
+  deleteDatabase(): Promise<void> {
+    return this.serialized(async () => {
+      await this.load();
+      for (const name of [...this.branches.keys()]) {
+        await this.files.remove(`${name}/${HEAD}`);
+        await this.files.remove(`${name}/${COMMITS}`);
+      }
+      await this.files.remove(MARKER);
+      this.branches.clear();
+      this.commits.clear();
+      this.folders.clear();
+      this.states.clear();
+      this.marked = false;
+    });
   }
 
   // --- documents as written ----------------------------------------------

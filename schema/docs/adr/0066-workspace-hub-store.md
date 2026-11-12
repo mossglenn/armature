@@ -157,6 +157,25 @@ store, and leaves the choice to its plan. Four facts bear on it.
    > ancestry by parent links and copies nothing, and deleting a branch removes only the commit
    > files no branch reaches. `store.json` marks the folder with a format number.
 
+   > **Note (2026-11-11):** one line of writes for the whole store, not one per branch (the code
+   > review of 2026-11-09, its W1, reproduced as two tests before the change; decided by Amos on
+   > that review's options). Commits were ordered per branch, and a branch's creation and deletion
+   > by nothing. A deletion removes the commit files no branch reaches from every branch's folder,
+   > so beside a write in flight on another branch it removed that write's commit, written and not
+   > yet under a head: the write was answered with a commit the store no longer held, every later
+   > read of that branch was 404 `unknown_ref`, and the folder would not open again ("the store is
+   > damaged"), which takes every workspace on the machine with it. A deletion of the branch being
+   > written brought it back with a head whose history was gone. Now every change to the folder (a
+   > commit, a branch made or deleted, the store marked or removed) runs one at a time within the
+   > process, whatever branch it is for. Weighed against it: keeping the per-branch order and
+   > having the sweep skip the commits of writes in flight, which keeps writes to two workspaces
+   > side by side at the cost of more state, and still leaves a branch made from a commit being
+   > swept to guard; on one person's machine the writes are milliseconds apart either way. The
+   > hub's write queue (`exclusive`) is still per branch and still a separate line, which work
+   > holding it commits through. The folder's removals are tried again while another program holds
+   > a file, as its renames are (`REMOVAL` in `app/lib/workspaceFolder.ts`; the review's W2, with
+   > ADR-0065 decision 6's note of this day). `filestore/store.test.ts`.
+
 3. **TerminusDB is the test bed first.** The plan's steps 2 to 5 (workspace mode, push, bring in
    and deliver, the subject snapshots) are built with TerminusDB as the local store, since its
    adapter exists and the contract suite already runs against it; a fault found then is in the
