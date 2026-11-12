@@ -612,6 +612,8 @@ describe("the issuer's metadata and the configuration", () => {
     };
     await expect(jwksUrlOf(ISSUER, metadata({ issuer: 'https://someone.else', jwks_uri: 'https://someone.else/keys' }))).rejects.toThrow(/describes issuer/);
     await expect(jwksUrlOf(ISSUER, metadata({}, 503))).rejects.toThrow(/answered 503/);
+    // An issuer reached over TLS never sends the hub to fetch its keys in the clear (the review's A5).
+    await expect(jwksUrlOf(ISSUER, metadata({ issuer: ISSUER, jwks_uri: 'http://login.example.edu/keys' }))).rejects.toThrow(/not https/);
     expect(await jwksUrlOf(ISSUER, good)).toBe(`${ISSUER}/protocol/openid-connect/certs`);
     expect(await jwksUrlOf(ISSUER, good)).toBe(`${ISSUER}/protocol/openid-connect/certs`);
     expect(calls).toEqual([`${ISSUER}/.well-known/openid-configuration`]);
@@ -645,4 +647,28 @@ describe("the issuer's metadata and the configuration", () => {
     ).toThrow(/workspace hub runs under header/);
   });
 
+  it('takes plain http for the issuer, its keys and the public address only on loopback or in a rehearsal (the 2026-11-09 review\'s A5)', () => {
+    const env = { ...process.env, ARMATURE_IDENTITY: 'oidc', ARMATURE_OIDC_AUDIENCE: AUDIENCE, ARMATURE_REHEARSAL: undefined } as Record<string, string | undefined>;
+    const plain = 'http://login.example.edu/realms/armature';
+    expect(() => configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: plain })).toThrow(/ARMATURE_OIDC_ISSUER=.*plain http/);
+    expect(() => configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: ISSUER, ARMATURE_OIDC_JWKS_URL: 'http://keycloak:8080/certs' })).toThrow(/ARMATURE_OIDC_JWKS_URL=.*plain http/);
+    expect(() => configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: ISSUER, ARMATURE_PUBLIC_URL: 'http://api.armature.example.edu' })).toThrow(/ARMATURE_PUBLIC_URL=.*plain http/);
+    // A name that only looks like loopback is not one.
+    expect(() => configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: 'http://localhost.example.edu' })).toThrow(/plain http/);
+    expect(() => configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: 'http://127.0.0.1.example.edu' })).toThrow(/plain http/);
+    for (const loopback of ['http://localhost:8080/realms/armature', 'http://127.0.0.1:8080', 'http://[::1]:8080', 'http://login.localhost']) {
+      expect(configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: loopback }).oidc!.issuer, loopback).toBe(loopback);
+    }
+    // The rehearsal of docs/deployment.md: the issuer by its loopback name, the keys by the service's, the hub's site plain.
+    const rehearsal = configFromEnv({
+      ...env,
+      ARMATURE_REHEARSAL: '1',
+      ARMATURE_OIDC_ISSUER: plain,
+      ARMATURE_OIDC_JWKS_URL: 'http://keycloak:8080/certs',
+      ARMATURE_PUBLIC_URL: 'http://api.armature.rehearsal',
+    });
+    expect(rehearsal.oidc).toMatchObject({ issuer: plain, jwksUrl: 'http://keycloak:8080/certs' });
+    expect(rehearsal.publicUrl).toBe('http://api.armature.rehearsal');
+    expect(() => configFromEnv({ ...env, ARMATURE_REHEARSAL: 'yes', ARMATURE_OIDC_ISSUER: ISSUER })).toThrow(/ARMATURE_REHEARSAL=yes/);
+  });
 });

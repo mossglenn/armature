@@ -159,6 +159,8 @@ export function jwksUrlOf(issuer: string, fetchFn: FetchLike = (input, init) => 
     if (metadata.issuer !== issuer) throw new Error(`${address} describes issuer ${String(metadata.issuer)}, not ${issuer}`);
     const url = text(metadata.jwks_uri);
     if (!url) throw new Error(`${address} names no jwks_uri`);
+    // An issuer reached over TLS does not send the hub to fetch its keys in the clear (the 2026-11-09 review's A5).
+    if (issuer.startsWith('https://') && !url.startsWith('https://')) throw new Error(`${address} names a jwks_uri that is not https: ${url}`);
     return url;
   })();
   jwksUrls.set(issuer, read);

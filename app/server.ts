@@ -21,6 +21,9 @@
  *                                                            services (the viewer's, a relay's); a token is a
  *                                                            service's only when its client is listed and it carries
  *                                                            no name (ADR-0067 decision 4, note of 2026-11-12)
+ *   ARMATURE_REHEARSAL                                       `1` for a rehearsal that is never a deployment: under oidc,
+ *                                                            plain http is then taken for the issuer, its keys and the
+ *                                                            public address on a host that is not loopback
  *   ARMATURE_OIDC_CLIENT_ID, ARMATURE_OIDC_JWKS_URL          optional: the client id a native program signs in with,
  *                                                            published by GET /discover; where the issuer's keys are
  *                                                            when not where its metadata says
@@ -114,6 +117,7 @@ async function main(): Promise<void> {
     console.log(`  admitted on first sign-in: ${admitted.length ? admitted.join(', ') : 'no one (ARMATURE_OIDC_ADMIT is empty; an administrator registers each person)'}`);
     const services = [...config.oidc.services];
     console.log(`  services: ${services.length ? services.join(', ') : "none (ARMATURE_OIDC_SERVICES is empty; no token is a service's, the viewer's included)"}`);
+    if (process.env.ARMATURE_REHEARSAL?.trim()) console.log('  ARMATURE_REHEARSAL is set: plain http is taken for the issuer, its keys and the public address; never a deployment');
   } else {
     console.log(`  identity: ${config.identity}`);
   }
