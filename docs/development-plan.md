@@ -114,7 +114,7 @@ adopted into the hub when at least two reference clients would need the same cap
 |---|---|---|
 | **CoQui** (real) | SME review of assessment items in rounds | Read by id at a commit; branch per round; replace-by-id writes; findings; attestations on item parts; users; history |
 | **Objective and curriculum mapper** | Author objectives, prerequisites, module declarations; link to CASE competencies | Transitive prerequisite queries; objective history and impact analysis; external competency references; ModuleObjective writes; coverage reads |
-| **Needs-analysis intake** | Record evidence, needs, priorities; the LEED-tracker decision log as a graph | Evidence and need writes; NeedEvidenceLink confidence; DesignNote and a future DesignDecision; provenance trace from objective back to evidence |
+| **Needs-analysis intake** | Record evidence, needs, priorities; the LEED-tracker decision log as a graph (its decision half proposed as Ledger, `docs/ledger-plan.md`, 2026-11-12) | Evidence and need writes; NeedEvidenceLink confidence; DesignNote and a future DesignDecision; provenance trace from objective back to evidence |
 | **Activity and strategy designer** | Plan activities and lessons per module; see strategy coverage | Sequenced module content (ADR-0005); "which objectives have no Practice activity" queries; Lesson flatness enforced |
 | **Outcomes importer** | Pull results from an LMS, DataShop or Torus; close the loop (Narrative 1) | LearningDataset and LearningMetric writes; item statistics as metrics about the item (ADR-0058); xAPI and QTI references; bulk atomic writes |
 | **Research exporter** | Produce comparable, anonymized design-data corpora across courses | Schema slices; JSON-LD export at a commit; export profiles with pseudonymization (ADR-0021); schema self-description; attachments resolvable or deliberately excluded per profile |
@@ -1055,7 +1055,7 @@ what evidence would be enough.
   tool needs it.
 - **DesignDecision as a structured type.** ADR-0010's intended second layer over `DesignNote`.
   Evidence: `DesignNote.category` usage showing recurring structure, or a needs-analysis tool
-  modeling the LEED tracker's columns.
+  modeling the LEED tracker's columns (Ledger, `docs/ledger-plan.md` §11, proposes drafting it after 50 real decisions).
 - **A fourth `DesignFinding` status.** CoQui stretches `Dismissed` to cover a reviewer's own
   withdrawal. Evidence: a second tool needing the distinction (ADR-0018 §5's test).
 - **One placement per item per assessment.** `ItemInstance`'s Hash key over `(assessment,
