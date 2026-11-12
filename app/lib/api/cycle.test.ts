@@ -16,7 +16,8 @@ import { configFromEnv, type HubConfig } from './config';
 import { handleOf } from './routes/workspace';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from './store';
 import { memoryRecords } from './workspace/records';
-import { localStoreConfig } from './filestore/testing';
+import { memoryFiles, type StoreFiles } from './filestore/files';
+import { openFileStore } from './filestore/store';
 
 // The suite runs over the one local store, a file store in memory (ADR-0066 decision 4); the two-store contract test holds it to the remote's store.
 describe('over the file-backed store in memory', () => {
@@ -43,7 +44,22 @@ describe('over the file-backed store in memory', () => {
   const json = async (res: Response) => ({ status: res.status, body: await res.json() });
   const need = (label: string, rationale = 'r') => ({ message: `Need ${label}`, document: { label, rationale } });
   const remoteStore = (branch: string) => createOperatorStore({ branch }, { ...storeConfigFromEnv(), db: REMOTE_DB });
-  const localConfig = localStoreConfig();
+  // The local store's files, with one removal made to fail when a test asks: what a sync client holding a file does.
+  let failRemovalOf: string | undefined;
+  const files: StoreFiles = (() => {
+    const inner = memoryFiles();
+    return {
+      ...inner,
+      async remove(path) {
+        if (failRemovalOf !== undefined && path.startsWith(failRemovalOf)) {
+          failRemovalOf = undefined;
+          throw Object.assign(new Error(`EBUSY: resource busy or locked, unlink '${path}'`), { code: 'EBUSY' });
+        }
+        await inner.remove(path);
+      },
+    };
+  })();
+  const localConfig = { files: openFileStore(files) };
   const localStore = (branch: string) => createOperatorStore({ branch }, localConfig);
 
   beforeAll(async () => {
@@ -170,6 +186,81 @@ describe('over the file-backed store in memory', () => {
     });
   });
 
+  // The three actions hold the workspace's write queue from their check that nothing is unpushed to their
+  // last local write (ADR-0025 decision 7, note of 2026-11-11; the 2026-11-09 review's W3 and W4). Each test
+  // sends a tool's write together with the action: whichever takes the queue first, a write answered 200 stands.
+  describe('a write sent together with an action', () => {
+    const listed = async () => (await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch) as string[];
+
+    it('is never answered 200 and then deleted with the workspace by a removal', async () => {
+      for (let round = 0; round < 3; round++) {
+        const name = `${NAME}-race-remove-${round}`;
+        const branch = `${handleOf(DESIGNER)}_${name}`;
+        const id = `LearningNeed/race-remove-${round}-${stamp}`;
+        expect((await on('POST', '/workspace', { name })).status).toBe(201);
+        const [removed, written] = await Promise.all([on('DELETE', `/workspace/${branch}`), on('PUT', `/documents/${id}?branch=${branch}`, need('late'))]);
+        if (written.status === 200) {
+          expect(removed.status).toBe(409);
+          expect((await removed.json()).error).toBe('unpushed_commits');
+          expect(await listed()).toContain(branch);
+          expect((await on('GET', `/documents/${id}?branch=${branch}`)).status).toBe(200);
+        } else {
+          expect(removed.status).toBe(200);
+          expect(written.status).toBe(404);
+        }
+      }
+    });
+
+    it('is never answered 200 and then deleted with the workspace by a delivery that deletes it', async () => {
+      const name = `${NAME}-race-deliver`;
+      const branch = `${handleOf(DESIGNER)}_${name}`;
+      const id = `LearningNeed/race-deliver-${stamp}`;
+      expect((await on('POST', '/workspace', { name })).status).toBe(201);
+      expect((await on('PUT', `/documents/LearningNeed/race-deliver-first-${stamp}?branch=${branch}`, need('first'))).status).toBe(200);
+      expect((await on('POST', `/workspace/${branch}/push`)).status).toBe(200);
+      expect((await on('POST', `/workspace/${branch}/bring-in`)).status).toBe(200);
+      const [delivered, written] = await Promise.all([
+        on('POST', `/workspace/${branch}/deliver`, { message: 'Deliver, with a write beside it', deleteWorkspace: true }),
+        on('PUT', `/documents/${id}?branch=${branch}`, need('late')),
+      ]);
+      if (written.status === 200) {
+        expect(delivered.status).toBe(409);
+        expect(await listed()).toContain(branch);
+        expect((await on('GET', `/documents/${id}?branch=${branch}`)).status).toBe(200);
+      } else {
+        expect(delivered.status).toBe(200);
+        expect(written.status).toBe(404);
+      }
+    });
+
+    it('is never answered 200 and then overwritten by what a bring-in read back', async () => {
+      for (let round = 0; round < 3; round++) {
+        const name = `${NAME}-race-bring-in-${round}`;
+        const branch = `${handleOf(DESIGNER)}_${name}`;
+        const id = `LearningNeed/race-bring-in-${round}-${stamp}`;
+        await onMain.documents.put('LearningNeed', id, { message: 'On main before the workspace', document: { label: 'shared', rationale: 'base' } });
+        expect((await on('POST', '/workspace', { name })).status).toBe(201);
+        await onMain.documents.put('LearningNeed', id, { message: 'Main moves', document: { label: 'shared', rationale: 'their edit' } });
+        const [brought, written] = await Promise.all([
+          on('POST', `/workspace/${branch}/bring-in`),
+          on('PUT', `/documents/${id}?branch=${branch}`, need('shared', 'my edit')),
+        ]);
+        const local = (await json(await on('GET', `/documents/${id}?branch=${branch}`))).body.rationale;
+        if (written.status === 200) {
+          // The write went first, so the bring-in found it unpushed; or it waited and landed on what was brought in.
+          expect(local).toBe('my edit');
+          if (brought.status !== 200) expect((await brought.json()).error).toBe('unpushed_commits');
+        } else {
+          // The write waited, and the bring-in had changed the document it replaces (ADR-0025 decision 7).
+          expect(brought.status).toBe(200);
+          expect(written.status).toBe(409);
+          expect((await written.json()).error).toBe('document_moved');
+          expect(local).toBe('their edit');
+        }
+      }
+    });
+  });
+
   // Removing a workspace (since 2026-11-07): this machine's copy goes with nothing unpushed, and the
   // remote deletes the branch only when another holds its head (ADR-0025 decision 6).
   describe('removing a workspace', () => {
@@ -211,6 +302,24 @@ describe('over the file-backed store in memory', () => {
       expect(await localStore('main').listBranches()).not.toContain(GONE);
       // A second removal finds nothing here to remove.
       expect((await on('DELETE', `/workspace/${GONE}`)).status).toBe(404);
+    });
+
+    it('is finished by asking again after a removal that failed partway (the 2026-11-09 review’s W2)', async () => {
+      const TWICE = `${handleOf(DESIGNER)}_${NAME}-twice`;
+      expect((await on('POST', '/workspace', { name: `${NAME}-twice` })).status).toBe(201);
+      expect((await write(TWICE, `remove-twice-${stamp}`)).status).toBe(200);
+      expect((await on('POST', `/workspace/${TWICE}/push`)).status).toBe(200);
+      // The head goes, then a commit file is held by another program.
+      failRemovalOf = `${TWICE}/commits/`;
+      expect((await on('DELETE', `/workspace/${TWICE}`)).status).toBe(500);
+      expect(failRemovalOf).toBeUndefined();
+      expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).toContain(TWICE);
+
+      const again = await json(await on('DELETE', `/workspace/${TWICE}`));
+      expect(again.status, JSON.stringify(again.body)).toBe(200);
+      expect(again.body).toMatchObject({ remote: 'kept', reason: 'unmerged' });
+      expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).not.toContain(TWICE);
+      expect(await localStore('main').listBranches()).not.toContain(TWICE);
     });
 
     it('is the owner’s alone', async () => {
