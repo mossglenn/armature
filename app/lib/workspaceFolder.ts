@@ -176,9 +176,9 @@ export function folderFiles(dir: string): StoreFiles {
     async remove(path) {
       const target = under(dir, path);
       if (target === dir) {
-        for (const name of await this.list('')) await rm(join(dir, name), { recursive: true, force: true });
+        for (const name of await this.list('')) await rm(join(dir, name), REMOVAL);
       } else {
-        await rm(target, { recursive: true, force: true });
+        await rm(target, REMOVAL);
       }
       await sync(join(target, '..'), 'r').catch(() => undefined);
     },
@@ -196,6 +196,16 @@ function alive(pid: number): boolean {
     return (err as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
+
+/**
+ * A removal is tried again while the operating system refuses it because
+ * another program holds the file (a sync client, an indexer), as a rename is
+ * (`RENAME_WAITS`): Node's own retry, on `EBUSY`, `EPERM` and `ENOTEMPTY`, six
+ * times over about two seconds. Until 2026-11-11 a removal had one try, and a
+ * workspace's removal that failed on it could not be asked for again (the
+ * 2026-11-09 review's W2).
+ */
+const REMOVAL = { recursive: true, force: true, maxRetries: 6, retryDelay: 100 } as const;
 
 /** What `writeWhole` names a file while it is being written. */
 const TEMPORARY = /\.\d+\.tmp$/;
@@ -307,7 +317,7 @@ export function folderRecords(dir: string): WorkspaceRecords {
     putLog: (branch, log) => writeJson(branch, LOG, log),
     async remove(branch) {
       if (!BRANCH_NAME.test(branch)) throw new Error(`Not a branch name: ${JSON.stringify(branch)}`);
-      await rm(join(dir, branch), { recursive: true, force: true });
+      await rm(join(dir, branch), REMOVAL);
       await sync(dir, 'r').catch(() => undefined);
     },
   };

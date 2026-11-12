@@ -3,7 +3,7 @@ import type { ClassName } from '@armature/types';
 import { storeOf, type HubConfig } from '../config';
 import { ApiError } from '../errors';
 import { MIRROR_BRANCH } from '../role';
-import { createOperatorStore, type TerminusDocument } from '../store';
+import { createOperatorStore, isUnknownRef, type OperatorStore, type TerminusDocument } from '../store';
 import { localCommitsSince, mappingOf } from './push';
 import { emptyPushTable, type PushedCommit, type WorkspaceRecord, type WorkspaceRecords } from './records';
 import { fromRemote, ownerClient } from './remote';
@@ -47,7 +47,32 @@ import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
  * wanted; the answer says what became of it. A remote that cannot be reached
  * keeps it too, and the local copy goes all the same, since nothing on it is
  * unpushed.
+ *
+ * Each of the three holds the workspace's write queue (`Store.exclusive`;
+ * ADR-0025 decision 7, note of 2026-11-11) from its check that nothing is
+ * unpushed to its last local write, the remote's answers included, so a
+ * tool's write waits its turn: it lands after what was brought in, or finds
+ * the workspace gone, and is never answered 200 and then overwritten or
+ * deleted with the branch (the 2026-11-09 review's W3 and W4). The cost is
+ * that such a write waits as long as the remote takes to answer. Resolving
+ * the caller comes before, in the route.
+ *
+ * A removal that failed partway (a file another program held) is finished by
+ * asking again: a local branch already gone has nothing unpushed and nothing
+ * left to delete (the review's W2).
  */
+
+/** The workspace's local branch through the operator-side methods, whose `exclusive` is the hub's queue for it. */
+const localOf = (hub: HubConfig, branch: string): OperatorStore => createOperatorStore({ branch }, hub.store());
+
+/** Deletes the local branch; one a removal that failed partway already deleted is left as it is. */
+async function deleteLocal(hub: HubConfig, branch: string): Promise<void> {
+  try {
+    await localOf(hub, branch).deleteBranch(branch);
+  } catch (err) {
+    if (!isUnknownRef(err)) throw err;
+  }
+}
 
 export interface BringInResult {
   workspace: WorkspaceRecord;
@@ -75,11 +100,18 @@ export interface DeliverResult {
   deleted: boolean;
 }
 
-/** The unpushed local commits, refused as such when there are any. */
+/** The unpushed local commits, refused as such when there are any; a local branch already gone has none. */
 async function requireNothingUnpushed(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, action: string): Promise<{ lastRemote: string }> {
   const table = (await records.getPush(record.branch)) ?? emptyPushTable();
   const mapping = mappingOf(record, table);
-  const unpushed = (await localCommitsSince(storeOf(hub, { branch: record.branch }), record.local)).filter((commit) => !mapping.has(commit.id));
+  let commits: Awaited<ReturnType<typeof localCommitsSince>>;
+  try {
+    commits = await localCommitsSince(storeOf(hub, { branch: record.branch }), record.local);
+  } catch (err) {
+    if (!isUnknownRef(err)) throw err;
+    commits = [];
+  }
+  const unpushed = commits.filter((commit) => !mapping.has(commit.id));
   if (unpushed.length) {
     throw new ApiError(409, 'unpushed_commits', `${unpushed.length} local commit(s) of ${record.branch} are not on the remote; push before ${action}`, {
       unpushed: unpushed.map((commit) => commit.id),
@@ -104,7 +136,11 @@ async function changedDocuments(hub: HubConfig, remote: ArmatureClient, branch: 
   return documents;
 }
 
-export async function bringIn(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, message?: string): Promise<BringInResult> {
+export function bringIn(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, message?: string): Promise<BringInResult> {
+  return localOf(hub, record.branch).exclusive(() => bringInHeld(hub, records, record, message));
+}
+
+async function bringInHeld(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, message?: string): Promise<BringInResult> {
   const { branch } = record;
   const { lastRemote } = await requireNothingUnpushed(hub, records, record, 'bringing in main');
   const remote = await ownerClient(hub, record);
@@ -116,7 +152,7 @@ export async function bringIn(hub: HubConfig, records: WorkspaceRecords, record:
   // What the merge changed, read at the merge commit and written here as one
   // commit, outside the pipeline: the remote decided these documents.
   const documents = await changedDocuments(hub, remote, branch, lastRemote, merged.commit);
-  const local = createOperatorStore({ branch }, hub.store());
+  const local = localOf(hub, branch);
   let localCommit = (await local.head())?.id ?? record.local;
   if (documents.length) {
     ({ commit: localCommit } = await local.putDocuments(documents, {
@@ -141,7 +177,16 @@ export async function bringIn(hub: HubConfig, records: WorkspaceRecords, record:
   };
 }
 
-export async function deliver(
+export function deliver(
+  hub: HubConfig,
+  records: WorkspaceRecords,
+  record: WorkspaceRecord,
+  opts: { message: string; deleteWorkspace?: boolean }
+): Promise<DeliverResult> {
+  return localOf(hub, record.branch).exclusive(() => deliverHeld(hub, records, record, opts));
+}
+
+async function deliverHeld(
   hub: HubConfig,
   records: WorkspaceRecords,
   record: WorkspaceRecord,
@@ -166,13 +211,17 @@ export async function deliver(
   };
   if (!opts.deleteWorkspace) return result;
   await fromRemote(hub, () => remote.branches.delete(branch));
-  await createOperatorStore({ branch }, hub.store()).deleteBranch(branch);
+  await deleteLocal(hub, branch);
   await records.remove(branch);
   return { ...result, deleted: true };
 }
 
 /** Removes the workspace from this hub, and its branch from the remote when the remote's rule allows. */
-export async function removeWorkspace(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<RemoveResult> {
+export function removeWorkspace(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<RemoveResult> {
+  return localOf(hub, record.branch).exclusive(() => removeHeld(hub, records, record));
+}
+
+async function removeHeld(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<RemoveResult> {
   const { branch } = record;
   await requireNothingUnpushed(hub, records, record, 'removing it');
   let outcome: Pick<RemoveResult, 'remote' | 'reason'> = { remote: 'deleted' };
@@ -190,7 +239,7 @@ export async function removeWorkspace(hub: HubConfig, records: WorkspaceRecords,
     else if (fromTheRemote && err.status === 404) outcome = { remote: 'absent' };
     else throw err;
   }
-  await createOperatorStore({ branch }, hub.store()).deleteBranch(branch);
+  await deleteLocal(hub, branch);
   await records.remove(branch);
   return { workspace: record, ...outcome };
 }
