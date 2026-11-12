@@ -218,18 +218,53 @@ test.describe('removing a workspace', () => {
     const list = page.getByRole('list', { name: 'Your workspaces' });
     await list.getByRole('button', { name: /demo-designer_glossary/ }).click();
     const remove = page.getByLabel('Remove', { exact: true });
-    await remove.getByRole('button', { name: 'Remove…' }).click();
+    await remove.getByRole('button', { name: 'Remove…', exact: true }).click();
     await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('409 unpushed_commits');
 
     await page.getByRole('button', { name: 'Push', exact: true }).click();
-    await remove.getByRole('button', { name: 'Remove…' }).click();
+    await remove.getByRole('button', { name: 'Remove…', exact: true }).click();
     await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('heading', { name: 'demo-designer_glossary' })).toBeVisible();
-    await remove.getByRole('button', { name: 'Remove…' }).click();
+    await remove.getByRole('button', { name: 'Remove…', exact: true }).click();
     await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
     await expect(page.getByRole('status')).toContainText('The remote keeps the branch, since it has work main does not');
+    await expect(list).not.toContainText('demo-designer_glossary');
+  });
+
+  test('a workspace whose commits will never be pushed is discarded, the count confirmed first and checked by the hub', async ({ page }) => {
+    await open(page, 'header');
+    const write = (message: string) =>
+      page.evaluate((m) => (window as unknown as { __fakeCore: { writeAsTool: (b: string, m: string) => void } }).__fakeCore.writeAsTool('demo-designer_glossary', m), message);
+    const list = page.getByRole('list', { name: 'Your workspaces' });
+    await list.getByRole('button', { name: /demo-designer_glossary/ }).click();
+    // Nothing unpushed: nothing to discard is offered.
+    const discard = page.getByLabel('Discard', { exact: true });
+    await expect(discard).toHaveCount(0);
+
+    await write('Define "framing"');
+    await page.getByRole('button', { name: '← Workspaces' }).click();
+    await list.getByRole('button', { name: /demo-designer_glossary/ }).click();
+    await expect(discard).toContainText('1 commit here is not on the remote');
+    await discard.getByRole('button', { name: 'Discard 1 commit and remove…' }).click();
+    const confirm = page.getByRole('group', { name: 'Confirm the discard' });
+    await expect(confirm).toContainText('Give up 1 commit that is not on the remote, and remove demo-designer_glossary from this machine?');
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('heading', { name: 'demo-designer_glossary' })).toBeVisible();
+
+    // A tool writes after the count was shown: the hub refuses the stale count, and the page shows the new one.
+    await discard.getByRole('button', { name: 'Discard 1 commit and remove…' }).click();
+    await write('Define "anchoring"');
+    await confirm.getByRole('button', { name: 'Discard and remove' }).click();
+    await expect(page.getByRole('alert')).toContainText('409 discard_mismatch');
+    await discard.getByRole('button', { name: 'Discard 2 commits and remove…' }).click();
+    await expect(confirm).toContainText('Give up 2 commits that are not on the remote');
+    await confirm.getByRole('button', { name: 'Discard and remove' }).click();
+    await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('removed from this machine with 2 commits that were not on the remote');
+    await expect(page.getByRole('status')).toContainText('under _discarded/demo-designer_glossary.');
+    await expect(page.getByRole('status')).toContainText('The remote was not asked');
     await expect(list).not.toContainText('demo-designer_glossary');
   });
 
@@ -242,7 +277,7 @@ test.describe('removing a workspace', () => {
     await page.getByLabel('Why (required)').fill('Unit 3, reviewed');
     await page.getByRole('button', { name: 'Deliver', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('Delivered into main as');
-    await page.getByLabel('Remove', { exact: true }).getByRole('button', { name: 'Remove…' }).click();
+    await page.getByLabel('Remove', { exact: true }).getByRole('button', { name: 'Remove…', exact: true }).click();
     await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('removed from this machine and from the remote');
   });

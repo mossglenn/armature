@@ -370,6 +370,17 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
       const unpushed = w.commits.length - w.pushed;
+      // A discard: the count stated is the count there, the remote is not asked, the files are set aside.
+      if (fields.discard !== undefined) {
+        const { discard } = fields;
+        if (typeof discard !== 'number' || !Number.isInteger(discard) || discard < 1) return refuse(400, 'bad_request', 'discard must be the whole number of commits to give up', { field: 'discard' });
+        const given = w.commits.slice(0, unpushed).map((c) => c.commit);
+        if (discard !== unpushed) {
+          return refuse(409, 'discard_mismatch', `${w.record.branch} holds ${unpushed} local commit(s) that are not on the remote, not the ${discard} this discard names; nothing was removed`, { unpushed: given, stated: discard });
+        }
+        model.workspaces.delete(w.record.branch);
+        return ok({ workspace: w.record, remote: 'untouched', discarded: { commits: given, setAside: `_discarded/${w.record.branch}.20261112T203000Z` } });
+      }
       if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} local commit(s) of ${w.record.branch} are not on the remote; push before removing it`);
       model.workspaces.delete(w.record.branch);
       const inMain = w.deliveredAt !== undefined && w.deliveredAt === w.commits.length;

@@ -23,8 +23,17 @@ interface DeliverResult {
   deleted: boolean;
 }
 
+/** A count of commits, as a sentence says it: "1 commit", "3 commits". */
+const commitsOf = (count: number): string => `${count} commit${count === 1 ? '' : 's'}`;
+
 /** What a removal says, by what became of the branch on the remote. */
 export function removedSentence(branch: string, result: RemoveResult): string {
+  if (result.remote === 'untouched') {
+    const count = result.discarded?.commits.length ?? 0;
+    const given = count ? ` with ${commitsOf(count)} that ${count === 1 ? 'was' : 'were'} not on the remote` : '';
+    const where = result.discarded?.setAside ? ` Its files are set aside in the workspaces folder, under ${result.discarded.setAside}.` : '';
+    return `${branch} is removed from this machine${given}.${where} The remote was not asked, and keeps whatever was pushed.`;
+  }
   if (result.remote === 'deleted') return `${branch} is removed from this machine and from the remote: main holds everything it had.`;
   if (result.remote === 'absent') return `${branch} is removed from this machine; the remote no longer had the branch.`;
   if (result.reason === 'forbidden') return `${branch} is removed from this machine. The remote keeps the branch: it is not yours to delete.`;
@@ -51,6 +60,8 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   const [deliverMessage, setDeliverMessage] = useState('');
   const [deleteAfter, setDeleteAfter] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
+  /** The number of unpushed commits the person was shown when they asked to discard: what the confirmation names and the hub checks. */
+  const [confirmingDiscard, setConfirmingDiscard] = useState<number | undefined>();
 
   const load = useCallback(async () => {
     const [s, c] = await Promise.all([run<WorkspaceStatus>('status', { workspace: branch }), run<{ commits: CommitEntry[] }>('commits', { workspace: branch, count: 50 })]);
@@ -187,6 +198,41 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
           <Button variant="outline" className="mt-3" disabled={busy !== undefined} onClick={() => setConfirmingRemove(true)}>
             Remove…
           </Button>
+        )}
+        {status !== undefined && status.unpushed > 0 && (
+          <div className="mt-4 border-t pt-3" aria-label="Discard">
+            <p className="text-muted-foreground text-sm">
+              {commitsOf(status.unpushed)} here {status.unpushed === 1 ? 'is' : 'are'} not on the remote. Push first to keep {status.unpushed === 1 ? 'it' : 'them'}. If {status.unpushed === 1 ? 'it' : 'they'} can never be pushed, the workspace can be
+              removed with {status.unpushed === 1 ? 'it' : 'them'}: nothing is asked of the remote, and the workspace&rsquo;s files are set aside in the workspaces folder, under _discarded, not deleted.
+            </p>
+            {confirmingDiscard !== undefined ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Confirm the discard">
+                <span className="text-sm">
+                  Give up {commitsOf(confirmingDiscard)} that {confirmingDiscard === 1 ? 'is' : 'are'} not on the remote, and remove {branch} from this machine?
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={busy !== undefined}
+                  onClick={() => {
+                    const discard = confirmingDiscard;
+                    setConfirmingDiscard(undefined);
+                    // Refused (the count moved since it was shown): the page reads the status again, so the next confirmation names what is there.
+                    void act<RemoveResult>('remove', { discard }, (r) => removedSentence(branch, r)).then((r) => (r ? back(removedSentence(branch, r)) : void load()));
+                  }}
+                >
+                  Discard and remove
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmingDiscard(undefined)}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" className="mt-3" disabled={busy !== undefined} onClick={() => setConfirmingDiscard(status.unpushed)}>
+                Discard {commitsOf(status.unpushed)} and remove…
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </section>

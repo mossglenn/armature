@@ -88,11 +88,16 @@ export interface CommitEntry {
   timestamp: number;
 }
 
-/** `remove`'s answer: what became of the branch on the remote (since 2026-11-07). */
+/**
+ * `remove`'s answer: what became of the branch on the remote (since 2026-11-07). After a discard
+ * (`remove` with `discard`, since 2026-11-12) the remote is `untouched`, and `discarded` names the
+ * commits given up and where the workspace's files were set aside in the workspaces folder.
+ */
 export interface RemoveResult {
   workspace: WorkspaceRecord;
-  remote: 'deleted' | 'kept' | 'absent';
+  remote: 'deleted' | 'kept' | 'absent' | 'untouched';
   reason?: 'unmerged' | 'forbidden' | 'unreachable';
+  discarded?: { commits: string[]; setAside?: string };
 }
 
 /** The remote's warning when a cloned branch is one the owner may not write (ADR-0068 decision 9). */
