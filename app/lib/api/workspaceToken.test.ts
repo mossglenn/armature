@@ -90,7 +90,7 @@ beforeAll(async () => {
 
   remote = await startHub({
     port: 0,
-    config: { ...remoteConfig(), identity: 'oidc', oidc: { issuer: ISSUER, audience: AUDIENCE, admit: { issuers: new Set(), domains: new Set() }, keys } },
+    config: { ...remoteConfig(), identity: 'oidc', oidc: { issuer: ISSUER, audience: AUDIENCE, admit: { issuers: new Set(), domains: new Set() }, services: new Set(), keys } },
   });
   currentToken = () => token(OWNER);
   const config: HubConfig = {

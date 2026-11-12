@@ -17,6 +17,10 @@
  *                                                            whose people are registered on first sign-in; empty
  *                                                            admits no one, an administrator registers them; a
  *                                                            domain admits only a token with email_verified true
+ *   ARMATURE_OIDC_SERVICES                                   optional, comma-separated: the client ids that are
+ *                                                            services (the viewer's, a relay's); a token is a
+ *                                                            service's only when its client is listed and it carries
+ *                                                            no name (ADR-0067 decision 4, note of 2026-11-12)
  *   ARMATURE_OIDC_CLIENT_ID, ARMATURE_OIDC_JWKS_URL          optional: the client id a native program signs in with,
  *                                                            published by GET /discover; where the issuer's keys are
  *                                                            when not where its metadata says
@@ -108,6 +112,8 @@ async function main(): Promise<void> {
     const admitted = [...config.oidc.admit.issuers, ...config.oidc.admit.domains];
     console.log(`  identity: oidc, tokens from ${config.oidc.issuer} for audience ${config.oidc.audience}`);
     console.log(`  admitted on first sign-in: ${admitted.length ? admitted.join(', ') : 'no one (ARMATURE_OIDC_ADMIT is empty; an administrator registers each person)'}`);
+    const services = [...config.oidc.services];
+    console.log(`  services: ${services.length ? services.join(', ') : "none (ARMATURE_OIDC_SERVICES is empty; no token is a service's, the viewer's included)"}`);
   } else {
     console.log(`  identity: ${config.identity}`);
   }

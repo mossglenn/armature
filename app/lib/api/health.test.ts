@@ -30,7 +30,7 @@ describe('GET /api/v1/health', () => {
     const oidc = createApp(() => ({
       ...configFromEnv(),
       identity: 'oidc',
-      oidc: { issuer: 'https://login.example.edu', audience: 'armature-hub', admit: { issuers: new Set(), domains: new Set() } },
+      oidc: { issuer: 'https://login.example.edu', audience: 'armature-hub', admit: { issuers: new Set(), domains: new Set() }, services: new Set() },
     }));
     expect((await oidc.request('/api/v1/health/live')).status).toBe(200);
     expect((await oidc.request('/api/v1/health/ready')).status).toBe(200);

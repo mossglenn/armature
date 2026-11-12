@@ -26,8 +26,9 @@ import { activeGrants } from './authorization';
  *           against the issuer's keys (ADR-0067 decision 1; ./oidc.ts, since
  *           2026-11-05): a person by `(issuer, sub)`, registered on first
  *           encounter only when ARMATURE_OIDC_ADMIT admits the token, else
- *           403 `not_registered`; a service's token as the agent `User` named
- *           by its client id. Every request needs a token but `GET /discover`
+ *           403 `not_registered`; a service's token, one whose client
+ *           ARMATURE_OIDC_SERVICES lists, as the agent `User` named by its
+ *           client id. Every request needs a token but `GET /discover`
  *           (`requireIdentity`), and `Armature-User` beside a token is a
  *           relay's claim (decision 5, since 2026-11-05): a service whose
  *           agent holds a `Relay` grant naming the person delivers the
@@ -321,18 +322,27 @@ async function resolveClaims(c: Context, claims: IdentityClaims, main: Store): P
     }
     // A valid token from a provider or a domain the instance did not admit
     // registers no one (ADR-0067 decision 1, note of 2026-10-30).
+    // Under `oidc` a token without a `name` is a person's with nothing to register them by, or a program's
+    // whose client the instance has not listed as a service (ADR-0067 decision 4, note of 2026-11-12). Both
+    // refusals below say so: a service left off the list is met by the first, having no email to admit it.
+    const nameless =
+      hub.identity === 'oidc' && !claims.displayName
+        ? "; the token carries no name claim, so if it is a service's, its client id belongs in ARMATURE_OIDC_SERVICES"
+        : '';
     if (claims.admitted === false) {
       throw new ApiError(
         403,
         'not_registered',
-        `${claims.externalId} signed in with ${claims.issuer} but is not registered here, and the token is not admitted for first encounter (ARMATURE_OIDC_ADMIT); an administrator registers them with POST /api/v1/users, naming the issuer`
+        `${claims.externalId} signed in with ${claims.issuer} but is not registered here, and the token is not admitted for first encounter (ARMATURE_OIDC_ADMIT); an administrator registers them with POST /api/v1/users${nameless}`
       );
     }
     if (!claims.displayName) {
       throw new ApiError(
         401,
         'unknown_user',
-        `No User is registered for ${claims.externalId}; create one with POST /api/v1/users`
+        hub.identity === 'oidc'
+          ? `No User is registered for ${claims.externalId}, and nothing to register them with on first encounter; an administrator registers them with POST /api/v1/users${nameless}`
+          : `No User is registered for ${claims.externalId}; create one with POST /api/v1/users`
       );
     }
     const id = firstEncounterId(claims.issuer, claims.externalId);

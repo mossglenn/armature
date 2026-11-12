@@ -42,6 +42,12 @@ export interface OidcConfig {
    * with `://` is an issuer, any other an email domain matched against the token's `email`; empty admits no one.
    */
   admit: { issuers: ReadonlySet<string>; domains: ReadonlySet<string> };
+  /**
+   * ARMATURE_OIDC_SERVICES (decision 4, note of 2026-11-12): the client ids that are services, such as the
+   * viewer's and a relay's. A token is a service's only when its client is listed here and it carries no
+   * `name`; every other token is a person's. Empty, no token is a service's.
+   */
+  services: ReadonlySet<string>;
   /** The issuer's keys, when a host or a test supplies them; absent, fetched from the issuer and kept (./oidc.ts). */
   keys?: JWTVerifyGetKey;
 }
@@ -177,7 +183,8 @@ const publicUrl = (raw: string | undefined): string | undefined => (raw?.trim() 
 /**
  * The `oidc` resolver's settings from the environment: the issuer and the
  * audience are required, the rest optional. The admission list is split by
- * shape: an issuer is a URL, an email domain is not.
+ * shape: an issuer is a URL, an email domain is not. The services are client
+ * ids, listed (decision 4, note of 2026-11-12).
  */
 function oidcConfig(env: Readonly<Record<string, string | undefined>>): OidcConfig {
   const issuer = httpUrl('ARMATURE_OIDC_ISSUER', env.ARMATURE_OIDC_ISSUER);
@@ -194,6 +201,8 @@ function oidcConfig(env: Readonly<Record<string, string | undefined>>): OidcConf
     ...(env.ARMATURE_OIDC_CLIENT_ID?.trim() ? { clientId: env.ARMATURE_OIDC_CLIENT_ID.trim() } : {}),
     ...(env.ARMATURE_OIDC_JWKS_URL?.trim() ? { jwksUrl: httpUrl('ARMATURE_OIDC_JWKS_URL', env.ARMATURE_OIDC_JWKS_URL) } : {}),
     admit,
+    // Client ids as given: a provider compares them exactly, so nothing is lowered.
+    services: new Set((env.ARMATURE_OIDC_SERVICES ?? '').split(',').map((e) => e.trim()).filter(Boolean)),
   };
 }
 

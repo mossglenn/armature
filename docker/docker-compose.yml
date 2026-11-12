@@ -92,6 +92,12 @@ services:
       - ARMATURE_OIDC_ADMIT=${ARMATURE_OIDC_ADMIT:-}
       - ARMATURE_OIDC_CLIENT_ID=${ARMATURE_OIDC_CLIENT_ID:-}
       - ARMATURE_OIDC_JWKS_URL=${ARMATURE_OIDC_JWKS_URL:-}
+      # The client ids that are services (ADR-0067 decision 4, note of
+      # 2026-11-12): a token is a service's only when its client is listed and
+      # it carries no name. The viewer's own client by default, so an instance
+      # with a viewer needs no line for it; a relay's client is added by name,
+      # and then the viewer's is written out beside it.
+      - ARMATURE_OIDC_SERVICES=${ARMATURE_OIDC_SERVICES:-${ARMATURE_HUB_CLIENT_ID:-}}
       # The connection profile, `instance` in GET /discover: the name a person
       # confirms before connecting (the host name when unset), and where a client
       # beyond this server reaches the hub, by default what Caddy publishes under
