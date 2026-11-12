@@ -79,7 +79,6 @@ export async function ensureSnapshots(
   }
 
   const store = createOperatorStore({ branch: record.branch }, hub.store());
-  const branches = new Set(await store.listBranches());
   let room = Math.max(0, hub.snapshotBudget - snapshots.commits.filter((s) => s.held).length);
   for (const [commit, references] of candidates) {
     let entry: SnapshotRecord;
@@ -87,7 +86,7 @@ export async function ensureSnapshots(
       entry = { commit, references, held: false, reason: 'budget' };
     } else {
       try {
-        entry = await loadSnapshot(hub, store, remote, commit, branches.has(snapshotBranch(commit)));
+        entry = await loadSnapshot(hub, store, remote, commit);
         entry.references = references;
         room -= 1;
       } catch (err) {
@@ -103,31 +102,32 @@ export async function ensureSnapshots(
   return snapshots;
 }
 
-/** The remote's export at `commit`, loaded into its snapshot branch unless the branch already holds it. */
-async function loadSnapshot(
-  hub: HubConfig,
-  store: ReturnType<typeof createOperatorStore>,
-  remote: ArmatureClient,
-  commit: string,
-  present: boolean
-): Promise<SnapshotRecord> {
+/**
+ * The remote's export at `commit`, loaded into its snapshot branch unless the
+ * branch already holds it. In the snapshot branch's own write queue (ADR-0025
+ * decision 7, note of 2026-11-11), so two workspaces naming one commit load it
+ * once; work holding that queue takes no other.
+ */
+async function loadSnapshot(hub: HubConfig, store: ReturnType<typeof createOperatorStore>, remote: ArmatureClient, commit: string): Promise<SnapshotRecord> {
   const branch = snapshotBranch(commit);
   const at = store.at({ branch });
-  if (present) {
-    const { documents } = await at.allDocuments();
+  return at.exclusive(async () => {
+    if ((await store.listBranches()).includes(branch)) {
+      const { documents } = await at.allDocuments();
+      return { commit, references: 0, held: true, documents: documents.length, fetchedAt: new Date().toISOString() };
+    }
+    const exported = await fromRemote(hub, () => remote.export.read({ ref: commit, profile: 'full' }));
+    const documents = exported.data.documents as unknown as TerminusDocument[];
+    await store.createEmptyBranch(branch);
+    await at.replaceSchema(exported.data.schema as Record<string, unknown>[], {
+      author: 'system',
+      message: `Snapshot of ${hub.remote ?? 'the remote'} at ${commit}: schema`,
+    });
+    if (documents.length) {
+      await at.insertDocuments(documents, { author: 'system', message: `Snapshot of ${hub.remote ?? 'the remote'} at ${commit}` });
+    }
     return { commit, references: 0, held: true, documents: documents.length, fetchedAt: new Date().toISOString() };
-  }
-  const exported = await fromRemote(hub, () => remote.export.read({ ref: commit, profile: 'full' }));
-  const documents = exported.data.documents as unknown as TerminusDocument[];
-  await store.createEmptyBranch(branch);
-  await at.replaceSchema(exported.data.schema as Record<string, unknown>[], {
-    author: 'system',
-    message: `Snapshot of ${hub.remote ?? 'the remote'} at ${commit}: schema`,
   });
-  if (documents.length) {
-    await at.insertDocuments(documents, { author: 'system', message: `Snapshot of ${hub.remote ?? 'the remote'} at ${commit}` });
-  }
-  return { commit, references: 0, held: true, documents: documents.length, fetchedAt: new Date().toISOString() };
 }
 
 /** The remote log's page size, the route's maximum. */

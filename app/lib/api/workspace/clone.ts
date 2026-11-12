@@ -46,7 +46,10 @@ const schemaKey = (entries: Record<string, unknown>[]) =>
  * its export as the copies the write pipeline put there (ADR-0032 decision 5).
  * Until 2026-11-05 every person was mirrored. A schema or a user unchanged
  * since the last mirror writes nothing, so the mirror's log records only what
- * changed. Creates the local store on first use (platform check AN).
+ * changed. Creates the local store on first use (platform check AN). What it
+ * compares and writes runs in the mirror's write queue (ADR-0025 decision 7,
+ * note of 2026-11-11), after the remote has answered, so two workspaces made
+ * together write the mirror one after the other.
  */
 export async function mirrorMain(hub: HubConfig, remote: ArmatureClient, owner: Owner): Promise<string> {
   const main = local(hub, { branch: MIRROR_BRANCH });
@@ -62,14 +65,16 @@ export async function mirrorMain(hub: HubConfig, remote: ArmatureClient, owner: 
   const from = `from ${hub.remote} at ${at}`;
 
   const entries = schema.data.schema as Record<string, unknown>[];
-  if (schemaKey((await main.getSchema()).entries) !== schemaKey(entries)) {
-    await main.replaceSchema(entries, { author: owner.id, message: `Mirror ${MIRROR_BRANCH}'s schema ${from}` });
-  }
-  const held = new Map((await main.queryDocuments('User', {})).documents.map((u) => [u['@id'], canonical(u)]));
-  const changed = (users.data as unknown as TerminusDocument[]).filter((u) => held.get(u['@id']) !== canonical(u));
-  if (changed.length) {
-    await main.putDocuments(changed, { author: owner.id, message: `Mirror ${MIRROR_BRANCH}'s users ${from}`, create: true });
-  }
+  await main.exclusive(async () => {
+    if (schemaKey((await main.getSchema()).entries) !== schemaKey(entries)) {
+      await main.replaceSchema(entries, { author: owner.id, message: `Mirror ${MIRROR_BRANCH}'s schema ${from}` });
+    }
+    const held = new Map((await main.queryDocuments('User', {})).documents.map((u) => [u['@id'], canonical(u)]));
+    const changed = (users.data as unknown as TerminusDocument[]).filter((u) => held.get(u['@id']) !== canonical(u));
+    if (changed.length) {
+      await main.putDocuments(changed, { author: owner.id, message: `Mirror ${MIRROR_BRANCH}'s users ${from}`, create: true });
+    }
+  });
   return at;
 }
 
@@ -86,6 +91,11 @@ const cloneMessage = (branch: string, remote: string, base: string) => `Clone ${
  * A local branch of that name with no record is a clone that did not finish
  * (the record is written last): it is replaced when it holds nothing but a
  * clone's own commits, and refused otherwise, so no work is ever dropped.
+ *
+ * Called holding the branch's write queue (`routes/workspace.ts`; ADR-0025
+ * decision 7, note of 2026-11-11), which is not reentrant, so it takes none
+ * itself: a second clone of the same branch waits for the first rather than
+ * deleting it half made.
  */
 export async function cloneBranch(
   hub: HubConfig,
