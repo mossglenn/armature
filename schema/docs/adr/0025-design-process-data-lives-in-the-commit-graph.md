@@ -247,6 +247,13 @@ Phase 2's routes land (ADR-0054 consequences).
    reads the head again just before deleting (409 `branch_moved`); the residual window is one
    request wide, and a commit lost from branch-reachable history in it stays readable by id.
 
+   > **Note (2026-11-12):** this rule is a remote hub's, about history that is shared. One
+   > deletion on a workspace hub removes commits no other branch holds: a discard (ADR-0065
+   > decision 6, later change of this day), for local commits that were never pushed and never
+   > will be, so never shared. It is not silent: the person states how many commits they give
+   > up, and the hub copies the branch's files aside in its folder before deleting it, so what
+   > vanishes from the hub is still on the machine. The remote's branch is not asked about.
+
 7. **`/api/v1` exposes the bare commit id, in standard HTTP headers.** Every response that read
    from or wrote to the store carries `ETag: "<commit-id>"`: the commit the read was served from,
    or the commit the write created. Writes accept `If-Match: "<commit-id>"`; the hub forwards it
