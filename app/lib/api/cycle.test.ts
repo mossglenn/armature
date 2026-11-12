@@ -15,7 +15,7 @@ import { app, createApp } from './app';
 import { configFromEnv, type HubConfig } from './config';
 import { handleOf } from './routes/workspace';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from './store';
-import { memoryRecords } from './workspace/records';
+import { memoryRecords, type PushTable, type WorkspaceRecords } from './workspace/records';
 import { memoryFiles, type StoreFiles } from './filestore/files';
 import { openFileStore } from './filestore/store';
 
@@ -60,6 +60,21 @@ describe('over the file-backed store in memory', () => {
     };
   })();
   const localConfig = { files: openFileStore(files) };
+  // The records, with one save of a push table made to fail when a test asks: the process ending there.
+  let failSaveOf: ((table: PushTable) => boolean) | undefined;
+  const records: WorkspaceRecords = (() => {
+    const inner = memoryRecords();
+    return {
+      ...inner,
+      async putPush(branch, table) {
+        if (failSaveOf?.(table)) {
+          failSaveOf = undefined;
+          throw new Error('The process ended here');
+        }
+        await inner.putPush(branch, table);
+      },
+    };
+  })();
   const localStore = (branch: string) => createOperatorStore({ branch }, localConfig);
 
   beforeAll(async () => {
@@ -80,7 +95,7 @@ describe('over the file-backed store in memory', () => {
       { author: 'User/demo-designer', message: 'The seed\'s dated records, for the cycle suite' }
     );
     remote = await startHub({ port: 0, config: { ...configFromEnv(), store: () => ({ ...storeConfigFromEnv(), db: REMOTE_DB }) } });
-    config = { ...configFromEnv(), role: 'workspace', remote: remote.url, workspaces: memoryRecords(), store: () => localConfig, localToken: TOKEN, actionRoutes: true };
+    config = { ...configFromEnv(), role: 'workspace', remote: remote.url, workspaces: records, store: () => localConfig, localToken: TOKEN, actionRoutes: true };
     workspace = createApp(() => config);
     onMain = createClient({ baseUrl: remote.url, user: DESIGNER });
   });
@@ -258,6 +273,96 @@ describe('over the file-backed store in memory', () => {
           expect(local).toBe('their edit');
         }
       }
+    });
+  });
+
+  // A bring-in the remote merged and this hub did not finish (workspace/merged.ts; the 2026-11-09 review's
+  // W4, "related"): the marker in push.json lets the next bring-in or push settle it.
+  describe('a bring-in that did not finish', () => {
+    const status = async (branch: string) => (await json(await on('GET', `/workspace/${branch}/status`))).body;
+    const local = async (branch: string, id: string) => (await json(await on('GET', `/documents/${id}?branch=${branch}`))).body.rationale;
+    /** A workspace holding `id` as main had it, main then moved on it, and a bring-in ended at `where`. */
+    async function interrupted(label: string, where: (table: PushTable) => boolean): Promise<{ branch: string; id: string }> {
+      const name = `${NAME}-${label}`;
+      const branch = `${handleOf(DESIGNER)}_${name}`;
+      const id = `LearningNeed/${label}-${stamp}`;
+      await onMain.documents.put('LearningNeed', id, { message: 'On main before the workspace', document: { label, rationale: 'base' } });
+      expect((await on('POST', '/workspace', { name })).status).toBe(201);
+      await onMain.documents.put('LearningNeed', id, { message: 'Main moves', document: { label, rationale: 'their edit' } });
+      failSaveOf = where;
+      expect((await on('POST', `/workspace/${branch}/bring-in`)).status).toBe(500);
+      expect(failSaveOf).toBeUndefined();
+      return { branch, id };
+    }
+    /** The save after the remote answered with its merge commit: merged there, nothing read back here. */
+    const afterTheMerge = (table: PushTable) => table.bringingIn?.merged !== undefined;
+    /** The save of the table's entry: the local commit made, the table not told. */
+    const beforeTheEntry = (table: PushTable) => table.bringingIn === undefined && table.commits.at(-1)?.broughtIn === true;
+
+    it('is finished by the next bring-in, from the remote’s log', async () => {
+      const { branch, id } = await interrupted('settle-bring-in', afterTheMerge);
+      expect(await local(branch, id)).toBe('base');
+      expect((await status(branch)).remote.moved).toBe(true);
+
+      const again = await json(await on('POST', `/workspace/${branch}/bring-in`));
+      expect(again.status, JSON.stringify(again.body)).toBe(200);
+      expect(again.body).toMatchObject({ upToDate: false, broughtIn: { documents: 1 } });
+      expect(await local(branch, id)).toBe('their edit');
+      expect(await status(branch)).toMatchObject({ localCommits: 1, pushed: 1, unpushed: 0, remote: { moved: false } });
+      expect((await records.getPush(branch))?.bringingIn).toBeUndefined();
+    });
+
+    it('is finished by the next push, which then replays a commit made since on other documents', async () => {
+      const { branch, id } = await interrupted('settle-push', afterTheMerge);
+      const mine = `LearningNeed/settle-push-mine-${stamp}`;
+      expect((await on('PUT', `/documents/${mine}?branch=${branch}`, need('mine'))).status).toBe(200);
+      const pushed = await json(await on('POST', `/workspace/${branch}/push`));
+      expect(pushed.status, JSON.stringify(pushed.body)).toBe(200);
+      expect(pushed.body.pushed).toHaveLength(1);
+      expect(await local(branch, id)).toBe('their edit');
+      expect(await status(branch)).toMatchObject({ localCommits: 2, pushed: 2, unpushed: 0, remote: { moved: false } });
+      // Here and on the remote the branch holds the same two documents.
+      expect((await onMain.documents.get('LearningNeed', id, { branch })).data.rationale).toBe('their edit');
+      expect((await onMain.documents.get('LearningNeed', mine, { branch })).data.rationale).toBe('r');
+    });
+
+    it('is refused, naming the documents, when a commit made since changed one the merge changed', async () => {
+      const { branch, id } = await interrupted('settle-overlap', afterTheMerge);
+      expect((await on('PUT', `/documents/${id}?branch=${branch}`, need('settle-overlap', 'my edit'))).status).toBe(200);
+      for (const action of ['bring-in', 'push']) {
+        const refused = await json(await on('POST', `/workspace/${branch}/${action}`));
+        expect(refused.status).toBe(409);
+        expect(refused.body).toMatchObject({ error: 'unpushed_commits', overlapping: [id] });
+      }
+      expect(await local(branch, id)).toBe('my edit');
+    });
+
+    it('takes the local commit already made as the bring-in, by what it holds, when only the table’s entry was missing', async () => {
+      const { branch, id } = await interrupted('settle-entry', beforeTheEntry);
+      expect(await local(branch, id)).toBe('their edit');
+      expect(await status(branch)).toMatchObject({ localCommits: 1, pushed: 0 });
+      const again = await json(await on('POST', `/workspace/${branch}/bring-in`));
+      expect(again.status, JSON.stringify(again.body)).toBe(200);
+      expect(again.body).toMatchObject({ upToDate: false, broughtIn: { documents: 1 } });
+      expect(await status(branch)).toMatchObject({ localCommits: 1, pushed: 1, unpushed: 0, remote: { moved: false } });
+    });
+
+    it('leaves nothing behind when the merge never landed, and the usual 412 when someone else wrote the branch instead', async () => {
+      const name = `${NAME}-settle-none`;
+      const branch = `${handleOf(DESIGNER)}_${name}`;
+      expect((await on('POST', '/workspace', { name })).status).toBe(201);
+      const record = (await records.get(branch))!;
+      const marker = { ifMatch: record.base, localHead: record.local, sentAt: new Date().toISOString() };
+      await records.putPush(branch, { commits: [], bringingIn: marker });
+      expect((await json(await on('POST', `/workspace/${branch}/bring-in`))).body).toMatchObject({ upToDate: true });
+      expect((await records.getPush(branch))?.bringingIn).toBeUndefined();
+
+      // Someone with a grant writes the branch on the remote: not a merge, so not this hub's bring-in.
+      await onMain.documents.put('LearningNeed', `settle-none-${stamp}`, { branch, message: 'Written on the remote', document: { label: 'elsewhere', rationale: 'r' } });
+      await records.putPush(branch, { commits: [], bringingIn: marker });
+      const moved = await json(await on('POST', `/workspace/${branch}/bring-in`));
+      expect(moved.status).toBe(412);
+      expect((await records.getPush(branch))?.bringingIn).toBeUndefined();
     });
   });
 

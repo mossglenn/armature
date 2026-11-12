@@ -5,6 +5,8 @@ import { isAgentExternalId, type UserDocument } from '../identity';
 import { MIRROR_BRANCH } from '../role';
 import { storeOf, type HubConfig } from '../config';
 import { changesOf, type Commit, type Store, type TerminusDocument } from '../store';
+import { localCommitsSince, mappingOf } from './commits';
+import { settleBringIn } from './merged';
 import {
   AUTHORED_AT_TRAILER,
   RESERVED_TRAILERS,
@@ -14,7 +16,7 @@ import {
   withoutTrailers,
   withTrailer,
 } from '../trailers';
-import { emptyPushTable, type InFlight, type PushedCommit, type PushTable, type WorkspaceRecord, type WorkspaceRecords } from './records';
+import { emptyPushTable, type InFlight, type PushedCommit, type WorkspaceRecord, type WorkspaceRecords } from './records';
 import { fromRemote, remoteClient, requireRemoteIdentity } from './remote';
 import { GroupTooLarge, PART_LIMITS, splitIntoParts, type PartLimits } from './split';
 
@@ -35,7 +37,8 @@ import { GroupTooLarge, PART_LIMITS, splitIntoParts, type PartLimits } from './s
  * acting for the owner (ADR-0067 decisions 3 and 10). An in-flight marker is
  * written before each request so that a push interrupted after the remote
  * accepted a part is settled on the next push from the remote branch's log
- * (ADR-0066 decision 2, note).
+ * (ADR-0066 decision 2, note). A bring-in that did not finish leaves its own
+ * marker, settled before anything is replayed (`./merged.ts`).
  *
  * What stops a push: 403 `forbidden` before its first commit (the owner may
  * not write the branch on the remote), 412 `precondition_failed` (the branch
@@ -65,24 +68,7 @@ const READ_PAGE = 100;
 /** The pushes running in this process, one per workspace at a time. */
 const running = new Set<string>();
 
-/** The local commits after the clone, newest first; the clone's own commit is not among them. */
-export async function localCommitsSince(store: Store, clone: string): Promise<Commit[]> {
-  const commits: Commit[] = [];
-  for (let start = 0; ; start += LOG_PAGE) {
-    const page = await store.log({ start, count: LOG_PAGE });
-    const at = page.findIndex((commit) => commit.id === clone);
-    if (at >= 0) {
-      commits.push(...page.slice(0, at));
-      return commits;
-    }
-    commits.push(...page);
-    if (page.length < LOG_PAGE) throw new Error(`The local branch no longer holds its clone commit ${clone}`);
-  }
-}
-
-/** The local commit → remote commit table as a map, the clone's commit mapping to the base. */
-export const mappingOf = (record: WorkspaceRecord, table: PushTable): Map<string, string> =>
-  new Map([[record.local, record.base], ...table.commits.map((c): [string, string] => [c.local, c.remote])]);
+export { localCommitsSince, mappingOf };
 
 /**
  * A document as the replay sends it: a copy with the store's nested ids
@@ -199,6 +185,11 @@ export async function pushWorkspace(hub: HubConfig, records: WorkspaceRecords, r
     // Under a token, the remote must take this hub for the owner before anything is replayed as them.
     await requireRemoteIdentity(hub, { id: record.owner, externalId: record.ownerExternalId });
     const local = storeOf(hub, { branch });
+    // A bring-in that did not finish is settled first, in the branch's queue since it may commit here
+    // (./merged.ts): the remote is then at the merge commit, which the replay below is conditioned on.
+    if ((await records.getPush(branch))?.bringingIn) {
+      await local.exclusive(() => settleBringIn(hub, records, record, remoteClient(hub, record.ownerExternalId)));
+    }
     const table = (await records.getPush(branch)) ?? emptyPushTable();
     const mapping = mappingOf(record, table);
     let lastRemote = table.commits.at(-1)?.remote ?? record.base;
