@@ -143,32 +143,39 @@ workspace.post('/', async (c) => {
 
   await mirrorMain(hub, remote, owner);
   const start = typeof from === 'string' ? from : 'main';
-  if (typeof name === 'string') await fromRemote(hub, () => remote.branches.create(branch, { branch: start }));
-  // A branch this hub just created is the owner's (ADR-0068 decision 3); an existing one may not be.
-  const warning = typeof existing === 'string' ? await writeWarning(hub, remote, me.data as UserDocument & { grants?: Grant[] }, branch) : undefined;
-  const { base, local, documents } = await cloneBranch(hub, remote, owner, branch);
-  // The remote's profile, kept so this hub's GET /discover can name the instance offline (docs/desktop-program-plan.md §8).
-  const { instance } = (await fromRemote(hub, () => remote.discover())).data;
+  // From here in the branch's write queue (ADR-0025 decision 7, note of 2026-11-11): a second request for
+  // the same workspace waits, then finds the record, rather than replacing a clone half made; a tool's
+  // write to the branch waits for the clone to finish. The mirror's queue was taken and left above.
+  const made = await storeFor(c, { branch }).exclusive(async () => {
+    await checkBranch(branch);
+    if (typeof name === 'string') await fromRemote(hub, () => remote.branches.create(branch, { branch: start }));
+    // A branch this hub just created is the owner's (ADR-0068 decision 3); an existing one may not be.
+    const warning = typeof existing === 'string' ? await writeWarning(hub, remote, me.data as UserDocument & { grants?: Grant[] }, branch) : undefined;
+    const { base, local, documents } = await cloneBranch(hub, remote, owner, branch);
+    // The remote's profile, kept so this hub's GET /discover can name the instance offline (docs/desktop-program-plan.md §8).
+    const { instance } = (await fromRemote(hub, () => remote.discover())).data;
 
-  const record: WorkspaceRecord = {
-    branch,
-    remote: hub.remote ?? '',
-    owner: owner.id,
-    ownerExternalId: externalId,
-    ...(typeof name === 'string' ? { from: start } : {}),
-    base,
-    local,
-    clonedAt: new Date().toISOString(),
-    ...(instance ? { instance } : {}),
-  };
-  await records.put(record);
-  // What the clone holds beyond the base (plan §8, §16 question 3): the
-  // remote's log back to the branch's beginning, and the state at each older
-  // commit a cloned record names. After the record, so an interruption here
-  // leaves a workspace whose next bring-in completes them.
-  await records.putLog(branch, await fetchRemoteLog(hub, remote, branch, base));
-  const snapshots = await ensureSnapshots(hub, records, record, remote, documents, resolvableCommitsOf(record, []));
-  return c.json({ ...record, snapshots: snapshots.commits, ...(warning ? { warning } : {}) }, 201);
+    const record: WorkspaceRecord = {
+      branch,
+      remote: hub.remote ?? '',
+      owner: owner.id,
+      ownerExternalId: externalId,
+      ...(typeof name === 'string' ? { from: start } : {}),
+      base,
+      local,
+      clonedAt: new Date().toISOString(),
+      ...(instance ? { instance } : {}),
+    };
+    await records.put(record);
+    // What the clone holds beyond the base (plan §8, §16 question 3): the
+    // remote's log back to the branch's beginning, and the state at each older
+    // commit a cloned record names. After the record, so an interruption here
+    // leaves a workspace whose next bring-in completes them.
+    await records.putLog(branch, await fetchRemoteLog(hub, remote, branch, base));
+    const snapshots = await ensureSnapshots(hub, records, record, remote, documents, resolvableCommitsOf(record, []));
+    return { ...record, snapshots: snapshots.commits, ...(warning ? { warning } : {}) };
+  });
+  return c.json(made, 201);
 });
 
 async function recordOf(c: Context, name: string): Promise<WorkspaceRecord> {
