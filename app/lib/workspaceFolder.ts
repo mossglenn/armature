@@ -19,13 +19,13 @@
  * seconds before it is reported (`unwritable`). All from the rehearsal on a
  * Windows PC (ADR-0066 Verification, 2026-11-03).
  */
-import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
+import { cp, mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
 import type { StoreFiles } from './api/filestore/files';
 import { BRANCH_NAME } from './api/http';
 import { StoreError } from './api/store';
-import type { PushTable, RemoteLog, Snapshots, WorkspaceRecord, WorkspaceRecords } from './api/workspace/records';
+import { DISCARDED, setAsidePath, type PushTable, type RemoteLog, type Snapshots, type WorkspaceRecord, type WorkspaceRecords } from './api/workspace/records';
 
 const RECORD = 'workspace.json';
 const PUSH = 'push.json';
@@ -319,6 +319,17 @@ export function folderRecords(dir: string): WorkspaceRecords {
       if (!BRANCH_NAME.test(branch)) throw new Error(`Not a branch name: ${JSON.stringify(branch)}`);
       await rm(join(dir, branch), REMOVAL);
       await sync(dir, 'r').catch(() => undefined);
+    },
+    // A workspace's folder is its branch folder, so one copy holds the records and the store's files
+    // for the branch: `head.json` and every commit made on it. Copied, not moved: the store then
+    // deletes the branch as it deletes any, and a copy that fails leaves the workspace as it was.
+    async setAside(branch, stamp) {
+      if (!BRANCH_NAME.test(branch)) throw new Error(`Not a branch name: ${JSON.stringify(branch)}`);
+      const path = setAsidePath(branch, stamp);
+      await mkdir(join(dir, DISCARDED), { recursive: true });
+      await cp(join(dir, branch), join(dir, ...path.split('/')), { recursive: true, errorOnExist: true, force: false });
+      await sync(join(dir, DISCARDED), 'r').catch(() => undefined);
+      return path;
     },
   };
 }

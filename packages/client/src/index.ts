@@ -481,9 +481,12 @@ export interface DeliverResult {
 /** `DELETE /workspace/:name` (2026-11-07): the workspace removed here, and what became of its branch on the remote. */
 export interface RemoveResult {
   workspace: WorkspaceRecord;
-  remote: 'deleted' | 'kept' | 'absent';
+  /** `untouched` after a discard (2026-11-12), which asks nothing of the remote. */
+  remote: 'deleted' | 'kept' | 'absent' | 'untouched';
   /** Why the remote kept it: commits no other branch holds, its refusal, or no answer. */
   reason?: 'unmerged' | 'forbidden' | 'unreachable';
+  /** After a discard: the local commits given up, newest first, and where the workspace's files were set aside in the hub's folder. */
+  discarded?: { commits: string[]; setAside?: string };
 }
 
 export type ExportProfile = 'full' | 'pseudonymous' | 'institutional';
@@ -788,8 +791,12 @@ export function createClient(options: ClientOptions) {
         return call<DeliverResult>(`/workspace/${encodeURIComponent(name)}/deliver`, { method: 'POST', body: opts });
       },
       /** `DELETE /workspace/:name`: removes the workspace here with nothing left to push (409 `unpushed_commits`), and its branch on the remote when the remote's rule allows (2026-11-07). */
-      remove(name: string) {
-        return call<RemoveResult>(`/workspace/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      /**
+       * With `discard`, the number of unpushed local commits given up (2026-11-12): the workspace leaves this machine with
+       * them, its files set aside in the hub's folder, and the remote is not asked; 409 `discard_mismatch` when the number is not what is there.
+       */
+      remove(name: string, opts: { discard?: number } = {}) {
+        return call<RemoveResult>(`/workspace/${encodeURIComponent(name)}${opts.discard === undefined ? '' : `?discard=${opts.discard}`}`, { method: 'DELETE' });
       },
       /** `GET /workspace/:name/status`: the record, the local head, the local commits since the clone, and the remote's head. */
       status(name: string) {

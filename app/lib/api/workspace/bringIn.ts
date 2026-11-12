@@ -61,6 +61,21 @@ import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
  * A removal that failed partway (a file another program held) is finished by
  * asking again: a local branch already gone has nothing unpushed and nothing
  * left to delete (the review's W2).
+ *
+ * A discard (since 2026-11-12; decision 6, note of that day; the 2026-11-09
+ * review's W8 and D6) is the way out for a workspace whose commits can never
+ * be pushed: a grant revoked, a remote branch deleted, a standing 422, a remote
+ * that is gone, a bring-in left unfinished and then overlapped. It is a removal
+ * that states how many local commits it gives up, and it is this machine's
+ * alone: nothing is asked of the remote, so it needs no network and no
+ * sign-in, which the cases it is for often lack. The count is the
+ * confirmation: one that differs from what is there is refused (409
+ * `discard_mismatch`) and nothing changes. Everything the workspace holds here,
+ * its records and its branch's own commit files, is first copied aside
+ * (`WorkspaceRecords.setAside`), since these are commits no other branch holds
+ * and the only thing in Armature that removes such commits (ADR-0025 decision
+ * 6); nothing reads the copy again. The remote's branch, with whatever was
+ * pushed, stays as it is; cloned again and removed, it goes by the remote's rule.
  */
 
 /** The workspace's local branch through the operator-side methods, whose `exclusive` is the hub's queue for it. */
@@ -87,10 +102,12 @@ export interface BringInResult {
 
 export interface RemoveResult {
   workspace: WorkspaceRecord;
-  /** What became of the branch on the remote: deleted, kept, or already absent. */
-  remote: 'deleted' | 'kept' | 'absent';
+  /** What became of the branch on the remote: deleted, kept, already absent, or, after a discard, not asked about. */
+  remote: 'deleted' | 'kept' | 'absent' | 'untouched';
   /** Why it was kept: commits no other branch holds, the remote's refusal, or no answer. */
   reason?: 'unmerged' | 'forbidden' | 'unreachable';
+  /** After a discard: the local commits given up, newest first, and where the workspace's files were set aside in the hub's folder. */
+  discarded?: { commits: string[]; setAside?: string };
 }
 
 export interface DeliverResult {
@@ -101,24 +118,29 @@ export interface DeliverResult {
   deleted: boolean;
 }
 
-/** The unpushed local commits, refused as such when there are any; a local branch already gone has none. */
-async function requireNothingUnpushed(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, action: string): Promise<{ lastRemote: string }> {
+/** The local commits the push table does not hold, and whether the local branch is still there; one already gone has none. */
+async function unpushedOf(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<{ unpushed: string[]; lastRemote: string; gone: boolean }> {
   const table = (await records.getPush(record.branch)) ?? emptyPushTable();
   const mapping = mappingOf(record, table);
   let commits: Awaited<ReturnType<typeof localCommitsSince>>;
+  let gone = false;
   try {
     commits = await localCommitsSince(storeOf(hub, { branch: record.branch }), record.local);
   } catch (err) {
     if (!isUnknownRef(err)) throw err;
     commits = [];
+    gone = true;
   }
-  const unpushed = commits.filter((commit) => !mapping.has(commit.id));
+  return { unpushed: commits.filter((commit) => !mapping.has(commit.id)).map((commit) => commit.id), lastRemote: table.commits.at(-1)?.remote ?? record.base, gone };
+}
+
+/** The unpushed local commits, refused as such when there are any; a local branch already gone has none. */
+async function requireNothingUnpushed(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, action: string): Promise<{ lastRemote: string }> {
+  const { unpushed, lastRemote } = await unpushedOf(hub, records, record);
   if (unpushed.length) {
-    throw new ApiError(409, 'unpushed_commits', `${unpushed.length} local commit(s) of ${record.branch} are not on the remote; push before ${action}`, {
-      unpushed: unpushed.map((commit) => commit.id),
-    });
+    throw new ApiError(409, 'unpushed_commits', `${unpushed.length} local commit(s) of ${record.branch} are not on the remote; push before ${action}`, { unpushed });
   }
-  return { lastRemote: table.commits.at(-1)?.remote ?? record.base };
+  return { lastRemote };
 }
 
 export function bringIn(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, message?: string): Promise<BringInResult> {
@@ -210,9 +232,44 @@ async function deliverHeld(
   return { ...result, deleted: true };
 }
 
-/** Removes the workspace from this hub, and its branch from the remote when the remote's rule allows. */
-export function removeWorkspace(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<RemoveResult> {
-  return localOf(hub, record.branch).exclusive(() => removeHeld(hub, records, record));
+/**
+ * Removes the workspace from this hub, and its branch from the remote when the remote's rule allows.
+ * With `discard`, the number of local commits the caller gives up, it is a discard instead: this
+ * machine's alone, the workspace's files set aside first.
+ */
+export function removeWorkspace(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, opts: { discard?: number } = {}): Promise<RemoveResult> {
+  return localOf(hub, record.branch).exclusive(() => (opts.discard === undefined ? removeHeld(hub, records, record) : discardHeld(hub, records, record, opts.discard)));
+}
+
+/** A stamp for a set-aside folder's name: the time to the second, in the characters every file system takes. */
+const stampOf = (when: Date): string => when.toISOString().replace(/\.\d+Z$/, 'Z').replace(/[-:]/g, '');
+
+async function discardHeld(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, stated: number): Promise<RemoveResult> {
+  const { branch } = record;
+  const { unpushed, gone } = await unpushedOf(hub, records, record);
+  // A discard that failed after the branch was deleted is finished by asking again, as a removal is:
+  // the commits were set aside then, and nothing is left to count.
+  if (gone) {
+    await records.remove(branch);
+    return { workspace: record, remote: 'untouched', discarded: { commits: [] } };
+  }
+  // The count is the confirmation: what the person was shown they would lose is what is there now. A
+  // tool's write since, or a push that landed, makes it another question, asked again.
+  if (unpushed.length !== stated) {
+    throw new ApiError(
+      409,
+      'discard_mismatch',
+      unpushed.length
+        ? `${branch} holds ${unpushed.length} local commit(s) that are not on the remote, not the ${stated} this discard names; nothing was removed`
+        : `${branch} holds no local commit that is not on the remote, so there is nothing to discard; remove it without discard`,
+      { unpushed, stated }
+    );
+  }
+  // An unfinished bring-in's marker goes with the push table, set aside like the rest; nothing is asked of the remote.
+  const setAside = await records.setAside(branch, stampOf(new Date()));
+  await deleteLocal(hub, branch);
+  await records.remove(branch);
+  return { workspace: record, remote: 'untouched', discarded: { commits: unpushed, setAside } };
 }
 
 async function removeHeld(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<RemoveResult> {

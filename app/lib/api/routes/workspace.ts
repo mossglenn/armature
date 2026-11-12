@@ -47,7 +47,11 @@ import { ensureSnapshots, fetchRemoteLog, resolvableCommitsOf } from '../workspa
  *                             brought in cleanly (409 bring_in_first)
  *   DELETE /:name             removes the workspace here with nothing left to
  *                             push, and its branch on the remote when the
- *                             remote's rule allows (since 2026-11-07)
+ *                             remote's rule allows (since 2026-11-07);
+ *                             ?discard=<n> gives up n unpushed local commits
+ *                             instead, on this machine alone, the workspace's
+ *                             files set aside first (409 discard_mismatch when
+ *                             n is not what is there; since 2026-11-12)
  *
  * Every route but the reads carries the hub's per-launch secret as
  * `Armature-Local-Token` (../localToken.ts; since 2026-11-03). Push, bring in
@@ -269,5 +273,11 @@ workspace.post('/:name/deliver', async (c) => {
 workspace.delete('/:name', async (c) => {
   requireActionRoutes(c, 'remove');
   const record = await ownedWorkspace(c, 'remove');
-  return c.json(await removeWorkspace(hubOf(c), recordsOf(c), record));
+  // `discard=<n>`: the removal gives up n local commits that are not on the remote, and says so.
+  const raw = c.req.query('discard');
+  const discard = raw === undefined ? undefined : Number(raw);
+  if (discard !== undefined && (!/^[1-9]\d*$/.test(raw ?? '') || !Number.isSafeInteger(discard))) {
+    throw new ApiError(400, 'bad_query', 'discard is the number of local commits to give up, a whole number of at least 1');
+  }
+  return c.json(await removeWorkspace(hubOf(c), recordsOf(c), record, { discard }));
 });

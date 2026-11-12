@@ -335,6 +335,15 @@ describe('over the file-backed store in memory', () => {
         expect(refused.body).toMatchObject({ error: 'unpushed_commits', overlapping: [id] });
       }
       expect(await local(branch, id)).toBe('my edit');
+      // The way out (the review's D6): the one commit given up, the unfinished bring-in's marker with it.
+      const discarded = await json(await on('DELETE', `/workspace/${branch}?discard=1`));
+      expect(discarded.status, JSON.stringify(discarded.body)).toBe(200);
+      expect(discarded.body).toMatchObject({ remote: 'untouched', discarded: { commits: [expect.any(String)] } });
+      expect(await records.get(branch)).toBeUndefined();
+      expect(await records.getPush(branch)).toBeUndefined();
+      // The remote's branch, with its merge, is as it was, and is cloned again as it stands.
+      expect((await on('POST', '/workspace', { existing: branch })).status).toBe(201);
+      expect(await local(branch, id)).toBe('their edit');
     });
 
     it('takes the local commit already made as the bring-in, by what it holds, when only the table’s entry was missing', async () => {
@@ -425,6 +434,74 @@ describe('over the file-backed store in memory', () => {
       expect(again.body).toMatchObject({ remote: 'kept', reason: 'unmerged' });
       expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).not.toContain(TWICE);
       expect(await localStore('main').listBranches()).not.toContain(TWICE);
+    });
+
+    // A discard (since 2026-11-12; ADR-0065 decision 6, note; the 2026-11-09 review's W8 and D6): the
+    // removal of a workspace whose commits will never be pushed, on this machine alone.
+    it('discards a stated number of unpushed commits without asking the remote, the workspace set aside first', async () => {
+      const LOST = `${handleOf(DESIGNER)}_${NAME}-lost`;
+      expect((await on('POST', '/workspace', { name: `${NAME}-lost` })).status).toBe(201);
+      expect((await write(LOST, `discard-pushed-${stamp}`)).status).toBe(200);
+      expect((await on('POST', `/workspace/${LOST}/push`)).status).toBe(200);
+      const remoteHead = (await onMain.branches.head(LOST)).data.head.commit;
+      // Nothing unpushed: there is nothing to discard, and the plain removal is the one to ask for.
+      const nothing = await json(await on('DELETE', `/workspace/${LOST}?discard=1`));
+      expect(nothing.status).toBe(409);
+      expect(nothing.body).toMatchObject({ error: 'discard_mismatch', stated: 1, unpushed: [] });
+
+      expect((await write(LOST, `discard-one-${stamp}`)).status).toBe(200);
+      expect((await write(LOST, `discard-two-${stamp}`)).status).toBe(200);
+      expect((await json(await on('DELETE', `/workspace/${LOST}`))).body).toMatchObject({ error: 'unpushed_commits' });
+      for (const bad of ['0', '-1', '1.5', 'all', '']) {
+        const refused = await json(await on('DELETE', `/workspace/${LOST}?discard=${bad}`));
+        expect(refused.status, bad).toBe(400);
+        expect(refused.body.error, bad).toBe('bad_query');
+      }
+      // The count is the confirmation: one that is not what is there changes nothing.
+      for (const stated of [1, 3]) {
+        const mismatch = await json(await on('DELETE', `/workspace/${LOST}?discard=${stated}`));
+        expect(mismatch.status).toBe(409);
+        expect(mismatch.body).toMatchObject({ error: 'discard_mismatch', stated });
+        expect(mismatch.body.unpushed).toHaveLength(2);
+      }
+      expect((await json(await on('GET', `/workspace/${LOST}/status`))).body).toMatchObject({ unpushed: 2 });
+      // The owner's alone, as a removal is.
+      expect((await on('DELETE', `/workspace/${LOST}?discard=2`, undefined, REVIEWER)).status).toBe(403);
+
+      // With the remote out of reach, which a plain removal would report: a discard does not ask.
+      const reachable = config;
+      config = { ...config, remote: 'http://127.0.0.1:9' };
+      try {
+        const discarded = await json(await on('DELETE', `/workspace/${LOST}?discard=2`));
+        expect(discarded.status, JSON.stringify(discarded.body)).toBe(200);
+        expect(discarded.body).toMatchObject({ workspace: { branch: LOST }, remote: 'untouched' });
+        expect(discarded.body.reason).toBeUndefined();
+        expect(discarded.body.discarded.commits).toHaveLength(2);
+        expect(discarded.body.discarded.setAside).toMatch(new RegExp(`^_discarded/${LOST}\\.\\d{8}T\\d{6}Z$`));
+      } finally {
+        config = reachable;
+      }
+      expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).not.toContain(LOST);
+      expect(await localStore('main').listBranches()).not.toContain(LOST);
+      expect(await records.getPush(LOST)).toBeUndefined();
+      // The remote's branch stands where the last push left it, without the two commits given up.
+      expect((await onMain.branches.head(LOST)).data.head.commit).toBe(remoteHead);
+      await expect(onMain.documents.get('LearningNeed', `LearningNeed/discard-one-${stamp}`, { branch: LOST })).rejects.toMatchObject({ status: 404 });
+      expect((await on('DELETE', `/workspace/${LOST}?discard=2`)).status).toBe(404);
+    });
+
+    it('finishes a discard that failed partway by asking again, with nothing left to count', async () => {
+      const HALF = `${handleOf(DESIGNER)}_${NAME}-half`;
+      expect((await on('POST', '/workspace', { name: `${NAME}-half` })).status).toBe(201);
+      expect((await write(HALF, `discard-half-${stamp}`)).status).toBe(200);
+      failRemovalOf = `${HALF}/commits/`;
+      expect((await on('DELETE', `/workspace/${HALF}?discard=1`)).status).toBe(500);
+      expect(failRemovalOf).toBeUndefined();
+      expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).toContain(HALF);
+      const again = await json(await on('DELETE', `/workspace/${HALF}?discard=1`));
+      expect(again.status, JSON.stringify(again.body)).toBe(200);
+      expect(again.body).toMatchObject({ remote: 'untouched', discarded: { commits: [] } });
+      expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).not.toContain(HALF);
     });
 
     it('is the owner’s alone', async () => {
