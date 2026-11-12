@@ -485,7 +485,14 @@ export function runCore(options: CoreOptions): Core {
     push: async (request) => viaProgram('POST', `/workspace/${named(request)}/push`, undefined, true),
     bringIn: async (request) => viaProgram('POST', `/workspace/${named(request)}/bring-in`, request.message === undefined ? undefined : { message: request.message }, true),
     // DELETE /workspace/:name (since 2026-11-07): this machine's copy, and the remote's branch when main holds its head.
-    remove: async (request) => viaProgram('DELETE', `/workspace/${named(request)}`, undefined, true),
+    // With `discard`, the number of unpushed commits the person confirmed giving up (since 2026-11-12): this machine's alone.
+    remove: async (request) => {
+      const { discard } = request;
+      if (discard !== undefined && (typeof discard !== 'number' || !Number.isInteger(discard) || discard < 1)) {
+        throw new ApiError(400, 'bad_request', 'discard must be the whole number of commits to give up', { field: 'discard' });
+      }
+      return viaProgram('DELETE', `/workspace/${named(request)}${discard === undefined ? '' : `?discard=${discard}`}`, undefined, true);
+    },
     deliver: async (request) =>
       viaProgram('POST', `/workspace/${named(request)}/deliver`, { message: request.message, ...(request.deleteWorkspace !== undefined ? { deleteWorkspace: request.deleteWorkspace } : {}) }, true),
   };

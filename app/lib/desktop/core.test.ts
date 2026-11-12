@@ -13,7 +13,7 @@
  * would speak to it; the bundle's own life over real pipes is bundle.test.ts.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -288,6 +288,26 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('remove', { workspace: WS })).toMatchObject({ status: 409, body: { error: 'unpushed_commits' } });
     expect((await driver.ask('push', { workspace: WS })).status).toBe(200);
     expect(await driver.ask('remove', { workspace: WS })).toMatchObject({ status: 200, body: { remote: 'kept', reason: 'unmerged' } });
+    expect((await driver.ask('workspaces')).body).toEqual([]);
+
+    // A discard (since 2026-11-12): the branch cloned again, a commit that will not be pushed, and the
+    // removal that names it. The count is checked, nothing is asked of the remote, and the folder keeps
+    // what the workspace held under _discarded/.
+    expect((await driver.ask('clone', { branch: WS })).status).toBe(201);
+    const written = await tool('PUT', `/documents/LearningNeed/discarded-${stamp}?branch=${WS}`, { message: 'Work that will not be pushed', document: { label: 'discarded', rationale: 'r' } });
+    expect(written.status).toBe(200);
+    for (const discard of [0, 1.5, '1']) {
+      expect(await driver.ask('remove', { workspace: WS, discard }), String(discard)).toMatchObject({ status: 400, body: { error: 'bad_request', field: 'discard' } });
+    }
+    expect(await driver.ask('remove', { workspace: WS, discard: 2 })).toMatchObject({ status: 409, body: { error: 'discard_mismatch', stated: 2 } });
+    const discarded = await driver.ask('remove', { workspace: WS, discard: 1 });
+    expect(discarded).toMatchObject({ status: 200, body: { remote: 'untouched' } });
+    const { setAside, commits } = (discarded.body as { discarded: { setAside: string; commits: string[] } }).discarded;
+    expect(commits).toHaveLength(1);
+    const aside = join(dataDir, 'workspaces', ...setAside.split('/'));
+    expect(readdirSync(aside).sort()).toEqual(expect.arrayContaining(['commits', 'head.json', 'workspace.json']));
+    expect(readdirSync(join(aside, 'commits'))).toContain(`${commits[0]}.json`);
+    expect(existsSync(join(dataDir, 'workspaces', WS))).toBe(false);
     expect((await driver.ask('workspaces')).body).toEqual([]);
     driver.end();
     await driver.core.closed;
