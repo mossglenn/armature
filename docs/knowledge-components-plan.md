@@ -148,7 +148,7 @@ The rules they would carry:
 
 **Question.** Where do real tutor sources attach KCs, how stable are KC identities, and does any source relate KCs to objectives?
 
-**Work.** `docs/research/tutor-content-mapping.md`, in the form of `quiqui-mapping.md` and `tessera-mapping.md` (source at a commit, read as text, no code run), over:
+**Work.** `docs/research/tutor-content-mapping.md`, in the form of `quiqui-mapping.md` and `tessera-mapping.md` (source at a commit, read as text, no code run), over the files in `docs/research/tutor-fixtures/` (OATutor, Torus, ALOSI and Perseus, with provenance and licenses; CTAT read upstream, since its license forbids copies):
 
 - **OATutor-Content:** one textbook's problems, steps, hints, scaffolds and `skillModel.json`.
 - **CTAT:** a published example-tracing BRD with skill labels and its `productionRule` inventory.
