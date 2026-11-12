@@ -204,6 +204,32 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > `invalid_token` and its reasons, 503 `issuer_unreachable`, `ARMATURE_OIDC_CLIENT_ID` and
    > `ARMATURE_OIDC_JWKS_URL`, `HubConfig.oidc` and `oidc.keys`.
 
+   > **Note (2026-11-12), from the code review of 2026-11-09** (its A1, A4, A5 and A6, with its D2
+   > decided by Amos that day as recommended): four changes to this decision as built.
+   > **A verified email.** A domain entry of `ARMATURE_OIDC_ADMIT` admits only a token whose
+   > `email_verified` claim is `true`. Until now only an explicit `false` was refused, so a provider
+   > that leaves the claim out, or lets a person write their own address, admitted anyone who wrote
+   > one at an admitted domain. Such a provider is listed as an issuer instead, the entry for a
+   > provider that vouches for all its people. **The issuer's outage.** A key set that answers an
+   > error, or something that is no key set, and metadata that cannot be read are 503
+   > `issuer_unreachable`, as this decision's note of 2026-11-05 promised; they had been 401
+   > `invalid_token` with `reason: malformed` and a 500. The token's own faults are named one by
+   > one (`reasonOf` in `oidc.ts`), anything else `jose` raises is the issuer's, and a token that
+   > marks a header parameter critical is `malformed` before any key is read, since `jose` reports
+   > it with the class it uses for a key it cannot read. **Plain http.** `ARMATURE_OIDC_ISSUER`,
+   > `ARMATURE_OIDC_JWKS_URL` and `ARMATURE_PUBLIC_URL` are refused at start as `http://` on a host
+   > that is not loopback, unless `ARMATURE_REHEARSAL=1` says the instance is a rehearsal; the
+   > compose file's guard refuses `ARMATURE_API_SCHEME=http` under `oidc` by the same setting; and
+   > an issuer reached by `https` whose metadata names an `http` key set is refused. **The default
+   > issuer.** Under `oidc`, `POST /users` gives a person registered without `issuer` the hub's
+   > own, since an instance has one issuer: such a person was matched by no token, and their first
+   > admitted sign-in registered a second `User` with the same `externalId`. An issuer named is
+   > kept, an agent has none, and a hub under `header` adds nothing. No request or answer changes
+   > shape, and 503 is the status the contract already named; the changes of this date are client
+   > revision 2026-11-12 all the same (Amos), since a service acts on decision 4's note
+   > (`docs/client-changes.md`). Names chosen without a separate decision, open to overrule:
+   > `ARMATURE_REHEARSAL`.
+
 2. **A native client signs in as the person.** The workspace hub, Quiver and the Storyline bridge
    use the authorization code flow with PKCE (Proof Key for Code Exchange) and a loopback redirect,
    the standard for native applications (RFC 8252), and keep the refresh token in the operating
@@ -283,6 +309,27 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > public name is not reachable from the viewer's container, as the hub's `ARMATURE_OIDC_JWKS_URL`
    > does for its keys.
 
+   > **Note (2026-11-12), decided** (the code review of 2026-11-09, its A3 and D1; Amos, the
+   > explicit list): the rule of the note of 2026-11-05, that a token without `name` naming a
+   > client is that client's service, is replaced. `ARMATURE_OIDC_SERVICES` lists the client ids
+   > that are services, and a token is a service's only when its client (`azp`, else `client_id`)
+   > is listed *and* it carries no `name`; every other token is a person's, resolved by
+   > `(issuer, sub)`. The old rule guessed from what a provider happens to send: several leave
+   > `name` out of a person's access token by default, and every person signing in through one
+   > client then resolved to `agent:<that client>`, with its `Relay` grant where it held one. Now
+   > a person's token without a name is that person when an administrator has registered them, and
+   > otherwise refused with a message that names the missing claim and the setting: 401
+   > `unknown_user` when the token is admitted, 403 `not_registered` when it is not, which is where
+   > a service left off the list arrives, having no email to admit it (found by the rehearsal). A
+   > listed client's token that does carry a name is a person's too, the narrower reading, so
+   > listing a client never makes the people who sign in through it into the service; a client
+   > that holds a `Relay` grant should still offer no sign-in to people, since a provider that
+   > omits `name` would make them it. The compose file defaults the list to the viewer's
+   > `ARMATURE_HUB_CLIENT_ID`; a relay's client is added by its administrator. The alternatives
+   > declined: keeping the `name` rule with a clearer refusal, still a guess; a configurable claim
+   > (`gty`, `idtyp`), which fits each provider and fails silently when misnamed. Nothing is
+   > published in `GET /discover`. Open to overrule: the name of the setting.
+
 5. **A service may relay a person's earlier work only if it holds a relay grant.** A service whose
    agent `User` holds an active `Relay` grant (ADR-0068) may send `Armature-User: <person>` with
    its own token; the person is the author, `createdBy` and, for an attestation, `attestedBy`,
@@ -311,6 +358,14 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > reviewer registered before the instance moved to `oidc` can still be relayed; every refusal
    > of a relay is the one code and reason with `relayed` naming the person, so a client treats
    > them alike. `GET /users/me` under a relay answers the person with `relayedBy`.
+
+   > **Note (2026-11-12), from the code review of 2026-11-09** (its A2): a relay reads no registry.
+   > `requirePermission` already refused a relayed request everything but a document write, but
+   > the full export asked `mayListUsers`, which judged the person's grants alone, so a service
+   > whose grant named an administrator, or named no one, received every `User` through
+   > `GET /export?profile=full`. `mayListUsers` now answers no under a relay, and such an export
+   > carries the users its records name, as for anyone who may not list (ADR-0068 decision 4,
+   > note of 2026-11-05).
 
 6. **The hub writes some trailers itself and refuses them from clients.** `Armature-On-Behalf-Of`
    and `Armature-Relayed-By` are written only by the hub; a request whose message already has a
