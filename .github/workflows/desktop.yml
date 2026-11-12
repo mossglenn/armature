@@ -36,6 +36,12 @@ on:
   # gh workflow run desktop.yml --ref <branch>: the Windows installer only.
   workflow_dispatch:
 
+# A pull request's run is cancelled when a newer commit is pushed to it (as in ci.yml);
+# a push to main and a run started by hand are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   shell:
     name: The desktop shell's checks and debug bundle on Ubuntu

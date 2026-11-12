@@ -1,6 +1,21 @@
 # Armature CI (continuous integration)
 #
-# Six jobs, run in parallel on every push to main and every pull request:
+# Six jobs, run in parallel on every push to main and every pull request, after a
+# seventh that decides whether five of them are needed:
+#
+#   changes   Lists the files the push or pull request changes and says whether any
+#             could affect the five jobs that build, start or test the code (client,
+#             contract, viewer, files, images). Only documents cannot: a path under
+#             docs/, schema/docs/ or .claude/, or any *.md, except
+#             docs/client-changes.md, which version.test.ts reads. A test that comes
+#             to read another document makes that document code: add it beside
+#             client-changes.md in the step below. Everything else, this file
+#             included, is code. The step fails open: a diff it cannot take (a new
+#             branch, a force-push, an error) counts as code, and so does a failure of
+#             the job itself, so a skip happens only when every changed path is
+#             proven a document. The app job always runs, since it checks the context
+#             files' budgets. Added 2026-11-12, when 79 of 193 commits since
+#             2026-11-01 changed documents only.
 #
 #   app       Guards the contracts that need no store: `schema/schema.json` and the
 #             generated `packages/types` agree (check:types), the app lints clean,
@@ -29,7 +44,14 @@
 #             calls the Hono app in-process against that store and exercises every
 #             /api/v1 route and every invariant, and serves it once over a socket
 #             (lib/hub.test.ts). The Vitest global setup waits again for the seeded
-#             database before the first test file starts.
+#             database before the first test file starts. Split into three shards
+#             (`vitest --shard=<n>/3`) since 2026-11-12, each on its own runner with
+#             its own store, loaded, seeded and checked the same way: the files
+#             still run one at a time against a store of their own (see
+#             app/vitest.config.mts for why), and Vitest places every file in exactly
+#             one shard, by the hash of its path. Run whole, the suite took 4.5 to 5
+#             minutes of a 6-minute run; the shards measured 97, 69 and 120 seconds
+#             of tests on 2026-11-12. `npm test -- --shard=2/3` in app/ runs one locally.
 #
 #   viewer    The browser smoke test (app/e2e, Playwright; docs/graph-view-plan.md
 #             §13, 2026-10-22): the same seeded store as the contract job, the
@@ -67,6 +89,17 @@
 # the contract job's `npm ci` until it was cancelled by hand. The limits let the
 # slow run pass and stop the stalled one: 10 minutes for app and images, 15 for
 # contract.
+#
+# The contract shards and the viewer restore node_modules (the workspace's and
+# scripts/) from a cache keyed on both lockfiles, the runner's system and processor,
+# and Node's major version, and run `npm ci` only on a miss, saving the result
+# before anything builds or tests so the cache holds exactly what `npm ci` wrote.
+# It saves 35 to 45 seconds a job. The app and files jobs keep a fresh `npm ci`,
+# so every run still proves the lockfiles install from nothing on Linux and on
+# Windows; the client job proves an outside consumer's install.
+#
+# A pull request's run is cancelled when a newer commit is pushed to it, since its
+# result no longer describes the branch; a push to main is never cancelled.
 name: CI
 
 on:
@@ -74,7 +107,59 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    name: Whether the change can affect the code
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      # A pull request's run checks out the merge of its head into the base: its
+      # first parent is the base, so the diff against that parent is exactly the
+      # change under test.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: diff
+        name: List the changed files and look for code among them
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          files=""
+          if [ "$EVENT" = pull_request ]; then
+            files=$(git diff --name-only HEAD^1 HEAD) || files=""
+          elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            if git fetch --no-tags --depth=1 origin "$BEFORE"; then
+              files=$(git diff --name-only "$BEFORE" "$AFTER") || files=""
+            fi
+          fi
+          if [ -z "$files" ]; then
+            code=true
+            echo "No list of changed files, so everything runs." >> "$GITHUB_STEP_SUMMARY"
+          else
+            # Documents, except the ones a test or a build reads.
+            read_by_code='^docs/client-changes\.md$'
+            found=$( { printf '%s\n' "$files" | grep -E "$read_by_code" || true
+                       printf '%s\n' "$files" | grep -vE '^(docs/|schema/docs/|\.claude/)|\.md$' || true; } )
+            if [ -n "$found" ]; then
+              code=true
+              { echo "Code changed, so everything runs:"; echo '```'; printf '%s\n' "$found"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            else
+              code=false
+              { echo "Only documents changed, so the app job alone runs:"; echo '```'; printf '%s\n' "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "code=$code"
+
+
   app:
     name: Lint, type-check, generated-types drift check, context budgets and the bundles
     runs-on: ubuntu-latest
@@ -95,8 +180,12 @@ jobs:
       - run: npm run build:operator --workspace app
       - run: npm run build:desktop --workspace app
 
+  # The five jobs below run unless `changes` proved the change touches documents only;
+  # `!cancelled()` keeps them running if `changes` itself failed, whose output is then empty.
   client:
     name: The client installed as another repository installs it
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -110,9 +199,16 @@ jobs:
       - run: packages/client/install-check/run.sh
 
   contract:
-    name: Contract suite against TerminusDB
+    name: Contract suite against TerminusDB (shard ${{ matrix.shard }} of 3)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      # Every shard reports, so one failure does not hide another's.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     services:
       terminusdb:
         # The same image and tag docker/docker-compose.yml pins.
@@ -137,11 +233,29 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             scripts/package-lock.json
+      - uses: actions/cache/restore@v4
+        id: modules
+        with:
+          path: |
+            node_modules
+            app/node_modules
+            scripts/node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package-lock.json', 'scripts/package-lock.json') }}
       - name: Install the scripts' dependencies (the TerminusDB client)
+        if: steps.modules.outputs.cache-hit != 'true'
         run: npm ci
         working-directory: scripts
       - name: Install the workspace (the app and the packages)
+        if: steps.modules.outputs.cache-hit != 'true'
         run: npm ci
+      - uses: actions/cache/save@v4
+        if: steps.modules.outputs.cache-hit != 'true'
+        with:
+          path: |
+            node_modules
+            app/node_modules
+            scripts/node_modules
+          key: ${{ steps.modules.outputs.cache-primary-key }}
       - name: Wait for TerminusDB
         run: node scripts/wait_for_store.js
       - name: Load the schema
@@ -150,14 +264,18 @@ jobs:
         run: node scripts/seed_data.js
       - name: Check the seed against every rule
         run: npm run operator --workspace app -- check
-      - name: Run the contract suite
-        run: npm test
+      - name: Run the contract suite, shard ${{ matrix.shard }} of 3
+        # Through the workspace, so the flag reaches Vitest: the root's `npm test` is
+        # itself an npm command, which would take `--shard` as one of its own options.
+        run: npm test --workspace app -- --shard=${{ matrix.shard }}/3
 
   viewer:
     name: Viewer smoke test in a browser
     # The Design Graph and the other pages driven by Playwright (app/e2e,
     # docs/graph-view-plan.md §13) against the built viewer, the bundled hub
     # and the same seeded store the contract job uses.
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -183,11 +301,29 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             scripts/package-lock.json
+      - uses: actions/cache/restore@v4
+        id: modules
+        with:
+          path: |
+            node_modules
+            app/node_modules
+            scripts/node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package-lock.json', 'scripts/package-lock.json') }}
       - name: Install the scripts' dependencies (the TerminusDB client)
+        if: steps.modules.outputs.cache-hit != 'true'
         run: npm ci
         working-directory: scripts
       - name: Install the workspace (the app and the packages)
+        if: steps.modules.outputs.cache-hit != 'true'
         run: npm ci
+      - uses: actions/cache/save@v4
+        if: steps.modules.outputs.cache-hit != 'true'
+        with:
+          path: |
+            node_modules
+            app/node_modules
+            scripts/node_modules
+          key: ${{ steps.modules.outputs.cache-primary-key }}
       # The browser binaries, cached on the lockfile (Playwright's version pins
       # the build). Without --with-deps: that flag apt-installs 26 MB of
       # libraries the ubuntu-latest image already carries, and on 2026-10-23
@@ -224,6 +360,8 @@ jobs:
 
   files:
     name: The file-backed store, the workspace folder and the desktop core on Windows
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -238,6 +376,8 @@ jobs:
 
   images:
     name: Hub and viewer container images
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
