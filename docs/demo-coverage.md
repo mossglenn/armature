@@ -1,6 +1,6 @@
 # Demo coverage
 
-**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built) · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
+**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built), Ledger and the totals recounted 2026-11-12 · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
 
 **How to read it.** Capabilities run down the side and tools across the top, grouped by who is in the loop (interactive, agent, batch, gate; § Kinds of plugin). ● means the tool's demo *shows* the capability; ○ means the tool *uses* it without making it the point. Each row gets the hub's own coverage verdict (ADR-0029's default thresholds), counting only ● for the tools in scope: Uncovered is 0, Partially is 1, Fully is 2 to 4, Over is 5 or more. Three verdict columns give the three scopes: built tools only, built and planned, and everything including the proposed tools. *Partial* marks a hub capability that is not finished.
 
@@ -21,7 +21,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 | Q-matrix exporter | Proposed | The alignment at a commit as a Q-matrix for DataShop, knowledge tracing, IRT and diagnosis models |
 | Experiment bridge | Proposed | Conditions as branches, delivered through UpGrade or Terracotta, with results per condition |
 | Torus bridge | Proposed | Objectives and activities linked with OLI Torus; results arrive through DataShop |
-| LEED importer | Proposed | LEED tracker decision logs brought into the graph as notes and evidence |
+| Ledger | Proposed (`docs/ledger-plan.md`, draft 2026-11-12) | LEED tracker decision logs imported into the graph, decisions captured at the moment they are made, and a revisit queue when a decision's subjects change or outcome data reaches them |
 | Formalizer | Proposed | Proposes structure from the free-text rationale it finds |
 | Ripple | Proposed | Edit on a branch, see everything the change touches, every intelligence read compared with `main` |
 | Lint | Proposed | Soft design rules, run before and after a merge, including graph patterns: alignment triangles and prerequisite order |
@@ -63,7 +63,7 @@ No single division of plugins holds: designer against administrator, or who inst
 | Q-matrix exporter | Batch | Nobody | Anywhere the export reaches |
 | Experiment bridge | Batch | The person setting up conditions | Beside the hub |
 | Torus bridge | Batch | A service `User` | Beside the hub |
-| LEED importer | Batch | The person importing | The designer's machine (through a workspace hub, ADR-0065, accepted 2026-10-30) |
+| Ledger | Batch (import); interactive (capture) | The person importing or capturing; an agent `User` for decisions an assistant proposes through the MCP server | The designer's machine (through a workspace hub, ADR-0065, accepted 2026-10-30) |
 | Drift | Batch | A service `User` | Beside the hub |
 | Projection | Batch | Nobody | Anywhere the export reaches |
 | Process miner | Batch | Nobody | A study's machine, over a pseudonymous export |
@@ -73,14 +73,14 @@ No single division of plugins holds: designer against administrator, or who inst
 
 ## The matrix
 
-| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | Ripple | Crosswalk | Whyfinder | MCP server | Formalizer | Storyline bridge | DataShop bridge | Q-matrix exporter | Experiment bridge | Torus bridge | LEED importer | Drift | Projection | Process miner | Response tracker | Structure analyzer | Lint |
+| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | Ripple | Crosswalk | Whyfinder | MCP server | Formalizer | Storyline bridge | DataShop bridge | Q-matrix exporter | Experiment bridge | Torus bridge | Ledger | Drift | Projection | Process miner | Response tracker | Structure analyzer | Lint |
 |---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | *In the loop* |  |  |  | *Interactive* |  |  |  |  |  | *Agent* |  | *Batch* |  |  |  |  |  |  |  |  |  |  | *Gate* |
 | **Version control** | | | | | | | | | | | | | | | | | | | | | | | |
 | Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 14 | ● | ● | ○ | ● | ○ | ● | ● | ○ | ● | ● | ● | ● | ● | ○ | ● | ● | ● | ● | ○ | ○ |
 | Branches<br>`POST /branches` | Fully 2 | Fully 2 | Over 6 | ● | ○ | ● | ● | ○ |  | ○ |  | ○ | ○ |  | ● | ○ | ● |  |  | ○ |  |  | ● |
 | History and changes since<br>`history · changes?since=` | Fully 2 | Fully 2 | Over 10 | ○ | ● | ● | ○ |  |  | ● | ○ | ● | ○ | ○ | ● | ● | ● | ● | ○ | ● | ● |  |  |
-| Reacting to changes *(Partial)*<br>`polling changes?since= · no events or merge-time checks` | Uncovered 0 | Uncovered 0 | Partially 1 |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  | ○ | ○ |  | ○ |  | ● |
+| Reacting to changes *(Partial)*<br>`polling changes?since= · no events or merge-time checks` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  |  |  |  |  |  |  |  | ● | ○ | ○ |  | ○ |  | ● |
 | Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Partially 1 | Partially 1 | Fully 3 | ○ |  | ● | ○ |  |  |  |  |  |  |  | ● | ○ | ○ |  |  | ○ |  |  | ● |
 | **Writes** | | | | | | | | | | | | | | | | | | | | | | | |
 | One write path with invariants<br>`generic writes · ADR-0024` | Fully 2 | Fully 2 | Over 8 | ● |  | ● | ● | ● |  | ○ | ○ | ● | ● |  | ○ | ● | ● |  |  |  |  |  |  |
@@ -88,7 +88,7 @@ No single division of plugins holds: designer against administrator, or who inst
 | Identity on every write *(Partial)*<br>`Armature-User · Armature-Agent · the oidc resolver built 2026-11-05, not yet published; ADR-0067` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  | ○ |  |  | ○ | ○ | ○ |  |  | ○ |  |  |  |
 | **Review** | | | | | | | | | | | | | | | | | | | | | | | |
 | Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 10 | ● | ○ | ○ | ● |  | ○ | ○ | ● | ● | ● |  | ● | ● | ● | ● |  | ○ | ○ | ○ | ● |
-| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Fully 4 | ● | ● |  | ● | ● | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |  | ○ | ○ |  |  | ○ |
+| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Over 5 | ● | ● |  | ● | ● | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ● |  | ○ | ○ |  |  | ○ |
 | **Design intelligence** | | | | | | | | | | | | | | | | | | | | | | | |
 | Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 10 | ● | ● | ○ | ● | ● |  | ● |  | ○ | ● | ○ | ● | ● |  |  | ○ |  | ○ | ● | ● |
 | Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 6 | ● | ● | ○ | ● |  |  | ● |  |  | ○ | ● |  | ○ |  |  |  |  |  | ○ | ● |
@@ -109,7 +109,7 @@ No single division of plugins holds: designer against administrator, or who inst
 | Loopback boundary<br>`host_not_allowed · origin_not_allowed · ADR-0067 decision 7, built 2026-10-30` | Uncovered 0 | Uncovered 0 | Uncovered 0 | ○ | ○ | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | Authorization<br>`Grant · 403 forbidden · ADR-0068, built 2026-11-01` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |
 
-Totals over 26 capabilities (Quiver counted as built since 2026-10-30, so no planned tool remains and the first two scopes agree): built tools, Uncovered 8, Partially 8, Fully 10, Over 0; built and planned, Uncovered 8, Partially 8, Fully 10, Over 0; everything, Uncovered 1, Partially 2, Fully 9, Over 14.
+Totals over 26 capabilities (Quiver counted as built since 2026-10-30, so no planned tool remains and the first two scopes agree): built tools, Uncovered 8, Partially 7, Fully 11, Over 0; built and planned, Uncovered 8, Partially 7, Fully 11, Over 0; everything, Uncovered 1, Partially 0, Fully 10, Over 15. *Recounted 2026-11-12 from the rows, with Ledger's revisit queue and reaffirmations (`docs/ledger-plan.md`): before that change the line already disagreed with the rows, reading Partially 8, Fully 10 for the first two scopes (the rows gave 7 and 11) and Partially 2, Fully 9, Over 14 for everything (the rows gave 1, 10 and 14).*
 
 ## Gaps, and which proposed tool closes them
 
@@ -120,9 +120,9 @@ With the built and planned tools, 8 capabilities have no demo that shows them: r
 | MCP server | 4 | Impact; Discovery and capabilities; Agent provenance; No per-person aggregates |
 | Storyline bridge | 3 | Impact; External references; Attachments |
 | Formalizer | 3 | Discovery and capabilities; Agent provenance; No per-person aggregates |
+| Ledger | 3 | Reacting to changes; External references; Attachments |
 | DataShop bridge | 2 | External references; Attachments |
 | Torus bridge | 2 | Impact; External references |
-| LEED importer | 2 | External references; Attachments |
 | Drift | 2 | External references; Attachments |
 | Lint | 1 | Reacting to changes |
 | Process miner | 1 | No per-person aggregates |
@@ -359,17 +359,18 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ○ **Outcome records at asOf.** Through the DataShop bridge.
 - ● **Typed client.** Built on @armature/client.
 
-### LEED importer (proposed)
+### Ledger (proposed; was the LEED importer, renamed 2026-11-12 with `docs/ledger-plan.md`)
 
 - ○ **Read any record at a commit.** Checks a log against the design at a ref before importing.
+- ● **Reacting to changes.** The revisit queue polls `changes?since=` from each decision's commit and lists decisions whose subjects have changed since.
 - ● **Branches.** Each imported log lands on a branch for the designer to review before it merges.
-- ● **History and changes since.** Each logged decision keeps its date and reason on its note; the import's commit names the log it came from.
+- ● **History and changes since.** Each logged decision keeps its date and reason on its note; the import's commit names the log it came from; a `Decision:` trailer names the decision a commit enacts.
 - ○ **Three-way merge with conflicts.** The reviewed import merges to main.
 - ● **One write path with invariants.** Writes notes, evidence and needs from the log.
 - ● **Batch writes with If-Match.** A log is imported as one atomic batch.
-- ○ **Identity on every write.** Entries keep their original authors as `Co-Authored-By` claims the hub records as sent (ADR-0067 decision 6); writing them as the author is refused (ADR-0068 decision 5).
+- ○ **Identity on every write.** Captures write as the person; decisions proposed through the MCP server write as its agent acting for the person (ADR-0067 decision 3). Imported entries keep their original authors as `Co-Authored-By` claims the hub records as sent (ADR-0067 decision 6); writing them as the author is refused (ADR-0068 decision 5).
 - ● **Findings and notes, by fragment.** Each logged decision and its rationale as a note, and as a DesignDecision once ADR-0010's second layer exists.
-- ○ **Attestations that go stale.** A logged sign-off becomes an endorsement.
+- ● **Attestations that go stale.** A person's claimless attestation accepts a decision an assistant proposed, or reaffirms one on revisit; a reaffirmation goes stale when the decision's subject changes.
 - ● **Trace.** An objective traces back to the logged decision and the evidence it cited.
 - ● **External references.** Each entry keeps its LEED tracker id as an ExternalRef.
 - ● **Attachments.** The evidence documents the log cites, referenced by hash.

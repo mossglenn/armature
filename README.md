@@ -80,6 +80,7 @@ As of 30 October 2026, Phases 0 to 7 of the [development plan](docs/development-
 | Install the workspace hub as a program on your own machine, signing in to a shared instance (built; the first release follows its rehearsal on a hosted instance) | [The desktop program](docs/desktop-program.md), [its plan](docs/desktop-program-plan.md) |
 | Ask the graph from an MCP assistant (planned) | [The MCP server](docs/mcp-server-plan.md) |
 | Record Storyline builds in the graph and bring results back (planned) | [The Storyline bridge](docs/storyline-bridge-plan.md) |
+| Import LEED tracker logs and capture design decisions as they are made (proposed) | [Ledger](docs/ledger-plan.md) |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
 | Work on the code (including with an AI assistant) | [.claude/CLAUDE.md](.claude/CLAUDE.md), [.claude/SESSION.md](.claude/SESSION.md) |
 
@@ -198,6 +199,7 @@ docs/
   mcp-server-plan.md          The Armature MCP server (draft 2026-10-27): a client that asks the graph through the intelligence reads at a named commit
   storyline-bridge-plan.md    The Storyline bridge (draft 2026-10-27): a client that records each Storyline build in the graph by hash and brings results back as metrics
   datashop-bridge-plan.md     The DataShop bridge (draft 2026-11-09): a client that sends the alignment at a commit to DataShop as a knowledge-component model and brings the evidence back as metrics and findings
+  ledger-plan.md              Ledger (draft 2026-11-12): a client that imports LEED tracker decision logs, captures decisions at the moment they are made, and lists decisions to revisit when their subjects change or outcome data reaches them
   knowledge-components-plan.md  Knowledge components and alignment models (draft 2026-11-11, nothing decided): the staged tests, studies and decisions toward a designer's knowledge-component model as design data
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
