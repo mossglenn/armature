@@ -307,6 +307,24 @@ describe('who a token is (decision 1 and its note; decision 4)', () => {
     expect(named.body.externalId).toBe('sub-7');
   });
 
+  it("gives a person registered under oidc without an issuer the hub's own, so their token finds them and registers no second User (the 2026-11-09 review's A6)", async () => {
+    const pat = await token({ sub: ADMIN_SUB, name: 'Pat Admin' });
+    const registered = await json(await as(pat, 'POST', '/users', { message: 'Registered ahead of their first sign-in', user: { displayName: 'Ira Issuerless', externalId: `sub-ira-${stamp}`, email: 'ira@example.edu' } }));
+    expect(registered.status).toBe(201);
+    const stored = await json(await as(pat, 'GET', `/documents/${registered.body.id}`));
+    expect(stored.body.issuer).toBe(ISSUER);
+    // Admitted by domain, so before the default this first sign-in registered a second User under the same externalId.
+    const me = await json(await as(await person(`sub-ira-${stamp}`, 'ira@example.edu', 'Ira Issuerless'), 'GET', '/users/me'));
+    expect(me.status).toBe(200);
+    expect(me.body['@id']).toBe(registered.body.id);
+    const listed = await json(await as(pat, 'GET', '/users'));
+    expect(listed.body.filter((u: { externalId: string }) => u.externalId === `sub-ira-${stamp}`)).toHaveLength(1);
+    // An agent has no issuer, under oidc as under header; an issuer named is kept as given.
+    const agent = await json(await as(await person('sub-7', 'sam@example.edu'), 'POST', '/users', { message: 'A tool', user: { displayName: 'A tool', externalId: `agent:tool-${stamp}` } }));
+    expect(agent.status).toBe(201);
+    expect((await json(await as(pat, 'GET', `/documents/${agent.body.id}`))).body.issuer).toBeUndefined();
+  });
+
   it('does not match a User registered without an issuer: the seed designer is not a token subject', async () => {
     const res = await json(await as(await person('demo-designer@example.edu', 'demo-designer@example.edu', 'Demo Designer'), 'GET', '/users/me'));
     // Admitted by domain, so first encounter registers a second User under the same externalId with the issuer.
