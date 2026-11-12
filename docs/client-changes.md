@@ -15,6 +15,40 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-12 · Under `oidc`: services are listed, a domain admits only a verified email, a provider's outage is 503
+
+**What changed.** Four things on a hub under `oidc`, from the code review of 2026-11-09 (ADR-0067
+decisions 1, 4 and 5, notes of this date). No request or answer changes shape.
+
+- **A service's client is listed.** A token is a service's only when the instance lists its client
+  id (`azp`, else `client_id`) in `ARMATURE_OIDC_SERVICES` and the token carries no `name`. Until
+  now any token without `name` that named a client was that client's service. A program whose client
+  is not listed is refused as an unregistered person: **403** `not_registered` (or **401**
+  `unknown_user` when its token is admitted), with a message naming the setting. A person's token
+  without `name` is no longer taken for a service: it resolves to a person an administrator
+  registered, and is otherwise refused the same way.
+- **Admission by domain needs `email_verified: true`.** A token that leaves the claim out no longer
+  registers a person on first sign-in by its email's domain; it is **403** `not_registered` until an
+  administrator registers them, or the instance admits the provider by its issuer.
+- **A provider's outage is 503, never 401.** When the identity provider's keys or metadata cannot be
+  read, or answer an error, the hub answers **503** `issuer_unreachable`. A key set answering an
+  error used to be **401** `invalid_token` with `reason: malformed`, and unreadable metadata a 500.
+- **A relay's full export carries the users its records name,** whoever the relay names
+  (`armature.users: "referenced"`); a relay naming an administrator used to receive everyone.
+
+Also: under `oidc`, `POST /users` records the hub's issuer for a person registered without one, and
+a hub refuses to start with plain `http` for its issuer, its keys or its public address outside a
+rehearsal (`docs/deployment.md`, "An instance under `oidc`").
+
+**What a client does.** A service (the viewer, a relay) asks its instance's administrator to list
+its client id before the instance is updated; the compose file lists the viewer's by default. A
+client that discards its token on a 401 keeps it on a 503 and tries again: the token was not judged.
+A client that reads a relayed full export expects only the users the records name. A workspace hub
+at this revision speaks it to its remote, so the remote is updated first.
+**CoQui:** its outbox relays under its own client, so that client id goes in
+`ARMATURE_OIDC_SERVICES` beside the viewer's (`ARMATURE_OIDC_SERVICES=armature-viewer,<the outbox's client>`)
+on any instance it relays to; nothing changes in its requests.
+
 ## 2026-11-07 · A workspace can be removed: `DELETE /workspace/:name`
 
 **What changed.** A workspace hub removes a workspace with `DELETE /workspace/:name`, a program action
