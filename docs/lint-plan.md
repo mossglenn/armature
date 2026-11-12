@@ -92,7 +92,7 @@ Capability `armature/checks` in `GET /discover` (ADR-0059) announces the four, s
   "workspaceCommit": "…", "changed": { "LearningObjective": 2, "AssessmentItem": 1 } }
 ```
 
-Types: `commit`, `merge`, `branch.created`, `branch.deleted`, `requirement.changed`, `hub.started`. The feed is derived, not stored: every event but `hub.started` is a commit the store already holds (a branch's creation is its `Owner` grant's commit on `main`, its deletion the marked commit revoking its grants), so the cursor is a commit's time and identifier and a plugin that was down resumes where it stopped, even across a hub restart (ADR-0070 decision 2; platform check AQ). `GET /branches/:name/changes?since=` and `/log` already exist and stay the way a plugin fetches *what* changed.
+Types: `commit`, `merge`, `branch.created`, `branch.deleted`, `requirement.changed`, `hub.started`. A plugin that was down resumes from its cursor, even across a hub restart. How the feed is kept is open: derived from the store's commit logs (every event but `hub.started` is already a commit) or a log the hub keeps (ADR-0070 open question 1; derived is recommended if platform check AQ passes). `GET /branches/:name/changes?since=` and `/log` already exist and stay the way a plugin fetches *what* changed.
 
 **What commit, push and merge mean to a plugin:**
 
@@ -106,7 +106,7 @@ The advisory events still matter: a check run posted seconds after a commit show
 
 ## 6. Check runs: where results live
 
-**Recommended: runs live in the hub's memory, outside the design graph, and the merge commit records the verdicts it relied on as trailers.** The durable facts (what was required, what passed, who overrode what and why) end up in the commit graph; the bulky, recomputable detail doesn't.
+**Recommended, still open: runs live in the hub's memory, outside the design graph, and the merge commit records the verdicts it relied on as trailers.** The durable facts (what was required, what passed, who overrode what and why) end up in the commit graph; the bulky, recomputable detail doesn't.
 
 | Option | For | Against |
 | --- | --- | --- |
@@ -124,7 +124,7 @@ The advisory events still matter: a check run posted seconds after a commit show
   "paramsHash": "sha256:…", "detailsUrl": "https://lint.example.edu/runs/91" }
 ```
 
-`conclusion` is `pass`, `fail`, `neutral` or `error`. The hub adds the reporter (the caller), the time and an id. `paramsHash` is the hash of the requirement's `params` the plugin ran with, so a run made under yesterday's stricter or looser settings doesn't satisfy today's requirement. Runs are kept in the hub's memory, the newest 50 per check and branch; the trailer, not the run, is what outlives a merge. Persisting runs waits for merges stalled after restarts (ADR-0070 open question 1).
+`conclusion` is `pass`, `fail`, `neutral` or `error`. The hub adds the reporter (the caller), the time and an id. `paramsHash` is the hash of the requirement's `params` the plugin ran with, so a run made under yesterday's stricter or looser settings doesn't satisfy today's requirement. Runs are kept in the hub's memory, the newest 50 per check and branch; the trailer, not the run, is what outlives a merge. Memory against a file, a volume or a second database is ADR-0070's open question 2; persisting is recommended once merges stalled after restarts are seen.
 
 **The trust rule.** Anyone who may read a branch may post an advisory run on it, so a designer's own tools can annotate their work. A run counts toward a requirement only if its reporter is the agent the requirement names. On the remote that's a service `User` holding its own credential (ADR-0067 decision 4), deployed by whoever runs the Lint service. This is one new permission row for ADR-0068's table: *Report a required check: the agent a `CheckRequirement` names.*
 
@@ -376,7 +376,7 @@ L1 and H2 are each worth shipping alone: L1 answers "does this branch break our 
 
 | # | Question | Decision | What it means for the build |
 | --- | --- | --- | --- |
-| 1 | Check runs outside the design graph? | **Yes.** Runs kept by the hub (in memory, a choice made while drafting ADR-0070 and open there as its question 1); the merge commit's `Armature-Check` and `Armature-Check-Override` trailers are the durable record. | No `_checks` branch. The ADR names this as the first hub state about the graph kept outside it, and why. |
+| 1 | Check runs outside the design graph? | **Yes.** Runs kept by the hub, never in the design graph; the merge commit's `Armature-Check` and `Armature-Check-Override` trailers are the durable record. | No `_checks` branch. The ADR names this as the first hub state about the graph kept outside it, and why. Where the hub keeps runs (memory or persisted) and how it keeps the event feed (derived or logged) came up while drafting ADR-0070 and are its open questions 1 and 2, not yet decided. |
 | 2 | A service credential that posts runs | **One new operation, `report_check`**, allowed to the reporter a requirement names; advisory runs open to any reader. | Dated notes on ADR-0067 decision 4 and ADR-0068's table: posting a run is not a graph write. |
 | 3 | Who may lock a requirement onto every branch? | **Administrators only.** | Authority row for `locked: true`; a locked override needs an administrator too. |
 | 4 | `fromPrefix` on `CheckRequirement` | **Now**, in the first schema commit, part of the key. | Key: Hash over `check`, `branch`, `fromPrefix`. Lint and the Structure analyzer leave it empty; CoQui uses `coqui-`. |

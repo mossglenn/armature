@@ -99,22 +99,20 @@ third.
    is a push's replay, the count of changed documents by class), never the documents; a plugin
    fetches those through the existing reads (`/branches/:name/changes`, `/log`, `/export`).
 
-   **The feed is derived, not stored.** Every event but `hub.started` is a commit the store
-   already holds: a branch's creation is its `Owner` grant's commit on `main` (ADR-0068 decision 3),
-   its deletion the marked commit revoking its grants, a requirement's change a commit on `main`.
-   The cursor is the commit's time and identifier, so the feed is rebuilt from the branches' logs
-   and nothing is persisted. A process-local notifier, fed by the code paths that commit (those
-   `queue.test.ts` lists), wakes the waiting requests. Any identity that may read may read the
-   feed; it takes no filter on an author, so it offers nothing ADR-0021 forbids that the log does
-   not already show.
+   **Where the feed comes from is open question 1:** derived from the branches' commit logs, or
+   an event log the hub keeps. Either way the cursor survives a restart, a process-local notifier
+   fed by the code paths that commit (those `queue.test.ts` lists) wakes the waiting requests, any
+   identity that may read may read the feed, and it takes no filter on an author, so it offers
+   nothing ADR-0021 forbids that the log does not already show.
 
 3. **Check runs, kept by the hub outside the design graph.** `POST /api/v1/checks/runs` records a
    verdict: `check`, `commit`, `branch`, `conclusion` (`pass`, `fail`, `neutral` or `error`), a
    `summary`, `counts`, a `paramsHash` and an optional `detailsUrl`. The hub adds the reporter (the
    caller), the time and an identifier. `GET /api/v1/checks?commit=|branch=` reads them. Runs are
-   kept in the hub's memory, bounded (the newest 50 per check and branch), on both roles; nothing
-   is written to a store. `hub.started` tells plugins to report again on the heads they care
-   about. `paramsHash` is the SHA-256 of the requirement's `params` the plugin ran with, so a run
+   kept by the hub on both roles, bounded (the newest 50 per check and branch), and never written
+   to the design graph; whether they are held in memory or persisted is open question 2. Held in
+   memory, they are gone after a restart, and `hub.started` tells plugins to report again on the
+   heads they care about. `paramsHash` is the SHA-256 of the requirement's `params` the plugin ran with, so a run
    made under other settings does not satisfy the requirement now in force.
 
    A run is not a design record: it is derived, recomputable at any commit, and a plugin's opinion.
@@ -248,7 +246,7 @@ third.
 - **Runs on a dedicated `_checks` branch, or a second database.** Keeps full history. Rejected for
   now: a store commit per run, and a branch or database with special rules every tool would learn
   to ignore, for history no one has asked for that the trailers do not already keep. Open question
-  1 is its trigger.
+  2 weighs a second database again as a place to persist runs, without the history.
 - **The hub calls registered checks synchronously** (webhooks with an answer). Restores blocking
   and removes the wait. Declined: outbound calls in every merge (Context 4) and nothing on a laptop.
   A later requirement setting, `mode: sync`, could add it for a check that proves the need.
@@ -261,13 +259,43 @@ third.
 
 ## Open questions
 
-1. **Runs in memory.** Decision 3 keeps nothing across a restart; plugins report again on
-   `hub.started`, and a merge waits meanwhile with `checks_pending`. *Recommendation:* keep it so
-   until merges stalled after restarts are seen; then persist runs beside the store, a file on a
-   workspace hub's folder and a volume or second database on a remote.
-2. **Long-poll or server-sent events.** *Recommendation:* long-poll first, the simplest thing
+Questions 1 and 2 were settled in the first draft of this record without being put to Amos;
+they are open until he decides them.
+
+1. **Where the event feed comes from** (decision 2).
+   - *(a) Derived from the store's commit logs.* Every event but `hub.started` is a commit the
+     store already holds: a branch's creation is its `Owner` grant's commit on `main` (ADR-0068
+     decision 3), its deletion the marked commit revoking its grants, a requirement's change a
+     commit on `main`. The cursor is a commit's time and identifier. For: nothing persisted,
+     nothing to back up or to drift from the store, the same on both roles, since the file-backed
+     store keeps logs too. Against: it rests on check AQ (every branch's log read in one order,
+     merges marked); each poll reads several logs, which grows with history (SESSION.md item 4's
+     cost); and an event's details, such as the count of changed documents, need a diff per commit.
+   - *(b) An event log the hub keeps.* An append-only log, a file in a workspace hub's folder and a
+     volume on a remote. For: the exact order of what the hub did, cheap to read, free to carry
+     events no commit records, independent of check AQ. Against: a remote hub gains durable state,
+     a change to how an instance runs (a volume, its backup, a fresh-VM rehearsal by workflow rule
+     5); and a crash between a commit and its append leaves the log and the store disagreeing,
+     which needs a repair path.
+
+   *Recommendation:* (a) if check AQ passes; (b) if it fails or polling cost shows on a long log.
+2. **Where check runs live** (decision 3).
+   - *(a) In the hub's memory, on both roles.* For: no state, no deployment change. Against: every
+     restart makes plugins report again (`hub.started`), and a reporter that is down when the hub
+     restarts stalls gated merges with `checks_pending` until it returns or someone overrides.
+   - *(b) Persisted beside the hub:* a file in a workspace hub's folder, a volume on a remote. For:
+     runs survive restarts. Against: the remote becomes stateful as in question 1 (b), with a
+     retention rule to keep.
+   - *(c) A second database in the remote's store server*, a file on a workspace hub. For: backed
+     up with the store, no new volume. Against: a store commit per run, a second database
+     ADR-0055's one adapter must learn to address, and the two roles keep runs differently.
+
+   *Recommendation:* (a) until merges stalled after restarts are seen, then (c) on a remote and
+   (b) on a workspace hub. If question 1 chooses (b), a remote already has a volume, and (b) here
+   costs nothing more.
+3. **Long-poll or server-sent events.** *Recommendation:* long-poll first, the simplest thing
    every client and proxy handles; server-sent events when a client needs lower latency.
-3. **The feed under the `pseudonymous` profile.** An event names its author as a `User` reference,
+4. **The feed under the `pseudonymous` profile.** An event names its author as a `User` reference,
    as the log does. *Recommendation:* the same rule the log follows under `oidc`, with no rewriting
    until an export-scoped reader of the feed exists.
 
@@ -280,10 +308,10 @@ Before acceptance, two lettered checks in `scripts/platform_checks.js` against
 | Check | Question |
 |---|---|
 | AP | A class with a `sys:JSON` field and a Hash key over three fields, two of them Optional: insert, replace, read, the JSON patch between two versions, and the export reloaded. The schema has no `sys:JSON` field yet, though the generator maps one (`unknown`, `z.unknown()`). |
-| AQ | The logs of every branch read since a commit time, in one order, with merge commits marked and `main`'s grant and requirement commits among them: the feed derived from the store alone, and a cursor that survives a restart. |
+| AQ | The logs of every branch read since a commit time, in one order, with merge commits marked and `main`'s grant and requirement commits among them: what open question 1's option (a) relies on, a feed derived from the store alone with a cursor that survives a restart. Run before question 1 is decided. |
 
 Before the build is accepted as done, the tests the plan's §16 lists, among them: the feed resumes
-from a cursor after a restart and matches the logs; a run by the wrong reporter or with a stale
+from a cursor after a restart (and, under open question 1's option (a), matches the logs); a run by the wrong reporter or with a stale
 `paramsHash` does not count; every authority row failing and passing; `bring_in_first`,
 `checks_pending`, `checks_failed` and an override's trailers; a client-sent `Armature-Check`
 refused; a merge with no requirement unchanged; a push stopped by a personal requirement and
@@ -297,8 +325,8 @@ few lines, never Lint, so that no hub test depends on a plugin.
 - What a merge relied on is in the commit graph, so the Process miner and any reader can ask which
   checks a change passed and who overrode which, and why.
 - The hub gains a route family, one schema class and one enum, two constraints, two trailers, three answers
-  (`checks_pending`, `checks_failed`, `bring_in_first` on the remote) and in-memory state that a
-  restart discards by design.
+  (`checks_pending`, `checks_failed`, `bring_in_first` on the remote) and state for runs, and
+  perhaps events, whose keeping open questions 1 and 2 decide.
 - Every tool can react to changes by pulling the feed, which SESSION.md item 18 lists as missing
   whether or not a gate is required.
 - No check blocks a single write; a rule that must is an invariant by ADR (decision 9).
