@@ -127,12 +127,16 @@ export async function requireReadPermission(c: Context, op: { permission: 'list_
  * Whether the caller may read the registry of everyone registered: under
  * `header` anyone, under `oidc` a maintainer of `main` or an administrator,
  * never a service's own credential (decision 4's note of 2026-11-05: a
- * `full` export to anyone else carries only the users its records name).
+ * `full` export to anyone else carries only the users its records name), and
+ * never a relay, whoever it names: a relay delivers documents and reads no
+ * registry by the person's grants (ADR-0067 decision 5; the 2026-11-09
+ * review's A2).
  */
 export async function mayListUsers(c: Context): Promise<boolean> {
   if (hubOf(c).identity !== 'oidc') return true;
   const who = await resolveUser(c);
   if (isAgentExternalId(who.user.externalId) && !who.onBehalfOf) return false;
+  if (who.relayedBy) return false;
   return refusal(principalOf(who), { permission: 'list_users' }, await activeGrants(c)) === undefined;
 }
 

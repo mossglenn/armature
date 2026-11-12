@@ -450,6 +450,33 @@ describe("the reads kept for maintainers of main and administrators under oidc (
     expect((await json(await operator('GET', '/export'))).body.armature).toMatchObject({ profile: 'full', users: 'all' });
   });
 
+  it("keeps the registry from a relay, whoever it names: an administrator relayed reads the users the records name (ADR-0067 decision 5; the 2026-11-09 review's A2)", async () => {
+    const pat = await token({ sub: ADMIN_SUB, name: 'Pat Admin' });
+    const patId = (await json(await as(pat, 'GET', '/users/me'))).body['@id'];
+    const outbox = (await json(await as(pat, 'GET', '/users?kind=agent'))).body.find((u: { externalId: string }) => u.externalId === `agent:${RELAY_CLIENT}`);
+    const granted = await json(
+      await operator('POST', '/documents?branch=main', {
+        message: 'The outbox may deliver the administrator\'s decisions too',
+        documents: [{ '@type': 'Grant', user: outbox['@id'], role: 'Relay', relayedUsers: [patId], status: 'Active', rationale: 'A relay that names an administrator' }],
+      })
+    );
+    expect(granted.status).toBe(200);
+    const service = await token({ sub: `service-account-${RELAY_CLIENT}`, azp: RELAY_CLIENT });
+    const forPat = { 'Armature-User': ADMIN_SUB };
+    const me = await json(await as(service, 'GET', '/users/me', undefined, forPat));
+    expect(me.body).toMatchObject({ '@id': patId, relayedBy: `agent:${RELAY_CLIENT}` });
+    const users = (body: { documents: Array<{ '@type': string; externalId?: string }> }) => body.documents.filter((d) => d['@type'] === 'User').map((d) => d.externalId);
+    const exported = await json(await as(service, 'GET', '/export?profile=full', undefined, forPat));
+    expect(exported.status).toBe(200);
+    expect(exported.body.armature).toMatchObject({ profile: 'full', users: 'referenced' });
+    expect(users(exported.body)).not.toContain(`quiet-${stamp}`);
+    // The list itself was already refused to a relay, as every act but a document write is.
+    const listed = await json(await as(service, 'GET', '/users', undefined, forPat));
+    expect(listed.status).toBe(403);
+    expect(listed.body).toMatchObject({ error: 'forbidden', reason: 'relay' });
+    // The administrator's own token still reads everyone.
+    expect(users((await json(await as(pat, 'GET', '/export?profile=full'))).body)).toContain(`quiet-${stamp}`);
+  });
 });
 
 describe("an identity provider that is down is never the caller's bad token (the 2026-11-09 review's A1)", () => {
