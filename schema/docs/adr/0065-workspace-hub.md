@@ -313,6 +313,36 @@ Three facts constrain the answer:
    > note of this day). No refusal code is new and no route's answer changed shape, so no client
    > revision. `cycle.test.ts`.
 
+   > **Later change (2026-11-12), decided (Amos) and built:** a discard, the way out the change of
+   > 2026-11-07 did not weigh (the code review of 2026-11-09, its W8 and D6). A workspace whose
+   > commits can never be pushed, a grant revoked, a remote branch deleted, a standing 422, a
+   > remote that is gone, a bring-in left unfinished and then overlapped (the note above), was 409
+   > `unpushed_commits` forever, since bring-in, delivery and removal all begin by requiring
+   > nothing unpushed. `DELETE /workspace/:name?discard=<n>` is a removal that gives up n local
+   > commits, on the removal's own terms as a program action and its owner's alone. Four choices,
+   > each Amos's that day. **The count is the confirmation:** the caller states how many commits it
+   > gives up, and a number that is not what is there, after a tool's write or a push that landed,
+   > is 409 `discard_mismatch` with nothing changed; with nothing unpushed there is nothing to
+   > discard. **It is this machine's alone:** nothing is asked of the remote, so the answer's
+   > `remote` is `untouched`. The removal's request to delete the remote branch was a tidy-up that
+   > has no place here: the cases a discard is for are those where the remote is gone, refuses, or
+   > the person is signed out, and a removal stops when the hub's own credential is refused. The
+   > remote's branch stays with whatever was pushed, and goes by the remote's rule when it is
+   > cloned again and removed. **Nothing is destroyed:** everything the workspace holds here, its
+   > records and its branch's own commit files, is copied to `_discarded/<branch>.<time>` in the
+   > hub's folder before the branch is deleted (`WorkspaceRecords.setAside`). These are commits no
+   > other branch holds, and a discard is the only thing in Armature that removes such commits
+   > (ADR-0025 decision 6, note of this day), so they are kept where the person can recover them
+   > by hand; nothing reads them again, and `_discarded` is no branch name, so the store and the
+   > records never take it for one. **It is offered whenever commits are unpushed,** behind a
+   > second confirmation that names the number: the hub cannot know that a commit will never be
+   > pushed, a grant may be restored and a remote may return, so the person decides. A discard
+   > that failed after the branch was deleted is finished by asking again. Chosen over a request
+   > only the desktop core could make, which would be a second path around the route's owner
+   > check, tested only through the core's harness; over deleting the commits; and over one
+   > exported file, a new format to keep. It rides client revision 2026-11-12. `cycle.test.ts`,
+   > `workspaceFolder.test.ts`, `core.test.ts`, the shell's `pages.spec.ts`.
+
 7. **Tools reach a workspace hub on loopback, as its owner.** The `header` resolver serves, and
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the
    remote. Writes by an agent identity are refused until the remote can tell an agent's push from

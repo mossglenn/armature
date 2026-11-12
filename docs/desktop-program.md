@@ -50,6 +50,7 @@ Open a workspace to work with it:
 - **Bring in `main`** merges what others have delivered into your workspace, so you deliver against the current design. If your work and theirs changed the same thing, the program lists each conflict, field by field, and says which tool to open to resolve it.
 - **Deliver** merges your workspace into `main`, with a message saying what it holds. Only a maintainer of `main` can deliver; anyone else is told whom to ask.
 - **Remove** deletes the workspace from your machine, once everything is pushed. Its branch on the instance is deleted too when `main` already holds all of it, and kept otherwise.
+- **Discard and remove** is for a workspace with commits that can never be pushed: the instance is gone, your access to the branch was withdrawn, or a push keeps being refused. It appears under Remove whenever commits are unpushed, says how many you would give up, and asks you to confirm that number. It works offline and signed out, and asks nothing of the instance, which keeps whatever you had pushed. Nothing is deleted outright: the workspace's files are copied to a `_discarded` folder inside your workspaces folder first (the message says where). The program never reads that folder again, so delete it when you are sure you no longer want what is in it. If you can still push, push instead.
 
 ## Your tools and the pairing value
 
@@ -96,6 +97,7 @@ Every refusal shows the message, a code and whether your instance or this machin
 | `unpushed_commits` | Something waits to be pushed | Push first. If the message says an earlier bring-in was not finished and names documents changed on both sides, pushing will not clear it, and the program has no way on from there yet; the work stays in the workspace's folder |
 | `bring_in_first` | `main` has moved since you last brought it in | Bring in `main`, then deliver |
 | `forbidden` | You may not do this on that branch; its reason says why | The message names who may |
+| `discard_mismatch` | The number of unpushed commits changed after the program showed it to you, usually because a tool wrote meanwhile | Read the new number and confirm again, or push |
 | `workspaces_exist` | You asked to connect elsewhere while workspaces exist | Deliver or remove them first |
 | `port_in_use` | Another program holds the port | Choose another port in **Settings** and restart the hub |
 | `folder_locked` | Another copy of the program, or another hub, holds the workspaces folder | Quit the other one |

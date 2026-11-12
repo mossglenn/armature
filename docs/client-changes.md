@@ -15,6 +15,25 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-12 · A workspace whose commits will never be pushed can be discarded: `DELETE /workspace/:name?discard=<n>`
+
+**What changed.** A workspace hub's removal takes `discard=<n>`, the number of local commits the
+caller gives up (ADR-0065 decision 6, later change of this date). Until now a workspace with
+anything unpushed could not leave the machine (409 `unpushed_commits`), so one whose commits could
+never reach the remote, a grant revoked, a branch deleted there, a remote that is gone, stayed for
+good. A discard is this machine's alone: the remote is not asked, the answer's `remote` is
+`untouched`, and `discarded` carries the commits given up and `setAside`, where the workspace's
+files were copied in the hub's folder before its branch was deleted (`_discarded/<branch>.<time>`).
+A number that is not the count of unpushed commits is **409** `discard_mismatch` with `unpushed`
+and `stated`, and nothing is removed. It is a program action like the removal itself: a route only
+where the host asks for the action routes. `@armature/client`: `workspace.remove(name, { discard })`,
+and `RemoveResult` gains `untouched` and `discarded`.
+
+**What a client does.** Nothing, unless it drives a workspace hub's actions: then it offers the
+discard only behind a confirmation that names the number, sends that number, and on
+`discard_mismatch` reads the status again and asks again. A client that reads a removal's `remote`
+handles `untouched`. **CoQui** needs nothing: it talks to a remote hub.
+
 ## 2026-11-12 · Under `oidc`: services are listed, a domain admits only a verified email, a provider's outage is 503
 
 **What changed.** Four things on a hub under `oidc`, from the code review of 2026-11-09 (ADR-0067
