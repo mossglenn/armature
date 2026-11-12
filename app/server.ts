@@ -15,7 +15,8 @@
  *                                                            lib/api/oidc.ts)
  *   ARMATURE_OIDC_ADMIT                                      optional, comma-separated: the issuers and email domains
  *                                                            whose people are registered on first sign-in; empty
- *                                                            admits no one, an administrator registers them
+ *                                                            admits no one, an administrator registers them; a
+ *                                                            domain admits only a token with email_verified true
  *   ARMATURE_OIDC_CLIENT_ID, ARMATURE_OIDC_JWKS_URL          optional: the client id a native program signs in with,
  *                                                            published by GET /discover; where the issuer's keys are
  *                                                            when not where its metadata says

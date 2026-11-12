@@ -255,11 +255,23 @@ describe('who a token is (decision 1 and its note; decision 4)', () => {
     expect(res.body.error).toBe('not_registered');
     const listed = await json(await operator('GET', '/users'));
     expect(listed.body.some((u: { externalId: string }) => u.externalId === 'sub-8')).toBe(false);
-    // An email the token marks unverified admits nothing either, and a token with no email is judged by the issuer alone.
-    const unverified = await json(await as(await token({ sub: 'sub-9', name: 'Un Verified', email: 'un@example.edu', email_verified: false }), 'GET', '/users/me'));
-    expect(unverified.body.error).toBe('not_registered');
-    const nameless = await json(await as(await token({ sub: 'sub-10', email: 'no-name@example.edu' }), 'GET', '/users/me'));
-    expect(nameless.body.error).toBe('unknown_user');
+    // A domain admits only an email the token says is verified (decision 1, note of 2026-11-12; the 2026-11-09
+    // review's A4): marked unverified, or with the claim left out or not a boolean, the token admits nothing.
+    for (const [label, claim] of [['false', { email_verified: false }], ['absent', {}], ['a string', { email_verified: 'true' }]] as const) {
+      const unverified = await json(await as(await token({ sub: `sub-9-${label}`, name: 'Un Verified', email: 'un@example.edu', ...claim }), 'GET', '/users/me'));
+      expect(unverified.status, label).toBe(403);
+      expect(unverified.body.error, label).toBe('not_registered');
+    }
+    const listed9 = await json(await operator('GET', '/users'));
+    expect(listed9.body.some((u: { externalId: string }) => u.externalId.startsWith('sub-9'))).toBe(false);
+  });
+
+  it('admits by issuer whatever the token says of its email: the entry for a provider that vouches for all its people', async () => {
+    const vouching = createApp(oidcConfigWith({ admit: { issuers: new Set([ISSUER]), domains: new Set() } }));
+    const bearer = await token({ sub: `sub-vouched-${stamp}`, name: 'Val Vouched', email: 'val@anywhere.org' });
+    const res = await json(await vouching.request('/api/v1/users/me', { headers: { Authorization: `Bearer ${bearer}` } }));
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ externalId: `sub-vouched-${stamp}`, issuer: ISSUER });
   });
 
   it('does not match a User registered without an issuer: the seed designer is not a token subject', async () => {
