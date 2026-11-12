@@ -274,6 +274,39 @@ describe('who a token is (decision 1 and its note; decision 4)', () => {
     expect(res.body).toMatchObject({ externalId: `sub-vouched-${stamp}`, issuer: ISSUER });
   });
 
+  it("takes a token without a name for a person's unless its client is a listed service (decision 4, note of 2026-11-12)", async () => {
+    // An admitted person whose provider leaves `name` out: nothing to register them with, and the refusal says so.
+    const nameless = await json(await as(await token({ sub: 'sub-10', email: 'no-name@example.edu', email_verified: true, azp: 'armature-desktop' }), 'GET', '/users/me'));
+    expect(nameless.status).toBe(401);
+    expect(nameless.body.error).toBe('unknown_user');
+    expect(nameless.body.message).toMatch(/no name claim/);
+    expect(nameless.body.message).toMatch(/ARMATURE_OIDC_SERVICES/);
+    // Never the agent of the client they signed in through, registered or not: `agent:armature-desktop` is no one's token.
+    const desktopAgent = await json(await operator('POST', '/users', { message: 'An agent named for the sign-in client', user: { displayName: 'Desktop', externalId: 'agent:armature-desktop' } }));
+    expect(desktopAgent.status).toBe(201);
+    const still = await json(await as(await token({ sub: 'sub-10', email: 'no-name@example.edu', email_verified: true, azp: 'armature-desktop' }), 'GET', '/users/me'));
+    expect(still.status).toBe(401);
+    expect(still.body.error).toBe('unknown_user');
+    // Registered ahead by an administrator, the same token is that person, by (issuer, sub).
+    const ahead = await json(await operator('POST', '/users', { message: 'Registered ahead', user: { displayName: 'Noel Nameless', externalId: 'sub-10', issuer: ISSUER } }));
+    expect(ahead.status).toBe(201);
+    const found = await json(await as(await token({ sub: 'sub-10', azp: 'armature-desktop' }), 'GET', '/users/me'));
+    expect(found.status).toBe(200);
+    expect(found.body['@id']).toBe(ahead.body.id);
+    // A program whose client the instance did not list has no email to admit it, so it meets the other refusal, which names the setting too.
+    const unlisted = await json(await as(await token({ sub: 'service-account-unlisted', azp: `unlisted-${stamp}`, email_verified: false }), 'GET', '/users/me'));
+    expect(unlisted.status).toBe(403);
+    expect(unlisted.body.error).toBe('not_registered');
+    expect(unlisted.body.message).toMatch(/ARMATURE_OIDC_SERVICES/);
+    // A person the instance did not admit, with a name, is told nothing about services.
+    const stranger = await json(await as(await person('sub-stranger', 'kim@elsewhere.org', 'Kim Elsewhere'), 'GET', '/users/me'));
+    expect(stranger.body.error).toBe('not_registered');
+    expect(stranger.body.message).not.toMatch(/ARMATURE_OIDC_SERVICES/);
+    // A listed client's token that does carry a name is a person's too: the service is its nameless token alone.
+    const named = await json(await as(await token({ sub: 'sub-7', name: 'Sam Designer', email: 'sam@example.edu', email_verified: true, azp: VIEWER_CLIENT }), 'GET', '/users/me'));
+    expect(named.body.externalId).toBe('sub-7');
+  });
+
   it('does not match a User registered without an issuer: the seed designer is not a token subject', async () => {
     const res = await json(await as(await person('demo-designer@example.edu', 'demo-designer@example.edu', 'Demo Designer'), 'GET', '/users/me'));
     // Admitted by domain, so first encounter registers a second User under the same externalId with the issuer.
@@ -301,9 +334,12 @@ describe('who a token is (decision 1 and its note; decision 4)', () => {
     const write = await json(await as(service, 'POST', '/branches', { name: `${BRANCH}-service` }));
     expect(write.status).toBe(403);
     expect(write.body).toMatchObject({ error: 'forbidden', credential: `agent:${VIEWER_CLIENT}` });
-    const unregistered = await json(await as(await token({ sub: 'service-account-nobody', client_id: 'nobody' }), 'GET', '/users/me'));
+    // A listed service no one has registered an agent for, named by `client_id` where a provider sends that.
+    const listedOnly = createApp(oidcConfigWith({ services: new Set(['nobody']) }));
+    const unregistered = await json(await listedOnly.request('/api/v1/users/me', { headers: { Authorization: `Bearer ${await token({ sub: 'service-account-nobody', client_id: 'nobody' })}` } }));
     expect(unregistered.status).toBe(401);
     expect(unregistered.body.error).toBe('unknown_user');
+    expect(unregistered.body.message).toMatch(/agent:nobody/);
   });
 
   it('takes Armature-Agent beside a person\'s token as under header: the agent writes, acting for the person (decision 3)', async () => {
@@ -597,6 +633,12 @@ describe("the issuer's metadata and the configuration", () => {
     expect(config.oidc).toMatchObject({ issuer: ISSUER, audience: AUDIENCE, clientId: 'armature-desktop' });
     expect([...config.oidc!.admit.issuers]).toEqual(['https://cilogon.org']);
     expect([...config.oidc!.admit.domains]).toEqual(['example.edu', 'partner.org']);
+    // The services are client ids, kept as written; none listed, no token is a service's.
+    expect([...config.oidc!.services]).toEqual([]);
+    expect([...configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: ISSUER, ARMATURE_OIDC_AUDIENCE: AUDIENCE, ARMATURE_OIDC_SERVICES: ' Armature-Viewer, coqui-outbox ,' }).oidc!.services]).toEqual([
+      'Armature-Viewer',
+      'coqui-outbox',
+    ]);
     expect(configFromEnv({ ...process.env } as Record<string, string | undefined>).oidc).toBeUndefined();
     expect(() =>
       configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: ISSUER, ARMATURE_OIDC_AUDIENCE: AUDIENCE, ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'http://x', ARMATURE_WORKSPACE_DIR: '/tmp/x' })

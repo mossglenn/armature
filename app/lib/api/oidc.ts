@@ -23,14 +23,19 @@ import type { IdentityClaims, IdentityResolver } from './identity';
  * 2026-10-30), `name` is the display name a first encounter registers with
  * and `email` the email, and the token is *admitted*, so that first encounter
  * may register, when ARMATURE_OIDC_ADMIT lists the issuer or the email's
- * domain (an email the token marks unverified admits nothing). A service's
- * token, one issued to a program with no person present by the client
- * credentials grant (decision 4), carries no `name` and names its client in
- * `azp` or `client_id`; it resolves to the agent `User` whose externalId is
+ * domain; a domain admits only an email the token says is verified,
+ * `email_verified: true`, so a provider that leaves the claim out admits no
+ * one by domain and is listed as an issuer instead (decision 1, note of
+ * 2026-11-12). A service's token, one issued to a program with no person
+ * present by the client credentials grant (decision 4), names its client in
+ * `azp` or `client_id`, and is a service's only when ARMATURE_OIDC_SERVICES
+ * lists that client and the token carries no `name` (decision 4, note of
+ * 2026-11-12): what a provider happens to leave out of a person's token never
+ * makes them a service. It resolves to the agent `User` whose externalId is
  * `agent:` followed by that client id, registered by a person as any agent
- * is, and reads only (ADR-0067 decision 10, authorization.ts). The rule is
- * the same one decision 1 draws for persons: a person's token carries a name,
- * a service's does not.
+ * is, and reads only (ADR-0067 decision 10, authorization.ts). Every other
+ * token is a person's, resolved by `sub`; without a `name` it registers no
+ * one, and the refusal says so.
  *
  * The keys. The issuer's key set is fetched once per process from the address
  * its metadata names (`<issuer>/.well-known/openid-configuration`, OpenID
@@ -93,7 +98,7 @@ export function claimsOf(payload: JWTPayload, oidc: OidcConfig): IdentityClaims 
   if (!sub) throw new jose.JWTClaimValidationFailed('missing required "sub" claim', payload, 'sub', 'missing');
   const name = text(payload.name);
   const clientId = text(payload.azp) ?? text(payload.client_id);
-  if (!name && clientId) return { externalId: `agent:${clientId}`, service: true };
+  if (!name && clientId && oidc.services.has(clientId)) return { externalId: `agent:${clientId}`, service: true };
   const email = text(payload.email);
   const admitted =
     oidc.admit.issuers.has(oidc.issuer) ||

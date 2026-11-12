@@ -157,7 +157,7 @@ beforeAll(async () => {
   headerRemote = await startHub({ port: 0, config: remoteConfig() });
   oidcRemote = await startHub({
     port: 0,
-    config: { ...remoteConfig(), identity: 'oidc', oidc: { issuer: ISSUER, audience: AUDIENCE, clientId: CLIENT_ID, admit: { issuers: new Set(), domains: new Set() }, keys } },
+    config: { ...remoteConfig(), identity: 'oidc', oidc: { issuer: ISSUER, audience: AUDIENCE, clientId: CLIENT_ID, admit: { issuers: new Set(), domains: new Set() }, services: new Set(), keys } },
   });
 }, 60_000);
 
