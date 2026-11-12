@@ -153,7 +153,23 @@ export interface WorkspaceRecords {
   putLog(branch: string, log: RemoteLog): Promise<void>;
   /** Forgets a workspace: its record, its push table, its snapshots and its log, after a delivery that deletes it. */
   remove(branch: string): Promise<void>;
+  /**
+   * Keeps a copy of everything a workspace holds here, its records and its branch's own files, under
+   * `DISCARDED/<branch>.<stamp>`, before a discard removes it (ADR-0065 decision 6, note of 2026-11-12).
+   * Nothing reads the copy again; it is the person's, to recover from by hand or to delete. Returns
+   * where it went, relative to the hub's folder.
+   */
+  setAside(branch: string, stamp: string): Promise<string>;
 }
+
+/**
+ * The folder discarded workspaces are set aside in. Not a branch name (`BRANCH_NAME` begins with a
+ * letter or a digit), so the store never reads it as a branch and no workspace can be given its name.
+ */
+export const DISCARDED = '_discarded';
+
+/** Where one discarded workspace is set aside, relative to the hub's folder. */
+export const setAsidePath = (branch: string, stamp: string): string => `${DISCARDED}/${branch}.${stamp}`;
 
 /** Records held in memory, for the tests and for a hub that need not outlive its process. */
 export function memoryRecords(): WorkspaceRecords {
@@ -162,6 +178,10 @@ export function memoryRecords(): WorkspaceRecords {
   const snapshots = new Map<string, Snapshots>();
   const logs = new Map<string, RemoteLog>();
   return {
+    // In memory the records are all this interface holds; the branch's commit files are the store's.
+    async setAside(branch, stamp) {
+      return setAsidePath(branch, stamp);
+    },
     async get(branch) {
       const record = held.get(branch);
       return record && { ...record };

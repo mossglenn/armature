@@ -50,6 +50,33 @@ describe('folderRecords', () => {
     expect(await readdir(join(dir, 'a_one'))).toEqual(['workspace.json']);
   });
 
+  it('sets a workspace aside whole, records and commit files, where neither the records nor the store read it again', async () => {
+    const records = folderRecords(dir);
+    const files = folderFiles(dir);
+    await records.put(record('a_one'));
+    await records.putPush('a_one', { commits: [] });
+    await files.write('a_one/head.json', '{"head":"c1"}\n');
+    await files.write('a_one/commits/c1.json', '{"id":"c1"}\n');
+    await files.write('main/head.json', '{"head":null}\n');
+
+    const path = await records.setAside('a_one', '20261112T203000Z');
+    expect(path).toBe('_discarded/a_one.20261112T203000Z');
+    const aside = join(dir, '_discarded', 'a_one.20261112T203000Z');
+    expect((await readdir(aside)).sort()).toEqual(['commits', 'head.json', 'push.json', 'workspace.json']);
+    expect(await readFile(join(aside, 'commits', 'c1.json'), 'utf8')).toBe('{"id":"c1"}\n');
+    // A copy: the workspace is as it was until the removal that follows, and a second one at the same second overwrites nothing.
+    expect((await records.get('a_one'))?.branch).toBe('a_one');
+    expect(await files.read('a_one/commits/c1.json')).toBe('{"id":"c1"}\n');
+    await expect(records.setAside('a_one', '20261112T203000Z')).rejects.toThrow();
+    await expect(records.setAside('../escape', '20261112T203000Z')).rejects.toThrow(/Not a branch name/);
+    // Removed, the copy stays; no workspace is listed from it and the store opens without a branch of that name.
+    await records.remove('a_one');
+    expect((await records.list()).map((r) => r.branch)).toEqual([]);
+    expect(await readdir(aside)).toHaveLength(4);
+    expect(await openFileStore(folderFiles(dir)).at({ branch: 'main' }).listBranches()).toEqual(['main']);
+    expect(await sweepTemporaries(dir)).toEqual([]);
+  });
+
   it('never reads or writes outside the folder, and ignores what is not a workspace', async () => {
     await writeFile(join(dir, 'workspace.json'), JSON.stringify(record('outside')));
     await writeFile(join(dir, 'stray.txt'), 'not a workspace');
