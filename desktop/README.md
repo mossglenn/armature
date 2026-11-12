@@ -68,4 +68,4 @@ The updater's key is `~/.tauri/armature.key` on Amos's Mac, its public half in `
 
 The updater can be tried without a release: build an older version with a `--config` overlay pointing `plugins.updater` at a feed on loopback (`dangerousInsecureTransportProtocol`, a scratch key's `pubkey`), build a newer one signed with that key (`TAURI_SIGNING_PRIVATE_KEY`, the overlay with `createUpdaterArtifacts`), serve its `.app.tar.gz` and a `latest.json` naming it, and open the older one (rehearsed on the Mac 2026-11-08).
 
-The icon is a placeholder (`src-tauri/icons/source.svg`, which says how every size is made from it).
+The icon (since 2026-11-12, replacing the placeholder of 2026-11-08) is the cutaway A in Paper on a Graphite tile. `src-tauri/icons/source.svg` is its macOS master; every file there comes from a build script kept with the brand's sources outside this repository, which draws the small sizes and the Windows plate separately, so the files are replaced together.
