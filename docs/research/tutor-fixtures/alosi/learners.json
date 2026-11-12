@@ -1,0 +1,16 @@
+[
+  {
+    "model": "engine.learner",
+    "pk": 1,
+    "fields": {
+      "identifier": 1
+    }
+  },
+  {
+    "model": "engine.learner",
+    "pk": 2,
+    "fields": {
+      "identifier": 2
+    }
+  }
+]

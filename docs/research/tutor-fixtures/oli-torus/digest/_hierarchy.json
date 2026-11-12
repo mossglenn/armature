@@ -1,0 +1,59 @@
+{
+  "children": [
+    {
+      "type": "container",
+      "children": [
+        {
+          "children": [],
+          "idref": "31",
+          "type": "item"
+        },
+        {
+          "children": [],
+          "idref": "32",
+          "type": "item"
+        },
+        {
+          "children": [],
+          "idref": "8",
+          "type": "item"
+        },
+        {
+          "children": [],
+          "idref": "35",
+          "type": "item"
+        },
+        {
+          "children": [],
+          "idref": "43",
+          "type": "item"
+        },
+        {
+          "children": [],
+          "idref": "39",
+          "type": "item"
+        },
+        {
+          "children": [],
+          "idref": "6533",
+          "type": "item"
+        }
+      ],
+      "id": "unit-1",
+      "title": "Unit 1"
+    },
+    {
+      "type": "labels",
+      "children": [],
+      "sequence": "Sequence",
+      "unit": "Volume",
+      "module": "Module",
+      "section": "Section"
+    }
+  ],
+  "id": "",
+  "originalFile": "",
+  "tags": [],
+  "title": "",
+  "type": "Hierarchy"
+}

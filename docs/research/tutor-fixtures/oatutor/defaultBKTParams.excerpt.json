@@ -1,0 +1,98 @@
+{
+  "addition_rule": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "complement_rule": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "conditional_probability": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "decreasing": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "determing_whether_a_linear_function_is_increasing": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "interpreting_slope_as_rate_of_change": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "modeling_real_world_problems_with_linear_functions": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "multiplication_rule": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "or_constant": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "probability": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "representing_linear_functions": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "the_addition_rule": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "the_multiplication_rule": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "writing_and_interpreting_an_equation_for_a_linear_function": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "writing_the_equation_for_a_function_from_the_graph_of_a_line": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  },
+  "writing_the_equation_of_a_line_parallel_or_perpendicular_to_a_given_line": {
+    "probMastery": 0.1,
+    "probTransit": 0.1,
+    "probSlip": 0.1,
+    "probGuess": 0.1
+  }
+}
