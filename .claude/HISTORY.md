@@ -6,6 +6,46 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-11, night (the review's W1 to W4 and T9; 0.1.2 released; PRs #133, #135 and #136)
+
+**Where things stood at the close.** **Phase 8; the code review of 2026-11-09's W1 to W4 and T9 closed (PR #133) and `desktop-v0.1.2` published, 2026-11-11 night (PRs #135 and #136).** The file store runs every change to its folder in one line; a workspace hub's bring-in, deliver, remove and clone hold their branch's write queue; a removal is finished by asking again; a bring-in the remote merged and the hub did not finish is settled by the next bring-in or push from a marker in `push.json`; `queue.test.ts` lists every module that commits. 0.1.2 carries that hub and logs a Windows logoff as the system's end; the channel names it, the Mac's program reads 0.1.2, the Windows PC still read 0.1.1 at the close. 627 tests in the app, 25 Rust tests. **Next: the Windows PC's update and a logoff there; then step 6 of the desktop plan, Quiver resumed on the workspace hub, or the review's D6, or its authentication group; Amos's call.**
+
+### Done
+
+- #133, five commits (`70f7a05` to `914f90a` on `main`). W1: `FileStore` runs every change to its folder under one key of its own queue (`serialized`), `createBranch`, `deleteBranch`, `ensureDatabase` and `deleteDatabase` joining `write`. W2: `requireNothingUnpushed` and `deleteLocal` take a local branch already gone as nothing to do; `REMOVAL` gives the folder's removals Node's retry. W3 and W4: `bringIn`, `deliver` and `removeWorkspace` run inside `localOf(hub, branch).exclusive`. The clone from the remote's creation to the snapshots in the branch's queue (`routes/workspace.ts`), `mirrorMain`'s compare-and-write in the mirror's, each snapshot's load in its own. T9: `queue.test.ts` reads the modules for the eight committing calls and holds a list of module, count and where the queue is taken. The marker: `bringingIn` in `push.json`, `workspace/merged.ts` (`writeMerged`, `settleBringIn`), `workspace/commits.ts` for `localCommitsSince` and `mappingOf`, push settling one in the queue before it replays. Dated notes on ADR-0025 decision 7, ADR-0065 decision 6 and ADR-0066 decision 2; `docs/api.md`, the guide, the workspace hub plan, the review's banner, CLAUDE.md.
+- Tests, 598 to 627 in the app: two in `filestore/store.test.ts` (a delete between another branch's commit file and its head; a delete of the branch being written), ten in `cycle.test.ts` (a removal after a failed file removal; a write beside a removal, a delivery that deletes and a bring-in; a bring-in ended after the merge or before the entry, settled by bring-in and by push, refused on overlap, cleared when nothing landed), two in `queue.test.ts`. The W1 pair failed before the fix was written; the four for W2 to W4 were run against the old `bringIn.ts` and failed.
+- #135, two commits: `ended_by_the_system` in `core.rs` (exit code 1073807364 on Windows logged at info as the system's end) with its test, 24 to 25 Rust tests; version 0.1.2 in the three manifests and both lockfiles.
+- `desktop-v0.1.2` tagged by Amos at `de1bdd9`, signed and published at 04:10 UTC on 2026-11-12; `desktop-channel.yml` ran on the event and the channel's `latest.json` names 0.1.2 for the four platforms. The Mac's `Info.plist` read 0.1.2 within the half hour; the Windows PC's `armature-desktop.exe` read 0.1.1 over SSH.
+- #136: the release recorded in the desktop plan's status line and step 5, the review's banner and CLAUDE.md.
+
+### Session notes
+
+- The session opened on the last close's three candidates; Amos took the review's W1 to W4 with T9. Each citation was checked against the file first, W1 reproduced as failing tests before any fix, then four options put to him with a recommendation each, all accepted.
+- Reading the code found two things the review had not said: W4's stuck 412 needs no crash, only a connection dropped after the remote's merge; and the clone, the mirror and the snapshots also committed outside the queue.
+- The marker's design turned on one case found while writing it: a tool's commit made after an unfinished bring-in that changed a document the merge changed. Writing either side over the other loses an update silently and no merge runs on a workspace hub, so it is refused and left for D6.
+- The full suite's one failure was a guard doing its work: `store.test.ts` lists the modules that may use the operator-side methods, and `merged.ts` was new to it.
+- Amos pushed three commits to `main` from another session mid-way (the knowledge components plan and fixtures) and made a schema branch; the release branch, uncommitted, was carried over by stash, fast-forward, pop.
+- Auto mode refused one command that committed, pushed and opened a pull request when Amos had asked only for the record; nothing of it ran, and he then asked in those words.
+
+### Facts from 2026-11-11 night worth keeping
+
+- Windows ends a sidecar at a logoff or shutdown with exit code 1073807364, `0x40010004`, `DBG_TERMINATE_PROCESS`, before the shell hears of the session's end (`core.rs`).
+- `queue.test.ts`'s list is exact: a commit added to or removed from any module under `app/lib/api/` changes a count and fails it (SESSION.md, Notes).
+- Commits were split after the fact from one working tree by saving `git diff` at each stage and rebuilding the tree stage by stage; the committed tree was compared with the tested one before the suite was run again.
+- Node's `rm` retries `EBUSY`, `EPERM` and `ENOTEMPTY` only with `recursive: true`, by `maxRetries` and `retryDelay`, the wait growing by `retryDelay` each time (`REMOVAL` in `app/lib/workspaceFolder.ts`).
+- `gh pr checks` said "no checks reported" seconds after a push while the run was already queued with its six jobs; the REST API's `runs?head_sha=` is the read to trust.
+
+### Decisions taken
+
+- One line of writes for the whole file store (Amos, over a set of commits in flight the sweep would skip): ADR-0066 decision 2, note of 2026-11-11.
+- The workspace actions and the clone hold their branch's queue over the remote's calls (Amos, over a head check after the remote has acted); the mirror and the snapshots in the queue rather than exempted in T9's test: ADR-0025 decision 7, note of 2026-11-11.
+- The unfinished bring-in fixed now rather than deferred (Amos); the overlap case refused: ADR-0065 decision 6, note of 2026-11-11.
+- Choices of the session, open to overrule, in SESSION.md's Active Decisions: no client revision; `merged.ts` in the guard; the interrupted commit known by content; the core's state after a system end; the names.
+- Moved here from SESSION.md's Active Decisions at this close, to keep its budget, as they stood:
+  - **Choices and names of 2026-11-11, open to overrule** (PR #131): `ACTIONS` (create, clone, push, bringIn, deliver, remove) and `ACTION_WAIT` of thirty seconds; an install refused outright while an action runs and given up after the wait, quitting never refused; `actions` and `loginEntry` in the shell's state, `LoginEntry`, `sidecar_arguments`; the notice a region with one live sentence; the fake core's `?slow` and `?login=fails`.
+  - **Choices and names of 2026-11-08 night, open to overrule** (branch `phase-8/desktop-release`): one pull request for step 5 and the Intel build kept (defaults); the update notice above every page; rehearsal by tag; NSIS only; the updater's artifacts only in `tauri.release.conf.json`; `update.rs`, `login.rs`, `check_update`, `install_update`, `--hidden`, `?update=`; and of 2026-11-09 evening (PR #123): `profile_changed`, `bad_profile`, `Found` and `UpdateCheck`, the hourly retry after a channel's empty answer, `desktop-channel` and `desktop-rehearsal-channel`, `latest-json.mjs` refusing a missing platform, a rerun adding to the tag's draft, `issuer` in the start reply (`ReleaseNotFound` as no update was reversed by the review's R2).
+  - **Choices of 2026-11-09 night, open to overrule** (PRs #125 to #127): `NODE_EXTRA_CA_CERTS` the one Node setting passed to the sidecar; a download given up on a minute's stall rather than a total timeout; a `.deb` not checked rather than offered package updates; the release without caches, `--locked`, the ancestry check on every tag; `KEPT_ENVIRONMENT`, `Found::Packaged`, `login::change`, `restart_arguments`, `desktop-rehearsal-3` deleted after.
+
 ## 2026-11-11 (`desktop-v0.1.0` published, 0.1.1 released and installed on both machines; PRs #130 to #132; the Windows PC rename)
 
 **Where things stood at the close.** **Phase 8; the desktop program released: `desktop-v0.1.0` published and `desktop-v0.1.1` released and installed on the Mac and the Windows PC through `desktop-channel`, 2026-11-11 (PRs #130 to #132).** The channel moved on the publication with the draft's manifest byte for byte; the release build was installed over the rehearsal builds by hand (the Mac from the update archive, the Windows PC by the NSIS installer run silently over SSH); 0.1.1 carried the review's R10, S2, S3 and S7 and updated both machines in eight seconds each, the Mac asking for the keychain password again and Windows nothing (the plan's §15 question 12). The desktop plan's step 5 is done and the review's release path closed; 24 Rust tests, 26 page tests.
