@@ -11,6 +11,8 @@
  * second hub over the same database runs under `header`, as the operator
  * would, to register ahead and to grant.
  */
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Hono } from 'hono';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type CryptoKey, type JWTPayload } from 'jose';
@@ -27,10 +29,13 @@ const ISSUER = 'https://login.example.edu/realms/armature';
 const AUDIENCE = 'armature-hub';
 const ADMIN_SUB = 'f3a1-admin';
 const VIEWER_CLIENT = `viewer-${stamp}`;
+const RELAY_CLIENT = `outbox-${stamp}`;
 const BRANCH = `test-oidc-${stamp}`;
 
 let headerHub: Hono;
 let oidcHub: Hono;
+/** The oidc hub's configuration with its `oidc` settings replaced in part, for a hub that reaches an issuer. */
+let oidcConfigWith: (oidc: Partial<NonNullable<HubConfig['oidc']>>) => () => HubConfig;
 let privateKey: CryptoKey;
 let otherKey: CryptoKey;
 const kid = `key-${stamp}`;
@@ -69,7 +74,8 @@ async function token(
   return new SignJWT(claims).setProtectedHeader({ alg, kid: keyId }).setIssuer(issuer).setAudience(audience).setIssuedAt().setExpirationTime(expires).sign(key);
 }
 
-const person = (sub: string, email: string, name = 'A Person') => token({ sub, name, email });
+/** A person's token as a provider that verifies addresses sends it. */
+const person = (sub: string, email: string, name = 'A Person') => token({ sub, name, email, email_verified: true });
 
 beforeAll(async () => {
   const exported = (await json(await app.request('/api/v1/export'))).body as { schema: Record<string, unknown>[]; documents: TerminusDocument[] };
@@ -92,17 +98,16 @@ beforeAll(async () => {
 
   const base = (): HubConfig => ({ ...configFromEnv(), store: () => ({ ...storeConfigFromEnv(), db: SCRATCH_DB }) });
   headerHub = createApp(base);
-  oidcHub = createApp(() => ({
-    ...base(),
-    identity: 'oidc',
-    oidc: {
-      issuer: ISSUER,
-      audience: AUDIENCE,
-      clientId: 'armature-desktop',
-      admit: { issuers: new Set(), domains: new Set(['example.edu']) },
-      keys,
-    },
-  }));
+  const settings = {
+    issuer: ISSUER,
+    audience: AUDIENCE,
+    clientId: 'armature-desktop',
+    admit: { issuers: new Set<string>(), domains: new Set(['example.edu']) },
+    services: new Set([VIEWER_CLIENT, RELAY_CLIENT]),
+    keys,
+  };
+  oidcConfigWith = (oidc) => () => ({ ...base(), identity: 'oidc', oidc: { ...settings, ...oidc } });
+  oidcHub = createApp(oidcConfigWith({}));
 
   // Registered ahead by the operator: an administrator naming the issuer, and the viewer's service agent.
   const admin = await json(
@@ -309,7 +314,6 @@ describe('who a token is (decision 1 and its note; decision 4)', () => {
 });
 
 describe("a service relaying a person's earlier work (ADR-0067 decision 5; ADR-0068 decision 5)", () => {
-  const RELAY_CLIENT = `outbox-${stamp}`;
   const relay = () => token({ sub: `service-account-${RELAY_CLIENT}`, azp: RELAY_CLIENT });
   const forSam = { 'Armature-User': 'sub-7' };
   let samId: string;
@@ -445,6 +449,80 @@ describe("the reads kept for maintainers of main and administrators under oidc (
     // Under header the default stays full and every user is carried.
     expect((await json(await operator('GET', '/export'))).body.armature).toMatchObject({ profile: 'full', users: 'all' });
   });
+
+});
+
+describe("an identity provider that is down is never the caller's bad token (the 2026-11-09 review's A1)", () => {
+  let server: Server;
+  let origin: string;
+  let answer: { status: number; body: string };
+  const bearer = () => token({ sub: 'sub-7', name: 'Sam Designer' }, { issuer: origin });
+  const me = async (hub: Hono) => {
+    const res = await hub.request('/api/v1/users/me', { headers: { Authorization: `Bearer ${await bearer()}` } });
+    return { status: res.status, body: await res.json(), challenge: res.headers.get('WWW-Authenticate') };
+  };
+
+  beforeAll(async () => {
+    server = createServer((_req, res) => {
+      res.writeHead(answer.status, { 'Content-Type': 'application/json' });
+      res.end(answer.body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(async () => {
+    forgetIssuers();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    forgetIssuers();
+  });
+
+  it('answers 503 issuer_unreachable when the key set answers an error or something that is no key set', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const hub = createApp(oidcConfigWith({ issuer: origin, jwksUrl: `${origin}/keys`, keys: undefined }));
+    for (const reply of [
+      { status: 503, body: '{"error":"starting"}' },
+      { status: 502, body: '<html>Bad Gateway</html>' },
+      { status: 404, body: '{}' },
+      { status: 200, body: '<html>a sign-in page</html>' },
+      { status: 200, body: '{"keys":"none"}' },
+    ]) {
+      answer = reply;
+      forgetIssuers(); // a new key set, so the half minute between fetches does not stand in for the answer
+      const res = await me(hub);
+      expect(res.status, JSON.stringify(reply)).toBe(503);
+      expect(res.body.error, JSON.stringify(reply)).toBe('issuer_unreachable');
+      expect(res.challenge, 'no challenge: the token was not judged').toBeNull();
+    }
+  });
+
+  it('answers 503 when the metadata cannot be read, and tries again on the next request', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const hub = createApp(oidcConfigWith({ issuer: origin, keys: undefined }));
+    answer = { status: 503, body: '{}' };
+    const down = await me(hub);
+    expect(down.status).toBe(503);
+    expect(down.body.error).toBe('issuer_unreachable');
+    // The provider is back, with keys that are not this token's: now the token is judged, and refused as its own fault.
+    answer = { status: 200, body: JSON.stringify({ issuer: origin, jwks_uri: `${origin}/keys`, keys: [] }) };
+    const back = await me(hub);
+    expect(back.status).toBe(401);
+    expect(back.body).toMatchObject({ error: 'invalid_token', reason: 'unknown_key' });
+  });
+
+  it('still names the token\'s own faults: one that marks a header critical is malformed, with the keys in hand', async () => {
+    const critical = await new SignJWT({ sub: 'x', name: 'X' })
+      .setProtectedHeader({ alg: 'ES256', kid, crit: ['exp-ext'], 'exp-ext': 1 } as never)
+      .setIssuer(ISSUER)
+      .setAudience(AUDIENCE)
+      .setExpirationTime('5m')
+      .sign(privateKey, { crit: { 'exp-ext': false } });
+    const res = await json(await as(critical, 'GET', '/users/me'));
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: 'invalid_token', reason: 'malformed' });
+  });
 });
 
 describe("the issuer's metadata and the configuration", () => {
@@ -485,4 +563,5 @@ describe("the issuer's metadata and the configuration", () => {
       configFromEnv({ ...env, ARMATURE_OIDC_ISSUER: ISSUER, ARMATURE_OIDC_AUDIENCE: AUDIENCE, ARMATURE_ROLE: 'workspace', ARMATURE_REMOTE_URL: 'http://x', ARMATURE_WORKSPACE_DIR: '/tmp/x' })
     ).toThrow(/workspace hub runs under header/);
   });
+
 });
