@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { createRemoteJWKSet, errors as jose, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
+import { createRemoteJWKSet, decodeProtectedHeader, errors as jose, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import { bareName, hubOf, type OidcConfig } from './config';
 import { ApiError } from './errors';
 import type { IdentityClaims, IdentityResolver } from './identity';
@@ -40,8 +40,10 @@ import type { IdentityClaims, IdentityResolver } from './identity';
  * (config.ts), so the key set lives here, keyed by its address, as the reads
  * memo lives beside the store; a host or a test may supply the keys on the
  * configuration instead (`oidc.keys`), which is how the contract suite signs
- * tokens with a key it generated. An issuer that cannot be reached is 503
- * `issuer_unreachable`, and the next request tries again.
+ * tokens with a key it generated. An issuer that cannot be reached, or whose
+ * metadata or key set answers anything but what a provider serves, is 503
+ * `issuer_unreachable`, and the next request tries again: a provider's outage
+ * is never told to a caller as a fault in their token.
  */
 
 /** The signature algorithms a token may use (decision 1): asymmetric only, so no shared secret could mint one. */
@@ -58,7 +60,13 @@ function invalid(c: Context, reason: string, message: string): ApiError {
   return new ApiError(401, 'invalid_token', message, { reason });
 }
 
-/** Why `jose` refused a token, as a stable reason, or undefined when the failure was not the token's. */
+/**
+ * Why `jose` refused a token, as a stable reason, or undefined when the
+ * failure was not the token's. The token's own faults are named one by one;
+ * anything else `jose` raises is the issuer's: a key set that answered an
+ * error or something that is no key set (a plain `JOSEError`, `JWKSInvalid`),
+ * one that timed out, a key the runtime cannot use.
+ */
 function reasonOf(err: unknown): string | undefined {
   if (err instanceof jose.JWTExpired) return 'expired';
   if (err instanceof jose.JWTClaimValidationFailed) {
@@ -67,7 +75,7 @@ function reasonOf(err: unknown): string | undefined {
   if (err instanceof jose.JOSEAlgNotAllowed) return 'algorithm';
   if (err instanceof jose.JWSSignatureVerificationFailed) return 'signature';
   if (err instanceof jose.JWKSNoMatchingKey || err instanceof jose.JWKSMultipleMatchingKeys) return 'unknown_key';
-  if (err instanceof jose.JOSEError && !(err instanceof jose.JWKSTimeout)) return 'malformed';
+  if (err instanceof jose.JWTInvalid || err instanceof jose.JWSInvalid) return 'malformed';
   return undefined;
 }
 
@@ -93,6 +101,15 @@ export function claimsOf(payload: JWTPayload, oidc: OidcConfig): IdentityClaims 
   return { externalId: sub, issuer: oidc.issuer, admitted, ...(name ? { displayName: name } : {}), ...(email ? { email } : {}) };
 }
 
+/** Whether a token's header carries `crit`; a token whose header cannot be read is left for `jwtVerify` to refuse. */
+function criticalOf(token: string): boolean {
+  try {
+    return decodeProtectedHeader(token).crit !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 export const oidcResolver: IdentityResolver = async (c) => {
   const oidc = hubOf(c).oidc;
   if (!oidc) throw new Error('ARMATURE_IDENTITY=oidc without its settings; configFromEnv reads them');
@@ -100,8 +117,12 @@ export const oidcResolver: IdentityResolver = async (c) => {
   if (!header) return undefined;
   const match = /^Bearer\s+(\S+)$/i.exec(header);
   if (!match) throw invalid(c, 'malformed', 'Authorization carries a bearer token: Authorization: Bearer <token>');
-  const keys = oidc.keys ?? (await keysFor(oidc));
   try {
+    // The hub understands no extension a token could mark critical; refused here, since `jose` reports
+    // one with the class it also uses for a key it cannot read, which is the issuer's fault.
+    if (criticalOf(match[1])) throw new jose.JWSInvalid('the token marks a header parameter critical (crit), and the hub understands none');
+    // Inside the try: metadata that cannot be read is the issuer's failure too, 503 and not a 500.
+    const keys = oidc.keys ?? (await keysFor(oidc));
     const { payload } = await jwtVerify(match[1], keys, { issuer: oidc.issuer, audience: oidc.audience, algorithms: [...ALGORITHMS] });
     return claimsOf(payload, oidc);
   } catch (err) {
