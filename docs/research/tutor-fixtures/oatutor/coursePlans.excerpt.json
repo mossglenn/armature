@@ -1,0 +1,103 @@
+[
+  {
+    "courseName": "Mission College: Introductory Statistics",
+    "office_hours": false,
+    "language": "en",
+    "courseOER": "https://openstax.org/ <OpenStax>",
+    "courseLicense": "https://creativecommons.org/licenses/by/4.0/ <CC BY 4.0>",
+    "lessons": [
+      {
+        "id": "5DUi1qV6-6Ykh-vIBOVeBPEX",
+        "name": "Lesson 3.4",
+        "topics": "Two Basic Rules of Probability",
+        "allowRecycle": true,
+        "chat_display_mode": "Window",
+        "learningObjectives": {
+          "addition_rule": 0.85,
+          "complement_rule": 0.85,
+          "conditional_probability": 0.85,
+          "multiplication_rule": 0.85,
+          "probability": 0.85,
+          "the_addition_rule": 0.85,
+          "the_multiplication_rule": 0.85
+        },
+        "chat_prompt": "PROMPTv2a.txt",
+        "chat_penalty_mode": "Never",
+        "hint_penalty_mode": "OnOpen",
+        "chat_model": "gpt-4o"
+      }
+    ],
+    "chat_prompt": "PROMPTv2a.txt",
+    "chat_penalty_mode": "Never",
+    "hint_penalty_mode": "OnOpen",
+    "chat_model": "gpt-4o"
+  },
+  {
+    "courseName": "OpenStax: College Algebra",
+    "office_hours": false,
+    "language": "en",
+    "courseOER": "https://openstax.org/details/books/college-algebra-2e <OpenStax: College Algebra>",
+    "courseLicense": "https://creativecommons.org/licenses/by/4.0/ <CC BY 4.0>",
+    "lessons": [
+      {
+        "id": "7HvOenA8-vBo7-a4Jgeuu78b",
+        "name": "Lesson 4.1",
+        "topics": "Linear Functions",
+        "allowRecycle": true,
+        "chat_display_mode": "Window",
+        "learningObjectives": {
+          "decreasing": 0.85,
+          "determing_whether_a_linear_function_is_increasing": 0.85,
+          "interpreting_slope_as_rate_of_change": 0.85,
+          "modeling_real_world_problems_with_linear_functions": 0.85,
+          "or_constant": 0.85,
+          "representing_linear_functions": 0.85,
+          "writing_and_interpreting_an_equation_for_a_linear_function": 0.85,
+          "writing_the_equation_for_a_function_from_the_graph_of_a_line": 0.85,
+          "writing_the_equation_of_a_line_parallel_or_perpendicular_to_a_given_line": 0.85
+        },
+        "chat_prompt": "PROMPTv2a.txt",
+        "chat_penalty_mode": "Never",
+        "hint_penalty_mode": "OnOpen",
+        "chat_model": "gpt-4o"
+      }
+    ],
+    "chat_prompt": "PROMPTv2a.txt",
+    "chat_penalty_mode": "Never",
+    "hint_penalty_mode": "OnOpen",
+    "chat_model": "gpt-4o"
+  },
+  {
+    "courseName": "OpenStax: Introductory Stats",
+    "office_hours": false,
+    "language": "en",
+    "courseOER": "https://openstax.org/ <OpenStax>",
+    "courseLicense": "https://creativecommons.org/licenses/by/4.0/ <CC BY 4.0>",
+    "lessons": [
+      {
+        "id": "5DUi1qV6-6Ykh-vIBOVeBPEX",
+        "name": "Lesson 3.3",
+        "topics": "Two Basic Rules of Probability",
+        "allowRecycle": true,
+        "chat_display_mode": "Window",
+        "learningObjectives": {
+          "addition_rule": 0.85,
+          "complement_rule": 0.85,
+          "conditional_probability": 0.85,
+          "multiplication_rule": 0.85,
+          "probability": 0.85,
+          "the_addition_rule": 0.85,
+          "the_multiplication_rule": 0.85
+        },
+        "chat_prompt": "PROMPTv2a.txt",
+        "chat_penalty_mode": "Never",
+        "hint_penalty_mode": "OnOpen",
+        "chat_model": "gpt-4o"
+      }
+    ],
+    "chat_prompt": "PROMPTv2a.txt",
+    "chat_penalty_mode": "Never",
+    "hint_penalty_mode": "OnOpen",
+    "chat_model": "gpt-4o"
+  }
+]
