@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { activeGrants, requirePermission, requireReadPermission } from '../authorization';
-import { storeFor } from '../config';
+import { hubOf, storeFor } from '../config';
 import { ApiError } from '../errors';
 import { ifMatchFrom, readEnvelope, refFromQuery, requireCommit, setEtag } from '../http';
 import { commitMessage, findUserByExternalId, isAgentExternalId, mintUserId, registry, resolveUser, type UserDocument } from '../identity';
@@ -75,8 +75,12 @@ users.post('/', async (c) => {
   const institution = text('institution', false);
   // The provider a person will sign in with (ADR-0067 decision 1, note): a token resolves by
   // (issuer, sub), so a person registered ahead of their first encounter names it here.
-  const issuer = text('issuer', false);
-  if (issuer && isAgentExternalId(externalId)) throw new ApiError(400, 'bad_request', 'user.issuer names the provider a person signs in with; an agent has none');
+  const named = text('issuer', false);
+  if (named && isAgentExternalId(externalId)) throw new ApiError(400, 'bad_request', 'user.issuer names the provider a person signs in with; an agent has none');
+  // Under `oidc` an instance has one issuer, and a person registered without one would be matched by
+  // no token, then registered a second time by their first admitted sign-in; so the hub's own issuer
+  // is the default (decision 1, note of 2026-11-12; the 2026-11-09 review's A6).
+  const issuer = named ?? (isAgentExternalId(externalId) ? undefined : hubOf(c).oidc?.issuer);
   let id: string | undefined;
   if (input['@id'] !== undefined) {
     if (typeof input['@id'] !== 'string' || !/^User\/[^\s/]+$/.test(input['@id'])) {
