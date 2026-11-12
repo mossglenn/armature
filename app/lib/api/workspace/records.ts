@@ -66,10 +66,26 @@ export interface InFlight {
   sentAt: string;
 }
 
+/**
+ * The marker written before a bring-in asks the remote to merge (since
+ * 2026-11-11; `./merged.ts`): the remote may merge and this hub not finish
+ * reading it back, and the next bring-in or push settles it from here.
+ */
+export interface BringingIn {
+  /** The remote commit the merge was conditioned on (`If-Match`). */
+  ifMatch: string;
+  /** The local head the merge was asked over: what the merge changed is written after it. */
+  localHead: string;
+  /** The remote's merge commit, once the remote has answered with one. */
+  merged?: string;
+  sentAt: string;
+}
+
 export interface PushTable {
   /** Oldest first; the clone's own commit is not here, it maps to the base. */
   commits: PushedCommit[];
   inFlight?: InFlight;
+  bringingIn?: BringingIn;
 }
 
 export const emptyPushTable = (): PushTable => ({ commits: [] });

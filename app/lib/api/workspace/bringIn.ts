@@ -1,11 +1,11 @@
-import type { ArmatureClient, MergeResult } from '@armature/client';
-import type { ClassName } from '@armature/types';
+import type { MergeResult } from '@armature/client';
 import { storeOf, type HubConfig } from '../config';
 import { ApiError } from '../errors';
 import { MIRROR_BRANCH } from '../role';
-import { createOperatorStore, isUnknownRef, type OperatorStore, type TerminusDocument } from '../store';
-import { localCommitsSince, mappingOf } from './push';
-import { emptyPushTable, type PushedCommit, type WorkspaceRecord, type WorkspaceRecords } from './records';
+import { createOperatorStore, isUnknownRef, type OperatorStore } from '../store';
+import { localCommitsSince, mappingOf } from './commits';
+import { settleBringIn, writeMerged, type Merged } from './merged';
+import { emptyPushTable, type WorkspaceRecord, type WorkspaceRecords } from './records';
 import { fromRemote, ownerClient } from './remote';
 import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
 
@@ -23,7 +23,8 @@ import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
  * local writes pushed like any other (§6). A clean merge is then read back,
  * the documents it changed at the merge commit, and written into the local
  * branch as one commit the push table maps to the merge commit, so the next
- * push continues from it. This is the second route-side use of the
+ * push continues from it (`./merged.ts`, which also settles a bring-in the
+ * remote merged and this hub did not finish). This is the second route-side use of the
  * operator-side methods (ADR-0062, note of 2026-11-01), bounded like the
  * clone's: the remote already checked these documents, and the local
  * pipeline would refill what the remote decided.
@@ -120,61 +121,54 @@ async function requireNothingUnpushed(hub: HubConfig, records: WorkspaceRecords,
   return { lastRemote: table.commits.at(-1)?.remote ?? record.base };
 }
 
-const typeOf = (id: string): ClassName => id.split('/')[0] as ClassName;
-
-/** The documents the remote branch changed between two of its commits, read at the later one. */
-async function changedDocuments(hub: HubConfig, remote: ArmatureClient, branch: string, since: string, at: string): Promise<TerminusDocument[]> {
-  const { changes } = (await fromRemote(hub, () => remote.branches.changes(branch, since))).data;
-  const deleted = changes.filter((change) => change.op === 'delete');
-  if (deleted.length) {
-    throw new Error(`The remote's merge deleted ${deleted.map((d) => d.id).join(', ')}, which no route of the API does; bringing it in is not supported`);
-  }
-  const documents: TerminusDocument[] = [];
-  for (const change of changes) {
-    documents.push((await fromRemote(hub, () => remote.documents.get(typeOf(change.id), change.id, { ref: at }))).data as unknown as TerminusDocument);
-  }
-  return documents;
-}
-
 export function bringIn(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, message?: string): Promise<BringInResult> {
   return localOf(hub, record.branch).exclusive(() => bringInHeld(hub, records, record, message));
 }
 
 async function bringInHeld(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, message?: string): Promise<BringInResult> {
   const { branch } = record;
-  const { lastRemote } = await requireNothingUnpushed(hub, records, record, 'bringing in main');
   const remote = await ownerClient(hub, record);
-  const merged: MergeResult = (
-    await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: message ?? `Bring in ${MIRROR_BRANCH}`, ifMatch: lastRemote }))
-  ).data;
-  if (merged.upToDate || !merged.commit) return { workspace: record, remoteHead: lastRemote, upToDate: true };
-
-  // What the merge changed, read at the merge commit and written here as one
-  // commit, outside the pipeline: the remote decided these documents.
-  const documents = await changedDocuments(hub, remote, branch, lastRemote, merged.commit);
+  // A bring-in that did not finish is settled first (./merged.ts): what the remote merged then is written
+  // here before anything is counted as unpushed or asked of the remote again.
+  const settled = await settleBringIn(hub, records, record, remote);
+  const { lastRemote } = await requireNothingUnpushed(hub, records, record, 'bringing in main');
   const local = localOf(hub, branch);
-  let localCommit = (await local.head())?.id ?? record.local;
-  if (documents.length) {
-    ({ commit: localCommit } = await local.putDocuments(documents, {
-      author: record.owner,
-      message: `Bring in ${MIRROR_BRANCH} from ${record.remote}: remote commit ${merged.commit}`,
-      create: true,
-    }));
-  }
   const table = (await records.getPush(branch)) ?? emptyPushTable();
-  const entry: PushedCommit = { local: localCommit, remote: merged.commit, parts: 0, broughtIn: true, pushedAt: new Date().toISOString() };
-  table.commits.push(entry);
+  // The marker, before the request: the remote may merge and its answer, or the read-back, not arrive.
+  table.bringingIn = { ifMatch: lastRemote, localHead: (await local.head())?.id ?? record.local, sentAt: new Date().toISOString() };
   await records.putPush(branch, table);
+  let merged: MergeResult;
+  try {
+    merged = (
+      await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: message ?? `Bring in ${MIRROR_BRANCH}`, ifMatch: lastRemote }))
+    ).data;
+  } catch (err) {
+    if (err instanceof ApiError && err.code !== 'remote_unreachable') {
+      // The remote answered, so nothing was merged: the marker goes.
+      delete table.bringingIn;
+      await records.putPush(branch, table);
+    }
+    throw err; // unreachable: the marker stays, and the next bring-in or push settles it from the remote's log
+  }
+  if (merged.upToDate || !merged.commit) {
+    delete table.bringingIn;
+    await records.putPush(branch, table);
+    // Nothing new now; what an earlier bring-in merged and this one finished writing is still reported.
+    return settled ? broughtIn(hub, records, record, remote, settled) : { workspace: record, remoteHead: lastRemote, upToDate: true };
+  }
+  table.bringingIn.merged = merged.commit;
+  await records.putPush(branch, table);
+  const written = await writeMerged(hub, records, record, remote, table);
+  return { ...(await broughtIn(hub, records, record, remote, written)), merge: { base: merged.base, source: merged.source, target: merged.target } };
+}
+
+/** The answer for a merge written here, its snapshots taken. */
+async function broughtIn(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, remote: Awaited<ReturnType<typeof ownerClient>>, written: Merged): Promise<BringInResult> {
+  const table = (await records.getPush(record.branch)) ?? emptyPushTable();
   // A brought-in record may name an older commit this hub lacks (a dataset
   // merged from main): its snapshot is taken now, as at the clone (plan §8).
-  await ensureSnapshots(hub, records, record, remote, documents, resolvableCommitsOf(record, table.commits));
-  return {
-    workspace: record,
-    remoteHead: merged.commit,
-    upToDate: false,
-    merge: { base: merged.base, source: merged.source, target: merged.target },
-    broughtIn: { local: localCommit, documents: documents.length },
-  };
+  await ensureSnapshots(hub, records, record, remote, written.documents, resolvableCommitsOf(record, table.commits));
+  return { workspace: record, remoteHead: written.remote, upToDate: false, broughtIn: { local: written.local, documents: written.documents.length } };
 }
 
 export function deliver(

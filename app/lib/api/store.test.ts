@@ -146,11 +146,14 @@ describe('the adapter stays behind its interfaces (workspace hub plan §13)', ()
   // remote's export at an older commit, and its bring-in the remote's merge
   // of main (ADR-0062 and ADR-0031, notes of 2026-11-01 and 2026-11-02). The
   // file-backed store implements the interface (ADR-0066), it does not call it.
+  // The bring-in's write is in merged.ts since 2026-11-11, so that a push can
+  // finish a bring-in that did not: the same second use, not a fourth.
   it('no module of the API reaches the operator-side methods but the clone, the snapshots and the bring-in (ADR-0062)', () => {
     expect(sources.filter((s) => /\b(createOperatorStore|OperatorStore)\b/.test(s.text)).map((s) => s.file).sort()).toEqual([
       join('filestore', 'store.ts'),
       join('workspace', 'bringIn.ts'),
       join('workspace', 'clone.ts'),
+      join('workspace', 'merged.ts'),
       join('workspace', 'snapshots.ts'),
     ]);
   });
