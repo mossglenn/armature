@@ -545,9 +545,26 @@ fn on_terminated(app: &AppHandle, code: Option<i32>) {
         core.exiting.store(true, SeqCst);
         return app.exit(0);
     }
-    let message = format!("The core ended unexpectedly (exit code {}); quit and open the program again", code.map_or("none".to_string(), |c| c.to_string()));
-    say(app, "error", &message);
+    // The system ending the session takes the core before the shell, which follows at once: that is
+    // an end, logged as one. The state still says the core is gone, should the shell outlive it.
+    let (level, message) = if ended_by_the_system(code, cfg!(windows)) {
+        ("info", "The system ended the core as the session ended (a logoff or a shutdown); open the program again to go on".to_string())
+    } else {
+        ("error", format!("The core ended unexpectedly (exit code {}); quit and open the program again", code.map_or("none".to_string(), |c| c.to_string())))
+    };
+    say(app, level, &message);
     set_state(app, |s| { s.core = "failed"; s.error = Some(message); s.actions.clear(); });
+}
+
+/// `DBG_TERMINATE_PROCESS`, the exit code of a process Windows ends itself at a logoff or a shutdown.
+const DBG_TERMINATE_PROCESS: i32 = 0x4001_0004;
+
+/// Whether the core's exit code says the system ended it with the session, not that it failed.
+/// Windows ends the sidecar before the shell hears of the logoff, so until 0.1.2 every logoff and
+/// shutdown left "The core ended unexpectedly (exit code 1073807364)" in the log, an error for an
+/// ordinary end (seen on the Windows PC, 2026-11-11). The code means nothing on another system.
+fn ended_by_the_system(code: Option<i32>, windows: bool) -> bool {
+    windows && code == Some(DBG_TERMINATE_PROCESS)
 }
 
 /// The last chance when the program ends without asking (macOS's quit, the Apple Event Cmd-Q
@@ -679,6 +696,15 @@ mod tests {
             ("TMPDIR", "/tmp"),
         ]));
         assert_eq!(names(&kept), ["HOME", "NODE_EXTRA_CA_CERTS", "OneDrive", "TMPDIR"]);
+    }
+
+    #[test]
+    fn takes_the_code_of_a_logoff_or_shutdown_on_windows_as_the_systems_end_and_no_other() {
+        assert!(ended_by_the_system(Some(1_073_807_364), true));
+        assert!(!ended_by_the_system(Some(1_073_807_364), false));
+        for code in [Some(0), Some(1), Some(-1), None] {
+            assert!(!ended_by_the_system(code, true), "{code:?}");
+        }
     }
 
     #[test]
