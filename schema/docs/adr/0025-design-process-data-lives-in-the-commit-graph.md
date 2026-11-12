@@ -333,6 +333,32 @@ Phase 2's routes land (ADR-0054 consequences).
    > encounter), so the probes of `writeQueue.test.ts` are run against the new version without it
    > first.
 
+   > **Note (2026-11-11):** a workspace hub's own actions broke this rule and now keep it (the code
+   > review of 2026-11-09, its W3, W4 and T9; decided by Amos on that review's options). Bringing
+   > in `main` committed what the remote merged with no queue and no head check, so a tool's write
+   > landing during it was overwritten with a 200 already given; a removal and a delivery that
+   > deletes checked for unpushed commits, waited on the remote, then deleted the branch, and a
+   > write landing in between went with it, the defect the note of 2026-11-06 closed for the
+   > remote's `DELETE /branches/:name`. Each of the three now holds the workspace's queue from its
+   > check that nothing is unpushed to its last local write, the remote's answers included
+   > (`workspace/bringIn.ts`). Holding it over a remote call is what the note above declined for a
+   > merge's check; here it is taken, since the alternative, a head check after the remote has
+   > already merged or deleted, refuses when nothing can be undone and leaves the workspace needing
+   > a recovery. The cost: a tool's write to that workspace waits as long as the remote takes, then
+   > lands after what was brought in (409 `document_moved` when it would replace a document the
+   > bring-in changed, by the rule of 2026-11-06) or finds the workspace gone (404). The clone runs
+   > in the new branch's queue from the remote's creation to the snapshots, so a second request for
+   > one workspace waits and finds the record rather than replacing a clone half made; the mirror
+   > of `main` and each snapshot's load take their own branch's queue. The order holds: a
+   > workspace's queue before a snapshot's, the mirror's taken and left before the workspace's, and
+   > work holding the mirror's or a snapshot's takes no other. A push joins only to settle a
+   > bring-in that did not finish (ADR-0065 decision 6, note of this day): it reads commits and
+   > writes none here. `queue.test.ts` now reads the API's modules for every call that commits, as
+   > `operator.test.ts` reads them for the skip: each module is listed with its number of commits
+   > and the module whose `exclusive` they run in, so a new commit fails until its queue has been
+   > looked at; the proof that a call is inside stays with the tests that send a write beside each
+   > action (`writeQueue.test.ts`, `cycle.test.ts`). No client changes.
+
 8. **History, changes and diff are read routes over the store's endpoints.** A document's
    history returns the commits that touched it, newest first, each with commit id, author,
    message, timestamp and the structural diff. A branch's changes since a commit are the changed

@@ -288,6 +288,31 @@ Three facts constrain the answer:
    > remote and the workspace here. The review is the program's, as plan §6 says; the local
    > preview is not built. `cycle.test.ts`.
 
+   > **Note (2026-11-11):** a bring-in is three steps that cannot be one, the remote's merge, the
+   > read-back and the local commit with its entry in the push table, and nothing covered the gaps.
+   > A connection dropped after the remote merged (no crash is needed, which the code review of
+   > 2026-11-09 did not say under its W4) left the remote one commit ahead of a table that did not
+   > know it, and every later bring-in and push was the remote's 412 with no way on. Since this day
+   > a marker, `bringingIn` in `push.json`, is written before the request as push writes `inFlight`:
+   > the remote commit the merge was conditioned on and the local head it was asked over, then the
+   > merge commit once the remote answers. The next bring-in or push settles a marker still there
+   > before anything else (`workspace/merged.ts`): the commit directly after the conditioned one in
+   > the remote's log is the merge when it carries a merge's metadata, and what it changed is
+   > written as the bring-in would have; a branch still at the conditioned commit, or moved by
+   > anyone's ordinary write, means no merge landed and the marker goes. A local commit already
+   > holding exactly those documents is taken as the bring-in's, by content and never by message.
+   > Commits a tool made since stay unpushed and what the merge changed is written after them,
+   > which leaves what the remote will hold once they are pushed after the merge, unless one of
+   > them changed a document the merge changed: the two orders then differ on it and no merge runs
+   > here (decision 3), so that is 409 `unpushed_commits` with `overlapping` and `merged`, the
+   > marker kept, from the bring-in and from the push. Such a workspace is as stuck as it was
+   > before; it is one of the cases the review's D6 (a discard) is for. A removal that failed
+   > partway (the review's W2) is finished by asking again: a local branch already gone has nothing
+   > unpushed and nothing to delete, and the folder's removals are tried again while another
+   > program holds a file. The three actions hold the workspace's write queue (ADR-0025 decision 7,
+   > note of this day). No refusal code is new and no route's answer changed shape, so no client
+   > revision. `cycle.test.ts`.
+
 7. **Tools reach a workspace hub on loopback, as its owner.** The `header` resolver serves, and
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the
    remote. Writes by an agent identity are refused until the remote can tell an agent's push from
