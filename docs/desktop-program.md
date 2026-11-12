@@ -93,7 +93,7 @@ Every refusal shows the message, a code and whether your instance or this machin
 | `sign_in_refused`, `sign_in_timeout` | The sign-in did not complete in the browser | Sign in again |
 | `signed_out` | The instance no longer accepts your sign-in | Sign in again |
 | `unsupported_version` | The instance is older than this program | Ask your administrator to update it |
-| `unpushed_commits` | Something waits to be pushed | Push first |
+| `unpushed_commits` | Something waits to be pushed | Push first. If the message says an earlier bring-in was not finished and names documents changed on both sides, pushing will not clear it, and the program has no way on from there yet; the work stays in the workspace's folder |
 | `bring_in_first` | `main` has moved since you last brought it in | Bring in `main`, then deliver |
 | `forbidden` | You may not do this on that branch; its reason says why | The message names who may |
 | `workspaces_exist` | You asked to connect elsewhere while workspaces exist | Deliver or remove them first |
