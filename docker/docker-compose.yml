@@ -98,6 +98,10 @@ services:
       # with a viewer needs no line for it; a relay's client is added by name,
       # and then the viewer's is written out beside it.
       - ARMATURE_OIDC_SERVICES=${ARMATURE_OIDC_SERVICES:-${ARMATURE_HUB_CLIENT_ID:-}}
+      # `1` for a rehearsal that is never a deployment: the hub then takes plain
+      # http for its issuer, the issuer's keys and its public address on a host
+      # that is not loopback, and the guard below lets ARMATURE_API_SCHEME=http by.
+      - ARMATURE_REHEARSAL=${ARMATURE_REHEARSAL:-}
       # The connection profile, `instance` in GET /discover: the name a person
       # confirms before connecting (the host name when unset), and where a client
       # beyond this server reaches the hub, by default what Caddy publishes under
@@ -195,6 +199,9 @@ services:
     # without its issuer and audience (the hub would not start) or without an
     # API host (Caddy would proxy the hub for any name); and the hub's site under
     # `header` is never there, whatever ARMATURE_API_HOST says (the Caddyfile).
+    # Since 2026-11-12 it refuses `oidc` with ARMATURE_API_SCHEME=http, which
+    # would publish the hub for bearer tokens in the clear, unless
+    # ARMATURE_REHEARSAL=1 says this is a rehearsal (the hub refuses the same).
     image: caddy:2.10.2-alpine
     profiles: [public]
     network_mode: none
@@ -204,6 +211,8 @@ services:
       - ISSUER=${ARMATURE_OIDC_ISSUER:-}
       - AUDIENCE=${ARMATURE_OIDC_AUDIENCE:-}
       - API_HOST=${ARMATURE_API_HOST:-api.${ARMATURE_SITE:-localhost}}
+      - API_SCHEME=${ARMATURE_API_SCHEME:-https}
+      - REHEARSAL=${ARMATURE_REHEARSAL:-}
     entrypoint:
       - sh
       - -c
@@ -225,6 +234,10 @@ services:
                 exit 1
                 ;;
             esac
+            if [ "$$API_SCHEME" != https ] && [ "$$REHEARSAL" != 1 ]; then
+              echo "ARMATURE_IDENTITY=oidc publishes the hub for bearer tokens, so ARMATURE_API_SCHEME is https; it is '$$API_SCHEME' (ARMATURE_REHEARSAL=1 allows plain http for a rehearsal, never a deployment)" >&2
+              exit 1
+            fi
             ;;
           *)
             echo "ARMATURE_IDENTITY=$$IDENTITY names no resolver (header, oidc)" >&2

@@ -163,8 +163,19 @@ function snapshotBudget(raw: string | undefined): number {
   return value;
 }
 
-/** An http or https address as given, without a trailing slash; throws naming the variable otherwise. */
-function httpUrl(variable: string, raw: string | undefined): string {
+/** A loopback name as a URL gives it: localhost, its IPv4 and IPv6 addresses, or a name under `.localhost` (RFC 6761). */
+const isLoopbackHost = (hostname: string): boolean =>
+  hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127(\.\d{1,3}){3}$/.test(hostname);
+
+/**
+ * An http or https address as given, without a trailing slash; throws naming
+ * the variable otherwise. Plain `http` is taken only for a loopback host, or
+ * when `rehearsal` says the instance is one (ARMATURE_REHEARSAL=1): under
+ * `oidc` these are the addresses the hub fetches its signing keys from and
+ * publishes for tokens to be sent to, and neither travels in the clear on a
+ * deployment (the 2026-11-09 review's A5).
+ */
+function httpUrl(variable: string, raw: string | undefined, rehearsal: boolean): string {
   const value = raw?.trim().replace(/\/+$/, '');
   if (!value) throw new Error(`${variable} is required when ARMATURE_IDENTITY=oidc`);
   let url: URL;
@@ -174,11 +185,23 @@ function httpUrl(variable: string, raw: string | undefined): string {
     throw new Error(`${variable}=${value} is not a URL`);
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`${variable}=${value} is not an http or https address`);
+  if (url.protocol === 'http:' && !rehearsal && !isLoopbackHost(url.hostname)) {
+    throw new Error(`${variable}=${value} is plain http on a host that is not loopback; use https, or set ARMATURE_REHEARSAL=1 for a rehearsal that is never a deployment`);
+  }
   return value;
 }
 
+/** ARMATURE_REHEARSAL: `1`, or unset; anything else is refused, so a misspelled value never passes for either. */
+function rehearsal(raw: string | undefined): boolean {
+  const value = raw?.trim();
+  if (!value) return false;
+  if (value === '1') return true;
+  throw new Error(`ARMATURE_REHEARSAL=${value} is not a setting (1, or unset)`);
+}
+
 /** ARMATURE_PUBLIC_URL as given, without a trailing slash, when the hub is published; a value that is not an address stops the hub at start. */
-const publicUrl = (raw: string | undefined): string | undefined => (raw?.trim() ? httpUrl('ARMATURE_PUBLIC_URL', raw) : undefined);
+const publicUrl = (raw: string | undefined, rehearsed: boolean): string | undefined =>
+  raw?.trim() ? httpUrl('ARMATURE_PUBLIC_URL', raw, rehearsed) : undefined;
 
 /**
  * The `oidc` resolver's settings from the environment: the issuer and the
@@ -187,7 +210,8 @@ const publicUrl = (raw: string | undefined): string | undefined => (raw?.trim() 
  * ids, listed (decision 4, note of 2026-11-12).
  */
 function oidcConfig(env: Readonly<Record<string, string | undefined>>): OidcConfig {
-  const issuer = httpUrl('ARMATURE_OIDC_ISSUER', env.ARMATURE_OIDC_ISSUER);
+  const rehearsed = rehearsal(env.ARMATURE_REHEARSAL);
+  const issuer = httpUrl('ARMATURE_OIDC_ISSUER', env.ARMATURE_OIDC_ISSUER, rehearsed);
   const audience = env.ARMATURE_OIDC_AUDIENCE?.trim();
   if (!audience) throw new Error('ARMATURE_OIDC_AUDIENCE is required when ARMATURE_IDENTITY=oidc');
   const admit = { issuers: new Set<string>(), domains: new Set<string>() };
@@ -199,7 +223,7 @@ function oidcConfig(env: Readonly<Record<string, string | undefined>>): OidcConf
     issuer,
     audience,
     ...(env.ARMATURE_OIDC_CLIENT_ID?.trim() ? { clientId: env.ARMATURE_OIDC_CLIENT_ID.trim() } : {}),
-    ...(env.ARMATURE_OIDC_JWKS_URL?.trim() ? { jwksUrl: httpUrl('ARMATURE_OIDC_JWKS_URL', env.ARMATURE_OIDC_JWKS_URL) } : {}),
+    ...(env.ARMATURE_OIDC_JWKS_URL?.trim() ? { jwksUrl: httpUrl('ARMATURE_OIDC_JWKS_URL', env.ARMATURE_OIDC_JWKS_URL, rehearsed) } : {}),
     admit,
     // Client ids as given: a provider compares them exactly, so nothing is lowered.
     services: new Set((env.ARMATURE_OIDC_SERVICES ?? '').split(',').map((e) => e.trim()).filter(Boolean)),
@@ -246,7 +270,7 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
     ...(role === 'workspace' && env.ARMATURE_LOCAL_TOKEN?.trim() ? { localToken: env.ARMATURE_LOCAL_TOKEN.trim() } : {}),
     actionRoutes: role === 'workspace' && actionRoutes(env.ARMATURE_WORKSPACE_ACTIONS),
     identity,
-    ...(identity === 'oidc' ? { oidc: oidcConfig(env), publicUrl: publicUrl(env.ARMATURE_PUBLIC_URL) } : {}),
+    ...(identity === 'oidc' ? { oidc: oidcConfig(env), publicUrl: publicUrl(env.ARMATURE_PUBLIC_URL, rehearsal(env.ARMATURE_REHEARSAL)) } : {}),
     ...(role === 'remote' && env.ARMATURE_INSTANCE_NAME?.trim() ? { instanceName: env.ARMATURE_INSTANCE_NAME.trim() } : {}),
     allowedHosts: list(env.ARMATURE_ALLOWED_HOSTS),
     allowedOrigins: list(env.ARMATURE_ALLOWED_ORIGINS),
