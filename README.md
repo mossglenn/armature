@@ -197,9 +197,11 @@ docs/
   desktop-program-plan.md     The desktop program (draft 2026-11-05): the host of a workspace hub a designer installs, with its sign-in, its pairing screen and its actions; the workspace hub plan's step 7
   mcp-server-plan.md          The Armature MCP server (draft 2026-10-27): a client that asks the graph through the intelligence reads at a named commit
   storyline-bridge-plan.md    The Storyline bridge (draft 2026-10-27): a client that records each Storyline build in the graph by hash and brings results back as metrics
+  datashop-bridge-plan.md     The DataShop bridge (draft 2026-11-09): a client that sends the alignment at a commit to DataShop as a knowledge-component model and brings the evidence back as metrics and findings
+  knowledge-components-plan.md  Knowledge components and alignment models (draft 2026-11-11, nothing decided): the staged tests, studies and decisions toward a designer's knowledge-component model as design data
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
-  research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings
+  research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings; tutor-fixtures/, tutor and adaptive content copied from its sources for the knowledge components plan's mapping study (2026-11-11)
   vendor/terminusdb/          Generated: vendored, version-stamped TerminusDB documentation
 app/                          The API with its hosts (server.ts; desktop.ts, the desktop program's core) and the viewer (the Next.js pages); see app/README.md
   app/                        The viewer's pages (no API route: the Next.js app is a client of the hub)
