@@ -2,6 +2,8 @@
 
 *Status: draft 2026-11-12, for review. A plan for a client of the hub, built outside this repository (proposed `mossglenn/armature-ledger`), in the shape of `docs/mcp-server-plan.md` and `docs/datashop-bridge-plan.md`. It absorbs the proposed **LEED importer** of `docs/demo-coverage.md` and adds real-time capture. "Ledger" is a working name. The questions in §12 each carry the recommendation the plan is written to.*
 
+Abbreviations: LEED (Learning Engineering Evidence and Decision, the MIT tracker), ADR (Architecture Decision Record), MCP (Model Context Protocol), AI (artificial intelligence), LLM (large language model), CLI (command-line interface), UI (user interface), API (application programming interface), CI (continuous integration), SME (subject-matter expert), MIT (Massachusetts Institute of Technology), ICICLE (the IEEE International Consortium for Innovation and Collaboration in Learning Engineering), SIG (special interest group), JAID (*Journal of Applied Instructional Design*), CSV (comma-separated values), XLSX (the Excel workbook format), VTT (WebVTT, a transcript and caption format), ISO (International Organization for Standardization, here its date format), URL (web address), ID (identifier).
+
 ---
 
 ## 1. Purpose
@@ -293,7 +295,7 @@ A global hotkey (`⌥⌘D` suggested) opens a single-line panel:
 ### 7.2 Front ends, in order
 
 1. **CLI** (`ledger decide "…" --why "…" --on Module/m2 --because <url> --influence Requirements`). The reference implementation; scriptable; how tests drive capture.
-2. **Raycast extension.** Amos's daily driver; React-in-TS like the rest of the stack; preferences hold hub URL, `ARMATURE_USER`, and the pairing value. Commands: *Decide*, *Decision Triage*, *Decisions Needing Revisit*.
+2. **Raycast extension.** Amos's daily driver; React in TypeScript like the rest of the stack; preferences hold hub URL, `ARMATURE_USER`, and the pairing value. Commands: *Decide*, *Decision Triage*, *Decisions Needing Revisit*.
 3. **Tray panel** (Tauri, small). Only when a non-Raycast user exists (Windows, Linux).
 
 **Why not in the desktop program?** Its plan rules it out explicitly: "The program is not a tool… nothing a plugin would build" (Development Principle 5). The hotkey belongs to Ledger.
@@ -414,7 +416,7 @@ Nothing in the hub is required for Phase 1. Asked for, each by its own rule:
    - `DesignNote.relatesToDecision` activated, as ADR-0012 reserved
 4. **`ExternalSystem`**: stay on `Other` until a second client names LEED rows (§12 Q4).
 5. **Desktop program:** route `armature://decide` to a paired tool (§6.2); a dated note on its plan.
-6. **Documents** when accepted: `demo-coverage.md` (rename LEED importer → Ledger, add the capture capabilities), the development plan's needs-analysis-intake row, README plan table, SESSION.md.
+6. **Documents.** *Updated with this plan, 2026-11-12:* `demo-coverage.md` (the LEED importer renamed Ledger, its capture capabilities added, the totals recounted), the development plan's needs-analysis-intake row and §6 deferral line, the README's plan table and docs list, `PROJECT_CONTEXT.md`'s row and `CLAUDE.md`'s map. When the plan is accepted: `SESSION.md`.
 
 ---
 
