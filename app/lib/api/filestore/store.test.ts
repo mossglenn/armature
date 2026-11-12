@@ -240,6 +240,69 @@ describe('branches', () => {
   });
 });
 
+describe('a branch deleted while another is written (the 2026-11-09 review’s W1)', () => {
+  /** Files whose write of one path waits until released, so a delete can run between a commit file and its head. */
+  function held(path: string): { files: StoreFiles; reached: Promise<void>; arm: () => void; release: () => void } {
+    const inner = memoryFiles();
+    let reach!: () => void;
+    let release!: () => void;
+    const reached = new Promise<void>((resolve) => (reach = resolve));
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let armed = false;
+    const files: StoreFiles = {
+      ...inner,
+      async write(target, text) {
+        if (armed && target === path) {
+          reach();
+          await gate;
+        }
+        await inner.write(target, text);
+      },
+    };
+    return { files, reached, arm: () => void (armed = true), release };
+  }
+
+  it('keeps the commit of a write in flight on another branch, and the folder opens again', async () => {
+    const gate = held('kept/head.json');
+    const { files, main } = await fresh(gate.files);
+    await main.createBranch('kept', { branch: 'main' });
+    await main.createBranch('gone', { branch: 'main' });
+    await main.at({ branch: 'gone' }).putDocuments([thing('g')], by);
+    const kept = main.at({ branch: 'kept' });
+
+    gate.arm();
+    const writing = kept.putDocuments([thing('k')], by);
+    await gate.reached; // the commit file is written, the head not yet moved
+    const deleting = main.deleteBranch('gone');
+    gate.release();
+    const [{ commit }] = await Promise.all([writing, deleting]);
+
+    expect((await kept.head())?.id).toBe(commit);
+    expect((await kept.allDocuments()).documents.map((d) => d['@id'])).toContain('Thing/k');
+    expect(await files.list('kept/commits')).toContain(`${commit}.json`);
+    const again = openFileStore(files).at({ branch: 'kept' });
+    expect((await again.allDocuments()).documents.map((d) => d['@id'])).toContain('Thing/k');
+  });
+
+  it('does not bring back a branch deleted while a write to it was in flight', async () => {
+    const gate = held('gone/head.json');
+    const { files, main } = await fresh(gate.files);
+    await main.createBranch('gone', { branch: 'main' });
+    const gone = main.at({ branch: 'gone' });
+
+    gate.arm();
+    const writing = kind(gone.putDocuments([thing('g')], by));
+    await gate.reached;
+    const deleting = main.deleteBranch('gone');
+    gate.release();
+    await Promise.all([writing, deleting]);
+
+    // Whichever went first, the branch is gone and the folder is whole.
+    expect(await main.listBranches()).toEqual(['main']);
+    expect(await openFileStore(files).at({ branch: 'main' }).listBranches()).toEqual(['main']);
+  });
+});
+
 describe('exclusive, the hub\u2019s write queue (ADR-0025 decision 7, note of 2026-11-06)', () => {
   it('lets work holding it commit: it is not the queue commits go through', async () => {
     const { main } = await fresh();
