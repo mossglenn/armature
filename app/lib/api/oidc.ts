@@ -97,7 +97,7 @@ export function claimsOf(payload: JWTPayload, oidc: OidcConfig): IdentityClaims 
   const email = text(payload.email);
   const admitted =
     oidc.admit.issuers.has(oidc.issuer) ||
-    (email !== undefined && payload.email_verified !== false && oidc.admit.domains.has(domainOf(email)));
+    (email !== undefined && payload.email_verified === true && oidc.admit.domains.has(domainOf(email)));
   return { externalId: sub, issuer: oidc.issuer, admitted, ...(name ? { displayName: name } : {}), ...(email ? { email } : {}) };
 }
 
