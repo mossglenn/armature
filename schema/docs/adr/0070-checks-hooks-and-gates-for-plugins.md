@@ -17,7 +17,8 @@ same day on the plan's six questions). Not accepted and not built. It changes th
 one class and one enum, so on acceptance it is implemented with `schema.json`, the generated types and the
 appendix in one commit (CLAUDE.md, "After schema changes"). The two platform checks under
 Verification were run on 2026-11-12; both pass, and what they found is recorded there and in open
-questions 1 and 5.
+questions 1 and 5. Amos decided the five open questions the same day, each as recommended
+(decisions 2, 3 and 12); the record as a whole is not yet accepted.
 
 On acceptance it would annotate, with dated notes:
 
@@ -30,6 +31,8 @@ On acceptance it would annotate, with dated notes:
 - **ADR-0065 decision 5**, whose push gains a gate before its first replay on a workspace hub
   (decision 8); and **decision 7**, whose local token stays as it is now but which a later step
   (the plan's §10, step 2) would turn into scoped tokens.
+- **ADR-0066 decision 5**, whose file-backed store's patches differ from the store's only in a
+  list's segmentation: inside a JSON value their operations may differ too (decision 12).
 - **ADR-0067 decision 4**, whose service credential reads only: posting a check run is not a write
   to the graph, so a service may do it under the permission decision 4 below adds.
 - **ADR-0068 decision 4**: two rows, *report a required check* and *write a requirement*; and
@@ -100,20 +103,32 @@ third.
    is a push's replay, the count of changed documents by class), never the documents; a plugin
    fetches those through the existing reads (`/branches/:name/changes`, `/log`, `/export`).
 
-   **Where the feed comes from is open question 1:** derived from the branches' commit logs, or
-   an event log the hub keeps. Either way the cursor survives a restart, a process-local notifier
-   fed by the code paths that commit (those `queue.test.ts` lists) wakes the waiting requests, any
+   **The feed is derived from the store's commit logs, and its cursor holds each branch's head**
+   (open question 1, decided 2026-11-12). The hub keeps no event log: every event but
+   `hub.started` is a commit the store already holds, or a branch appearing in or vanishing from
+   the store's list of branches. The cursor is opaque to clients and encodes the head the client
+   last saw on each branch. A request lists the branches and reads each head; a branch whose head
+   moved is paged back to the cursor's head for it, a branch missing from the cursor is
+   `branch.created` and is paged back to a commit the cursor holds, and a branch missing from the
+   list is `branch.deleted`, its commits held by another branch's log (ADR-0025 decision 6, the
+   hub's delete rule). Within a branch, events follow its log; across branches they are ordered
+   by timestamp, which is advisory, since the file-backed store stamps to the millisecond (check
+   AQ). The cursor survives a restart because it names commits, a process-local notifier fed by
+   the code paths that commit (those `queue.test.ts` lists) wakes the waiting requests, any
    identity that may read may read the feed, and it takes no filter on an author, so it offers
-   nothing ADR-0021 forbids that the log does not already show.
+   nothing ADR-0021 forbids that the log does not already show; an event's author follows the
+   log's rule under every profile (open question 4). The transport is long-poll; server-sent
+   events wait for a client that needs lower latency (open question 3).
 
 3. **Check runs, kept by the hub outside the design graph.** `POST /api/v1/checks/runs` records a
    verdict: `check`, `commit`, `branch`, `conclusion` (`pass`, `fail`, `neutral` or `error`), a
    `summary`, `counts`, a `paramsHash` and an optional `detailsUrl`. The hub adds the reporter (the
    caller), the time and an identifier. `GET /api/v1/checks?commit=|branch=` reads them. Runs are
    kept by the hub on both roles, bounded (the newest 50 per check and branch), and never written
-   to the design graph; whether they are held in memory or persisted is open question 2. Held in
-   memory, they are gone after a restart, and `hub.started` tells plugins to report again on the
-   heads they care about. `paramsHash` is the SHA-256 of the requirement's `params` the plugin ran with, so a run
+   to the design graph. They are held in memory (open question 2, decided 2026-11-12): gone after
+   a restart, when `hub.started` tells plugins to report again on the heads they care about.
+   They are persisted when merges stalled after a restart are seen, in a second database on a
+   remote and a file on a workspace hub (that question's options (c) and (b)). `paramsHash` is the SHA-256 of the requirement's `params` the plugin ran with, so a run
    made under other settings does not satisfy the requirement now in force. It is computed over a
    canonical form of the value as the hub reads it (keys sorted at every depth, no whitespace,
    numbers as JSON prints them), and the hub returns it beside `params` so that a plugin copies it
@@ -237,6 +252,13 @@ third.
     expected to report about records, never to summarize a person's work (ADR-0021); a rule such as
     "items attested only by their own author" reports the items.
 
+12. **A diff of `params` is the store's own patch** (open question 5, decided 2026-11-12). The
+    history and diff routes keep passing each store's patch through unchanged. Inside a JSON value
+    the two stores' operations may differ, as a list's segmentation already may: TerminusDB
+    patches a list of objects of equal length as a plain array of positional patches (check AP4).
+    The reference patcher, `filestore/patch.ts`'s `applyPatch`, learns that form, a test holds it
+    to AP4's patch, and `docs/api.md` says both shapes apply.
+
 ## Alternatives considered
 
 - **Rules in the hub** (the plan's first version): a rule pack evaluated in the write pipeline and
@@ -265,7 +287,9 @@ third.
 ## Open questions
 
 Questions 1 and 2 were settled in the first draft of this record without being put to Amos;
-they are open until he decides them.
+question 5 was raised by check AP4. **Amos decided all five on 2026-11-12, each as recommended;**
+the decisions are in decisions 2, 3 and 12, and the options are kept here as the record of what
+was weighed.
 
 1. **Where the event feed comes from** (decision 2).
    - *(a) Derived from the store's commit logs.* Every event but `hub.started` is a commit the
@@ -306,7 +330,8 @@ they are open until he decides them.
      which needs a repair path.
 
    *Recommendation:* (a), with a cursor of branch heads, since check AQ passed; (b) if polling
-   cost shows on an instance with many branches.
+   cost shows on an instance with many branches. *Decided (Amos, 2026-11-12):* (a), with a cursor
+   of branch heads (decision 2).
 2. **Where check runs live** (decision 3).
    - *(a) In the hub's memory, on both roles.* For: no state, no deployment change. Against: every
      restart makes plugins report again (`hub.started`), and a reporter that is down when the hub
@@ -320,12 +345,15 @@ they are open until he decides them.
 
    *Recommendation:* (a) until merges stalled after restarts are seen, then (c) on a remote and
    (b) on a workspace hub. If question 1 chooses (b), a remote already has a volume, and (b) here
-   costs nothing more.
+   costs nothing more. *Decided (Amos, 2026-11-12):* (a), then (c) and (b) when stalled merges are
+   seen (decision 3).
 3. **Long-poll or server-sent events.** *Recommendation:* long-poll first, the simplest thing
    every client and proxy handles; server-sent events when a client needs lower latency.
+   *Decided (Amos, 2026-11-12):* as recommended (decision 2).
 4. **The feed under the `pseudonymous` profile.** An event names its author as a `User` reference,
    as the log does. *Recommendation:* the same rule the log follows under `oidc`, with no rewriting
-   until an export-scoped reader of the feed exists.
+   until an export-scoped reader of the feed exists. *Decided (Amos, 2026-11-12):* as
+   recommended (decision 2).
 5. **How a change to `params` reads in a diff** (raised by check AP4, 2026-11-12). The history
    and diff routes pass the store's patch through unchanged, and `docs/api.md` promises that the
    file-backed store's patches differ from the store's only in a list's segmentation, never in
@@ -346,7 +374,8 @@ they are open until he decides them.
      routes no longer pass the store's patch through unchanged, and building the swap needs the
      document at both commits, a read per entry of a history.
 
-   *Recommendation:* (a); (b) when a client applies patches of settings.
+   *Recommendation:* (a); (b) when a client applies patches of settings. *Decided (Amos,
+   2026-11-12):* (a) (decision 12).
 
 ## Verification
 
@@ -373,7 +402,8 @@ patch is open question 5; and its millisecond stamps were measured by a probe of
 kept. Each becomes a test with the build.
 
 Before the build is accepted as done, the tests the plan's §16 lists, among them: the feed resumes
-from a cursor after a restart (and, under open question 1's option (a), matches the logs); a run by the wrong reporter or with a stale
+from a cursor after a restart and matches the logs, a branch created and one deleted between two
+requests included, on both stores; `applyPatch` applies AP4's patch (decision 12); a run by the wrong reporter or with a stale
 `paramsHash` does not count; every authority row failing and passing; `bring_in_first`,
 `checks_pending`, `checks_failed` and an override's trailers; a client-sent `Armature-Check`
 refused; a merge with no requirement unchanged; a push stopped by a personal requirement and
@@ -387,8 +417,8 @@ few lines, never Lint, so that no hub test depends on a plugin.
 - What a merge relied on is in the commit graph, so the Process miner and any reader can ask which
   checks a change passed and who overrode which, and why.
 - The hub gains a route family, one schema class and one enum, two constraints, two trailers, three answers
-  (`checks_pending`, `checks_failed`, `bring_in_first` on the remote) and state for runs, and
-  perhaps events, whose keeping open questions 1 and 2 decide.
+  (`checks_pending`, `checks_failed`, `bring_in_first` on the remote) and runs held in memory; it
+  keeps no event log and no new volume (decisions 2 and 3), so how an instance runs is unchanged.
 - Every tool can react to changes by pulling the feed, which SESSION.md item 18 lists as missing
   whether or not a gate is required.
 - No check blocks a single write; a rule that must is an invariant by ADR (decision 9).
