@@ -86,6 +86,16 @@ annotate:
   (decision 6), registering a person needs an administrator, and `GET /users/me` returns grants
   (decisions 4 and 7).
 
+> **Note (2026-11-12):** ADR-0070 is accepted, not yet built. Decision 4's table gains two rows
+> with no new role (ADR-0070 decisions 4 and 5): *report a required check*, the agent a
+> `CheckRequirement` names (operation `report_check`); and *write a requirement*, for merges into
+> `main` a maintainer of `main` or of every branch, for merges into branch B its owner or a
+> maintainer of B or of every branch, and for a `locked` one an administrator. A requirement lives
+> on `main` and names an agent as its reporter (constraints 23 and 24, as constraints 21 and 22 for
+> a grant). Decision 3's deletion of a branch revokes its requirements in the same marked commit
+> that revokes its grants. Open question 2, a request for delivery, gains a hub-side answer without
+> CoQui-specific code: a requirement on the branch a round merges into.
+
 ## Context
 
 ADR-0032 decision 1 has the hub resolve identity and never authenticate; ADR-0015 leaves database

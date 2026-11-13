@@ -52,6 +52,17 @@ Decision 6's branch deletion is the owner's or a maintainer's, revokes the branc
 
 > **Note (2026-11-01):** built: creating a branch writes the creator's `Owner` grant on `main` as a commit of its own, so `POST /branches` needs an identity; who may write, merge and delete is checked (ADR-0068 decisions 3 and 4, Status note of 2026-11-01); the hub's first trailer, `Armature-On-Behalf-Of`, is written and refused from clients (ADR-0067 decisions 3 and 6).
 
+> **Note (2026-11-12):** ADR-0070 is accepted, not yet built. Decision 2's reserved trailers gain
+> two the hub writes and refuses from clients with 400 `reserved_trailer`: `Armature-Check`, one per
+> requirement a merge was held to, and `Armature-Check-Override`, one per override with its reason
+> (ADR-0070 decision 7). Decision 5's merge gains a step after its check of the merged state, for a
+> merge that `CheckRequirement` records on `main` apply to: the source must already contain the
+> target's head (409 `bring_in_first`), and each required check must have a run by its reporter at
+> the source's head, with the current `paramsHash`, concluding `pass` or `neutral` (409
+> `checks_pending`, 422 `checks_failed`), unless someone who may merge overrides it with a reason
+> (ADR-0070 decision 6). A merge no requirement applies to is unchanged. Decision 6's deletion of a
+> branch also revokes its requirements (ADR-0068 decision 3, note of this date).
+
 ## Context
 
 The position paper's third principle (plan §1 P3) promises version control modeled on Git:
