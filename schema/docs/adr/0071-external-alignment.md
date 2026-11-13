@@ -55,7 +55,7 @@ alignment claims, the embedded shape fails in three places:
    name the objective as its subject. The staleness read compares the whole subject at `asOf` and at
    the ref (ADR-0028 decision 7), and ADR-0030 decision 4 showed that the comparison sees changes
    inside nested subdocuments. Adding a second alignment to LO-3 therefore makes every earlier
-   verdict on LO-3 `Stale`, for every alignment it carries. Check AP (Verification) demonstrates it.
+   verdict on LO-3 `Stale`, for every alignment it carries. Check AR (Verification) demonstrates it.
 2. **No reverse lookup.** "Which objectives align with item X" is a filter on an embedded part,
    which the list route refuses (`docs/api.md`: "A filter ... on an embedded part: 400
    `unknown_field`"). A client would read every objective at the ref and scan.
@@ -146,7 +146,7 @@ even through `Exact`, and no alignment between two outside items. Each value's e
 
 ### 3. The statement is fingerprinted, its text stored only where allowed
 
-**Constraint 23:** an `ExternalAlignment` carries `statementText` or `statementHash`, or both
+**Constraint 25:** an `ExternalAlignment` carries `statementText` or `statementHash`, or both
 (422 `alignment_without_statement`). `statementHash` and `hashAlgorithm` are present together
 (422 `hash_incomplete`), and `statementHash` is checked as constraint 18 checks `contentHash`
 (`hash_malformed` for an algorithm the hub knows).
@@ -204,7 +204,7 @@ course claim" count `Active` only; the status carries no further hub behavior.
 
 `replacedBy` records a retarget, ESCO's second migration choice: when an outside item is replaced
 or a mapper decides another item fits better, a new alignment is written and the old one is retired
-pointing at it. **Constraint 24:** a `replacedBy` names an alignment of the same objective
+pointing at it. **Constraint 26:** a `replacedBy` names an alignment of the same objective
 (422 `replacement_objective_mismatch`), and an alignment with `replacedBy` is `Retired`
 (422 `replaced_not_retired`). The three choices themselves (refresh the fingerprint, retarget,
 retire) are the plugin's workflow; each is an ordinary write with an author and a reason.
@@ -215,7 +215,7 @@ An SME's verdict on an alignment is an `Attestation` whose `subject` is the `Ext
 Since the record is the claim, a claimless endorsement (ADR-0028 decision 2) is enough; a tool may
 add a `claimRef` when the verdict is about one aspect, such as the strength. Staleness is ADR-0028
 decision 7's read with no change: the judged state is the alignment's, so adding another alignment
-to the objective stales nothing (check AP).
+to the objective stales nothing (check AR).
 
 **A change to the objective does not stale a verdict on its alignment**, because the objective is a
 reference from the alignment, not part of it. A reader that wants to know whether the objective
@@ -274,7 +274,7 @@ projects carry standards alignments, and an importer for a publisher's pre-align
 
 - **`ExternalRef` on the objective, verdicts as attestations on the objective with a `claimRef` per
   alignment.** No schema change beyond ADR-0030's open fields. Rejected: every alignment change
-  stales every verdict on the objective (check AP), the reverse lookup is a scan, and a trace has
+  stales every verdict on the objective (check AR), the reverse lookup is a scan, and a trace has
   nowhere to start. It remains what a client can do on a hub without this decision.
 - **A client-assigned identifier on `ExternalRef`, treated as a part so an attestation can name it.**
   Exact staleness with the existing shape. Rejected: it reverses ADR-0030 decision 5 and stretches
@@ -306,11 +306,11 @@ To run before acceptance, as checks in `scripts/platform_checks.js`:
 
 | Check | What it must show |
 |---|---|
-| AP1 | Through the API on the seed: an objective carrying one `ExternalRef` and an attestation about it, with `asOf` at that state; a second `ExternalRef` added; the attestations read reports the attestation `Stale`. The motivating case, demonstrated rather than inferred |
-| AP2 | `GET /documents/LearningObjective?externalRefs.identifier=...` is 400 `unknown_field` (confirms `docs/api.md`) |
-| AQ1 | A Hash-keyed class whose key includes an enum field and a string field holding a URI (with `/`, `:` and `#`) round-trips through the store, and the id the store mints is the id check AI's formula computes, so the file-backed store (ADR-0066) mints the same one |
-| AQ2 | A filter on a required `xsd:string` field of such a class is applied by the store, not the hub (check Y's distinction) |
-| AQ3 | A replace with an unchanged key and a changed `statementHash` changes the record, and an attestation on it reads `Stale`; a second alignment of the same objective leaves it `Current` |
+| AR1 | Through the API on the seed: an objective carrying one `ExternalRef` and an attestation about it, with `asOf` at that state; a second `ExternalRef` added; the attestations read reports the attestation `Stale`. The motivating case, demonstrated rather than inferred |
+| AR2 | `GET /documents/LearningObjective?externalRefs.identifier=...` is 400 `unknown_field` (confirms `docs/api.md`) |
+| AS1 | A Hash-keyed class whose key includes an enum field and a string field holding a URI (with `/`, `:` and `#`) round-trips through the store, and the id the store mints is the id check AI's formula computes, so the file-backed store (ADR-0066) mints the same one |
+| AS2 | A filter on a required `xsd:string` field of such a class is applied by the store, not the hub (check Y's distinction) |
+| AS3 | A replace with an unchanged key and a changed `statementHash` changes the record, and an attestation on it reads `Stale`; a second alignment of the same objective leaves it `Current` |
 
 ## Consequences
 
@@ -365,7 +365,7 @@ To run before acceptance, as checks in `scripts/platform_checks.js`:
 - ADR-0030 — `ExternalRef` and `Attachment`; its open items answered here; annotated on acceptance
 - ADR-0031 — export slices and profiles
 - ADR-0057 — `asOf`, which lets a client compare the objective at a verdict's commit
-- ADR-0066 — the file-backed store's Hash ids (check AQ1)
+- ADR-0066 — the file-backed store's Hash ids (check AS1)
 - ADR-0070 (proposed) — a required check over alignments is a plugin's verdict, not hub logic
 - Candidate ADR-0042 — adopted here for external alignment; candidates 0040, 0043, 0044
 - `docs/crosswalk-plan.md` — the client and its build order

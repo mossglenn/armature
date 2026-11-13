@@ -165,19 +165,19 @@ For each, record: where KC labels attach (problem, step, link); how many KCs per
 
 ### Stage 2 · Platform checks
 
-**Question.** Does the store do what the target shape relies on? New lettered checks in `scripts/platform_checks.js`, from AP on, against the pinned TerminusDB v12.0.7:
+**Question.** Does the store do what the target shape relies on? New lettered checks in `scripts/platform_checks.js`, from AT on, against the pinned TerminusDB v12.0.7:
 
 | Check | What it probes | Relied on by |
 |---|---|---|
-| AP | A `Set` of document references on an abstract-typed subdocument inside a `List`, typed to a document class: loads, round-trips, and survives a replace that regenerates nested ids (check J4's case) | `StepFragment.exercises` |
-| AQ | Deleting a document referenced only from inside a nested subdocument: refused, as check AC found for a top-level reference | KC deletion |
-| AR | The store's diff reports a change to a reference set inside a nested fragment at field level (as J3 does for text) | History and staleness of step tags |
-| AS | A template query by a reference inside a subdocument; if the store cannot, `Graph.where` lists it (check Y's pattern) | "Which steps exercise KC x" |
-| AT | Export and re-import (check AE's path) with references from nested subdocuments to documents | Export profiles, a workspace hub's clone |
+| AT | A `Set` of document references on an abstract-typed subdocument inside a `List`, typed to a document class: loads, round-trips, and survives a replace that regenerates nested ids (check J4's case) | `StepFragment.exercises` |
+| AU | Deleting a document referenced only from inside a nested subdocument: refused, as check AC found for a top-level reference | KC deletion |
+| AV | The store's diff reports a change to a reference set inside a nested fragment at field level (as J3 does for text) | History and staleness of step tags |
+| AW | A template query by a reference inside a subdocument; if the store cannot, `Graph.where` lists it (check Y's pattern) | "Which steps exercise KC x" |
+| AX | Export and re-import (check AE's path) with references from nested subdocuments to documents | Export profiles, a workspace hub's clone |
 
-The file-backed store gets the same cases in its contract test, since a workspace hub must hold the same data (ADR-0066). AP to AT are needed only for stage 7; stage 4 needs nothing the store has not shown (a `Set` of references on a document is what `assesses` already is, and check Y queries it).
+The file-backed store gets the same cases in its contract test, since a workspace hub must hold the same data (ADR-0066). AT to AX are needed only for stage 7; stage 4 needs nothing the store has not shown (a `Set` of references on a document is what `assesses` already is, and check Y queries it).
 
-**Gate.** If AP or AQ fails, step-level KCs become a junction document (`StepComponentLink` over `(item, fragmentId, kc)`, Hash-keyed) rather than a field on a fragment. Stage 7's ADR records which, and why.
+**Gate.** If AT or AU fails, step-level KCs become a junction document (`StepComponentLink` over `(item, fragmentId, kc)`, Hash-keyed) rather than a field on a fragment. Stage 7's ADR records which, and why.
 
 ### Stage 3 · ADR: knowledge components
 
@@ -289,11 +289,11 @@ Recommendation, to test: (i) until a trigger, then (ii). KCs keep one identity a
 | Stage | Where the tests live | What they protect |
 |---|---|---|
 | 1 | `docs/research/tutor-content-mapping.md`; a scratch branch | That the shape answers real content |
-| 2 | `scripts/platform_checks.js` AP to AT; `filestore/contract.test.ts` | The store behaviors the ADRs cite |
+| 2 | `scripts/platform_checks.js` AT to AX; `filestore/contract.test.ts` | The store behaviors the ADRs cite |
 | 4 | `app/lib/api/*.test.ts` (write, intelligence, export, client), `app/lib/graph/` | KC writes, reads, export, negotiation, the viewer |
 | 5, 8 | The DataShop bridge's repository: recorded responses, contract tests against a seeded hub | KC models out, KC metrics and findings back |
 | 6 | `app/lib/api/intelligence.test.ts`, or the client's tests | Opportunity coverage |
-| 7 | `invariants/` tests for constraints 23 onward; `fragments.ts` tests | Steps, nested fragment identity, grain |
+| 7 | `invariants/` tests for its new constraints (numbered after ADR-0070's 23 and 24 and ADR-0071's 25 and 26); `fragments.ts` tests | Steps, nested fragment identity, grain |
 | 9 | `app/lib/api/*.test.ts` | Coexisting models without changing coverage |
 
 ---
