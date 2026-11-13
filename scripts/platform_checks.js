@@ -165,6 +165,22 @@
 //      the middle and at the end, a negative integer, two references (X1's Link) and, for
 //      information, a Set in a key (order-independent; empty, it is `+none+` too)
 //
+// Checks, hooks and gates for plugins (ADR-0070, proposed; its Verification), added 2026-11-12:
+//   AP. A requirement-shaped class: a required sys:JSON field and a Hash key over three fields,
+//      two of them Optional. The four key combinations are four ids, each AI's formula; a JSON
+//      value with every type reads back structurally equal, but its keys come back in an order
+//      of the store's own and 1.0 as 1, so a hash of it is over a canonical form; null is
+//      refused, an array, a string or a number accepted; a replace swaps the value whole; the
+//      store's diff patches inside the value, a list of scalars as CopyList and PatchList, a
+//      list of objects as a plain array of positional patches, a form filestore/patch.ts neither
+//      emits nor applies; the class and its records survive an export reloaded
+//   AQ. A feed derived from the logs: merges recognizable in the log by their metadata, one
+//      parent; commits written in turn on three branches read back from each head to a common
+//      base, once each by identifier, in the order written by timestamp; a new branch has no
+//      commit of its own; a deleted branch's log is gone (the hub deletes only a branch whose
+//      head another holds); a commit's stamp is taken as it lands, not as its write begins;
+//      what a poll over 25 branches costs
+//
 // Usage: node scripts/platform_checks.js [--keep]
 // Env:   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS (defaults for local dev)
 
@@ -1190,12 +1206,199 @@ async function main() {
   record("AO3", aoSameId.every((x) => x.landed === 1 && x.refused === aoWriters.length - 1) ? "PASS" : "FAIL",
     `${aoWriters.length} inserts of one @id sent at once: ${aoSameId.map((x) => `${x.landed} landed, ${x.refused} DocumentIdAlreadyExists`).join("; ")}: the id is what the store settles among concurrent writers`);
 
+  // AP: a requirement-shaped record (ADR-0070 decision 5). CheckRequirement would be the schema's
+  // first sys:JSON field on a document (G covered an Optional one on a subdocument) and its second
+  // Hash key with two Optional fields (Attestation's, check AA). The hub hashes `params` into the
+  // run's paramsHash, so what the store does to a JSON value's key order and number forms decides
+  // what the hash is computed over. The file-backed store must mint the same ids (AI) and emit the
+  // same patch (filestore/patch.ts), so the ids and the diff are compared, not only accepted.
+  r = await api("POST", docs(`graph_type=schema&${commit("ap: a requirement-shaped class")}`), [
+    { "@type": "Enum", "@id": "ApLevel", "@value": ["Required", "Advisory"] },
+    { "@type": "Class", "@id": "Req", "@key": { "@type": "Hash", "@fields": ["check", "branch", "fromPrefix"] },
+      check: "xsd:string", branch: { "@type": "Optional", "@class": "xsd:string" }, fromPrefix: { "@type": "Optional", "@class": "xsd:string" },
+      reporter: "Artifact", level: "ApLevel", locked: "xsd:boolean", params: "sys:JSON",
+      rationale: { "@type": "Optional", "@class": "xsd:string" } },
+  ]);
+  if (r.status !== 200) record("AP", "FAIL", `schema with a sys:JSON field and a three-field Hash key: ${r.status} ${errType(r)}`);
+  else {
+    await api("POST", docs(commit("ap reporter")), { "@type": "Artifact", "@id": "Artifact/ap-agent", label: "reporter" });
+    const apReq = (fields, params) => ({ "@type": "Req", check: "lint/team", reporter: "Artifact/ap-agent", level: "Required", locked: false, params, ...fields });
+    const apCases = [{}, { branch: "b" }, { fromPrefix: "b" }, { branch: "release", fromPrefix: "coqui-" }];
+    const apIds = [], apMiss = [];
+    const apFirstParams = { n: 1, ignore: ["a", "b", "c"], nested: { keep: 1, change: 1 }, list: [{ id: "r1", on: true }, { id: "r2", on: true }] };
+    for (const c of apCases) {
+      const res = await api("POST", docs(commit("ap insert")), apReq(c, apFirstParams));
+      const id = Array.isArray(res.json) ? String(res.json[0]).replace(aiBase, "") : `${res.status} ${errType(res)}`;
+      const want = `Req/${aiHash(["lint/team", c.branch, c.fromPrefix])}`;
+      apIds.push(id);
+      if (id !== want) apMiss.push(`${short(c)}: ${id} (expected ${want})`);
+    }
+    record("AP1", apMiss.length === 0 && new Set(apIds).size === apCases.length ? "PASS" : "FAIL",
+      `four key combinations (both Optional fields absent, branch only, prefix only, both; branch "b" against prefix "b") are ${new Set(apIds).size} distinct ids, each AI's formula over the three fields with "/" in the check name encoded: ${apMiss.length === 0 ? "all match" : apMiss.join("; ")}`);
+
+    // A plugin's settings: nesting, every JSON type, keys out of alphabetical order, and number
+    // forms (1.0, 1e21, an integer past 2^53) sent as raw text so JavaScript does not rewrite them.
+    const apRawParams = `{"zeta":1,"alpha":{"severity":"error","margin":1.0},"ignore":["Module/m1","LearningObjective/lo-2"],"threshold":0.75,"exp":1e21,"big":12345678901234567890,"neg":-2,"flag":true,"none":null,"empty":{},"emptyList":[],"text":"café 日本 \\"q\\" \\\\"}`;
+    const apRawBody = `{"@type":"Req","check":"structure/spof","reporter":"Artifact/ap-agent","level":"Advisory","locked":true,"params":${apRawParams}}`;
+    const apRaw = await fetch(`${URL}${docs(commit("ap raw params"))}`, { method: "POST", headers: { Authorization: AUTH, "Content-Type": "application/json" }, body: apRawBody });
+    const apRawId = JSON.parse(await apRaw.text())?.[0]?.replace(aiBase, "");
+    const apReadText = await (await fetch(`${URL}${docs(`id=${encodeURIComponent(apRawId)}`)}`, { headers: { Authorization: AUTH } })).text();
+    const apRead = JSON.parse(apReadText);
+    const apSent = JSON.parse(apRawParams);
+    const apParamsText = apReadText.slice(apReadText.indexOf('"params"'));
+    record("AP2", apRaw.status === 200 && deepCanon(apRead.params) === deepCanon(apSent) ? "PASS" : "FAIL",
+      `a nested object with every JSON type stored and read back structurally equal: insert ${apRaw.status}; ${deepCanon(apRead.params) === deepCanon(apSent) ? "equal" : "differs: " + short(apRead.params)}`);
+    record("AP2b", "INFO",
+      `what the store returns of the same value: keys ${JSON.stringify(Object.keys(apRead.params ?? {}))} (sent ${JSON.stringify(Object.keys(apSent))}); 1.0 as ${/"margin":([^,}]*)/.exec(apParamsText)?.[1]}, 1e21 as ${/"exp":([^,}]*)/.exec(apParamsText)?.[1]}, 12345678901234567890 as ${/"big":([^,}]*)/.exec(apParamsText)?.[1]}: a paramsHash over the hub's canonical form of the value read, never over a client's text`);
+    const apShapes = {};
+    for (const [name, value] of Object.entries({ array: [1, 2], string: "s", number: 3, null: null, atKeys: { "@type": "x", "@id": "y" } })) {
+      const res = await api("POST", docs(commit(`ap shape ${name}`)), apReq({ branch: `shape-${name}` }, value));
+      apShapes[name] = res.status === 200 ? "accepted" : `${res.status} ${errType(res)}`;
+    }
+    record("AP2c", "INFO", `params that are not a plain object: ${Object.entries(apShapes).map(([k, v]) => `${k} ${v}`).join("; ")}`);
+
+    // Replace: same key fields, settings changed with one key removed and one added. A replace
+    // that merged JSON values (as POST overwrite merges lists, check X3a) would keep the removed key.
+    const apBefore = await head("main");
+    const apNewParams = { alpha: { severity: "warning" }, added: [3], ignore: ["a", "x", "c"], nested: { keep: 1, change: 2 }, list: [{ id: "r1", on: true }, { id: "r2", on: false }] };
+    r = await api("PUT", docs(commit("ap replace")), { ...apReq({}, apNewParams), "@id": apIds[0] });
+    const apAfter = await head("main");
+    const apReplaced = (await api("GET", docs(`id=${encodeURIComponent(apIds[0])}`))).json;
+    const apAgain = await api("POST", docs(commit("ap insert again")), apReq({}, { n: 2 }));
+    record("AP3", r.status === 200 && deepCanon(apReplaced?.params) === deepCanon(apNewParams) ? "PASS" : "FAIL",
+      `a replace under the same key: ${r.status}; params now ${short(apReplaced?.params)} (the old key ${"n" in (apReplaced?.params ?? {}) ? "KEPT: merged" : "gone: replaced whole"}); a second insert of the same key ${apAgain.status} ${errType(apAgain)}`);
+
+    // The store's patch for the change, which filestore/patch.ts must emit and apply alike.
+    r = await api("POST", `/api/diff/admin/${DB}`, { before_data_version: apBefore, after_data_version: apAfter, document_id: apIds[0] });
+    const apPatch = r.json?.params;
+    const apNested = JSON.stringify(apPatch ?? null).match(/"@op"/g)?.length ?? 0;
+    record("AP4", "INFO",
+      `the store's diff of the replace (${r.status}), its params entry: ${JSON.stringify(apPatch ?? r.json).slice(0, 1200)}; ${apNested} "@op" ${apNested === 1 ? "(the whole value swapped)" : "(a patch inside the JSON value: filestore/patch.test.ts holds diffValue to it)"}`);
+
+    // Export reloaded (AE's path): the schema read at the head loads into an empty branch, and the
+    // requirements post back with their ids and read back equal.
+    const apHead = await head("main");
+    const apSchema = (await api("GET", `/api/document/admin/${DB}/local/commit/${apHead}?graph_type=schema&as_list=true`)).json;
+    const apNormal = (Array.isArray(apSchema) ? apSchema : []).map((e) => Object.fromEntries(Object.entries(e).map(([k, v]) =>
+      [k, v && typeof v === "object" && !Array.isArray(v) && v["@max_cardinality"] === "inf" ? Object.fromEntries(Object.entries(v).filter(([kk]) => kk !== "@max_cardinality")) : v])));
+    const apReqClass = apNormal.find((e) => e["@id"] === "Req");
+    const apDocs = (await api("GET", `/api/document/admin/${DB}/local/commit/${apHead}?type=Req&as_list=true`)).json ?? [];
+    await api("POST", `/api/branch/admin/${DB}/local/branch/ap-empty`, {});
+    const apLoad = await api("POST", at("branch/ap-empty", `graph_type=schema&full_replace=true&${commit("ap schema")}`), apNormal);
+    await api("POST", at("branch/ap-empty", commit("ap reporter")), { "@type": "Artifact", "@id": "Artifact/ap-agent", label: "reporter" });
+    const apPost = await api("POST", at("branch/ap-empty", commit("ap import")), apDocs);
+    const apBack = (await api("GET", at("branch/ap-empty", "type=Req&as_list=true"))).json ?? [];
+    const apIndex = (list) => Object.fromEntries(list.map((d) => [d["@id"], deepCanon(d)]));
+    const apA = apIndex(apDocs), apB = apIndex(apBack);
+    const apDiffer = Object.keys(apA).filter((k) => apA[k] !== apB[k]);
+    record("AP5", apLoad.status === 200 && apPost.status === 200 && apBack.length === apDocs.length && apDiffer.length === 0 ? "PASS" : "FAIL",
+      `the class as exported (params ${short(apReqClass?.params)}) loads into an empty branch: ${apLoad.status}; ${apDocs.length} requirements posted back with their ids: ${apPost.status}; read back equal: ${apDiffer.length === 0 ? "all" : "differing " + short(apDiffer)}`);
+    await api("DELETE", `/api/branch/admin/${DB}/local/branch/ap-empty`, {});
+  }
+
+  // AQ: a feed derived from the store's logs (ADR-0070 open question 1, option (a)). /api/log takes
+  // start and count, nothing by time (S), so "since" is paging back from a branch's head to a known
+  // commit; an apply writes one commit with one parent (V) and the hub marks it in metadata, which
+  // the log returns. What a derived feed needs: every new commit on every branch, once, in an order
+  // a cursor can resume from, with merges recognizable, at a cost that does not grow with history.
+  const aqBranch = (name, from = "branch/main") => api("POST", `/api/branch/admin/${DB}/local/branch/${name}`, { origin: `admin/${DB}/local/${from}` });
+  const aqDelete = (name) => api("DELETE", `/api/branch/admin/${DB}/local/branch/${name}`, {});
+  const aqWrite = async (branch, label) => {
+    const res = await api("POST", at(`branch/${branch}`, commit(`aq ${label}`)), { "@type": "Artifact", "@id": `Artifact/aq-${label}`, label });
+    if (res.status !== 200) throw new Error(`aq write ${label}: ${res.status} ${errType(res)}`);
+    return head(branch);
+  };
+  const aqSince = async (branch, stop) => {
+    const seen = []; let requests = 0;
+    for (let start = 0; ; start += 3) {
+      const page = (await api("GET", `/api/log/admin/${DB}/local/branch/${branch}?start=${start}&count=3`)).json; requests++;
+      if (!Array.isArray(page) || page.length === 0) return { seen, requests, reachedStop: false };
+      for (const e of page) { if (e.identifier === stop) return { seen, requests, reachedStop: true }; seen.push({ ...e, branch }); }
+    }
+  };
+  await aqBranch("aq-a"); await aqBranch("aq-b");
+  const aqBase = await head("main");
+  const aqWritten = [];
+  aqWritten.push(await aqWrite("aq-a", "a1"));
+  aqWritten.push(await aqWrite("aq-b", "b1"));
+  aqWritten.push(await aqWrite("main", "m1"));
+  aqWritten.push(await aqWrite("aq-a", "a2"));
+  aqWritten.push(await aqWrite("aq-b", "b2"));
+  const aqM1 = aqWritten[2];
+  r = await api("POST", `/api/apply/admin/${DB}/local/branch/main`, { before_commit: aqBase, after_commit: aqWritten[3], commit_info: { author: "aq-merger", message: "aq merge aq-a", metadata: { armature: { merge: { source: "aq-a" } } } } });
+  aqWritten.push(await head("main"));
+  aqWritten.push(await aqWrite("main", "m2"));
+  const aqReads = await Promise.all(["main", "aq-a", "aq-b"].map((b) => aqSince(b, aqBase)));
+  const aqUnion = [...new Map(aqReads.flatMap((x) => x.seen).map((e) => [e.identifier, e])).values()];
+  const aqMerge = aqUnion.find((e) => e.identifier === aqWritten[5]);
+  const aqDecimals = Math.max(...aqUnion.map((e) => (String(e.timestamp).split(".")[1] ?? "").length));
+  record("AQ1", r.status === 200 && aqMerge?.metadata?.armature?.merge?.source === "aq-a" && String(aqMerge?.parent ?? "").endsWith(aqM1) ? "PASS" : "FAIL",
+    `the merge in main's log: apply ${r.status}; metadata ${short(aqMerge?.metadata)}; parent ${aqMerge?.parent} (main's previous head ${aqM1}); timestamps are seconds with up to ${aqDecimals} decimals`);
+  const aqOrdered = [...aqUnion].sort((x, y) => x.timestamp - y.timestamp || String(x.identifier).localeCompare(String(y.identifier)));
+  const aqStrict = aqOrdered.every((e, i) => i === 0 || e.timestamp > aqOrdered[i - 1].timestamp);
+  record("AQ2", aqReads.every((x) => x.reachedStop) && JSON.stringify(aqOrdered.map((e) => e.identifier)) === JSON.stringify(aqWritten) ? "PASS" : "FAIL",
+    `seven commits written in turn on three branches, read back from each branch's head to the common base (${aqReads.map((x) => x.requests).join("+")} requests of three entries), once each by identifier, ordered by timestamp: ${aqOrdered.length} commits, ${JSON.stringify(aqOrdered.map((e) => e.identifier)) === JSON.stringify(aqWritten) ? "the order written" : "NOT the order written: " + aqOrdered.map((e) => `${e.branch}:${e.message}`).join(", ")}; timestamps strictly increasing: ${aqStrict}`);
+
+  // A new branch has no commit of its own, so its creation is not in any log; a deleted branch's
+  // log is gone though its commits stay readable by id (T), so what was committed on it between
+  // two polls and never merged is in no log a feed can read.
+  await aqBranch("aq-c");
+  const aqCHead = await head("aq-c"), aqMainHead = await head("main");
+  record("AQ3", aqCHead === aqMainHead ? "PASS" : "FAIL",
+    `a branch cut from main's head: its log starts at main's head (${aqCHead === aqMainHead ? "the same commit" : aqCHead + " vs " + aqMainHead}), with no commit of its own, so a feed learns of it only from a listing of branches or from the hub's own commit on main (the Owner grant)`);
+  const aqOrphan = await aqWrite("aq-c", "c1");
+  await aqDelete("aq-c");
+  r = await api("GET", `/api/log/admin/${DB}/local/branch/aq-c?count=1`);
+  const aqOrphanDoc = await commitDoc(aqOrphan);
+  record("AQ4", "INFO",
+    `a commit on a branch then deleted: the branch's log reads ${r.status} ${r.status === 200 ? "" : errType(r)}; the commit by id ${aqOrphanDoc?.["@type"] ?? "missing"}; it is in no other branch's log, so a derived feed that polled before the commit and after the deletion never sees it`);
+
+  // Commit time against visibility. A cursor by time is safe only if a commit can never become
+  // visible after a later-stamped commit on another branch has been read. A large write on one
+  // branch is sent, then a small write on another; when the small one has landed, the first
+  // branch's head is read at once. The hazard: the large one not yet visible then, and stamped
+  // earlier than the small one when it lands.
+  const aqRounds = [];
+  for (let round = 0; round < 3; round++) {
+    const bulk = Array.from({ length: 1500 }, (_, i) => ({ "@type": "Artifact", "@id": `Artifact/aq-bulk-${round}-${i}`, label: "x".repeat(200) }));
+    const aBefore = await head("aq-a");
+    const big = api("POST", at("branch/aq-a", commit(`aq bulk ${round}`)), bulk);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const small = await aqWrite("aq-b", `small-${round}`);
+    const aWhenSmallLanded = await head("aq-a");
+    const bigDone = await big;
+    if (bigDone.status !== 200) throw new Error(`aq bulk ${round}: ${bigDone.status} ${errType(bigDone)}`);
+    const bigEntry = (await log("aq-a", 1))?.[0];
+    const smallEntry = (await log("aq-b", 1))?.[0];
+    const bigVisibleThen = aWhenSmallLanded !== aBefore;
+    aqRounds.push({ bigVisibleThen, bigFirst: bigEntry.timestamp < smallEntry.timestamp, gap: (smallEntry.timestamp - bigEntry.timestamp).toFixed(3), hazard: !bigVisibleThen && bigEntry.timestamp < smallEntry.timestamp, small });
+  }
+  record("AQ5", aqRounds.some((x) => x.hazard) ? "INFO" : "PASS",
+    `a large write sent, then a small one on another branch, three rounds: ${aqRounds.map((x) => `large ${x.bigVisibleThen ? "visible" : "not yet visible"} when the small one landed, large stamped ${x.bigFirst ? "earlier" : "later"} (small minus large ${x.gap} s)${x.hazard ? ": a time cursor taken then would skip the large commit" : ""}`).join("; ")}${aqRounds.some((x) => x.hazard) ? ". A cursor is a head per branch, not a time" : ""}`);
+
+  // What one poll costs with many branches: the listing, then each branch's head, compared with
+  // the cursor's head for that branch. Only a branch that moved is paged further.
+  const aqMany = Array.from({ length: 20 }, (_, i) => `aq-n${i}`);
+  for (const name of aqMany) await aqBranch(name);
+  let t0 = performance.now();
+  const aqList = (await api("GET", `/api/db/admin/${DB}?branches=true`)).json?.branches ?? [];
+  const aqListMs = performance.now() - t0;
+  t0 = performance.now();
+  await Promise.all(aqList.map((b) => head(b)));
+  const aqParallelMs = performance.now() - t0;
+  t0 = performance.now();
+  for (const b of aqList) await head(b);
+  const aqSerialMs = performance.now() - t0;
+  record("AQ6", "INFO",
+    `one poll over ${aqList.length} branches: the listing ${aqListMs.toFixed(0)} ms, every head read at once ${aqParallelMs.toFixed(0)} ms, one after another ${aqSerialMs.toFixed(0)} ms; a quiet poll is the listing and one read per branch whatever the history's length, and a branch that moved is paged back only as far as the cursor's head for it`);
+  for (const name of [...aqMany, "aq-a", "aq-b"]) await aqDelete(name);
+
   console.log("\nSummary:");
   for (const x of results) console.log(`  ${x.verdict.padEnd(4)} ${x.id}`);
 }
 
 main()
-  .catch((e) => { console.error("\nError:", e.message); process.exitCode = 1; })
+  .catch((e) => { console.error("\nError:", e.message, e.cause?.code ?? "", e.cause?.message ?? ""); process.exitCode = 1; })
   .finally(async () => {
     if (KEEP) { console.log(`\nKept ${DB} (--keep)`); return; }
     const r = await api("DELETE", `/api/db/admin/${DB}`);
