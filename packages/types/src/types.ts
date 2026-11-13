@@ -164,6 +164,13 @@ export const VALID_GrantStatus = [
 
 export type GrantStatus = typeof VALID_GrantStatus[number];
 
+export const VALID_CheckLevel = [
+  "Required",
+  "Advisory",
+] as const;
+
+export type CheckLevel = typeof VALID_CheckLevel[number];
+
 export const VALID_ExternalSystem = [
   "CASE",
   "QTI",
@@ -213,6 +220,18 @@ export interface Grant extends TerminusDocument {
   rationale?: string;
   relayedUsers: string[];  // User @id[]
   expires?: string;  // ISO 8601 datetime
+}
+
+export interface CheckRequirement extends TerminusDocument {
+  check: string;
+  branch?: string;
+  fromPrefix?: string;
+  reporter: string;  // User @id
+  level: CheckLevel;
+  locked: boolean;
+  params: unknown;
+  status: GrantStatus;
+  rationale?: string;
 }
 
 /** @abstract */
@@ -439,6 +458,7 @@ export interface Attestation extends DesignRecord {
 export const CLASS_CATEGORY = {
   User: "infrastructure",
   Grant: "infrastructure",
+  CheckRequirement: "infrastructure",
   DesignRecord: "infrastructure",
   ArmatureDocument: "infrastructure",
   LearningEvidence: "artifact",
@@ -478,6 +498,7 @@ export type ClassCategory = typeof CLASS_CATEGORY[ClassName];
 export interface ClassMap {
   User: User;
   Grant: Grant;
+  CheckRequirement: CheckRequirement;
   DesignRecord: DesignRecord;
   ArmatureDocument: ArmatureDocument;
   LearningEvidence: LearningEvidence;
@@ -523,6 +544,7 @@ export const SUBDOCUMENT_CLASSES = [
 export const CLASS_ANCESTORS = {
   User: [],
   Grant: [],
+  CheckRequirement: [],
   DesignRecord: [],
   ArmatureDocument: ["DesignRecord"],
   LearningEvidence: ["ArmatureDocument", "DesignRecord"],
@@ -559,6 +581,7 @@ export const CLASS_ANCESTORS = {
 export const CLASS_KEY = {
   User: {"type":"Random"},
   Grant: {"type":"Hash","fields":["user","role","branch"]},
+  CheckRequirement: {"type":"Hash","fields":["check","branch","fromPrefix"]},
   LearningMetric: {"type":"Random"},
   DescriptiveEvidence: {"type":"Random"},
   LearningDataset: {"type":"Random"},
@@ -616,6 +639,17 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     rationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
     relayedUsers: {"type":"User","kind":"reference","optional":true,"many":true},
     expires: {"type":"xsd:dateTime","kind":"primitive","optional":true,"many":false},
+  },
+  CheckRequirement: {
+    check: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    branch: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    fromPrefix: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    reporter: {"type":"User","kind":"reference","optional":false,"many":false},
+    level: {"type":"CheckLevel","kind":"enum","optional":false,"many":false},
+    locked: {"type":"xsd:boolean","kind":"primitive","optional":false,"many":false},
+    params: {"type":"sys:JSON","kind":"primitive","optional":false,"many":false},
+    status: {"type":"GrantStatus","kind":"enum","optional":false,"many":false},
+    rationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
   },
   DesignRecord: {},
   ArmatureDocument: {

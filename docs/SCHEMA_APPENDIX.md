@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-11-01_
+_Schema snapshot · Generated 2026-11-13_
 
 ---
 
@@ -40,6 +40,18 @@ classDiagram
     +string? rationale
     +Set<User> relayedUsers
     +dateTime? expires
+  }
+
+  class CheckRequirement {
+    +string check
+    +string? branch
+    +string? fromPrefix
+    +User reporter
+    +CheckLevel level
+    +boolean locked
+    +JSON params
+    +GrantStatus status
+    +string? rationale
   }
 
   class DesignRecord {
@@ -289,6 +301,7 @@ classDiagram
   %% Relationships (solid: reference; dotted: optional; diamond: embedded subdocument)
   Grant --> User : user
   Grant "0..*" --> User : relayedUsers
+  CheckRequirement --> User : reporter
   ArmatureDocument ..> User : createdBy
   ArmatureDocument *-- ExternalRef : externalRefs
   ArmatureDocument *-- Attachment : attachments
@@ -336,7 +349,7 @@ classDiagram
 
 ## Infrastructure
 
-_Non-artifact types that underpin the design process: the user, the grants of authority recorded on main (ADR-0068), and the abstract roots every record inherits._
+_Non-artifact types that underpin the design process: the user, the grants of authority recorded on main (ADR-0068), the checks a merge requires, also on main (ADR-0070), and the abstract roots every record inherits._
 
 ### `User`
 _category: infrastructure · key: Random_
@@ -365,6 +378,23 @@ _category: infrastructure · key: Hash(user, role, branch)_
 | `rationale` | `string?` | optional |
 | `relayedUsers` | `Set<User>` | required |
 | `expires` | `dateTime?` | optional |
+
+### `CheckRequirement`
+_category: infrastructure · key: Hash(check, branch, fromPrefix)_
+
+> A requirement that a plugin's check pass before a merge, recorded on main so that every change to what a merge requires is a commit with an author and a reason (ADR-0070 decision 5), as a Grant is for authority (ADR-0068 decision 2). Infrastructure, outside DesignRecord as Grant is: a requirement is not a design decision and cannot be the subject of a note, a finding or an attestation. The hub hosts checks, never rules: it knows a check by its name, by the agent whose runs count and by the verdicts reported for each commit, and it never reads params or evaluates a design rule (decision 1). Identity is a Hash over check, branch and fromPrefix, so there is one current requirement per check, target and source prefix (two Optional fields in a Hash key, platform checks AA and AP); a client never supplies the @id. A requirement is never deleted: withdrawing one is a replace with status Revoked and a rationale, and deleting a branch revokes the requirements naming it in the same marked commit that revokes its grants (ADR-0068 decision 3, note of 2026-11-12). The requirements that apply to a merge from S into T are those naming T and those with locked true, filtered by fromPrefix against S; combining their params into layers is the plugin's (decision 5). Requirements live on main only and are written through the generic document API there; who may write one is ADR-0068 decision 4's table as ADR-0070 decision 5 extends it. A workspace hub holds none of its own: its personal requirements are a file its host writes, never a record (decision 8). API CONSTRAINTS: 0 (reporter is a User), 23 (main only), 24 (reporter is an agent). See ADR-0070.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `check` | `string` | required |
+| `branch` | `string?` | optional |
+| `fromPrefix` | `string?` | optional |
+| `reporter` | `User` | required |
+| `level` | `CheckLevel` | required |
+| `locked` | `boolean` | required |
+| `params` | `JSON` | required |
+| `status` | `GrantStatus` | required |
+| `rationale` | `string?` | optional |
 
 ### `DesignRecord`
 _category: infrastructure · **abstract**_
@@ -753,10 +783,17 @@ _category: relationship · extends `DesignRecord` · key: Hash(subject, fragment
 
 ### `GrantStatus`
 
-> Whether a Grant is in force. Active: the authority holds, unless expires has passed. Revoked: withdrawn; the record stays, with its rationale, so who held authority at a commit is a read of main at that commit. Deliberately two values and never a delete (ADR-0068 decision 2).
+> Whether a Grant is in force. Active: the authority holds, unless expires has passed. Revoked: withdrawn; the record stays, with its rationale, so who held authority at a commit is a read of main at that commit. Deliberately two values and never a delete (ADR-0068 decision 2). Shared by CheckRequirement, which is withdrawn the same way (ADR-0070 decision 5).
 
 - `Active`
 - `Revoked`
+
+### `CheckLevel`
+
+> How a CheckRequirement binds a merge (ADR-0070 decision 5). Required: the merge route refuses a merge the requirement applies to until a run by its reporter at the source's head, with the requirement's current paramsHash, concludes pass or neutral, unless someone who may perform the merge overrides it with a reason (decision 6). Advisory: its runs are shown at merge and at push and never refuse.
+
+- `Required`
+- `Advisory`
 
 ### Objectives
 

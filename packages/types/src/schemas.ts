@@ -7,13 +7,19 @@
 // Phase 3). Shape only: cross-document rules live in the invariants engine.
 
 import { z } from 'zod';
-import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict, VALID_GrantRole, VALID_GrantStatus, VALID_ExternalSystem, VALID_AttachmentStore } from './types';
+import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict, VALID_GrantRole, VALID_GrantStatus, VALID_CheckLevel, VALID_ExternalSystem, VALID_AttachmentStore } from './types';
 
 /**
  * A reference to another document: its id, or { "@ref": "<capture>" } naming a
  * document captured earlier in the same batch with "@capture" (platform check X2).
  */
 export const ReferenceSchema = z.union([z.string().min(1), z.strictObject({ '@ref': z.string().min(1) })]);
+
+/**
+ * A sys:JSON value: any JSON but a top-level null, which the store refuses for a
+ * required field (platform check AP2c). A nested null is kept as sent (AP2).
+ */
+export const JsonValueSchema = z.union([z.string(), z.number(), z.boolean(), z.array(z.json()), z.record(z.string(), z.json())]);
 
 // ── Subdocuments (inline; @type required, nested @id ignored) ─────────────────
 
@@ -87,6 +93,21 @@ export const GrantSchema = z.strictObject({
   rationale: z.string().min(1).max(10_000).optional(),
   relayedUsers: z.array(ReferenceSchema).optional(),
   expires: z.iso.datetime().optional(),
+});
+
+export const CheckRequirementSchema = z.strictObject({
+  '@id': z.string().min(1).optional(),
+  '@type': z.literal('CheckRequirement').optional(),
+  '@capture': z.string().min(1).optional(),
+  check: z.string().min(1).max(10_000),
+  branch: z.string().min(1).max(10_000).optional(),
+  fromPrefix: z.string().min(1).max(10_000).optional(),
+  reporter: ReferenceSchema,
+  level: z.enum(VALID_CheckLevel),
+  locked: z.boolean(),
+  params: JsonValueSchema,
+  status: z.enum(VALID_GrantStatus),
+  rationale: z.string().min(1).max(10_000).optional(),
 });
 
 export const LearningMetricSchema = z.strictObject({
@@ -382,6 +403,7 @@ export const CourseSchema = z.strictObject({
 export const DOCUMENT_SCHEMAS = {
   User: UserSchema,
   Grant: GrantSchema,
+  CheckRequirement: CheckRequirementSchema,
   LearningMetric: LearningMetricSchema,
   DescriptiveEvidence: DescriptiveEvidenceSchema,
   LearningDataset: LearningDatasetSchema,

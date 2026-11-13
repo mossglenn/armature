@@ -90,7 +90,11 @@
  *   xsd:integer                    → z.number().int()
  *   xsd:decimal                    → z.number()
  *   xsd:dateTime / xsd:date        → z.iso.datetime() / z.iso.date()
- *   sys:JSON                       → z.unknown()
+ *   sys:JSON                       → JsonValueSchema: any JSON value but a top-level
+ *                                    null, which the store refuses for a required
+ *                                    field (platform check AP2c); a nested null stays.
+ *                                    z.json() makes the key required, as z.unknown()
+ *                                    did not; Optional<sys:JSON> adds .optional()
  *   Enum                           → z.enum(VALID_<Enum>)  (the same arrays)
  *   Reference to a document Class  → ReferenceSchema: an id, or { "@ref" } to a
  *                                    document captured earlier in the same batch
@@ -566,7 +570,7 @@ const ZOD_XSD = {
   'xsd:dateTime': 'z.iso.datetime()',
   'xsd:date':     'z.iso.date()',
   'xsd:anyURI':   'z.string().min(1).max(10_000)',
-  'sys:JSON':     'z.unknown()',
+  'sys:JSON':     'JsonValueSchema',
 };
 
 const sBody = [];
@@ -596,6 +600,12 @@ sline(` * A reference to another document: its id, or { "@ref": "<capture>" } na
 sline(` * document captured earlier in the same batch with "@capture" (platform check X2).`);
 sline(` */`);
 sline(`export const ReferenceSchema = z.union([z.string().min(1), z.strictObject({ '@ref': z.string().min(1) })]);`);
+sline();
+sline(`/**`);
+sline(` * A sys:JSON value: any JSON but a top-level null, which the store refuses for a`);
+sline(` * required field (platform check AP2c). A nested null is kept as sent (AP2).`);
+sline(` */`);
+sline(`export const JsonValueSchema = z.union([z.string(), z.number(), z.boolean(), z.array(z.json()), z.record(z.string(), z.json())]);`);
 sline();
 
 // Subdocuments: a schema is emitted once every subdocument schema it names exists.
