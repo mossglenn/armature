@@ -51,6 +51,23 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > write a requirement turns on whether the record it replaces is `locked`, which the permission
 > check must read. Not built: those rows, the feed, the runs, the gate, the trailers, the
 > capability, the push gate and decision 12's patcher.
+>
+> **Note (2026-11-13), built:** decision 5's rows of ADR-0068's table, as `write_requirement` in
+> `authorization.ts`: the document routes take `CheckRequirement`, judged by the branch it names
+> and by `locked` on the record written and on the one it replaces, which the permission check
+> reads by the key before the write's queue. A branch with no owner takes a requirement only from
+> a maintainer, migration window or not (chosen in the build, open to overrule: the window opens an
+> unclaimed branch to writes, not to gates on what reaches it). The operator's `put` is no longer
+> the only write. No client revision for it: decision 10 makes the checks routes one revision, and
+> a requirement binds nothing until the gate exists. Found in the build: `branch` in a list query
+> is the branch read, so requirements are listed by `reporter` and filtered by `branch` in the
+> client until `GET /checks/requirements?target=`. The permission is read before the write's
+> queue, as every grant has been since 2026-11-01, so a lock or a revocation landing between the
+> read and the commit is unseen; the write pipeline looks the replaced record up again inside the
+> queue, and an authorization step there, after that lookup, would close the window and spare the
+> second read. Deferred under the evidence rule until the race is seen. Still not built: the feed,
+> the runs, `report_check`, the gate, the trailers, the capability, the push gate and decision
+> 12's patcher.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in
