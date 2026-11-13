@@ -166,6 +166,8 @@ The rules, numbered as in `.claude/CLAUDE.md`:
 | 20 | A `LearningDataset` names its source, `producedBy` or at least one `externalRef`; a `LearningMetric` names `derivedFrom` or at least one `externalRef` (ADR-0063) | `dataset_without_source`, `metric_without_source` |
 | 21 | A `Grant` lives on `main`, whatever branch the work is on; judged by the branch a write is for, so the operator's `put` on `main` passes (ADR-0068 decision 2) | 400 `grants_live_on_main`, before anything is read |
 | 22 | A grant's holder suits its role: `Maintainer` and `Administrator` are persons, `Relay` is an agent; `relayedUsers` appears only on a `Relay` grant and names persons (ADR-0068 decision 2) | `grant_holder_kind`, `relayed_users_not_relay` |
+| 23 | A `CheckRequirement` lives on `main`, whatever branch it binds (ADR-0070 decision 5; since 2026-11-12). The document routes do not take the class yet: until its rows in ADR-0068 decision 4's table are built, only the operator's `put` writes one | 400 `requirements_live_on_main`, before anything is read |
+| 24 | A `CheckRequirement`'s `reporter` is an agent, the one whose runs count (ADR-0070 decision 5; since 2026-11-12) | `reporter_not_agent` |
 
 Every `ArmatureDocument` may carry `externalRefs` (identifiers in other systems: `{ "@type": "ExternalRef", system, identifier, label? }`) and `attachments`; every fragment may carry `attachments` (`{ "@type": "Attachment", store, storeUri, contentHash, hashAlgorithm, revision?, path?, container?, mediaType?, byteSize?, role?, label? }`). Both are embedded subdocuments: send them inline, never store their nested `@id`, and expect the field to be absent on read when the set is empty. The hub checks their shape and rules 18 and 19; it does not fetch bytes or verify a hash in this phase (ADR-0030).
 
@@ -529,6 +531,7 @@ Removes the workspace (since 2026-11-07), a program action as the three above, i
 | 400 | `bad_name`, `protected_branch` | Branch name or `main` protection |
 | 400 | `untraceable_type`, `users_live_on_main`, `person_filter_refused`, `unknown_profile`, `unknown_slice` | Route-specific refusals |
 | 400 | `grants_live_on_main` | A `Grant` written to any branch but `main` (rule 21) |
+| 400 | `requirements_live_on_main` | A `CheckRequirement` written to any branch but `main` (rule 23) |
 | 400 | `reserved_trailer` | A message carrying `Armature-On-Behalf-Of` or `Armature-Relayed-By`, which the hub writes itself (Write envelopes) |
 | 400 | `not_an_agent`, `not_a_person` | `Armature-Agent` names a person, or `Armature-User` names an agent beside it (Identity) |
 | 400 | `remote_only` | A route or a write a workspace hub leaves to its remote (Discovery: `role`) |
