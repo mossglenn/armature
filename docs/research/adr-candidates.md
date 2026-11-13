@@ -99,6 +99,8 @@ Priority: **High** = decide before the phase named, because getting it wrong cos
 
 ### ADR-0042: Local structure and external alignment as separate classes
 
+> **Note (2026-11-12):** the external-alignment half is proposed as ADR-0071 (`ExternalAlignment`), with the statement held as a fingerprint and its text optional; the local-structure half is not decided there.
+
 - **Candidate decision.** Within-graph structure (prerequisite, part of) and mappings to external frameworks are different junction classes. External mappings carry graded strength (exact, broad, narrow, close, related). Only `exact` chains.
 - **Precedents.** SKOS separates `broader` from `*Match`; CASE mixes `isChildOf` and `exactMatchOf` in one enum; ASN/CTDL-ASN graded alignments; only 542 of 5,175 ESCO–O*NET matches were exact.
 

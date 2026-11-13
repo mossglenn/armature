@@ -123,7 +123,7 @@ and 0031 were written 2026-10-20); see [Numbering](#numbering).
 | [0032](0032-identity-resolution.md) | Identity resolution | Accepted and implemented; annotated by ADR-0065, ADR-0067 and ADR-0068 (2026-10-30) | A pluggable resolver turns each request's identity into a `User` kept on the `main` branch, and that identity, never the request body, is recorded as the author of the change. |
 | [0033](0033-items-as-a-tree-of-fragments.md) | Items Are a Tree of Fragments | Accepted; the typed shape is implemented, generic fragment kinds are not yet built | A question's parts are "fragments" with permanent identifiers, so richer question types can be added later without reworking existing data. |
 
-### 0054–0070: Later decisions (October and November 2026)
+### 0054–0071: Later decisions (October and November 2026)
 
 | ADR | Title | Status | In plain language |
 |---|---|---|---|
@@ -144,6 +144,7 @@ and 0031 were written 2026-10-20); see [Numbering](#numbering).
 | [0068](0068-authorization.md) | Authorization: Who May Write, Merge and Grant, Recorded on `main` | Accepted (2026-10-30; proposed 2026-10-29); built 2026-11-01 under `header` (the `Grant` class, branch ownership, the permission check, 403 `forbidden`), the `oidc` rows and the relay row 2026-11-05, except the migration window's close; decision 9 (a workspace hub does not authorize) added 2026-10-30; written with ADR-0067; amends ADR-0015, ADR-0021, ADR-0025 decisions 4 to 6, ADR-0032 and ADR-0065 decision 2 | Permissions are records on `main`, so every change of authority is a commit with an author and a reason. Whoever creates a branch owns it and decides who else may write to it; only a maintainer merges into `main`; an administrator grants the rest. Only the person asking, or an AI tool working for them, is ever recorded as a change's author. |
 | [0069](0069-desktop-program-tauri-shell-node-sidecar.md) | The Desktop Program Is a Tauri Shell Over the Hub on a Node Sidecar | Accepted (2026-11-05, on `docs/desktop-program-plan.md` §15 questions 1 and 13); verified by the sidecar spike on four machines 2026-11-05 and 06; not built; depends on ADR-0054, ADR-0065, ADR-0066 and ADR-0067 decision 2 | The program a designer installs to run a workspace hub is a small native shell, which handles windows, the tray, the keychain, links and updates, beside the hub itself running on the copy of Node.js the program carries; the two talk over a private channel, and the hub stops itself whenever the shell goes away. |
 | [0070](0070-checks-hooks-and-gates-for-plugins.md) | Checks: An Event Feed, Check Runs and Required Checks, So Plugins Can Gate a Merge | Accepted (2026-11-12, Amos; drafted from `docs/lint-plan.md` §17's decisions the same day, checks AP and AQ passed and its five open questions decided before acceptance); not built; annotates ADR-0021, ADR-0025, ADR-0059, ADR-0062, ADR-0065, ADR-0066, ADR-0067 and ADR-0068 | Tools such as a design linter pull a list of what changed and post pass or fail verdicts about a commit; maintainers and branch owners say, as records on `main`, which verdicts a merge requires; the merge route refuses until they pass or someone with the right to merge gives a reason, and the merge commit records it. The hub runs no design rules itself. |
+| [0071](0071-external-alignment.md) | External Alignment: A Relationship Record From an Objective to an Item in an Outside Framework | Proposed (2026-11-12, drafted from `docs/crosswalk-plan.md`; adopts candidate ADR-0042 for external alignment); not built; would annotate ADR-0027, ADR-0028 and ADR-0030 | When a designer says an objective teaches a standard in an outside framework, that claim is its own record, with how close the match is and why, so an expert can affirm it, the affirmation goes out of date only when that alignment or the standard's wording changes, and anyone can ask which objectives teach a standard. The framework's text is never required in the graph: identifiers and a fingerprint of each statement are enough. |
 
 ## How to add an ADR
 
@@ -152,7 +153,7 @@ and 0031 were written 2026-10-20); see [Numbering](#numbering).
    otherwise have to reverse-engineer from the code.
 2. **Pick the number.** If you are writing one of the reserved decisions (0030, 0031, 0034),
    use its reserved number. Otherwise take the next number after the highest existing ADR
-   (ADR-0070 at the time of writing). If the decision adopts a research candidate from
+   (ADR-0071 at the time of writing). If the decision adopts a research candidate from
    `docs/research/adr-candidates.md`, name the candidate in the Status section, as ADR-0025 does
    for candidate 0036 and ADR-0059 for candidate 0039.
 3. **Name the file** `NNNN-short-decision-title.md` in this directory.
