@@ -92,7 +92,7 @@ Capability `armature/checks` in `GET /discover` (ADR-0059) announces the four, s
   "workspaceCommit": "…", "changed": { "LearningObjective": 2, "AssessmentItem": 1 } }
 ```
 
-Types: `commit`, `merge`, `branch.created`, `branch.deleted`, `requirement.changed`, `hub.started`. A plugin that was down resumes from its cursor, even across a hub restart. How the feed is kept is open: derived from the store's commit logs (every event but `hub.started` is already a commit) or a log the hub keeps (ADR-0070 open question 1; derived is recommended if platform check AQ passes). `GET /branches/:name/changes?since=` and `/log` already exist and stay the way a plugin fetches *what* changed.
+Types: `commit`, `merge`, `branch.created`, `branch.deleted`, `requirement.changed`, `hub.started`. A plugin that was down resumes from its cursor, even across a hub restart. How the feed is kept is open: derived from the store's commit logs (every event but `hub.started` is already a commit) or a log the hub keeps (ADR-0070 open question 1; platform check AQ passed on 2026-11-12, and derived, with a cursor holding each branch's head, is recommended). `GET /branches/:name/changes?since=` and `/log` already exist and stay the way a plugin fetches *what* changed.
 
 **What commit, push and merge mean to a plugin:**
 

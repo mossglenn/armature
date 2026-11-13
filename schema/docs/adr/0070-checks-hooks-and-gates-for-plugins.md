@@ -15,8 +15,9 @@
 Proposed (2026-11-12, drafted from `docs/lint-plan.md`, whose §17 records Amos's decisions of the
 same day on the plan's six questions). Not accepted and not built. It changes the schema, adding
 one class and one enum, so on acceptance it is implemented with `schema.json`, the generated types and the
-appendix in one commit (CLAUDE.md, "After schema changes"), and the two platform checks under
-Verification run first.
+appendix in one commit (CLAUDE.md, "After schema changes"). The two platform checks under
+Verification were run on 2026-11-12; both pass, and what they found is recorded there and in open
+questions 1 and 5.
 
 On acceptance it would annotate, with dated notes:
 
@@ -113,7 +114,11 @@ third.
    to the design graph; whether they are held in memory or persisted is open question 2. Held in
    memory, they are gone after a restart, and `hub.started` tells plugins to report again on the
    heads they care about. `paramsHash` is the SHA-256 of the requirement's `params` the plugin ran with, so a run
-   made under other settings does not satisfy the requirement now in force.
+   made under other settings does not satisfy the requirement now in force. It is computed over a
+   canonical form of the value as the hub reads it (keys sorted at every depth, no whitespace,
+   numbers as JSON prints them), and the hub returns it beside `params` so that a plugin copies it
+   rather than computing it: the store returns a JSON value's keys in an order of its own and
+   `1.0` as `1` (check AP2b), so a hash of the text a client sent would not match.
 
    A run is not a design record: it is derived, recomputable at any commit, and a plugin's opinion.
    What must outlive it is what a merge relied on, which decision 7 writes into the commit graph.
@@ -137,7 +142,7 @@ third.
    | `reporter` | `User` | The agent whose runs count |
    | `level` | `CheckLevel`: `Required` or `Advisory` | Advisory is shown at merge and push and never refuses |
    | `locked` | `xsd:boolean` | Applies to merges into every branch, not only `branch` |
-   | `params` | `sys:JSON` | Opaque to the hub; returned to plugins; hashed into `paramsHash` |
+   | `params` | `sys:JSON` | Opaque to the hub; returned to plugins; hashed into `paramsHash`; any JSON value but `null`, which the store refuses for a required field (check AP2c) |
    | `status` | `GrantStatus`: `Active` or `Revoked` | Never deleted, as `Grant` |
    | `rationale` | `Optional<xsd:string>` | Why the check is required |
 
@@ -268,9 +273,31 @@ they are open until he decides them.
      decision 3), its deletion the marked commit revoking its grants, a requirement's change a
      commit on `main`. The cursor is a commit's time and identifier. For: nothing persisted,
      nothing to back up or to drift from the store, the same on both roles, since the file-backed
-     store keeps logs too. Against: it rests on check AQ (every branch's log read in one order,
-     merges marked); each poll reads several logs, which grows with history (SESSION.md item 4's
-     cost); and an event's details, such as the count of changed documents, need a diff per commit.
+     store keeps logs too. Against: each poll reads every branch's head, which grows with the
+     number of branches though not with history; and an event's details, such as the count of
+     changed documents, need a diff per commit.
+
+     *Check AQ (2026-11-12) passed on what this option rests on:* the log carries a merge's
+     metadata and its one parent (AQ1); commits written in turn on three branches, read from each
+     head back to a common base and taken once each, come out in the order written by timestamp
+     (AQ2); a quiet poll over 25 branches is the branch listing (7 ms) and a head read per branch
+     (70 to 390 ms at once over four runs), whatever the length of the history (AQ6).
+
+     *The cursor, which the first draft left as a time and an identifier, would better be each
+     branch's head.* The store stamps a commit as it lands, not as its write begins (AQ5, three
+     rounds), so a time cursor did not skip a commit on the store; but the file-backed store
+     stamps to the millisecond, and 191 of 200 commits written in turn on two branches of it
+     shared the previous commit's stamp, so a time cannot order them. A cursor that records each
+     branch's head needs no clock. A branch whose head moved is paged back to the head the cursor
+     holds for it. A branch missing from the cursor is new (`branch.created`; it has no commit of
+     its own until written, AQ3) and is paged back to a commit the cursor holds. A branch missing
+     from the listing is deleted (`branch.deleted`). Its commits are not lost: the hub deletes only
+     a branch whose head another branch's log holds, directly or as a merge's source
+     (`branchHolding` in `routes/branches.ts`), so they are reached from there, though its own
+     log is gone (AQ4). The order within a branch is its log's; across branches it is by
+     timestamp, and advisory. The cost is a cursor about 40 bytes longer per branch, which an
+     instance with hundreds of branches carries in a request body, or which the hub keeps (state
+     again).
    - *(b) An event log the hub keeps.* An append-only log, a file in a workspace hub's folder and a
      volume on a remote. For: the exact order of what the hub did, cheap to read, free to carry
      events no commit records, independent of check AQ. Against: a remote hub gains durable state,
@@ -278,7 +305,8 @@ they are open until he decides them.
      5); and a crash between a commit and its append leaves the log and the store disagreeing,
      which needs a repair path.
 
-   *Recommendation:* (a) if check AQ passes; (b) if it fails or polling cost shows on a long log.
+   *Recommendation:* (a), with a cursor of branch heads, since check AQ passed; (b) if polling
+   cost shows on an instance with many branches.
 2. **Where check runs live** (decision 3).
    - *(a) In the hub's memory, on both roles.* For: no state, no deployment change. Against: every
      restart makes plugins report again (`hub.started`), and a reporter that is down when the hub
@@ -298,6 +326,27 @@ they are open until he decides them.
 4. **The feed under the `pseudonymous` profile.** An event names its author as a `User` reference,
    as the log does. *Recommendation:* the same rule the log follows under `oidc`, with no rewriting
    until an export-scoped reader of the feed exists.
+5. **How a change to `params` reads in a diff** (raised by check AP4, 2026-11-12). The history
+   and diff routes pass the store's patch through unchanged, and `docs/api.md` promises that the
+   file-backed store's patches differ from the store's only in a list's segmentation, never in
+   their operations (ADR-0066 decision 5). Inside a JSON value the store patches key by key, a
+   list of scalars as `CopyList`, `PatchList` and `KeepList`, and a list of objects of equal
+   length as a plain array of positional patches (`[{}, {"on": {...}}]`), a form the vendored
+   page does not describe and `filestore/patch.ts` neither emits nor applies. No document holds a
+   `sys:JSON` field today, so this is latent until `params` exists.
+   - *(a) Both stores' patches stay as they are; the reference patcher learns the array form.*
+     `applyPatch` applies a positional array, a test holds it to AP4's patch, and `docs/api.md`
+     says that inside a JSON value the operations may differ too and both apply. For: small, and
+     the hub reads no settings (decision 1). Against: two stores give two shapes for one change.
+   - *(b) The file-backed store emits what the store emits inside a JSON value.* For: the
+     promise kept whole. Against: an undocumented algorithm learned by probing (growth,
+     shrinkage, reordering, mixed lists), and kept in step with the store's releases.
+   - *(c) The hub reports a changed `sys:JSON` field as one `SwapValue` of the whole value, on
+     both stores.* For: one shape, as opaque as decision 1 makes the settings. Against: the
+     routes no longer pass the store's patch through unchanged, and building the swap needs the
+     document at both commits, a read per entry of a history.
+
+   *Recommendation:* (a); (b) when a client applies patches of settings.
 
 ## Verification
 
@@ -309,6 +358,19 @@ Before acceptance, two lettered checks in `scripts/platform_checks.js` against
 |---|---|
 | AP | A class with a `sys:JSON` field and a Hash key over three fields, two of them Optional: insert, replace, read, the JSON patch between two versions, and the export reloaded. The schema has no `sys:JSON` field yet, though the generator maps one (`unknown`, `z.unknown()`). |
 | AQ | The logs of every branch read since a commit time, in one order, with merge commits marked and `main`'s grant and requirement commits among them: what open question 1's option (a) relies on, a feed derived from the store alone with a cursor that survives a restart. Run before question 1 is decided. |
+
+**Run on 2026-11-12** (`node scripts/platform_checks.js`; the facts in `docs/development-plan.md`
+§9, "Checks for plugins"). **AP passed:** the four key combinations are four ids, each check AI's
+formula, so the file-backed store mints them unchanged (AP1); a JSON value with every type reads
+back structurally equal (AP2) but not textually (AP2b, decision 3's canonical form); a replace
+swaps the value whole (AP3); the class and its records survive an export reloaded (AP5); the
+store's patch inside the value raised open question 5 (AP4). **AQ passed** (AQ1 to AQ3, AQ5), with
+two facts recorded as information: a deleted branch's log is gone (AQ4) and what a poll costs
+(AQ6); open question 1 weighs them. The file-backed store's counterparts are not in
+`filestore/contract.test.ts`, whose two stores share the seed's schema, which has no `sys:JSON`
+field: AP's ids are check AI's formula, which `filestore/ids.ts` already implements and tests; its
+patch is open question 5; and its millisecond stamps were measured by a probe of 200 commits, not
+kept. Each becomes a test with the build.
 
 Before the build is accepted as done, the tests the plan's §16 lists, among them: the feed resumes
 from a cursor after a restart (and, under open question 1's option (a), matches the logs); a run by the wrong reporter or with a stale
