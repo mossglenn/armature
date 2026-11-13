@@ -41,7 +41,7 @@ Read against `main` at `15a42b2` (2026-11-12). Constraints the plan works inside
 | ADR-0024, ADR-0010 | Tools never delete, they change status; free text until usage shows structure | Alignments retire, never vanish. `rationale` stays text. |
 | ADR-0068, CoQui's pattern | The branch creator owns it and grants `Maintainer`; a maintainer of `main` merges | One branch per mapping round; the mapper owns it, grants SMEs, a maintainer merges. |
 | ADR-0021 | No per-person aggregates | The evidence table reports standards and records, never who affirmed how many. |
-| ADR-0070 (proposed) | Check runs and required checks on `main`; the hub runs no rules | "Every objective in an accredited course has an affirmed mapping" is a check Crosswalk or Lint posts, not hub logic (§10). |
+| ADR-0070 (accepted 2026-11-12, built in part) | Check runs and required checks on `main`; the hub runs no rules | "Every objective in an accredited course has an affirmed mapping" is a check Crosswalk or Lint posts, not hub logic (§10). |
 | `scripts/seed_data.js` | One `ExternalRef` today: `distinguish-bias-types` → a fictional CASE item `AI-ETH.2.1` on `case.example.edu` | The seed already gestures at Crosswalk. It migrates under §4 (§13). |
 
 ## 3. What Crosswalk is for
