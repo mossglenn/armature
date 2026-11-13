@@ -239,3 +239,114 @@ describe('the skip stays operator-only', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * CheckRequirement (ADR-0070 decision 5): constraints 23 and 24, the operator's
+ * `check` rule, and a branch's deletion revoking its requirements. The routes
+ * do not take the class until ADR-0068 decision 4's rows for it are built, so
+ * the operator's `put` is the write here. Every requirement and the agent are
+ * deleted at the end, so `main` keeps no record of the test.
+ */
+describe('a CheckRequirement (ADR-0070 decision 5)', () => {
+  const JSON_HEADERS = { 'Content-Type': 'application/json', 'Armature-User': OPERATOR };
+  const created: string[] = [];
+  let agent = '';
+  const requirement = (extra: Record<string, unknown> = {}) => ({
+    '@type': 'CheckRequirement',
+    check: `test/check-${stamp}`,
+    reporter: agent,
+    level: 'Required',
+    locked: false,
+    params: { severity: 'error' },
+    status: 'Active',
+    ...extra,
+  });
+  const put = async (documents: unknown[], branch = 'main') => {
+    const written = await putDocuments({ branch, documents, as: OPERATOR, reason: 'A requirement for the test' });
+    created.push(...written.ids);
+    return written;
+  };
+  const violations = async (work: Promise<unknown>) => {
+    try {
+      await work;
+      return [];
+    } catch (err) {
+      if (!(err instanceof InvariantError)) throw err;
+      return err.violations.map((v) => `${v.code}@${v.field}`);
+    }
+  };
+
+  beforeAll(async () => {
+    const res = await app.request('/api/v1/users', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ message: 'A reporter for the test', user: { displayName: 'Lint (test)', externalId: `agent:test-lint-${stamp}` } }),
+    });
+    expect(res.status).toBe(201);
+    agent = ((await res.json()) as { id: string }).id;
+  });
+
+  afterAll(async () => {
+    for (const id of [...new Set(created)]) await deleteDocument({ id, branch: 'main', as: OPERATOR, reason: 'The test is over' }).catch(() => undefined);
+    if (agent) await deleteDocument({ id: agent, branch: 'main', as: OPERATOR, reason: 'The test is over' });
+  });
+
+  it('lives on main (constraint 23): refused on any other branch, before anything is read', async () => {
+    const elsewhere = `test-requirement-elsewhere-${stamp}`;
+    await createStore({ branch: 'main' }).createBranch(elsewhere, { branch: 'main' });
+    try {
+      await expect(putDocuments({ branch: elsewhere, documents: [requirement()], as: OPERATOR, reason: 'x' })).rejects.toMatchObject({
+        status: 400,
+        code: 'requirements_live_on_main',
+      });
+    } finally {
+      await createStore({ branch: elsewhere }).deleteBranch(elsewhere);
+    }
+    const written = await put([requirement()]);
+    expect(written.ids[0]).toMatch(/^CheckRequirement\/[0-9a-f]{64}$/);
+  });
+
+  it('names an agent as its reporter (constraint 24): a person is refused', async () => {
+    expect(await violations(put([requirement({ check: `test/person-${stamp}`, reporter: 'User/demo-designer' })]))).toEqual(['reporter_not_agent@reporter']);
+    expect(await violations(put([requirement({ check: `test/agent-${stamp}` })]))).toEqual([]);
+  });
+
+  it('is not yet written through the document routes', async () => {
+    const res = await app.request('/api/v1/documents?branch=main', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ message: 'x', documents: [requirement({ check: `test/route-${stamp}` })] }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).issues[0].message).toContain('not a writable document type');
+  });
+
+  it("is reported by check when it binds a branch the store lacks, and passes once revoked", async () => {
+    const gone = `test-requirement-nowhere-${stamp}`;
+    const written = await put([requirement({ check: `test/nowhere-${stamp}`, branch: gone })]);
+    const found = (await checkBranch(createStore({ branch: 'main' }))).violations.filter((v) => v.id === written.ids[0]);
+    expect(found.map((v) => v.code)).toEqual(['requirement_without_branch']);
+    await put([requirement({ check: `test/nowhere-${stamp}`, branch: gone, status: 'Revoked', rationale: 'The branch is gone' })]);
+    expect((await checkBranch(createStore({ branch: 'main' }))).violations.filter((v) => v.id === written.ids[0])).toEqual([]);
+  });
+
+  it("is revoked with the branch's grants when the branch is deleted, by the route and by the operator", async () => {
+    const byRoute = `test-requirement-route-${stamp}`;
+    const byOperator = `test-requirement-operator-${stamp}`;
+    for (const name of [byRoute, byOperator]) {
+      expect((await app.request('/api/v1/branches', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name }) })).status).toBe(201);
+    }
+    const [routeReq, operatorReq] = (await put([requirement({ branch: byRoute }), requirement({ branch: byOperator })])).ids;
+
+    expect((await app.request(`/api/v1/branches/${byRoute}`, { method: 'DELETE', headers: JSON_HEADERS })).status).toBe(200);
+    const deleted = await deleteScratchBranch(byOperator, AS_OPERATOR);
+    expect(deleted.revoked).toContain(operatorReq);
+
+    const main = createStore({ branch: 'main' });
+    for (const id of [routeReq, operatorReq]) {
+      expect((await main.getDocument(id)).document).toMatchObject({ status: 'Revoked' });
+    }
+    const message = (await main.log({ count: 5 })).find((c) => c.message.includes(byRoute))?.message;
+    expect(message).toContain('1 grant(s) and 1 requirement(s) on it revoked');
+  });
+});

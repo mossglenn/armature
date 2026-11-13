@@ -27,17 +27,24 @@ export const isWritable = (type: string): boolean =>
  * write, and `User`, which a client registers through `POST /users` and never
  * edits, so the operator is the one who corrects an email or adds the
  * `issuer` a person signs in with (ADR-0067 decision 1; found missing by the
- * rehearsal of 2026-11-05).
+ * rehearsal of 2026-11-05). And `CheckRequirement` (ADR-0070 decision 5),
+ * which the document routes take only once ADR-0068 decision 4's rows for it
+ * are built: who may write a requirement turns on the branch it names and on
+ * whether the record it replaces is `locked`, which no route checks yet.
  */
-export const isOperatorWritable = (type: string): boolean => isWritable(type) || type === 'User';
+export const isOperatorWritable = (type: string): boolean => isWritable(type) || type === 'User' || type === 'CheckRequirement';
 
 /**
  * Classes kept on `main` only, whatever branch a request names, because they
  * are read there for every request: `Grant` (ADR-0068 decision 2; constraint
- * 21) and `User` (ADR-0032 decision 2), which only the operator's `put` writes
- * through the pipeline.
+ * 21), `CheckRequirement` (ADR-0070 decision 5; constraint 23), and `User`
+ * (ADR-0032 decision 2), which only the operator's `put` writes through the
+ * pipeline.
  */
-export const livesOnMain = (type: string): boolean => type === 'Grant' || type === 'User';
+export const livesOnMain = (type: string): boolean => type === 'Grant' || type === 'User' || type === 'CheckRequirement';
+
+/** The code a write of a `livesOnMain` class elsewhere is refused with: constraint 23's own, or 21's. */
+export const mainOnlyCode = (type: string): string => (type === 'CheckRequirement' ? 'requirements_live_on_main' : 'grants_live_on_main');
 
 /** True when `type` is `ancestor` or inherits from it, transitively. */
 export const inheritsFrom = (type: string, ancestor: string): boolean =>

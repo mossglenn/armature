@@ -1,4 +1,4 @@
-import { activeGrantsNaming, revokeGrantsNaming } from '../api/grants';
+import { revocablesNaming, revokeGrantsNaming } from '../api/grants';
 import { findUserByExternalId, REGISTRY_BRANCH, type ResolvedUser } from '../api/identity';
 import { createOperatorStore, createStore, type Commit, type OperatorStore } from '../api/store';
 import { parseDocuments, writeDocuments, type WriteResult } from '../api/write';
@@ -143,7 +143,7 @@ export async function deleteScratchBranch(name: string, opts: { as: string }): P
   const who = await operatorIdentity(opts.as);
   const main = createOperatorStore({ branch: REGISTRY_BRANCH });
   let revoked: string[] = [];
-  if ((await activeGrantsNaming(main, name)).length) {
+  if ((await revocablesNaming(main, name)).length) {
     const message = 'Scratch branch deleted';
     ({ result: { revoked } } = await asOperatorCommit(REGISTRY_BRANCH, who, message, { tool: 'delete', rulesSkipped: false }, (transient) =>
       revokeGrantsNaming(who, name, message, { main, write: transient })
