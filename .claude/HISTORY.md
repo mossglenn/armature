@@ -6,6 +6,33 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-12, late night (the day's fifteen pull requests reviewed, nothing lost, the documents aligned; PRs #148 and #149)
+
+**Where things stood at the close.** **Phase 8, 2026-11-12 late night; ADR-0070 accepted and built in part (PRs #145, #147); the day's pull requests reviewed and the documents aligned (#149).** `CheckRequirement` and `CheckLevel` are in the schema, constraints 23 and 24 enforced, the operator's `check` reports `requirement_without_branch`, a branch's deletion revokes its requirements; the routes do not take the class yet. ADR-0071 and the Crosswalk plan are proposed (#146, another session) and renumbered after ADR-0070's constraints and checks (#148). A review of the fifteen pull requests of 2026-11-12 (#133 to #148) found nothing lost between their rebases; the documents they left behind were aligned in #149. `desktop-v0.1.2` is the released program; officepi serves revision 2026-11-12. 644 tests in the app, 27 browser tests in the shell. **Next: ADR-0070's route writes with ADR-0068 decision 4's rows (item 18); the Windows PC's update and logoff; 0.1.3 when Amos wants it (item 38); Amos's call.**
+
+### Done
+
+- **PR #148** (`747db5e`, another session's branch, merged after the night's close): ADR-0071's constraints 23 and 24 became 25 and 26 and its checks AP and AQ became AR and AS, in the ADR and `docs/crosswalk-plan.md`; the knowledge components plan's checks AP to AT became AT to AX. The night entry below records this as a local commit not yet pushed; #148 supersedes that.
+- **The review of #133 to #148:** each pull request's diff fetched with `gh pr diff` and every added line looked for on `main`, every removed line checked for reappearance. Every miss was a later intentional edit (the renumbering in #148, ADR-0070's acceptance in #145, the version and plan-list lines in CLAUDE.md); the two "removed line present again" hits were lines moved within one diff. Generated types and the appendix in sync; `REVISIONS`, `CLIENT_REVISION` and `docs/client-changes.md` agree at 2026-11-12; constraint numbers 23 to 26 and check letters AP to AX each claimed once; no open pull request and no unmerged branch.
+- **PR #149** (`9be8f94`, eight documents): `README.md`'s listing names `lint-plan.md` and `crosswalk-plan.md` and its table gets rows for ADR-0070 and Crosswalk, with three stale sentences corrected (the resolver and the store built, the program released); `docs/crosswalk-plan.md`, `docs/lint-plan.md`, `docs/demo-coverage.md` and CLAUDE.md say ADR-0070 is accepted and built in part; `docs/schema-guide.md` lists `CheckRequirement` under infrastructure with `requirements_live_on_main`; `docs/workspace-hub-plan.md` gains the Remove row (built 2026-11-07, never added) with #139's discard; SESSION.md's item 41 records #148. CI on `main` green (run 43353619689, confirmed by the REST API).
+
+### Session notes
+
+- Amos asked for a review of the day's pull requests, that nothing was lost and the documents were aligned. Fifteen had merged from three sessions in one day, several rebased over the same lines of CLAUDE.md, the ADR index and the review banner, so the check was mechanical first and a reading second.
+- Every document gap was a later PR's omission, not a rebase loss: #142 and #146 updated CLAUDE.md's plan list but not the README's listing; #147 built part of ADR-0070 without touching the three documents that said "not built"; Remove (2026-11-07) had never reached the workspace hub plan's cycle table.
+- The schema guide's category table was updated though #145 deferred the guide to the routes: the table describes the schema as it is, and the class exists.
+- HISTORY.md's night entry was left as written (a log), and SESSION.md was corrected mid-session for #148 in #149, since the session file is state.
+
+### Facts from 2026-11-12 late night worth keeping
+
+- A "nothing lost" check over a day's pull requests: `gh pr diff <n>` into the scratchpad for each, then a script that looks for every added line (15 characters or more) verbatim in the file on `main` and every removed line (25 or more) for reappearance; lines a later PR changed on purpose are the expected noise, and a hit that is both removed and re-added in one diff is a move. About 4,000 added lines across the fifteen checked in seconds.
+- `gh pr diff` run after a `cd` into the scratchpad in a compound command wrote empty files once; run it from the repository and redirect to an absolute path.
+- A grep with `--include=*.md` unquoted fails under zsh ("no matches found"); quote the glob.
+
+### Decisions taken
+
+- None. One choice without a separate decision, open to overrule: the README's "what to read" table gets a row for a proposed plan when it has an ADR or a built hub piece behind it (ADR-0070 and Lint; Crosswalk and ADR-0071), as Ledger's row set the precedent in #140.
+
 ## 2026-11-12, night (ADR-0070: checks AP and AQ, its open questions decided, accepted; the schema and constraints 23 and 24; PRs #145 and #147)
 
 **Where things stood at the close.** **Phase 8, 2026-11-12 night; ADR-0070 accepted and built in part (PRs #145, #147).** Checks AP and AQ passed; Amos decided ADR-0070's five open questions as recommended (the feed derived from the logs with a cursor of branch heads, runs in memory, a diff of `params` as each store's own patch) and accepted it. `CheckRequirement` and `CheckLevel` are in the schema; constraints 23 and 24 are enforced; the operator's `check` reports `requirement_without_branch`; a branch's deletion revokes its requirements. The routes do not take the class yet; the operator's `put` alone writes one. Another session proposed ADR-0071 and the Crosswalk plan (#146), whose constraint and check numbers collided with ADR-0070's; the renumbering is committed locally on `docs/adr-0071-renumber`, not pushed. `desktop-v0.1.2` is the released program; officepi serves revision 2026-11-12. 644 tests in the app. **Next: ADR-0070's route writes with ADR-0068 decision 4's rows (item 18); push the renumbering; the Windows PC's update; 0.1.3 when Amos wants it.**
