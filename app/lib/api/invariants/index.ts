@@ -6,6 +6,7 @@ import { validateAssessmentItem } from './assessmentItem';
 import { checkAttachments } from './attachments';
 import { validateAttestation } from './attestation';
 import { validateDesignFinding } from './designFinding';
+import { validateCheckRequirement } from './checkRequirement';
 import { validateGrant } from './grant';
 import { checkFragmentRef } from './fragmentRef';
 import { validateItemInstance } from './itemInstance';
@@ -55,6 +56,9 @@ import { checkReferences } from './references';
  *                                (ADR-0068 decision 2)
  *  22  a grant's holder suits its role grant.ts (Maintainer and Administrator by persons, Relay by agents;
  *                                relayedUsers only on a Relay grant, naming persons; ADR-0068 decision 2)
+ *  23  requirements live on main the write pipeline, 400 requirements_live_on_main before anything is
+ *                                read (ADR-0070 decision 5)
+ *  24  a reporter is an agent    checkRequirement.ts (a CheckRequirement's reporter; ADR-0070 decision 5)
  *
  * A validator sees the whole batch and the branch being written, never main
  * by default. Every violation is collected and reported at once as a 422.
@@ -121,6 +125,7 @@ const VALIDATORS: Record<string, Validator> = {
   DesignFinding: validateDesignFinding,
   Attestation: validateAttestation,
   Grant: validateGrant,
+  CheckRequirement: validateCheckRequirement,
   LearningDataset: validateLearningDataset,
   LearningMetric: validateLearningMetric,
 };

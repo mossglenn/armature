@@ -20,9 +20,12 @@ import type { DocumentReader, Store, TerminusDocument } from '../api/store';
  * Two rules are about the whole store rather than one branch, and run only
  * when `main` is checked through a store that can list branches (ADR-0068
  * decision 3, note): a grant in force naming a branch the store lacks
- * (`grant_without_branch`), and a branch with no `Owner` in force
- * (`branch_without_owner`, with no document, so its index is -1). The repair
- * for either is `put` on the grant, as a commit with a reason.
+ * (`grant_without_branch`), a requirement in force binding merges into a
+ * branch the store lacks (`requirement_without_branch`, ADR-0070 decision 5),
+ * and a branch with no `Owner` in force (`branch_without_owner`, with no
+ * document, so its index is -1). The repair for each is `put` on the record,
+ * as a commit with a reason. A requirement whose reporter is not an agent is
+ * constraint 24, which the engine reports like any rule.
  */
 export const WRITE_ONLY_RULES: ReadonlyMap<string, string> = new Map([
   ['attester_not_caller', 'constraint 15, the attester is the caller: a check has no caller'],
@@ -76,6 +79,19 @@ async function checkOwnership(store: Store, documents: TerminusDocument[]): Prom
         index: documents.indexOf(grant),
         field: 'branch',
         message: `${grant['@id']} grants ${grant.role} on branch ${grant.branch}, which the store does not have; revoke it (ADR-0068 decision 3)`,
+      });
+    }
+  }
+  for (const requirement of documents) {
+    if (requirement['@type'] !== 'CheckRequirement' || requirement.status !== 'Active') continue;
+    const branch = requirement.branch;
+    if (typeof branch === 'string' && !names.includes(branch)) {
+      out.push({
+        code: 'requirement_without_branch',
+        id: requirement['@id'],
+        index: documents.indexOf(requirement),
+        field: 'branch',
+        message: `${requirement['@id']} requires ${String(requirement.check)} of merges into branch ${branch}, which the store does not have; revoke it (ADR-0070 decision 5)`,
       });
     }
   }

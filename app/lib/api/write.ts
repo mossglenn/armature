@@ -1,6 +1,6 @@
 import { CLASS_FIELDS, CLASS_KEY, type FieldShape } from '@armature/types';
 import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
-import { hasAttestedBy, hasCreatedBy, isOperatorWritable, isWritable, livesOnMain } from './classes';
+import { hasAttestedBy, hasCreatedBy, isOperatorWritable, isWritable, livesOnMain, mainOnlyCode } from './classes';
 import { ApiError } from './errors';
 import { commitMessage, REGISTRY_BRANCH, userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
@@ -15,8 +15,9 @@ import { changesOf, StoreError, type DocumentReader, type Store, type TerminusDo
  *   1. shape: each document's @type is a writable class and the document
  *      matches its generated Zod (validation library) schema in
  *      app/lib/schemas.ts (400 invalid_document); a class that lives on
- *      main (`Grant`, constraint 21) is refused on any other branch (400
- *      grants_live_on_main, ADR-0068 decision 2)
+ *      main is refused on any other branch: `Grant` (constraint 21, 400
+ *      grants_live_on_main, ADR-0068 decision 2) and `CheckRequirement`
+ *      (constraint 23, 400 requirements_live_on_main, ADR-0070 decision 5)
  *   2. identity: an id held by another type is a 409 (ADR-0024 decision 4);
  *      an existing document is found by @id, or for a Hash-keyed class by
  *      its key fields, so a replace is recognized either way. An omitted
@@ -94,7 +95,7 @@ const keyOf = (type: string): { type: string; fields?: readonly string[] } | und
 export function parseDocuments(inputs: unknown[], opts: { operator?: boolean } = {}): TerminusDocument[] {
   const issues: Array<{ index: number; path: string; message: string }> = [];
   const parsed: TerminusDocument[] = [];
-  // The operator's put also writes `User` (classes.ts); a route never does.
+  // The operator's put also writes `User` and, until its permission rows are built, `CheckRequirement` (classes.ts); a route never does.
   const writable = opts.operator ? isOperatorWritable : isWritable;
   inputs.forEach((input, index) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -137,10 +138,13 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   checkUnique(documents);
   const onMain = documents.find((doc) => livesOnMain(doc['@type']));
   if (onMain && (opts.target ?? branch.branch) !== REGISTRY_BRANCH) {
+    const requirement = onMain['@type'] === 'CheckRequirement';
     throw new ApiError(
       400,
-      'grants_live_on_main',
-      `${onMain['@type']} documents live on ${REGISTRY_BRANCH} only, whatever branch the work is on; write this one there (ADR-0068 decision 2; ADR-0032 decision 2 for a User)`
+      mainOnlyCode(onMain['@type']),
+      requirement
+        ? `CheckRequirement documents live on ${REGISTRY_BRANCH} only, whatever branch they bind; name the merge target in branch and write this one there (ADR-0070 decision 5)`
+        : `${onMain['@type']} documents live on ${REGISTRY_BRANCH} only, whatever branch the work is on; write this one there (ADR-0068 decision 2; ADR-0032 decision 2 for a User)`
     );
   }
   const moved = (current: string | undefined) =>
