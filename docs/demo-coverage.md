@@ -446,6 +446,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ○ **Export profiles and slices.** The institutional profile for an accreditor.
 - ○ **Outcome records at asOf.** Results as evidence per standard.
 - Reuse across courses (2026-10-28): objectives in other courses or stores carrying the same CASE identifier, and how each is assessed there.
+- Plan and ADR (2026-11-12): `docs/crosswalk-plan.md`; ADR-0071 (proposed) would have it write `ExternalAlignment` records rather than ExternalRefs, making trace from a standard possible. The cells above are unchanged until the ADR is accepted.
 
 ### Whyfinder (proposed)
 
