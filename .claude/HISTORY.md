@@ -6,6 +6,42 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-12, evening (the Ledger merge checked, the app icon, faster CI; PRs #141 and #144)
+
+**Where things stood at the close.** **Phase 8, 2026-11-12 evening; unchanged since the review's authentication group and D6 (PRs #138, #139) but for documents, the icon and CI.** `main` holds three proposals written in other sessions: the Ledger plan (PR #140), ADR-0070 (checks as hooks and gates for plugins, Proposed) and the Lint plan (PR #142); the desktop program's icon is the cutaway A in place of the placeholder (PR #141), not yet in a release; CI runs in about 2¾ minutes, the contract suite in three shards, and a change to documents alone runs the app job only (PR #144). `desktop-v0.1.2` is the released program; officepi serves revision 2026-11-12. 638 tests in the app, 27 browser tests in the shell. **Next: the Windows PC's update and a logoff there; a 0.1.3 release when Amos wants the discard, the new revision and the icon in people's hands, the installer's icon-cache refresh first; Amos's review of ADR-0070 and the Ledger and Lint plans; then step 6 of the desktop plan or the review's remaining groups; Amos's call.**
+
+### Done
+
+- **The Ledger merge checked** (PR #140, merged by Amos before the session; `e89b958` to `a488393`): integrated where the earlier plans were (README's table and `docs/` listing, CLAUDE.md's list of plans, PROJECT_CONTEXT's and the development plan's needs-analysis row, §6's DesignDecision deferral, demo coverage's four tables). Demo coverage's recounted totals were checked by a script against every row's ● count and hold (built 8/7/11/0 in the first two scopes, 1/0/10/15 in all). Only `SESSION.md` lacked it (item 39 now).
+- **PR #141, the app icon** (`fdc0392`): `brand/app-icon/`'s seven files (the five `tauri.conf.json` names, `icon.png`, the macOS master `source.svg`) copied byte for byte over the placeholder's in `desktop/src-tauri/icons/`; the tray takes the window's default icon. `desktop/README.md`'s line no longer says placeholder. `brand/` itself is excluded through `.git/info/exclude` and never tracked.
+- **PR #144, faster CI with the same coverage** (`1be3c1e`, `480660f`): the contract suite in three shards (`npm test --workspace app -- --shard=<n>/3`), each on its own runner with its own TerminusDB, seeded and checked; a `changes` job whose output gates client, contract, viewer, files and images, skipping them only when every changed path is a document (`docs/`, `schema/docs/`, `.claude/`, `*.md`, except `docs/client-changes.md`), failing open on any diff it cannot take or its own failure (`!cancelled() && … != 'false'`); `node_modules` restored for the shards and the viewer from a cache keyed on both lockfiles, system, processor and Node 22, saved right after `npm ci`; a pull request's superseded runs cancelled in `ci.yml` and `desktop.yml`. The READMEs and CLAUDE.md describe it. The shards ran 17, 17 and 16 files, 50 distinct; the run took 2 min 56 s on the pull request and 2 min 43 s on `main`, against about 6 min 10 s before.
+
+### Session notes
+
+- Amos asked to add `brand/` to `main` and check #140's integration; the integration held. `brand/`'s `build_icons.py` names `BRAND.md` and `armature-mark*.svg`, found in `~/Downloads`, and `BRAND.md` (2026-11-08) says the mark's sources are versioned once it is approved, so bringing them in was put as a choice; Amos then decided `brand/` is not tracked at all and only the icons are copied where needed.
+- The CI question was answered from measurements: per-job times (the contract job about 6 minutes, everything else within 2) and per-file times from the log (50 files, 286 s, about 15 of them nearly all of it, `cycle.test.ts` 56 s of real store round trips). Options A to E were put with a recommendation; Amos chose A, B, D and E, C deferred.
+- Vitest's built-in sharding was simulated against the measured times before choosing a count: 3 shards 97/69/120 s, 4 shards 54/53/59/120, 6 shards up to 88; three chosen, since four gained nothing.
+- Outside this session: #142 (ADR-0070 and the Lint plan) merged at 23:48; #143 was opened from `ci/faster-checks` at 23:56 with GitHub's default title and closed, and started an extra run.
+- Moved out of `SESSION.md` at this close, for its budget: item 37's detail (already in the 2026-11-12 entry, PR #137's bullet and the session notes); the Watch paragraph's `brand/` account (the 2026-11-12 entry) and its Actions-outage account (Claude's memory, `github-actions-prequeue-stuck`, and the 2026-11-11 entries).
+
+### Facts from 2026-11-12 evening worth keeping
+
+- Vitest 5's `--shard` sorts files by the SHA-1 of their path and slices equal counts, never by duration; `vitest list --shard` ignores the flag and lists every file, so shard coverage is read from the shards' own "Test Files" lines (`ci.yml`'s header).
+- The root's `npm test` is itself an npm command (`npm test --workspace app`), so `npm test -- --flag` from the root hands the flag to npm, not Vitest; the shard step calls the workspace (`ci.yml`, a comment on the step).
+- GitHub Actions caches are scoped to the ref that saved them: a pull request's cache is invisible to `main` and to other pull requests, `main`'s is readable by every pull request. `main`'s `node_modules` cache was saved by #144's run on `main`.
+- The brand PNGs and `source.svg` carry Anthropic content credentials (C2PA, `caBX` chunks, an SVG `<metadata>` block) saying Claude provided the file; `icon.ico` and `icon.icns`, assembled by the script from intermediate renders, carry none. Editing `source.svg`'s text would break its hash, so it went in unedited, its comment naming a script outside the repository.
+- `BRAND.md` and `armature-mark.svg`, `-dark`, `-small`, `-small-dark` are in `~/Downloads`, not the repository; `BRAND.md`'s status (2026-11-08) still calls the mark "in design" and the colors "proposed", and its Claims still describe writes as depending on a trusted-caller resolver, not so since 2026-11-05.
+- 79 of 193 commits from 2026-11-01 to 2026-11-12 changed documents only. `main` has no branch protection, so a skipped job blocks nothing.
+
+### Decisions taken
+
+- **`brand/` is never tracked;** its icons are copied where they are needed, byte for byte (Amos; Claude's memory, `stage-by-path-never-add-all`).
+- **CI's A, B, D and E** (Amos; PR #144, `ci.yml`'s header and CLAUDE.md); **C**, skipping the run after a merge whose tree equals the tested pull request's head, deferred until post-merge waits matter (item 40).
+- **Rejected:** files in parallel on one store with a database per worker; whether separate databases avoid the 2026-10-21 transaction failure is an unverified platform assumption, which would need a lettered check first.
+- Chosen in the building, open to overrule (Active Decisions): Vitest's own sharding at three; the documents list and its one exception; a fresh `npm ci` kept in the app and files jobs, the Windows job uncached; the icon's content credentials kept.
+
+---
+
 ## 2026-11-12 (the review's authentication group and D6; the plans indexed; PRs #137 to #139)
 
 **Where things stood at the close.** **Phase 8; the code review of 2026-11-09's authentication group closed (PR #138, client revision 2026-11-12) and its D6 built, a discard for a workspace that can never be pushed (PR #139), 2026-11-12.** Under `oidc` a service's token is one whose client `ARMATURE_OIDC_SERVICES` lists, a domain admits only `email_verified: true`, a provider's outage is 503 and never a bad token, a relay reads no registry, plain http for the issuer and the hub's address is a rehearsal's alone (`ARMATURE_REHEARSAL=1`), and a person registered without an issuer gets the hub's; rehearsed on a fresh VM and on a Droplet with no rehearsal setting. A workspace hub's removal takes `?discard=<n>`: this machine's alone, the number checked, the workspace's files copied to `_discarded/` first, offered under Remove in the program. `desktop-v0.1.2` is the released program and has neither; officepi serves revision 2026-11-12. 638 tests in the app, 27 browser tests in the shell. **Next: the Windows PC's update and a logoff there; a 0.1.3 release when Amos wants the discard and the new revision in people's hands; then step 6 of the desktop plan, Quiver resumed on the workspace hub, or the review's remaining groups; Amos's call.**
