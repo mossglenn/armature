@@ -95,7 +95,7 @@ const keyOf = (type: string): { type: string; fields?: readonly string[] } | und
 export function parseDocuments(inputs: unknown[], opts: { operator?: boolean } = {}): TerminusDocument[] {
   const issues: Array<{ index: number; path: string; message: string }> = [];
   const parsed: TerminusDocument[] = [];
-  // The operator's put also writes `User` and, until its permission rows are built, `CheckRequirement` (classes.ts); a route never does.
+  // The operator's put also writes `User` (classes.ts); a route never does.
   const writable = opts.operator ? isOperatorWritable : isWritable;
   inputs.forEach((input, index) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -345,13 +345,15 @@ async function fillAsOf(
  * The document on the branch this one replaces: by @id when it has one;
  * for a Hash-keyed class without one, by its key fields, since the store
  * derives the id from them (platform check X1c). Undefined when it is new.
+ * Step 2's lookup; also the permission check's, which reads the requirement a
+ * write replaces for its `locked` (authorization.ts, `requireWrite`).
  *
  * Required single-valued key fields go to the store as a template. Optional
  * key fields (Attestation's fragmentId, claimRef and attestedBy) are matched
  * here, absent only against absent, which is how the store hashes them
  * (check AA3): a template on an Optional reference is a store 500 (Y2).
  */
-async function findExisting(branch: DocumentReader, doc: TerminusDocument): Promise<TerminusDocument | undefined> {
+export async function findExisting(branch: DocumentReader, doc: TerminusDocument): Promise<TerminusDocument | undefined> {
   if (typeof doc['@id'] === 'string' && doc['@id']) {
     try {
       return (await branch.getDocument(doc['@id'])).document;

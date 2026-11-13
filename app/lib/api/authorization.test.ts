@@ -468,3 +468,123 @@ describe('an agent acting for a person (ADR-0067 decisions 3, 6 and 8; ADR-0068 
     expect((await json(await on('GET', `/documents/LearningNeed/${id}?branch=${BRANCH}`))).body.createdBy).toBe(agentUserId);
   });
 });
+
+describe("CheckRequirement documents through the routes (ADR-0070 decision 5; ADR-0068 decision 4's row)", () => {
+  const asReviewer = { 'Content-Type': 'application/json', 'Armature-User': 'demo-reviewer@example.edu' };
+  const REPORTER = `agent:test/lint-${stamp}`;
+  const asReporter = { 'Content-Type': 'application/json', 'Armature-User': REPORTER };
+  // What the permissions suite left: the reviewer owns MINE, maintains BRANCH and holds nothing on main.
+  const MINE = `test-authz-reviewers-${stamp}`;
+  const as = (headers: Record<string, string>) => (method: string, path: string, body?: unknown) =>
+    hub.request(`/api/v1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const reviewer = as(asReviewer);
+  const reporter = as(asReporter);
+  let agentId = '';
+  const requirement = (fields: Record<string, unknown>) => ({
+    '@type': 'CheckRequirement',
+    reporter: agentId,
+    level: 'Required',
+    locked: false,
+    params: { severity: 'error' },
+    status: 'Active',
+    ...fields,
+  });
+  const forbidden = async (res: Response, details: Record<string, unknown>) => {
+    const body = await res.json();
+    expect(res.status).toBe(403);
+    expect(body).toMatchObject({ error: 'forbidden', ...details });
+    return body;
+  };
+
+  beforeAll(async () => {
+    const registered = await json(await on('POST', '/users', { message: 'A lint service for the tests', user: { displayName: 'Lint (test)', externalId: REPORTER } }));
+    expect(registered.status).toBe(201);
+    agentId = registered.body.id;
+  });
+
+  it('lives on main whatever branch it binds (constraint 23), judged before the permission reads anything', async () => {
+    const res = await json(await reviewer('POST', `/documents?branch=${MINE}`, { message: 'x', documents: [requirement({ check: `test/here-${stamp}`, branch: MINE })] }));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('requirements_live_on_main');
+  });
+
+  it("a branch's owner requires a check of merges into it, on main, without the right to write main", async () => {
+    const written = await json(await reviewer('POST', '/documents', { message: 'Lint before anything merges here', documents: [requirement({ check: `test/lint-${stamp}`, branch: MINE })] }));
+    expect(written.status).toBe(200);
+    expect(written.body.ids[0]).toMatch(/^CheckRequirement\/[0-9a-f]{64}$/);
+    // The requirement alone is judged by its record; anything beside it needs main.
+    await forbidden(
+      await reviewer('POST', '/documents', {
+        message: 'x',
+        documents: [requirement({ check: `test/beside-${stamp}`, branch: MINE }), { '@type': 'LearningNeed', '@id': `LearningNeed/beside-${stamp}`, label: 'b', rationale: 'r' }],
+      }),
+      { permission: 'write', branch: 'main' }
+    );
+    // A maintainer of the branch, not its owner, may too.
+    expect((await reviewer('POST', '/documents', { message: 'x', documents: [requirement({ check: `test/lint-${stamp}`, branch: BRANCH })] })).status).toBe(200);
+  });
+
+  it('merges into main are the maintainers of main to gate; the refusal names the target', async () => {
+    const body = await forbidden(await reviewer('POST', '/documents', { message: 'x', documents: [requirement({ check: `test/lint-${stamp}` })] }), {
+      permission: 'write_requirement',
+      branch: 'main',
+      locked: false,
+    });
+    expect(body.message).toContain('Maintainer of main');
+    expect((await write([requirement({ check: `test/lint-${stamp}` })], 'Lint gates main')).status).toBe(200);
+  });
+
+  it('a locked requirement is an administrator\'s, on the record written and on the one it replaces', async () => {
+    const locked = requirement({ check: `test/locked-${stamp}`, branch: MINE, locked: true });
+    await forbidden(await reviewer('POST', '/documents', { message: 'x', documents: [locked] }), { permission: 'write_requirement', branch: MINE, locked: true });
+    const written = await json(await write([locked], 'Locked by the administrator'));
+    expect(written.status).toBe(200);
+    // The owner of MINE may write an unlocked requirement for it, but not by unlocking this one: `locked` is not in the key, so the stored record is read.
+    await forbidden(await reviewer('POST', '/documents', { message: 'x', documents: [requirement({ check: `test/locked-${stamp}`, branch: MINE, locked: false })] }), {
+      permission: 'write_requirement',
+      branch: MINE,
+      locked: true,
+    });
+    expect((await write([requirement({ check: `test/locked-${stamp}`, branch: MINE, locked: false })], 'Unlocked')).status).toBe(200);
+    // Unlocked, it is the owner's to withdraw, as a grant is: a replace under the same key, never a delete.
+    const revoked = await json(
+      await reviewer('POST', '/documents', { message: 'Withdrawn', documents: [requirement({ check: `test/locked-${stamp}`, branch: MINE, status: 'Revoked', rationale: 'No longer wanted' })] })
+    );
+    expect(revoked.status).toBe(200);
+    expect(revoked.body.ids[0]).toBe(written.body.ids[0]);
+  });
+
+  it('a branch with no owner gets no requirement but from a maintainer, migration window or not', async () => {
+    const OWNERLESS = `test-authz-unclaimed-${stamp}`;
+    await scratch('main').createBranch(OWNERLESS, { branch: 'main' });
+    await forbidden(await reviewer('POST', '/documents', { message: 'x', documents: [requirement({ check: `test/lint-${stamp}`, branch: OWNERLESS })] }), {
+      permission: 'write_requirement',
+      branch: OWNERLESS,
+      locked: false,
+    });
+    expect((await write([requirement({ check: `test/lint-${stamp}`, branch: OWNERLESS })], 'The designer maintains every branch')).status).toBe(200);
+  });
+
+  it('an agent as the credential itself writes none (ADR-0067 decision 10); requirements are listed by reporter, never by branch', async () => {
+    await forbidden(await reporter('POST', '/documents', { message: 'x', documents: [requirement({ check: `test/self-${stamp}`, branch: MINE })] }), {
+      permission: 'write_requirement',
+      credential: REPORTER,
+    });
+    const byReporter = await json(await on('GET', `/documents/CheckRequirement?reporter=${agentId}`));
+    expect(byReporter.status).toBe(200);
+    expect(byReporter.body.map((r: TerminusDocument) => [r.check, r.branch ?? 'main', r.status]).sort()).toEqual(
+      [
+        [`test/lint-${stamp}`, MINE, 'Active'],
+        [`test/lint-${stamp}`, BRANCH, 'Active'],
+        [`test/lint-${stamp}`, 'main', 'Active'],
+        [`test/locked-${stamp}`, MINE, 'Revoked'],
+        [`test/lint-${stamp}`, `test-authz-unclaimed-${stamp}`, 'Active'],
+      ].sort()
+    );
+    // `branch` in the query names the branch read (docs/api.md), where no requirement lives, never
+    // the field: a client filters main's list itself until `GET /checks/requirements?target=` (ADR-0070 decision 5).
+    expect((await json(await on('GET', `/documents/CheckRequirement?branch=${MINE}`))).body).toEqual([]);
+    const forMine = byReporter.body.filter((r: TerminusDocument) => r.branch === MINE).map((r: TerminusDocument) => r.check);
+    expect(forMine.sort()).toEqual([`test/lint-${stamp}`, `test/locked-${stamp}`]);
+  });
+});

@@ -20,19 +20,18 @@ export const isKnownType = (type: string): boolean => Object.prototype.hasOwnPro
  * abstract roots, the embedded coordinates) has its own routes or none.
  */
 export const isWritable = (type: string): boolean =>
-  categories[type] === 'artifact' || categories[type] === 'relationship' || type === 'Grant';
+  categories[type] === 'artifact' || categories[type] === 'relationship' || type === 'Grant' || type === 'CheckRequirement';
 
 /**
  * Writable by the operator's `put` (ADR-0062 decision 5.3): what a client may
  * write, and `User`, which a client registers through `POST /users` and never
  * edits, so the operator is the one who corrects an email or adds the
  * `issuer` a person signs in with (ADR-0067 decision 1; found missing by the
- * rehearsal of 2026-11-05). And `CheckRequirement` (ADR-0070 decision 5),
- * which the document routes take only once ADR-0068 decision 4's rows for it
- * are built: who may write a requirement turns on the branch it names and on
- * whether the record it replaces is `locked`, which no route checks yet.
+ * rehearsal of 2026-11-05). `CheckRequirement` (ADR-0070 decision 5) was the
+ * operator's alone until ADR-0068 decision 4's row for it was built
+ * (`write_requirement` in authorization.ts, 2026-11-13).
  */
-export const isOperatorWritable = (type: string): boolean => isWritable(type) || type === 'User' || type === 'CheckRequirement';
+export const isOperatorWritable = (type: string): boolean => isWritable(type) || type === 'User';
 
 /**
  * Classes kept on `main` only, whatever branch a request names, because they
