@@ -1,6 +1,6 @@
 # Checks and the Lint plugin: plan
 
-*Status: draft 2026-11-12, decisions taken the same day (§17). The hub's half is ADR-0070 (`schema/docs/adr/0070-checks-hooks-and-gates-for-plugins.md`), accepted 2026-11-12 and not yet built; Lint itself is a client of the hub, built outside this repository. Written in a claude.ai session from `main` at `bcbf8ff`, in two versions: v1 put the rule engine in the hub; v2, this one, keeps only hooks and gates in the hub, at Amos's request, so that rules ship with the plugin and not with Armature's releases.*
+*Status: draft 2026-11-12, decisions taken the same day (§17). The hub's half is ADR-0070 (`schema/docs/adr/0070-checks-hooks-and-gates-for-plugins.md`), accepted 2026-11-12 and built in part the same night (the schema and constraints 23 and 24; its Status note says what remains); Lint itself is a client of the hub, built outside this repository. Written in a claude.ai session from `main` at `bcbf8ff`, in two versions: v1 put the rule engine in the hub; v2, this one, keeps only hooks and gates in the hub, at Amos's request, so that rules ship with the plugin and not with Armature's releases.*
 
 Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), CLI (command-line interface), JSON (JavaScript Object Notation), SSE (server-sent events), WASM (WebAssembly).
 
