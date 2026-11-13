@@ -95,6 +95,11 @@ annotate:
 > a grant). Decision 3's deletion of a branch revokes its requirements in the same marked commit
 > that revokes its grants. Open question 2, a request for delivery, gains a hub-side answer without
 > CoQui-specific code: a requirement on the branch a round merges into.
+>
+> **Note (2026-11-13), built:** the *write a requirement* row, `write_requirement` in
+> `authorization.ts`, judged on the record written and on the one it replaces (ADR-0070's note of
+> this date); a branch with no owner takes a requirement only from a maintainer, outside decision
+> 3's migration window. The *report a required check* row waits for the run routes.
 
 ## Context
 
