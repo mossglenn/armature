@@ -101,6 +101,12 @@ the scripts send no `Origin`, and call the hub by a name the check allows), and 
 other decision here. Because it adds `ARMATURE_ALLOWED_HOSTS` to the compose file, its pull
 request gets the fresh-VM rehearsal CLAUDE.md requires of a change to how an instance runs.
 
+> **Note (2026-11-12):** ADR-0070 is accepted, not yet built. Decision 4's service, which reads
+> and never writes, may post a check run, which is not a write to the graph; a run counts toward a
+> requirement only when its reporter is the agent the requirement names (ADR-0070 decision 4), so
+> decision 10 is not engaged. Decision 6's hub-written trailers gain `Armature-Check` and
+> `Armature-Check-Override`, refused from clients (ADR-0070 decision 7).
+
 ## Context
 
 The hub resolves identity and never authenticates (ADR-0032 decision 1). Its one built resolver,

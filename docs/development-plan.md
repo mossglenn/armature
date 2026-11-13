@@ -1575,3 +1575,28 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   one-request window the operator's repair and a branch delete already accept (ADR-0025
   decision 5, note). *Since 2026-11-06* that read and the apply are in the branch's write queue,
   so the window is a second hub's or the operator's only (decision 7, note of that day).
+
+**Checks for plugins** (2026-11-12, ADR-0070 accepted the same day)
+- *Verified (2026-11-12, check AP):* a class with a required `sys:JSON` field and a Hash key over
+  three fields, two `Optional`, loads; its four key combinations are four ids, each check AI's
+  formula (AP1); a JSON value with nesting and every JSON type reads back structurally equal
+  (AP2), but its keys come back in an order of the store's own, which changed between runs, and
+  `1.0` as `1` (AP2b), so a hash of such a value is over a canonical form of the value read; a
+  top-level `null` is refused, an array, a string or a number accepted (AP2c); a replace swaps
+  the value whole, keeping no removed key (AP3); the class and its records survive an export
+  reloaded (AP5). *Undocumented (AP4):* the store's diff patches inside a JSON value, a changed
+  key as `SwapValue`, a list of scalars as `CopyList`, `PatchList`, `KeepList`, and a list of
+  objects of equal length as a plain array of positional patches, `[{}, {"on": {...}}]`, which
+  the vendored page covers with one sentence ("Arrays allow index swapping") and
+  `app/lib/api/filestore/patch.ts` neither emits nor applies.
+- *Verified (2026-11-12, check AQ):* the log returns an `apply` commit's metadata and its one
+  parent, so a merge is recognizable from the log alone (AQ1); commits written in turn on three
+  branches, read from each head back to a common base and taken once each by identifier, come
+  out in the order written when sorted by timestamp, which has seven decimals (AQ2); a branch
+  cut from `main` has no commit of its own (AQ3); a deleted branch's log is
+  `api:UnresolvableAbsoluteDescriptor` while its commits stay readable by id (AQ4); a large write
+  sent before a small one on another branch is stamped after it, as it lands (AQ5, three rounds);
+  listing 25 branches takes 7 ms and reading every head at once 70 to 390 ms over four runs (AQ6). The
+  file-backed store stamps commits with `Date.now()`, so to the millisecond: 191 of 200 commits
+  written in turn on two in-memory branches shared the previous commit's stamp. ADR-0070's open
+  question 1 weighs these.

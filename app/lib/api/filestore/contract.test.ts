@@ -23,6 +23,9 @@ const DESIGNER = 'demo-designer@example.edu';
 const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': DESIGNER };
 const stamp = Date.now().toString(36);
 const BRANCH = `test-contract-${stamp}`;
+const REQUIREMENTS = `test-contract-requirements-${stamp}`;
+/** Hash-keyed classes the seed holds no record of; each has its own test below. */
+const NOT_SEEDED = ['CheckRequirement'];
 /** A document's route path: the type, then the id's local part. */
 const local = (id: string) => id.slice(id.indexOf('/') + 1);
 
@@ -100,6 +103,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await deleteScratchBranch(BRANCH, { as: DESIGNER }).catch(() => undefined);
+  await deleteScratchBranch(REQUIREMENTS, { as: DESIGNER }).catch(() => undefined);
 });
 
 describe('the ids the seed holds are the ids the file store mints (check AI)', () => {
@@ -113,10 +117,35 @@ describe('the ids the seed holds are the ids the file store mints (check AI)', (
       expect(await hashId(index, doc), doc['@id']).toBe(doc['@id']);
       compared.set(doc['@type'], (compared.get(doc['@type']) ?? 0) + 1);
     }
-    // The seed holds every Hash-keyed class, in each form its key takes (an absent Optional included).
-    expect([...compared.keys()].sort()).toEqual(hashed.sort());
+    // The seed holds every Hash-keyed class, in each form its key takes (an absent Optional included),
+    // but CheckRequirement, whose ids the next test mints on a scratch branch.
+    expect([...compared.keys()].sort()).toEqual(hashed.filter((name) => !NOT_SEEDED.includes(name)).sort());
     expect(compared.get('Attestation')).toBeGreaterThan(0);
     expect(compared.get('Grant')).toBeGreaterThan(0);
+  });
+
+  it('reproduces a CheckRequirement\'s id in each form its key takes, as the store mints it (check AP1)', async () => {
+    // The seed holds no CheckRequirement: one on main would bind merges once ADR-0070's gate is
+    // built, and its reporter would be an agent the seed does not register. So the TerminusDB store
+    // mints one of each key form here, on a scratch branch, through its operator side (no route,
+    // since constraint 23 keeps requirements on main), and the file store's formula is held to it.
+    // The branch has no Owner grant, which the operator's check reports, so it is gone before that
+    // test runs.
+    const server = createOperatorStore({ branch: 'main' });
+    await server.createBranch(REQUIREMENTS, { branch: 'main' });
+    try {
+      const forms = [{}, { branch: 'b' }, { fromPrefix: 'b' }, { branch: 'release', fromPrefix: 'coqui-' }];
+      await server.at({ branch: REQUIREMENTS }).insertDocuments(
+        // No @id: the store mints a Hash-keyed record's id, which is what is compared.
+        forms.map((form) => ({ '@type': 'CheckRequirement', check: 'lint/team', reporter: 'User/demo-designer', level: 'Advisory', locked: false, params: { n: 1 }, status: 'Revoked', ...form }) as unknown as TerminusDocument),
+        { author: 'User/demo-designer', message: 'Contract: one requirement of each key form' }
+      );
+      const minted = (await server.at({ branch: REQUIREMENTS }).allDocuments()).documents.filter((doc) => doc['@type'] === 'CheckRequirement');
+      expect(minted).toHaveLength(forms.length);
+      for (const doc of minted) expect(await hashId(index, doc), doc['@id']).toBe(doc['@id']);
+    } finally {
+      await deleteScratchBranch(REQUIREMENTS, { as: DESIGNER });
+    }
   });
 
   it('holds a Random-keyed document under the id the seed gave it, and every document the seed has', async () => {

@@ -29,6 +29,11 @@ document gains a top-level `identity` entry naming the resolver, the issuer, aud
 client id under `oidc`, and the headers a client may send (ADR-0067 decision 9), and stays open
 without a token so a client can read how to sign in. Each is a dated contract revision.
 
+> **Note (2026-11-12):** ADR-0070 is accepted, not yet built. Decision 4 gains one capability,
+> `armature/checks`: the event feed, the check runs and the requirements, with settings naming the
+> event types served and the run store's bound; its routes and the merge route's new answers are one
+> client revision (ADR-0070 decision 10).
+
 ## Context
 
 ADR-0026 made `/api/v1` the whole of the version contract: every route lives under the prefix,
