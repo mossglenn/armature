@@ -6,6 +6,42 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-12, night (ADR-0070: checks AP and AQ, its open questions decided, accepted; the schema and constraints 23 and 24; PRs #145 and #147)
+
+**Where things stood at the close.** **Phase 8, 2026-11-12 night; ADR-0070 accepted and built in part (PRs #145, #147).** Checks AP and AQ passed; Amos decided ADR-0070's five open questions as recommended (the feed derived from the logs with a cursor of branch heads, runs in memory, a diff of `params` as each store's own patch) and accepted it. `CheckRequirement` and `CheckLevel` are in the schema; constraints 23 and 24 are enforced; the operator's `check` reports `requirement_without_branch`; a branch's deletion revokes its requirements. The routes do not take the class yet; the operator's `put` alone writes one. Another session proposed ADR-0071 and the Crosswalk plan (#146), whose constraint and check numbers collided with ADR-0070's; the renumbering is committed locally on `docs/adr-0071-renumber`, not pushed. `desktop-v0.1.2` is the released program; officepi serves revision 2026-11-12. 644 tests in the app. **Next: ADR-0070's route writes with ADR-0068 decision 4's rows (item 18); push the renumbering; the Windows PC's update; 0.1.3 when Amos wants it.**
+
+### Done
+
+- **PR #145** (five commits): platform checks AP (a requirement-shaped record: a required `sys:JSON` field, a Hash key over three fields with two Optional) and AQ (a feed derived from the logs) in `scripts/platform_checks.js`; their results in ADR-0070 (`paramsHash` over a canonical form, a cursor of branch heads, open question 5 on diffs of `params`) and `docs/development-plan.md` §9 ("Checks for plugins"); the five open questions decided as recommended (decisions 2, 3 and a new 12); ADR-0070 accepted with dated notes on ADR-0021, 0025, 0059, 0062, 0065, 0066, 0067 and 0068, the index, CLAUDE.md's ADRs to read first, the Lint plan and demo coverage; the schema, `CheckRequirement` and `CheckLevel`, `GrantStatus` shared; the generator's `sys:JSON` mapped to `JsonValueSchema`; a contract test minting one requirement of each key form on a scratch branch and holding the file store's ids to the store's.
+- **PR #147** (two commits): constraint 23 (`requirements_live_on_main`, 400 in `write.ts` beside 21, `mainOnlyCode` in `classes.ts`), constraint 24 (`reporter_not_agent`, `invariants/checkRequirement.ts`), the operator's `check` rule `requirement_without_branch`, a branch's deletion revoking its requirements by the route and by the operator (`revocablesNaming` in `grants.ts`), five tests in `operator.test.ts`, each seen to fail with its constraint disabled; `api.md`, `deployment.md`, CLAUDE.md and ADR-0070's build note.
+- **`docs/adr-0071-renumber`** (local commit `0b710bb`, not pushed: auto mode refused the push and the pull request, not asked for in those words): ADR-0071's constraints 23 and 24 become 25 and 26 and its checks AP and AQ become AR and AS, in the ADR and the Crosswalk plan; the knowledge components plan's checks AP to AT become AT to AX.
+- CI green on `main` after each merge (`e88b873`, `8da11b1`); `armature_test` recreated from the new schema and seeded.
+
+### Session notes
+
+- Amos asked to start work on ADR-0070; its Verification named AP and AQ as first, needing no decision, so they were written and run, and their findings reshaped two parts of the ADR before it was decided.
+- AP4 found the store's diff patching inside a JSON value with a positional array form the vendored docs barely mention and `filestore/patch.ts` neither emits nor applies; latent until `params` exists, it became open question 5 and decision 12.
+- The full suite caught the contract test holding the seed to every Hash-keyed class; the seed was kept free of requirements, since one on `main` would bind merges once the gate exists. A first fix left a scratch branch with no owner long enough for the operator's `check` test to report it; the branch is now deleted in a `finally`.
+- Route writes of `CheckRequirement` were split from the constraints: `locked` is not in the key, so ADR-0068 decision 4's new rows must read the record a write replaces, or a maintainer could unlock an administrator's requirement.
+- One commit (the decisions recorded, `f121276`) was made before its message was shown; Amos's later approvals covered the rest. #146 landed from another session during this one, and its numbers collided with this session's.
+
+### Facts from 2026-11-12 night worth keeping
+
+- The store returns a `sys:JSON` value's keys in an order of its own, which changed between runs, and `1.0` as `1`; an integer past 2^53 comes back exact as text but any JavaScript reader loses it (AP2b; development plan §9).
+- The file-backed store stamps commits with `Date.now()`: 191 of 200 commits written in turn on two in-memory branches shared the previous stamp, so no order across branches rests on its time (a probe, not kept; ADR-0070 open question 1).
+- The store stamps a commit as it lands, not as its write begins (AQ5); a quiet poll over 25 branches is the listing (7 ms) and one head read per branch (70 to 390 ms at once).
+- Platform check Q1 (rebase, unused by Armature) answered 500 once in five runs; one run died once with `fetch failed`, as check AG's idle-connection race would. Neither recurred.
+- `scripts/seed_data.js` prints a GraphQL URL naming `admin/armature` whatever `TERMINUS_DB` is (line 948); the seed itself writes the named database.
+- The background task wrapping `npm test; echo` reports the `echo`'s exit code; read the suite's own summary.
+- CI's documents-only rule ran as designed on the evening's session-close push (run 43335372803: the change detector and the app job only, 1m12s). A skipped matrix job shows `${{ matrix.shard }}` unexpanded in its name; cosmetic (SESSION.md item 40's company).
+
+### Decisions taken
+
+- ADR-0070's open questions 1 to 5, each as recommended (Amos): decisions 2 (feed derived, cursor of branch heads, long-poll, authors as the log shows them), 3 (runs in memory, persisted when stalled merges are seen) and 12 (each store's patch passes through; `applyPatch` learns the array form).
+- ADR-0070 accepted (Amos, 2026-11-12); its Status and the eight dated notes.
+- Choices made in the build, open to overrule (PRs #145, #147): `JsonValueSchema` for every `sys:JSON` field; the seed holds no `CheckRequirement`; the operator's `put` alone writes one until the permission rows are built; the names `mainOnlyCode`, `revocablesNaming`, `NOT_SEEDED`, `requirement_without_branch`.
+- Renumbering (Amos): ADR-0071's constraints 25 and 26 and checks AR and AS; the knowledge components plan's checks AT to AX.
+
 ## 2026-11-12, evening (the Ledger merge checked, the app icon, faster CI; PRs #141 and #144)
 
 **Where things stood at the close.** **Phase 8, 2026-11-12 evening; unchanged since the review's authentication group and D6 (PRs #138, #139) but for documents, the icon and CI.** `main` holds three proposals written in other sessions: the Ledger plan (PR #140), ADR-0070 (checks as hooks and gates for plugins, Proposed) and the Lint plan (PR #142); the desktop program's icon is the cutaway A in place of the placeholder (PR #141), not yet in a release; CI runs in about 2¾ minutes, the contract suite in three shards, and a change to documents alone runs the app job only (PR #144). `desktop-v0.1.2` is the released program; officepi serves revision 2026-11-12. 638 tests in the app, 27 browser tests in the shell. **Next: the Windows PC's update and a logoff there; a 0.1.3 release when Amos wants the discard, the new revision and the icon in people's hands, the installer's icon-cache refresh first; Amos's review of ADR-0070 and the Ledger and Lint plans; then step 6 of the desktop plan or the review's remaining groups; Amos's call.**
