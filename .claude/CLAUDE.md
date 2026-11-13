@@ -163,6 +163,8 @@ Enforced by the invariants engine on every write; `invariants/index.ts` maps eac
 20. A `LearningDataset` has `producedBy` or an `externalRef` (`dataset_without_source`); a `LearningMetric` has `derivedFrom` or an `externalRef` (`metric_without_source`) (ADR-0063)
 21. A `Grant` lives on `main`, judged by the branch a write is for, so the operator's `put` on `main` passes (400 `grants_live_on_main`, before anything is read; ADR-0068 decision 2)
 22. A grant's holder suits its role: `Maintainer` and `Administrator` are persons, `Relay` an agent; `relayedUsers` only on a `Relay` grant, naming persons (`grant_holder_kind`, `relayed_users_not_relay`; ADR-0068 decision 2)
+23. A `CheckRequirement` lives on `main`, as constraint 21 (400 `requirements_live_on_main`; ADR-0070 decision 5); the operator's `put` alone writes one until its permission rows are built
+24. A `CheckRequirement`'s `reporter` is an agent (`reporter_not_agent`; ADR-0070 decision 5)
 
 Also in the API: the list route refuses a filter on a `User` field of a class under `DesignRecord` (400 `person_filter_refused`, ADR-0021) and lists `Grant` by `user` (ADR-0068 decision 8); `Optional` and `Set` filters run in the hub (check Y). A merge is checked before it commits, on a transient branch, 422 with the target unchanged, with a dry run (ADR-0025 decision 5, note; built 2026-11-01).
 

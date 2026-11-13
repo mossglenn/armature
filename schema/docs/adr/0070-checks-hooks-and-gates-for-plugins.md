@@ -40,6 +40,18 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
   **decision 3**, whose revocation of a branch's grants on deletion also revokes its requirements.
 - **ADR-0021**: a stated expectation of every plugin that posts runs (decision 11).
 
+> **Note (2026-11-12), built in part:** the schema, `CheckRequirement` and `CheckLevel`, with the
+> generator's `sys:JSON` mapped to any JSON value but a top-level `null` (PR #145). Then
+> constraints 23 (`requirements_live_on_main`, in the write pipeline beside 21) and 24
+> (`reporter_not_agent`, `invariants/checkRequirement.ts`); the operator's `check` rule
+> `requirement_without_branch`; and a branch's deletion revoking its requirements in the commit
+> that revokes its grants, by the route and by the operator's scratch-branch deletion
+> (`revocablesNaming` in `grants.ts`). Decision 5's rows of ADR-0068's table are not built, so
+> the document routes do not take the class yet and the operator's `put` alone writes one: who may
+> write a requirement turns on whether the record it replaces is `locked`, which the permission
+> check must read. Not built: those rows, the feed, the runs, the gate, the trailers, the
+> capability, the push gate and decision 12's patcher.
+
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in
 the hub". It does not touch item 18's first half, the path read.
