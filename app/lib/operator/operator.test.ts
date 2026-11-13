@@ -242,9 +242,9 @@ describe('the skip stays operator-only', () => {
 
 /**
  * CheckRequirement (ADR-0070 decision 5): constraints 23 and 24, the operator's
- * `check` rule, and a branch's deletion revoking its requirements. The routes
- * do not take the class until ADR-0068 decision 4's rows for it are built, so
- * the operator's `put` is the write here. Every requirement and the agent are
+ * `check` rule, and a branch's deletion revoking its requirements, through the
+ * operator's `put`, which writes one as a maintainer would through the routes
+ * (who may is authorization.test.ts's). Every requirement and the agent are
  * deleted at the end, so `main` keeps no record of the test.
  */
 describe('a CheckRequirement (ADR-0070 decision 5)', () => {
@@ -309,16 +309,6 @@ describe('a CheckRequirement (ADR-0070 decision 5)', () => {
   it('names an agent as its reporter (constraint 24): a person is refused', async () => {
     expect(await violations(put([requirement({ check: `test/person-${stamp}`, reporter: 'User/demo-designer' })]))).toEqual(['reporter_not_agent@reporter']);
     expect(await violations(put([requirement({ check: `test/agent-${stamp}` })]))).toEqual([]);
-  });
-
-  it('is not yet written through the document routes', async () => {
-    const res = await app.request('/api/v1/documents?branch=main', {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ message: 'x', documents: [requirement({ check: `test/route-${stamp}` })] }),
-    });
-    expect(res.status).toBe(400);
-    expect((await res.json()).issues[0].message).toContain('not a writable document type');
   });
 
   it("is reported by check when it binds a branch the store lacks, and passes once revoked", async () => {

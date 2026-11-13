@@ -4,7 +4,8 @@ import { hubOf, type HubConfig } from './config';
 import { ApiError } from './errors';
 import { grantsAt, isActive, type GrantDocument } from './grants';
 import { isAgentExternalId, principalOf, registry, REGISTRY_BRANCH, resolveUser, type ResolvedUser } from './identity';
-import type { TerminusDocument } from './store';
+import type { DocumentReader, TerminusDocument } from './store';
+import { findExisting } from './write';
 
 /**
  * Authorization (architecture decision record ADR-0068 decisions 1 and 4):
@@ -27,11 +28,21 @@ import type { TerminusDocument } from './store';
  *                            export to anyone else carries only the users its records name
  *                            (decision 4's notes of 2026-10-30 and 2026-11-05; under `header`
  *                            open, since the caller is trusted and on loopback)
+ *   write a requirement      for merges into main, a Maintainer of main or of every branch;
+ *                            for merges into B, B's Owner or a Maintainer of B or of every
+ *                            branch; a `locked` one, an Administrator (ADR-0070 decision 5;
+ *                            decision 4's note of 2026-11-12). Judged on the record as written
+ *                            and on the one it replaces, since `locked` is not in the key: the
+ *                            right to unlock a requirement is the right to lock one
  *
  * A branch with no Owner in force is writable, mergeable and deletable by any
  * registered User, as before this decision: the migration window of decision
- * 3's note is open, and `GET /discover` says so (`ownerlessBranches`). The
- * check runs on a remote hub under every resolver; a workspace hub does not
+ * 3's note is open, and `GET /discover` says so (`ownerlessBranches`). A
+ * requirement for such a branch is not in that window: it binds what reaches
+ * the branch by merge, and no one has yet claimed the branch, so only a
+ * maintainer writes one (chosen 2026-11-13; an Owner grant on the branch
+ * opens it). The check runs on a remote hub under every resolver; a
+ * workspace hub does not
  * authorize (decision 9), it only keeps each workspace to its owner (below).
  * On a remote hub an agent's own credential may read and never write
  * (ADR-0067 decision 10). The operator tools are outside the API and outside
@@ -48,7 +59,9 @@ export type Operation =
   | { permission: 'delete'; branch: string }
   | { permission: 'grant'; role: GrantRole; branch?: string }
   | { permission: 'register'; agent: boolean }
-  | { permission: 'list_users' };
+  | { permission: 'list_users' }
+  /** A `CheckRequirement` for merges into `branch` (`main` when the record names none); `locked` when the record written or replaced is. */
+  | { permission: 'write_requirement'; branch: string; locked: boolean };
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -105,6 +118,13 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
       return admin ? undefined : 'registering a person needs an Administrator';
     case 'list_users':
       return maintains(REGISTRY_BRANCH) || admin ? undefined : `listing users needs Maintainer of ${REGISTRY_BRANCH} or an Administrator`;
+    case 'write_requirement': {
+      if (op.locked) return admin ? undefined : 'writing a locked requirement, which binds merges into every branch, needs an Administrator';
+      if (op.branch === REGISTRY_BRANCH) {
+        return maintains(REGISTRY_BRANCH) ? undefined : `requiring a check of merges into ${REGISTRY_BRANCH} needs Maintainer of ${REGISTRY_BRANCH} or of every branch`;
+      }
+      return owns(op.branch) || maintains(op.branch) ? undefined : `requiring a check of merges into branch ${op.branch} needs its Owner, or Maintainer of it or of every branch`;
+    }
   }
 }
 
@@ -213,17 +233,44 @@ async function requireWorkspaceOwner(hub: HubConfig, who: ResolvedUser, op: Oper
 }
 
 /**
- * The permissions a document write needs: a grant in the batch needs the
- * right to grant that role on that branch; anything else needs the right to
- * write the branch. Checked after the shape, so a grant's role is known.
+ * The operation a document's write needs, for the classes judged by the
+ * record rather than by the branch they are written to: each lives on `main`
+ * and names inside itself the branch it concerns, so the right to write
+ * `main` is not what it takes (`livesOnMain` in classes.ts holds the same
+ * classes, and `User`, which no route writes). A class absent here needs the
+ * right to write the branch. One entry per class, as the invariants engine
+ * maps a class to its validator; the next record-judged class is an entry.
+ * `main` is the registry at the request's time, read only when the write is
+ * for `main`: elsewhere constraint 23 refuses the write whatever is found.
+ */
+const OPERATION_FOR: Record<string, (doc: TerminusDocument, main: DocumentReader | undefined) => Operation | Promise<Operation>> = {
+  Grant: (doc) => ({ permission: 'grant', role: doc.role as GrantRole, branch: doc.branch as string | undefined }),
+  // A requirement's `locked` is not in its key, so the record it replaces is read: unlocking needs what locking did (ADR-0070 decision 5).
+  CheckRequirement: async (doc, main) => {
+    const replaced = main ? await findExisting(main, doc) : undefined;
+    return { permission: 'write_requirement', branch: (doc.branch as string | undefined) ?? REGISTRY_BRANCH, locked: doc.locked === true || replaced?.locked === true };
+  },
+};
+
+/**
+ * The permissions a document write needs: each document's own operation
+ * (`OPERATION_FOR`), or the right to write the branch for any other class,
+ * asked once. Checked after the shape, so the fields are known, and before
+ * the write's queue, as the grants are read: a lock or a revocation landing
+ * between this read and the write is unseen, a window open since 2026-11-01
+ * that the queue does not close; authorizing inside the pipeline after its
+ * own replace lookup would close it, and waits for the race to be seen
+ * (ADR-0070, note of 2026-11-13).
  */
 export async function requireWrite(c: Context, who: ResolvedUser, branch: string, documents: TerminusDocument[]): Promise<void> {
+  const main = branch === REGISTRY_BRANCH ? registry(c) : undefined;
+  let needsBranch = false;
   for (const doc of documents) {
-    if (doc['@type'] === 'Grant') {
-      await requirePermission(c, who, { permission: 'grant', role: doc.role as GrantRole, branch: doc.branch as string | undefined });
-    }
+    const operationFor = OPERATION_FOR[doc['@type']];
+    if (operationFor) await requirePermission(c, who, await operationFor(doc, main));
+    else needsBranch = true;
   }
-  if (documents.some((doc) => doc['@type'] !== 'Grant')) await requirePermission(c, who, { permission: 'write', branch });
+  if (needsBranch) await requirePermission(c, who, { permission: 'write', branch });
 }
 
 /** What `GET /discover` says about authorization on a remote hub: the migration window is open. */
