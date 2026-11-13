@@ -1,6 +1,6 @@
 # Checks and the Lint plugin: plan
 
-*Status: draft 2026-11-12, decisions taken the same day (§17). The hub's half is proposed as ADR-0070 (`schema/docs/adr/0070-checks-hooks-and-gates-for-plugins.md`), not yet accepted; Lint itself is a client of the hub, built outside this repository. Written in a claude.ai session from `main` at `bcbf8ff`, in two versions: v1 put the rule engine in the hub; v2, this one, keeps only hooks and gates in the hub, at Amos's request, so that rules ship with the plugin and not with Armature's releases.*
+*Status: draft 2026-11-12, decisions taken the same day (§17). The hub's half is ADR-0070 (`schema/docs/adr/0070-checks-hooks-and-gates-for-plugins.md`), accepted 2026-11-12 and not yet built; Lint itself is a client of the hub, built outside this repository. Written in a claude.ai session from `main` at `bcbf8ff`, in two versions: v1 put the rule engine in the hub; v2, this one, keeps only hooks and gates in the hub, at Amos's request, so that rules ship with the plugin and not with Armature's releases.*
 
 Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), CLI (command-line interface), JSON (JavaScript Object Notation), SSE (server-sent events), WASM (WebAssembly).
 
@@ -372,7 +372,7 @@ L1 and H2 are each worth shipping alone: L1 answers "does this branch break our 
 
 ## 17. Decisions taken
 
-**Amos accepted every recommendation on 2026-11-12, and chose step 1 of the local-plugin ladder for decision 5.** These are inputs to ADR-0070, not yet an accepted ADR.
+**Amos accepted every recommendation on 2026-11-12, and chose step 1 of the local-plugin ladder for decision 5.** These were the inputs to ADR-0070, accepted the same day with its own five open questions decided as recommended.
 
 | # | Question | Decision | What it means for the build |
 | --- | --- | --- | --- |

@@ -7,20 +7,21 @@
 > are *required* before a merge, with settings only the tool reads. The merge route then *refuses*
 > a merge whose required verdicts are missing or failing, unless someone with the right to merge
 > gives a reason, and the merge commit records what was required, what passed and who overrode
-> what. The same pieces run on a person's own machine, where the gate is the push. Proposed on
+> what. The same pieces run on a person's own machine, where the gate is the push. Accepted on
 > 12 November 2026; nothing is built.
 
 ## Status
 
-Proposed (2026-11-12, drafted from `docs/lint-plan.md`, whose §17 records Amos's decisions of the
-same day on the plan's six questions). Not accepted and not built. It changes the schema, adding
-one class and one enum, so on acceptance it is implemented with `schema.json`, the generated types and the
+Accepted (2026-11-12, Amos). Proposed the same day, drafted from `docs/lint-plan.md`, whose §17
+records Amos's decisions of that day on the plan's six questions. Not built. It changes the schema,
+adding one class and one enum, so it is implemented with `schema.json`, the generated types and the
 appendix in one commit (CLAUDE.md, "After schema changes"). The two platform checks under
 Verification were run on 2026-11-12; both pass, and what they found is recorded there and in open
 questions 1 and 5. Amos decided the five open questions the same day, each as recommended
-(decisions 2, 3 and 12); the record as a whole is not yet accepted.
+(decisions 2, 3 and 12), before accepting the record.
 
-On acceptance it would annotate, with dated notes:
+The dated notes this acceptance promised are on ADR-0021, ADR-0025, ADR-0059, ADR-0062, ADR-0065,
+ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 
 - **ADR-0025 decision 2**, which reserves git-style trailers: two more hub-written trailers,
   `Armature-Check` and `Armature-Check-Override` (decision 7).

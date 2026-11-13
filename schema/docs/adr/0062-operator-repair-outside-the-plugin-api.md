@@ -99,6 +99,12 @@ The open items below remain open.
 - **`check` runs in CI** after the seed is loaded, in the contract job, before the tests. The seed
   is written outside the API, so nothing else would notice a seed that breaks a rule.
 
+> **Note (2026-11-12):** ADR-0070 is accepted, not yet built. Decision 5's `check` gains a rule
+> over a whole branch: an active `CheckRequirement` naming a branch the store lacks, or whose
+> `reporter` is not a registered agent (ADR-0070 decision 5). Decision 6 stands: a plugin that
+> checks the graph reads it through the export and the intelligence reads like any client, and no
+> query route is added for it (ADR-0070, Context 1).
+
 ## Context
 
 The hub's write path applies seventeen rules to every write (CLAUDE.md, "Critical API constraints")

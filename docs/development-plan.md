@@ -1576,7 +1576,7 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   decision 5, note). *Since 2026-11-06* that read and the apply are in the branch's write queue,
   so the window is a second hub's or the operator's only (decision 7, note of that day).
 
-**Checks for plugins** (2026-11-12, ADR-0070 proposed)
+**Checks for plugins** (2026-11-12, ADR-0070 accepted the same day)
 - *Verified (2026-11-12, check AP):* a class with a required `sys:JSON` field and a Hash key over
   three fields, two `Optional`, loads; its four key combinations are four ids, each check AI's
   formula (AP1); a JSON value with nesting and every JSON type reads back structurally equal

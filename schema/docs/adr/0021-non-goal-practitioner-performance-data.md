@@ -39,6 +39,12 @@ keeps this record's rule for commit messages too.
 
 > **Note (2026-11-01):** built: the list route refuses a filter on a `User`-typed field of a class under `DesignRecord` and answers one on `Grant.user` (ADR-0068 decision 8; `app/lib/api/routes/documents.ts`).
 
+> **Note (2026-11-12):** ADR-0070 is accepted, not yet built. Every plugin that posts check runs
+> is expected to report about records, never to summarize a person's work: a rule such as "items
+> attested only by their own author" reports the items. The hub stores a run's `summary` as text it
+> neither indexes nor filters, and the event feed takes no author filter, so it shows nothing the
+> log does not (ADR-0070 decisions 2 and 11).
+
 ## Context
 
 Armature records who is responsible for each record entering the graph. `createdBy` is on `ArmatureDocument` and propagates to every inheriting type (ADR-0015). Proposed types that capture design activity — `DesignFinding` (ADR-0020) and extensions to `DesignNote` — will carry it too.

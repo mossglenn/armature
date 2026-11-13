@@ -73,6 +73,17 @@ On acceptance it would annotate, not amend in substance:
 
 Each of those ADRs gets a dated note pointing here when this one is accepted.
 
+> **Note (2026-11-12):** ADR-0070 is accepted, not yet built. Decision 5's push gains a gate
+> before its first replay: the workspace's personal requirements,
+> `<ARMATURE_WORKSPACE_DIR>/checks.json`, written by the host and never through a route, are applied
+> to the workspace's head against the runs posted on this workspace hub, with the remote merge's
+> codes; an override's reason rides as an `Armature-Check-Override` trailer on the first replayed
+> commit, the pusher's claim, which the remote records and does not enforce (ADR-0070 decision 8).
+> The remote's requirements are mirrored with the clone and shown, never enforced, since decision
+> 3's `main` is a read-only mirror and a workspace hub authorizes nothing (ADR-0068 decision 9).
+> Decision 7's local token is unchanged; a later step of `docs/lint-plan.md` §10 may turn it into
+> scoped tokens.
+
 ## Context
 
 Every client today is a client of one hub, over the network. Quiver, the local-first item manager

@@ -42,6 +42,14 @@ questions 2 and 11. It amends:
 
 ADR-0055 decision 1 and ADR-0065 decision 8 carry dated notes pointing here (2026-11-02).
 
+> **Note (2026-11-12):** ADR-0070 is accepted, not yet built. Decision 5's promise that the
+> file-backed store's patches differ from TerminusDB's only in a list's segmentation does not hold
+> inside a JSON value: TerminusDB patches a list of objects of equal length there as a plain array
+> of positional patches (platform check AP4), which the file-backed store does not emit. Each
+> store's patch passes through unchanged, `applyPatch` learns that form, and `docs/api.md` says both
+> shapes apply (ADR-0070 decision 12). Decision 6's formula mints `CheckRequirement`'s Hash ids
+> unchanged, with two Optional key fields (check AP1).
+
 ## Context
 
 ADR-0065 decision 8 admits two stores under a workspace hub, TerminusDB beside it or a file-backed
