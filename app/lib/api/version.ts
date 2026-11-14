@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import { hubOf, type HubConfig, type HubRole } from './config';
 import { ApiError } from './errors';
 import { AUTHORIZATION_SETTINGS } from './authorization';
+import { CONCLUSIONS, RUNS_KEPT } from './checks';
 import { readOnlyBranches, remoteOnlyRoutes } from './role';
 import type { InstanceProfile } from './workspace/records';
 
@@ -22,7 +23,7 @@ import type { InstanceProfile } from './workspace/records';
  * list against that file's headings. Revisions under /api/v1 are additive, so
  * a hub at the newest serves every earlier one.
  */
-export const REVISIONS = ['2026-11-12', '2026-11-07', '2026-11-06', '2026-11-05', '2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
+export const REVISIONS = ['2026-11-13', '2026-11-12', '2026-11-07', '2026-11-06', '2026-11-05', '2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
 
 export const CURRENT_REVISION = REVISIONS[0];
 const OLDEST_REVISION = REVISIONS[REVISIONS.length - 1];
@@ -62,6 +63,8 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/intelligence.item-statistics': { fallback: 'reject', routes: ['/api/v1/intelligence/item-statistics'], settings: {} },
   'armature/intelligence.module-content': { fallback: 'reject', routes: ['/api/v1/intelligence/module-content'], settings: {} },
   'armature/export': { fallback: 'reject', routes: ['/api/v1/export'], settings: { profiles: ['full', 'pseudonymous', 'institutional'] } },
+  /** Check runs and the requirements that apply to a merge (ADR-0070 decisions 3 to 5; routes/checks.ts), both roles; the feed and the gate join it as they are built. */
+  'armature/checks': { fallback: 'reject', routes: ['/api/v1/checks'], settings: { runsKept: RUNS_KEPT, conclusions: [...CONCLUSIONS] } },
   /** What a tool asks a hub about itself, and since 2026-11-05 the two health probes (routes/health.ts). */
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema', '/api/v1/health'], settings: {} },
   /** `localToken` and `actions` are set by `discovery` from the hub's configuration (./localToken.ts). */

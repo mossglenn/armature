@@ -169,6 +169,16 @@ describe('@armature/client over the app in-process', () => {
     expect(users.data.map((u) => u['@id'])).toContain('User/demo-designer');
   });
 
+  it('posts a check run about a commit, reads it back, and reads the requirements a merge into a branch must meet', async () => {
+    const head = (await hub.branches.list()).data.find((b) => b.name === BRANCH)!.head.commit;
+    const run = await hub.checks.report({ check: `test/client-${stamp}`, commit: head, branch: BRANCH, conclusion: 'pass', summary: 'all clear' });
+    expect(run.data).toMatchObject({ check: `test/client-${stamp}`, commit: head, branch: BRANCH, conclusion: 'pass', reporter: 'User/demo-designer' });
+    expect((await hub.checks.runs({ commit: head })).data.map((r) => r.id)).toContain(run.data.id);
+    const required = await hub.checks.requirements({ target: BRANCH, from: `${BRANCH}-source` });
+    expect(required.data).toEqual({ target: BRANCH, from: `${BRANCH}-source`, requirements: [] });
+    expect(required.commit).toBeDefined();
+  });
+
   it('reads the coverage, alignment, trace, attestation and impact routes with ids in either spelling', async () => {
     const coverage = await hub.intelligence.coverage('Module/how-ai-works', { fullyAssessedAt: 1 });
     expect(coverage.data.thresholds.fullyAssessedAt).toBe(1);

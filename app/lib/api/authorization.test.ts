@@ -17,6 +17,7 @@ import { checkBranch } from '../operator/check';
 import { capabilitiesOf } from './version';
 import { createClient } from '@armature/client';
 import type { UserDocument } from './identity';
+import { paramsHash } from './checks';
 
 const stamp = Date.now().toString(36);
 const SCRATCH_DB = `${process.env.TERMINUS_DB}_authz_${stamp}`;
@@ -586,5 +587,29 @@ describe("CheckRequirement documents through the routes (ADR-0070 decision 5; AD
     expect((await json(await on('GET', `/documents/CheckRequirement?branch=${MINE}`))).body).toEqual([]);
     const forMine = byReporter.body.filter((r: TerminusDocument) => r.branch === MINE).map((r: TerminusDocument) => r.check);
     expect(forMine.sort()).toEqual([`test/lint-${stamp}`, `test/locked-${stamp}`]);
+  });
+
+  it('GET /checks/requirements answers which apply to a merge into a target from a source: by target, by lock, by prefix, each with its paramsHash (ADR-0070 decisions 3 and 5)', async () => {
+    // A requirement bound to review-round branches only, and a locked one that binds every target.
+    expect((await write([requirement({ check: `test/rounds-${stamp}`, branch: MINE, fromPrefix: 'coqui-', params: { b: 1, a: [1.0] } })], 'Rounds only')).status).toBe(200);
+    expect((await write([requirement({ check: `test/everywhere-${stamp}`, branch: BRANCH, locked: true })], 'Everywhere')).status).toBe(200);
+    const read = async (query: string) => json(await reviewer('GET', `/checks/requirements?${query}`));
+    const byCheck = (body: { requirements: Array<{ check: string }> }) => body.requirements.map((r) => r.check).sort();
+
+    const fromRound = await read(`target=${MINE}&from=coqui-round-7`);
+    expect(fromRound.status).toBe(200);
+    expect(byCheck(fromRound.body)).toEqual([`test/everywhere-${stamp}`, `test/lint-${stamp}`, `test/rounds-${stamp}`]);
+    const rounds = fromRound.body.requirements.find((r: TerminusDocument) => r.check === `test/rounds-${stamp}`);
+    expect(rounds.paramsHash).toBe(paramsHash({ a: [1], b: 1 })); // over the value as the store returns it, not the text sent
+    expect(rounds.level).toBe('Required');
+    // Another source: the prefixed requirement drops out; no source: it stays for the client to filter.
+    expect(byCheck((await read(`target=${MINE}&from=${BRANCH}`)).body)).toEqual([`test/everywhere-${stamp}`, `test/lint-${stamp}`]);
+    expect(byCheck((await read(`target=${MINE}`)).body)).toEqual([`test/everywhere-${stamp}`, `test/lint-${stamp}`, `test/rounds-${stamp}`]);
+    // main is the default target; the revoked requirement is never listed; a locked one reaches a branch no requirement names.
+    const toMain = await read('');
+    expect(toMain.body.target).toBe('main');
+    expect(byCheck(toMain.body)).toEqual([`test/everywhere-${stamp}`, `test/lint-${stamp}`]);
+    expect(byCheck((await read(`target=test-nothing-${stamp}`)).body)).toEqual([`test/everywhere-${stamp}`]);
+    expect((await read('target=not a branch')).status).toBe(400);
   });
 });

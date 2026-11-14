@@ -28,6 +28,10 @@ import { findExisting } from './write';
  *                            export to anyone else carries only the users its records name
  *                            (decision 4's notes of 2026-10-30 and 2026-11-05; under `header`
  *                            open, since the caller is trusted and on loopback)
+ *   report a check           any identity that may read the branch (ADR-0070 decision 4): a
+ *                            run is advisory unless its reporter is the agent a requirement
+ *                            names, which the merge gate compares, not this; a service's own
+ *                            credential posts one, since a run is not a write to the graph
  *   write a requirement      for merges into main, a Maintainer of main or of every branch;
  *                            for merges into B, B's Owner or a Maintainer of B or of every
  *                            branch; a `locked` one, an Administrator (ADR-0070 decision 5;
@@ -61,7 +65,9 @@ export type Operation =
   | { permission: 'register'; agent: boolean }
   | { permission: 'list_users' }
   /** A `CheckRequirement` for merges into `branch` (`main` when the record names none); `locked` when the record written or replaced is. */
-  | { permission: 'write_requirement'; branch: string; locked: boolean };
+  | { permission: 'write_requirement'; branch: string; locked: boolean }
+  /** A check run about a commit on `branch` (ADR-0070 decision 4). */
+  | { permission: 'report_check'; branch: string };
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -118,6 +124,8 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
       return admin ? undefined : 'registering a person needs an Administrator';
     case 'list_users':
       return maintains(REGISTRY_BRANCH) || admin ? undefined : `listing users needs Maintainer of ${REGISTRY_BRANCH} or an Administrator`;
+    case 'report_check':
+      return undefined; // any identity that may read; whether the run counts is the gate's (ADR-0070 decisions 4 and 6)
     case 'write_requirement': {
       if (op.locked) return admin ? undefined : 'writing a locked requirement, which binds merges into every branch, needs an Administrator';
       if (op.branch === REGISTRY_BRANCH) {
@@ -167,8 +175,9 @@ export async function requirePermission(c: Context, who: ResolvedUser, op: Opera
   const { permission, ...rest } = op;
   // ADR-0067 decision 10: an agent's own work reaches a remote hub only as a
   // workspace hub's push, acting for a person; an agent as the credential
-  // itself may read, never write.
-  if (isAgentExternalId(who.user.externalId) && !who.onBehalfOf) {
+  // itself may read, never write. A check run is not a write to the graph, so
+  // a service posts one under its own credential (ADR-0070 decision 4).
+  if (isAgentExternalId(who.user.externalId) && !who.onBehalfOf && permission !== 'report_check') {
     throw new ApiError(
       403,
       'forbidden',

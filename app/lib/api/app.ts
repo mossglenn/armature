@@ -31,12 +31,14 @@ import { bodyLimit } from 'hono/body-limit';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { boundary } from './boundary';
+import { RunStore } from './checks';
 import { configFromEnv, type HubConfig } from './config';
 import { ApiError } from './errors';
 import { requireIdentity } from './identity';
 import { requireLocalToken } from './localToken';
 import { guardRemoteOnly } from './role';
 import { branches } from './routes/branches';
+import { checks } from './routes/checks';
 import { discover } from './routes/discover';
 import { documents } from './routes/documents';
 import { exportRoutes } from './routes/export';
@@ -56,10 +58,13 @@ export const MAX_BODY_BYTES = 10 * 1024 * 1024;
  */
 export function createApp(config: () => HubConfig = configFromEnv): Hono {
   const app = new Hono().basePath('/api/v1');
+  // The check runs this hub holds, in memory for the app's life (ADR-0070 decision 3; ./checks.ts).
+  const runs = new RunStore();
 
   // The configuration first: everything after reads it from the request.
   app.use('*', async (c, next) => {
     c.set('hub', config());
+    c.set('runs', runs);
     await next();
   });
 
@@ -91,6 +96,7 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
 
   app.route('/documents', documents);
   app.route('/branches', branches);
+  app.route('/checks', checks);
   app.route('/users', users);
   app.route('/intelligence', intelligence);
   app.route('/export', exportRoutes);
