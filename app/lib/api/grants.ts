@@ -28,14 +28,20 @@ export async function activeGrantsNaming(main: DocumentReader, branch: string): 
   return grants.filter((grant) => grant.branch === branch && isActive(grant));
 }
 
+/** Every `CheckRequirement` in force at the reader's ref (ADR-0070 decision 5), with the commit read. */
+export async function activeRequirements(main: DocumentReader): Promise<{ requirements: TerminusDocument[]; commit: string }> {
+  const { documents, commit } = await main.queryDocuments('CheckRequirement', {});
+  return { requirements: documents.filter((requirement) => requirement.status === 'Active'), commit };
+}
+
 /**
  * The `CheckRequirement`s in force that bind merges into one branch (ADR-0070
  * decision 5). One with no `branch` binds `main`, which is never deleted, so
  * only a named branch is matched.
  */
 export async function activeRequirementsNaming(main: DocumentReader, branch: string): Promise<TerminusDocument[]> {
-  const { documents } = await main.queryDocuments('CheckRequirement', {});
-  return documents.filter((requirement) => requirement.branch === branch && requirement.status === 'Active');
+  const { requirements } = await activeRequirements(main);
+  return requirements.filter((requirement) => requirement.branch === branch);
 }
 
 /** What deleting `branch` revokes on `main`: its grants and its requirements in force (ADR-0068 decision 3, note of 2026-11-12). */
