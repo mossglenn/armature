@@ -3,7 +3,7 @@
  * docs/development-plan.md; the API contract is docs/api.md).
  *
  * One function per /api/v1 route, grouped as the reference groups them:
- * documents, branches, users, intelligence and export. The client adds nothing
+ * documents, branches, users, checks, intelligence and export. The client adds nothing
  * the routes do not have. What it carries so a plugin need not: the ref as
  * `?branch=` or `?ref=`, the commit every response was served from (the ETag,
  * returned as `commit`), optimistic concurrency (`ifMatch` → If-Match), the
@@ -25,10 +25,10 @@
  * lacks one. `discover()` asks a hub about itself first, when a caller wants
  * to know before its first write.
  */
-import type { ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
+import type { CheckRequirement, ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-12';
+export const CLIENT_REVISION = '2026-11-13';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -249,6 +249,34 @@ export interface RegisterUser {
   externalId: string;
   email?: string;
   institution?: string;
+}
+
+export type CheckConclusion = 'pass' | 'fail' | 'neutral' | 'error';
+
+/** A check run as the hub holds it (ADR-0070 decision 3; since 2026-11-13): a plugin's verdict about one commit, outside the graph. */
+export interface CheckRun {
+  id: string;
+  check: string;
+  commit: string;
+  branch: string;
+  conclusion: CheckConclusion;
+  summary?: string;
+  counts?: Record<string, number>;
+  /** `sha256:<hex>` of the requirement's `params` the plugin ran with, copied from `checks.requirements()`. */
+  paramsHash?: string;
+  detailsUrl?: string;
+  /** `User/<id>`, the request's author: the agent under `agent`, else the caller. */
+  reporter: string;
+  reportedAt: string;
+}
+
+export type RunInput = Omit<CheckRun, 'id' | 'reporter' | 'reportedAt'>;
+
+/** The requirements in force that apply to a merge into `target` from `from`, each with the hash a run must carry. */
+export interface RequirementsResult {
+  target: string;
+  from?: string;
+  requirements: Array<CheckRequirement & { paramsHash: string }>;
 }
 
 /**
@@ -714,6 +742,22 @@ export function createClient(options: ClientOptions) {
       /** `POST /users`: register a user on `main`; the caller must be registered. */
       register(opts: { message: string; user: RegisterUser }) {
         return call<WriteResult>('/users', { method: 'POST', body: opts });
+      },
+    },
+
+    /** Check runs and the requirements a merge must satisfy (ADR-0070; since 2026-11-13), on both roles. */
+    checks: {
+      /** `POST /checks/runs`: a verdict about a commit the hub holds, as the caller (or the `agent` option's agent); 201 the run as recorded. Not a write to the graph: no message, no commit. */
+      report(run: RunInput) {
+        return call<CheckRun>('/checks/runs', { method: 'POST', body: run });
+      },
+      /** `GET /checks?commit=&branch=&check=`: the runs the hub holds, newest first; the newest 50 per check and branch. */
+      runs(opts: { commit?: string; branch?: string; check?: string } = {}) {
+        return call<CheckRun[]>('/checks', { query: opts });
+      },
+      /** `GET /checks/requirements?target=&from=`: the requirements in force that bind a merge into `target` (`main` by default) from `from`, with each `paramsHash`. */
+      requirements(opts: { target?: string; from?: string } = {}) {
+        return call<RequirementsResult>('/checks/requirements', { query: opts });
       },
     },
 
