@@ -65,9 +65,22 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > queue, as every grant has been since 2026-11-01, so a lock or a revocation landing between the
 > read and the commit is unseen; the write pipeline looks the replaced record up again inside the
 > queue, and an authorization step there, after that lookup, would close the window and spare the
-> second read. Deferred under the evidence rule until the race is seen. Still not built: the feed,
-> the runs, `report_check`, the gate, the trailers, the capability, the push gate and decision
-> 12's patcher.
+> second read. Deferred under the evidence rule until the race is seen.
+>
+> **Note (2026-11-13, later), built:** decision 3's run store and routes (`checks.ts`,
+> `routes/checks.ts`): `POST /checks/runs`, `GET /checks?commit=|branch=|check=`, runs in memory,
+> one store per app, the newest 50 per check and branch; `paramsHash` over the canonical form,
+> served beside `params` by `GET /checks/requirements?target=&from=`, decision 5's one question,
+> answered on both roles (a workspace hub's mirror holds none until decision 8). Decision 4's
+> `report_check` row: any identity that may read posts a run, a service's own credential included
+> (the one operation ADR-0067 decision 10's refusal passes), a relay refused; whether a run counts
+> is left to the gate's comparison, so the row refuses no one and the ADR's "the agent a
+> requirement names" is the gate's rule, not a refusal at the post. Decision 10's capability
+> `armature/checks` with `runsKept` and `conclusions`, and the client revision 2026-11-13, which
+> also carries decision 5's route writes of the morning; the feed and the gate will ride later
+> revisions rather than this one, against decision 10's estimate of one. A run's shape is checked
+> in the route (400 `invalid_run`), not by a generated schema: a run is not a document. Still not
+> built: the feed, the gate, the trailers, the push gate and decision 12's patcher.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in

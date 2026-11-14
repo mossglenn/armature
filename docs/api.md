@@ -262,7 +262,25 @@ Who may write a grant: `Maintainer` on a branch, its owner or an administrator; 
 
 A `CheckRequirement` says which plugin's verdict a merge into a branch must carry (ADR-0070 decision 5; written through the document routes since 2026-11-13). It is a document on `main` like a `Grant`, whatever branch it binds, so every change to what a merge requires is a commit with an author and a reason. Its fields: `check` (the name the plugin owns, such as `lint/team`), `branch` (the merge target; absent means `main`), `fromPrefix` (binds only merges from branches whose name starts with it), `reporter` (the agent `User` whose runs count), `level` (`Required` or `Advisory`), `locked` (binds merges into every branch, not only `branch`), `params` (the plugin's settings, any JSON value but `null`, which the hub stores and returns without reading), `status` (`Active` or `Revoked`) and `rationale`. Its identifier derives from `check`, `branch` and `fromPrefix`, so there is one current requirement per check, target and source prefix; withdrawing one is a replace with `status: "Revoked"`, never a delete, and deleting a branch revokes the requirements naming it in the commit that revokes its grants. Rules 21 to 24 (The write pipeline) hold it to `main` and its reporter to an agent.
 
-Who may write one (**403** `forbidden`, `permission: "write_requirement"`, with `branch`, the target, and `locked`): for merges into `main`, a maintainer of `main` or of every branch; for merges into another branch, its owner or a maintainer of it or of every branch; a locked one, an administrator. The record replaced counts too: `locked` is not part of the identifier, so unlocking a requirement needs what locking it did. A branch with no owner takes a requirement only from a maintainer, migration window or not. A requirement alone in a write is judged by these rows; any other document beside it needs the right to write `main`. Requirements are listed by reporter, `GET /documents/CheckRequirement?reporter=User/<id>`; `branch` in a list query names the branch read, where no requirement lives, so a client filters `main`'s list by the `branch` field itself until `GET /checks/requirements?target=` exists. Nothing enforces a requirement yet: the runs, the feed and the merge gate are ADR-0070's remaining steps (its Status note).
+The requirements that apply to a merge are read with their `paramsHash` at `GET /checks/requirements` (Checks). Who may write one (**403** `forbidden`, `permission: "write_requirement"`, with `branch`, the target, and `locked`): for merges into `main`, a maintainer of `main` or of every branch; for merges into another branch, its owner or a maintainer of it or of every branch; a locked one, an administrator. The record replaced counts too: `locked` is not part of the identifier, so unlocking a requirement needs what locking it did. A branch with no owner takes a requirement only from a maintainer, migration window or not. A requirement alone in a write is judged by these rows; any other document beside it needs the right to write `main`. Requirements are listed by reporter, `GET /documents/CheckRequirement?reporter=User/<id>`; `branch` in a list query names the branch read, where no requirement lives, so a client filters `main`'s list by the `branch` field itself until `GET /checks/requirements?target=` exists. Nothing enforces a requirement yet: the feed and the merge gate are ADR-0070's remaining steps (its Status note).
+
+---
+
+## Checks
+
+A plugin's verdict about one commit is a *check run* (ADR-0070 decisions 3 and 4; since 2026-11-13), kept by the hub in memory outside the design graph, on both roles: a plugin on a person's machine posts to the workspace hub on loopback as one more tool there. The hub hosts checks and never rules: it knows a check by its name, by the agent whose runs count and by the verdicts posted; it never reads a requirement's `params`, evaluates a design rule or calls a plugin (decision 1). Runs are bounded to the newest 50 per check and branch, and gone after a restart. The capability is `armature/checks`, with `runsKept` and `conclusions` as its settings. The event feed and the merge gate, which will make a run matter, are not built yet.
+
+### `POST /checks/runs`
+
+Body: `{ "check": "lint/team", "commit": "<commit-id>", "branch": "<name>", "conclusion": "pass" | "fail" | "neutral" | "error", "summary"?: "...", "counts"?: { "<key>": <integer> }, "paramsHash"?: "sha256:<hex>", "detailsUrl"?: "https://..." }`. No `message`: a run is not a write to the graph and makes no commit. The hub adds `reporter`, the request's author (the agent under `Armature-Agent`, else the caller), `reportedAt` and an `id`, and answers **201** with the run. Anyone who may read the branch may post a run about it, a service under its own credential included (ADR-0067 decision 10 is not engaged; decision 4); a relay may not. Whether a run counts toward a requirement is the gate's comparison of its `reporter` and `paramsHash` with the requirement's, never a refusal here: a run by anyone else is advisory. `paramsHash` is copied from `GET /checks/requirements`. Errors: **400** `invalid_run` with `issues` (`{ path, message }`, every problem at once; an unknown field among them); **404** `unknown_ref` for a branch or a commit the hub lacks; on a workspace hub **403** `forbidden` with `owner` for anyone but the workspace's owner.
+
+### `GET /checks?commit=&branch=&check=`
+
+The runs held, newest first, each `{ id, check, commit, branch, conclusion, summary?, counts?, paramsHash?, detailsUrl?, reporter, reportedAt }`; any of the three filters, or none. No `ETag`: runs are not read from a commit.
+
+### `GET /checks/requirements?target=&from=`
+
+The `CheckRequirement`s in force on `main` that apply to a merge into `target` (`main` when absent) from `from`: those naming the target, those `locked`, filtered by `fromPrefix` against the source when one is given, every prefix kept when none is (decision 5). Response `{ target, from?, requirements: [ { ...the record, paramsHash } ] }`, `ETag` the commit of `main` read. `paramsHash` is `sha256:` and the hex SHA-256 of `params` in a canonical form (keys sorted at every depth, no whitespace, numbers as JSON prints them), computed by the hub over the value as the store returns it, since the store reorders a JSON value's keys and prints `1.0` as `1`: a plugin copies it into its runs rather than hashing the text it sent. Layering several requirements' `params` is the plugin's. On a workspace hub `main` is the mirror, which holds no requirement until the remote's are mirrored (decision 8, not built). 400 `bad_query` for a `target` or `from` that is not a branch name.
 
 ---
 
@@ -432,6 +450,7 @@ What this hub is, for a client that wants to know before its first write (ADR-00
                   program: { releases: "https://github.com/mossglenn/armature/releases" } },
   capabilities: { "armature/documents": { fallback: "reject", batchLimit: 500, historyCount: 20, readOnlyBranches: [] },
                   "armature/branches": { fallback: "reject", remoteOnly: [] },
+                  "armature/checks": { fallback: "reject", runsKept: 50, conclusions: ["pass", "fail", "neutral", "error"] },  // since 2026-11-13
                   "armature/intelligence.coverage": { fallback: "reject", fullyAssessedAt: 2, overAssessedAbove: 4 },
                   ... },                                   // each with its fallback and its settings
   schema:       { route: "/api/v1/schema" }
@@ -526,6 +545,7 @@ Removes the workspace (since 2026-11-07), a program action as the three above, i
 | 400 | `bad_request` | The body is not the expected JSON shape |
 | 400 | `message_required` | A write has no `message` |
 | 400 | `invalid_document` | A document fails its shape check (see `issues`) |
+| 400 | `invalid_run` | A check run fails its shape check (see `issues`; Checks; since 2026-11-13) |
 | 400 | `invalid_type` | The type cannot be written through the document routes |
 | 400 | `id_mismatch`, `type_mismatch` | The body's `@id` or `@type` disagrees with the path |
 | 400 | `duplicate_id`, `duplicate_capture` | The same identifier or capture twice in one batch |

@@ -542,6 +542,10 @@ plugin, outside the browser engine, so an origin rule does not touch it.
     > operation a remote hub checks, branch creation included (`permission: "create"`), 403
     > `forbidden` with `credential` naming the agent; reads and `GET /users/me` stay open
     > (`authorization.test.ts`). The push's form is ADR-0065 decision 5's note of the same day.
+    >
+    > **Note (2026-11-13):** one operation passes this refusal, `report_check`: a service posts a
+    > check run under its own credential, since a run is kept outside the graph and is no write
+    > to it (ADR-0070 decision 4, built this day). Every write to the graph is refused as before.
 
 ## Alternatives considered
 

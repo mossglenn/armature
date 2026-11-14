@@ -15,6 +15,38 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-13 · Check runs and required checks: `POST /checks/runs`, `GET /checks`, `GET /checks/requirements`, and `CheckRequirement` through the document routes
+
+**What changed.** The first client-facing pieces of ADR-0070 (checks as hooks and gates for
+plugins), under one capability, `armature/checks`, on both roles. A plugin posts a verdict about a
+commit, `POST /checks/runs` with `{ check, commit, branch, conclusion, summary?, counts?,
+paramsHash?, detailsUrl? }`, `conclusion` one of `pass`, `fail`, `neutral`, `error`; the hub adds
+the reporter (the request's author: the agent under `Armature-Agent`, else the caller), the time
+and an id, and answers **201** with the run. It is not a write to the graph: no `message`, no
+commit, no `ETag`; anyone who may read the branch may post one, a service under its own credential
+included; a commit or a branch the hub lacks is **404** `unknown_ref`, a malformed run **400**
+`invalid_run` with `issues`. `GET /checks?commit=&branch=&check=` lists the runs held, newest first,
+the newest 50 per check and branch, in memory: a restart forgets them. `GET /checks/requirements?target=&from=`
+answers which `CheckRequirement`s in force bind a merge into `target` (`main` by default) from
+`from`: those naming the target, those `locked`, filtered by `fromPrefix` against the source, each
+with `paramsHash`, the hash a run must carry to count for it (computed by the hub over a canonical
+form of `params`; copy it, do not hash your own text). A `CheckRequirement` is written through the
+document routes on `main` like a `Grant`: by the target branch's owner or a maintainer, for `main`
+by a maintainer of `main`, a locked one by an administrator (**403** `forbidden`,
+`permission: "write_requirement"` with `branch` and `locked`). Nothing is enforced yet: the merge
+gate, its codes `checks_pending` and `checks_failed` and the event feed are ADR-0070's remaining
+steps and will ride later entries. `@armature/client`: `checks.report(run)`, `checks.runs(opts)`,
+`checks.requirements(opts)`, with `CheckRun`, `RunInput` and `RequirementsResult`.
+
+**What a client does.** Nothing, unless it reports checks or edits requirements. A check service
+reads `checks.requirements({ target, from })` before it runs, runs with each requirement's `params`,
+and posts a run per check with that requirement's `paramsHash`. A tool that lets a maintainer
+require a check writes a `CheckRequirement` on `main`, lists them by `reporter`
+(`GET /documents/CheckRequirement?reporter=`), and filters by the `branch` field itself: `branch`
+in a list query names the branch read. A workspace hub at this revision speaks it to its remote, so
+the remote is updated first. **CoQui:** nothing now; its round check, a requirement on the branch
+a round merges into with `fromPrefix: "coqui-"`, becomes possible when the gate lands.
+
 ## 2026-11-12 · A workspace whose commits will never be pushed can be discarded: `DELETE /workspace/:name?discard=<n>`
 
 **What changed.** A workspace hub's removal takes `discard=<n>`, the number of local commits the

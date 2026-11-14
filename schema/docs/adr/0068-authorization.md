@@ -100,6 +100,12 @@ annotate:
 > `authorization.ts`, judged on the record written and on the one it replaces (ADR-0070's note of
 > this date); a branch with no owner takes a requirement only from a maintainer, outside decision
 > 3's migration window. The *report a required check* row waits for the run routes.
+>
+> **Note (2026-11-13, later), built:** the *report a required check* row, `report_check`, with
+> the run routes (ADR-0070's note of this date): it refuses no identity that may read, since a
+> run is advisory unless the gate finds its reporter is the agent the requirement names, and it
+> is the one operation an agent's own credential performs on a remote hub, a run being no write
+> to the graph (ADR-0067 decision 10, note).
 
 ## Context
 
