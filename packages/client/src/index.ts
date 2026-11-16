@@ -231,7 +231,8 @@ export interface CheckVerdict {
   requirement: string;
   level: 'Required' | 'Advisory';
   locked: boolean;
-  reporter: string;
+  /** The agent whose runs count; absent on a personal requirement of a workspace hub's push gate, where any run on the machine counts. */
+  reporter?: string;
   paramsHash: string;
   conclusion: CheckConclusion | 'pending';
   run?: { id: string; reportedAt: string; summary?: string; detailsUrl?: string };
@@ -305,6 +306,23 @@ export interface RequirementsResult {
   target: string;
   from?: string;
   requirements: Array<CheckRequirement & { paramsHash: string }>;
+  /**
+   * On a workspace hub (since 2026-11-15): the owner's personal requirements that gate a push of `target`,
+   * from `checks.json` in the hub's folder, each with the hash a local run must carry.
+   */
+  personal?: Array<PersonalRequirement & { paramsHash: string }>;
+}
+
+/** A personal requirement (ADR-0070 decision 8): what a person asks of their own pushes; a record's shape without a reporter. */
+export interface PersonalRequirement {
+  check: string;
+  /** The workspace it binds; every workspace when absent. */
+  branch?: string;
+  fromPrefix?: string;
+  level: 'Required' | 'Advisory';
+  params: unknown;
+  status: 'Active' | 'Revoked';
+  rationale?: string;
 }
 
 /** The types of event the feed tells (ADR-0070 decision 2; since 2026-11-15); `GET /discover` lists the ones a hub serves under `armature/checks`. */
@@ -553,6 +571,8 @@ export interface PushResult {
   /** The remote branch's head after the push. */
   remoteHead: string;
   upToDate: boolean;
+  /** The push gate's verdicts on the personal requirements that applied (since 2026-11-15); absent when none did. */
+  checks?: CheckVerdict[];
 }
 
 /** `POST /workspace/:name/bring-in` (2026-11-01): the remote's merge of `main` into the workspace, read back as one local commit. */
@@ -569,6 +589,12 @@ export interface DeliverResult {
   workspace: WorkspaceRecord;
   delivered: { commit: string; base: string; source: string; target: string; upToDate: boolean };
   deleted: boolean;
+  /** The remote's verdicts on its required checks for the merge (since 2026-11-15); absent when none applied. */
+  checks?: CheckVerdict[];
+  /** On a dry run: what the remote's merge would find, nothing merged. */
+  dryRun?: true;
+  conflicts?: MergeConflict[];
+  violations?: Violation[];
 }
 
 /** `DELETE /workspace/:name` (2026-11-07): the workspace removed here, and what became of its branch on the remote. */
@@ -907,16 +933,16 @@ export function createClient(options: ClientOptions) {
       create(opts: { name: string; from?: string } | { existing: string }) {
         return call<WorkspaceRecord & { warning?: WorkspaceWarning }>('/workspace', { method: 'POST', body: opts });
       },
-      /** `POST /workspace/:name/push`: replays the unpushed local commits on the remote, as the owner (2026-11-01); 403, 412 or 422 as the remote gave it, with `pushed` and `at`. */
-      push(name: string) {
-        return call<PushResult>(`/workspace/${encodeURIComponent(name)}/push`, { method: 'POST' });
+      /** `POST /workspace/:name/push`: replays the unpushed local commits on the remote, as the owner (2026-11-01); 403, 412 or 422 as the remote gave it, with `pushed` and `at`. Gated first by the owner's personal requirements (since 2026-11-15): 409 `checks_pending` or 422 `checks_failed` with `checks`, nothing replayed; `overrides` sets them aside, each with a reason. */
+      push(name: string, opts: { overrides?: Array<{ check: string; reason: string }> } = {}) {
+        return call<PushResult>(`/workspace/${encodeURIComponent(name)}/push`, { method: 'POST', ...(opts.overrides ? { body: opts } : {}) });
       },
       /** `POST /workspace/:name/bring-in`: the remote merges `main` into the workspace and the result is read back here; 409 `unpushed_commits` first, the remote's 409 `merge_conflict` or 422 as given. */
       bringIn(name: string, opts: { message?: string } = {}) {
         return call<BringInResult>(`/workspace/${encodeURIComponent(name)}/bring-in`, { method: 'POST', body: opts });
       },
-      /** `POST /workspace/:name/deliver`: the remote merges the workspace into `main` after `main` was brought in cleanly (409 `bring_in_first`); `deleteWorkspace` removes it there and here. */
-      deliver(name: string, opts: { message: string; deleteWorkspace?: boolean }) {
+      /** `POST /workspace/:name/deliver`: the remote merges the workspace into `main` after `main` was brought in cleanly (409 `bring_in_first`); `deleteWorkspace` removes it there and here. The remote's required checks gate it (its 409 `checks_pending` and 422 `checks_failed`, as given); `overrides` are the remote merge's, and `dryRun` returns what it would find, its `checks` among it (since 2026-11-15). */
+      deliver(name: string, opts: { message: string; deleteWorkspace?: boolean; overrides?: Array<{ check: string; reason: string }>; dryRun?: boolean }) {
         return call<DeliverResult>(`/workspace/${encodeURIComponent(name)}/deliver`, { method: 'POST', body: opts });
       },
       /** `DELETE /workspace/:name`: removes the workspace here with nothing left to push (409 `unpushed_commits`), and its branch on the remote when the remote's rule allows (2026-11-07). */
