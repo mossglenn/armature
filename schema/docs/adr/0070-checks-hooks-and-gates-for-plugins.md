@@ -213,6 +213,18 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > they did. With this, every decision of this record is built on the hub's side; what is left
 > is the desktop program's editor for `checks.json` and its showing of verdicts, and the schema
 > guide and the explainer.
+>
+> **Note (2026-11-15, documents):** the schema guide and the explainer now cover this record:
+> `docs/schema-guide.md` §9 (the feed), §11 (the refusals), §13.5 (a check service and the merge
+> it gates) and §17; `docs/how-armature-works.md` §14.10, rules 21 to 24 in §13.2 and the
+> appendices. `docs/deployment.md` gains "Required checks and a check service" for an
+> instance's administrator, and `docs/desktop-program-plan.md` §14 step 5a names what is left,
+> the program's: the editor for `checks.json`, overrides sent from the push and deliver pages,
+> and the verdicts shown. Found in that pass and fixed the same day: the export's `full` slice
+> listed `DesignRecord`, `User` and `Grant` and not `CheckRequirement`, so an export left
+> requirements out. The slice lists the class now, and the profiles rewrite a requirement's
+> `reporter`, `branch` and `fromPrefix` as they do a grant's fields (ADR-0031, note of this
+> date); it rides revision 2026-11-15.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in

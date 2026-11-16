@@ -1,6 +1,6 @@
 # Checks and the Lint plugin: plan
 
-*Status: draft 2026-11-12, decisions taken the same day (§17). The hub's half is ADR-0070 (`schema/docs/adr/0070-checks-hooks-and-gates-for-plugins.md`), accepted 2026-11-12 and built in part the same night (the schema and constraints 23 and 24; its Status note says what remains); Lint itself is a client of the hub, built outside this repository. Written in a claude.ai session from `main` at `bcbf8ff`, in two versions: v1 put the rule engine in the hub; v2, this one, keeps only hooks and gates in the hub, at Amos's request, so that rules ship with the plugin and not with Armature's releases.*
+*Status: draft 2026-11-12, decisions taken the same day (§17). The hub's half is ADR-0070 (`schema/docs/adr/0070-checks-hooks-and-gates-for-plugins.md`), accepted 2026-11-12 and built on the hub's side whole between 2026-11-12 and 2026-11-15 (the schema, the feed, the runs, the requirements, the merge gate with its trailers, the push gate's hub side; its Status notes say how each was built and §15's note below says where the build differs from this plan); not built: the desktop program's editor for `checks.json`, its showing of verdicts and its Tools list. Lint itself is a client of the hub, built outside this repository, and not started. Written in a claude.ai session from `main` at `bcbf8ff`, in two versions: v1 put the rule engine in the hub; v2, this one, keeps only hooks and gates in the hub, at Amos's request, so that rules ship with the plugin and not with Armature's releases.*
 
 Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), CLI (command-line interface), JSON (JavaScript Object Notation), SSE (server-sent events), WASM (WebAssembly).
 
@@ -335,6 +335,17 @@ CoQui is the stronger second client, because it exists and its "submit a round f
 CoQui also exposes a gap in the requirement record: its check should bind merges *from* round branches, not every merge into `main`. That needs one more Optional field on `CheckRequirement`, `fromPrefix` (e.g. `coqui-`), part of the key. Lint and the Structure analyzer leave it empty. It's cheap in the first schema commit and awkward later, so it goes in now (decision 4).
 
 ## 15. Build order
+
+> **Status (2026-11-15).** Of the steps below, the hub's are done and Lint's and the program's are not. **H1** accepted 2026-11-12. **H2** built: the run store and routes on 2026-11-13, the feed on 2026-11-15. **H3** built: the schema and constraints 23 and 24 on 2026-11-12, the authority rows on 2026-11-13, the gate, overrides and trailers on 2026-11-15. **H4** built on the hub's side on 2026-11-15 (the push gate, the mirror, deliver's `overrides` and `dryRun`); the Settings editor is not built, so `checks.json` is written by hand. **L1 to L3** and **P1** are not started.
+>
+> Where the build differs from this plan, each recorded in ADR-0070's dated notes, which are authoritative:
+> - A merge whose source is `main` is not gated (decided 2026-11-15): it is how a branch brings `main` in.
+> - A push's override is written as `Armature-Local-Check-Override`, a trailer of its own; `Armature-Check-Override` is the remote hub's alone.
+> - The routes came as two client revisions, 2026-11-13 and 2026-11-15, not one.
+> - A run naming a commit the hub lacks is 404 `unknown_ref`; a requirement whose reporter is not an agent is 422 `reporter_not_agent`.
+> - On a workspace hub any run under the requirement's `paramsHash` counts, there being no reporter to name; a `checks.json` the hub cannot read stops the push (422 `personal_checks_invalid`).
+> - The remote's verdicts before a delivery come from a new `dryRun` on deliver, not from deliver's existing dry run of `main` into the workspace.
+> - Runs are held in memory and no retention keeps a run a trailer cites: the trailer is the record.
 
 **Two tracks that meet at step 6: Lint starts now with no hub change, and the hub builds its four primitives in the order each becomes useful.** Hub steps are PRs in `mossglenn/armature`; Lint steps are in a new `mossglenn/armature-lint` (or a name of its own, given the plugin-branding decision).
 
