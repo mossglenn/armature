@@ -1,5 +1,6 @@
 import { canonical } from '../fragments';
 import { BRANCH_NAME } from '../http';
+import { committed } from '../notifier';
 import { KeyedQueue } from '../queue';
 import { StoreError, type ApplyResult, type Commit, type HistoryEntry, type OperatorStore, type Ref, type TerminusDocument } from '../store';
 import type { StoreFiles } from './files';
@@ -190,7 +191,8 @@ export class FileStore {
 
   /** Runs `work` alone among the hub's writes to `branch` (`Store.exclusive`). */
   exclusive<T>(branch: string, work: () => Promise<T>): Promise<T> {
-    return this.writers.run(branch, work);
+    // The feed's waiting requests are woken when the work ends, whatever it did (../notifier.ts).
+    return this.writers.run(branch, work).finally(committed);
   }
 
   // --- states --------------------------------------------------------------

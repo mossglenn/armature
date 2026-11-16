@@ -34,6 +34,7 @@ import { boundary } from './boundary';
 import { RunStore } from './checks';
 import { configFromEnv, type HubConfig } from './config';
 import { ApiError } from './errors';
+import { EventFeed } from './events';
 import { requireIdentity } from './identity';
 import { requireLocalToken } from './localToken';
 import { guardRemoteOnly } from './role';
@@ -41,6 +42,7 @@ import { branches } from './routes/branches';
 import { checks } from './routes/checks';
 import { discover } from './routes/discover';
 import { documents } from './routes/documents';
+import { events } from './routes/events';
 import { exportRoutes } from './routes/export';
 import { health } from './routes/health';
 import { intelligence } from './routes/intelligence';
@@ -60,11 +62,14 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
   const app = new Hono().basePath('/api/v1');
   // The check runs this hub holds, in memory for the app's life (ADR-0070 decision 3; ./checks.ts).
   const runs = new RunStore();
+  // This life of the hub, which the event feed's cursors name: a cursor from another is told `hub.started` (decision 2; ./events.ts).
+  const feed = new EventFeed();
 
   // The configuration first: everything after reads it from the request.
   app.use('*', async (c, next) => {
     c.set('hub', config());
     c.set('runs', runs);
+    c.set('feed', feed);
     await next();
   });
 
@@ -97,6 +102,7 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
   app.route('/documents', documents);
   app.route('/branches', branches);
   app.route('/checks', checks);
+  app.route('/events', events);
   app.route('/users', users);
   app.route('/intelligence', intelligence);
   app.route('/export', exportRoutes);
