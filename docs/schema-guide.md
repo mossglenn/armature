@@ -37,11 +37,11 @@ curl http://localhost:3100/api/v1/discover
 
 It returns the contract revisions the hub serves, its capabilities with their settings, and where the schema is (Section 15).
 
-The hub published by the compose file listens on the machine's loopback interface only, and so does the standalone process by default, because the only identity resolver built so far trusts whatever identity a request claims (Section 10). A hub other machines can reach is a decision, not a default: under the `oidc` resolver (ADR-0067 decision 1, built 2026-11-05) a tool sends a signed token on every request instead of the header, and the hub may then be published, which no deployment does yet; under `header` a tool that writes runs on the hub's machine, or behind a proxy that authenticates. Since 2026-10-30 a tool that calls a hub by any name but a loopback one needs that name in `ARMATURE_ALLOWED_HOSTS`, else 403 `host_not_allowed` (Section 11).
+The hub published by the compose file listens on the machine's loopback interface only, and so does the standalone process by default, because the default identity resolver trusts whatever identity a request claims (Section 10). A hub other machines can reach is a decision, not a default: under the `oidc` resolver (ADR-0067 decision 1, built 2026-11-05) a tool sends a signed token on every request instead of the header, and the hub may then be published, which no deployment does yet; under `header` a tool that writes runs on the hub's machine, or behind a proxy that authenticates. Since 2026-10-30 a tool that calls a hub by any name but a loopback one needs that name in `ARMATURE_ALLOWED_HOSTS`, else 403 `host_not_allowed` (Section 11).
 
 ### 2. The client in five lines
 
-[`@armature/client`](../packages/client/README.md) is one typed function per route, grouped as the API reference groups them: `documents`, `branches`, `users`, `intelligence`, `export`, plus `discover()` and `schema()`. Types come from [`@armature/types`](../packages/types/README.md), generated from the schema. Both ship TypeScript source, which your tool compiles. Another repository installs them by git reference, the types first, since the client takes them as a peer dependency: `pnpm add github:mossglenn/armature#path:packages/types github:mossglenn/armature#path:packages/client`. A Next.js app adds `transpilePackages: ['@armature/client', '@armature/types']` to its `next.config`; Vitest and `tsx` need nothing. The client's README has the details, including pinning a commit.
+[`@armature/client`](../packages/client/README.md) is one typed function per route, grouped as the API reference groups them: `documents`, `branches`, `users`, `checks`, `events`, `intelligence`, `export`, plus `discover()` and `schema()` (and `workspace` on a workspace hub). Types come from [`@armature/types`](../packages/types/README.md), generated from the schema. Both ship TypeScript source, which your tool compiles. Another repository installs them by git reference, the types first, since the client takes them as a peer dependency: `pnpm add github:mossglenn/armature#path:packages/types github:mossglenn/armature#path:packages/client`. A Next.js app adds `transpilePackages: ['@armature/client', '@armature/types']` to its `next.config`; Vitest and `tsx` need nothing. The client's README has the details, including pinning a commit.
 
 ```ts
 import { createClient, HubError } from '@armature/client';
@@ -307,6 +307,8 @@ Rules:
 | | A grant lives on `main`, and its holder suits its role (rules 21, 22) |
 | | A check requirement lives on `main`, and its reporter is an agent (rules 23, 24) |
 
+These rules are the hub's own, the same on every instance, and hold on every write. A team's softer standards are not rules of this kind: they are *checks* a tool runs and the hub can require before a merge (ADR-0070; Sections 9 and 13.5), and no check ever refuses a single write.
+
 The database does **not** check that a reference points at the right *class* of document. Never describe a typed reference as "schema-enforced"; the API enforces it. For a tool the distinction is invisible: both kinds of failure come back from the same write as a refusal with a code (Section 11). The full rule list, with codes, is in the [API reference](api.md#the-write-pipeline).
 
 ---
@@ -322,6 +324,8 @@ The database does **not** check that a reference points at the right *class* of 
 **Absent fields.** The database returns no field for an empty set. An item that assesses nothing has no `assesses` key; read `doc.assesses ?? []`. The generated interfaces type every set as an array, so a reader guards the field, never the type.
 
 **History and difference.** `documents.history(type, id, { branch, start, count, diff })` lists the commits on a branch that touched one document, newest first, each with who, why, when, and the structural difference it made (TerminusDB's JSON patch; see the API reference). `documents.diff(type, id, { from, to })` is the difference between two commits. Lists inside a document (an item's options) are compared by position, so reordering reads as several changes.
+
+**What changed since you last looked.** A tool that reacts to changes (a linter, an indexer, a notifier) pulls the event feed; the hub calls nothing, so there are no webhooks to register (ADR-0070 decision 2; since 2026-11-15). `events.since()` with no cursor answers at once with no events and a cursor at the present. `events.since(cursor, { types, branch, wait })` answers with what changed since, oldest first, and the next cursor, and when nothing has changed it holds the request open up to `wait` seconds (30 by default and at most) and returns the moment a commit lands. Keep the cursor wherever your tool keeps state: it names commits, so it survives a restart of the hub and of your tool. The types are `commit`, `merge`, `branch.created`, `branch.deleted`, `requirement.changed` and `hub.started`. An event tells you where to look, never the documents: `changed` counts the documents a commit changed by class, and you read them with `branches.changes(name, since)`, `branches.log(name)` or `export.read({ ref })`. Three things to plan for: a cursor more than 1,000 commits behind on a branch is 400 `cursor_too_old` (start again without one and read what you missed from the log); a proxy in front of the hub must allow a response that takes 30 seconds; and the feed takes no filter on an author (ADR-0021). The reference's Events section lists every field and what the feed leaves out.
 
 **What a module or course looks like now.** The seven intelligence reads answer design questions from the graph's structure alone, at any ref, storing nothing (ADR-0056):
 
@@ -342,7 +346,7 @@ The coverage thresholds are the hub's provisional cut; a tool passes its own and
 
 **Who you are.** Every write carries an identity: the `user` given to `createClient` is sent as `Armature-User`, an external identifier of a `User` registered on `main`. The seed registers `demo-designer@example.edu`. A tool registers its own people, and its AI agents, once: `users.register({ message, user: { displayName, externalId, email?, institution? } })`; an agent's `externalId` begins with `agent:` (`agent:coqui/item-drafter`). There are no routes to edit or delete a user. The default resolver trusts the header, which is why such a hub stays local (Section 1); under the `oidc` resolver (ADR-0067 decision 1, built 2026-11-05) the tool passes `token` instead of `user`, a signed token from the issuer `hub.discover()` names under `identity`, on every call, and a person is registered on first sign-in only when the instance admits their provider or email domain; the hub refuses hosts and web origins it does not serve either way (Section 11). A tool whose AI agent drafts for a person passes `agent: 'agent:<tool>/<name>'` to `createClient` beside the person's `user` (since 2026-11-01): the agent is the author and `createdBy`, the person's authority applies, and the hub records the person in the commit's `Armature-On-Behalf-Of` trailer, a line no client may write itself (400 `reserved_trailer`; ADR-0067 decisions 3 and 6).
 
-**What you may do.** A remote hub authorizes every write from `Grant` documents on `main` (ADR-0068, since 2026-11-01), and refuses with 403 `forbidden` naming the missing `permission` and the `branch`. Whoever creates a branch owns it, and the hub writes that `Owner` grant itself; the owner, or a `Maintainer` of the branch or of every branch, writes to it and merges into it; only a maintainer of `main` merges into `main`; an `Administrator` grants the rest and registers people, while any person registers an agent. A tool reads the caller's grants from `users.me()` to hide what would be refused, and writes a grant as any document: `documents.post({ branch: 'main', message, documents: [{ '@type': 'Grant', user, role: 'Maintainer', branch, status: 'Active' }] })`; a revocation is the same key with `status: 'Revoked'` and a `rationale`. A branch with no owner stays open to every registered user while `GET /discover` says `ownerlessBranches: "writable"`. A review tool's round coordinator, for instance, owns the round's branch and grants its reviewers `Maintainer` on it. The reference's Grants section has the table. A `CheckRequirement`, which says whose verdict a merge into a branch must carry, is written the same way on `main`: by the target branch's owner or a maintainer, for `main` by a maintainer of `main`, a locked one by an administrator (ADR-0070 decision 5; since 2026-11-13); the reference's Check requirements section has its fields. A check service reads which requirements bind a merge with `checks.requirements({ target, from })`, runs with each one's `params`, and posts its verdict with `checks.report({ check, commit, branch, conclusion, paramsHash })`, copying the hub's `paramsHash`; a run is not a document and makes no commit (the reference's Checks section).
+**What you may do.** A remote hub authorizes every write from `Grant` documents on `main` (ADR-0068, since 2026-11-01), and refuses with 403 `forbidden` naming the missing `permission` and the `branch`. Whoever creates a branch owns it, and the hub writes that `Owner` grant itself; the owner, or a `Maintainer` of the branch or of every branch, writes to it and merges into it; only a maintainer of `main` merges into `main`; an `Administrator` grants the rest and registers people, while any person registers an agent. A tool reads the caller's grants from `users.me()` to hide what would be refused, and writes a grant as any document: `documents.post({ branch: 'main', message, documents: [{ '@type': 'Grant', user, role: 'Maintainer', branch, status: 'Active' }] })`; a revocation is the same key with `status: 'Revoked'` and a `rationale`. A branch with no owner stays open to every registered user while `GET /discover` says `ownerlessBranches: "writable"`. A review tool's round coordinator, for instance, owns the round's branch and grants its reviewers `Maintainer` on it. The reference's Grants section has the table. A `CheckRequirement`, which says whose verdict a merge into a branch must carry, is written the same way on `main`: by the target branch's owner or a maintainer, for `main` by a maintainer of `main`, a locked one by an administrator (ADR-0070 decision 5; since 2026-11-13); the reference's Check requirements section has its fields. A check service reads which requirements bind a merge with `checks.requirements({ target, from })`, runs with each one's `params`, and posts its verdict with `checks.report({ check, commit, branch, conclusion, paramsHash })`, copying the hub's `paramsHash`; a run is not a document and makes no commit (the reference's Checks section). Section 13.5 walks through a check service and the merge it gates.
 
 **Why.** Every write carries a `message`, the reason for the change, which becomes the commit message and the first home of rationale (Section 7.8). Write it for the designer who inherits the course in three years.
 
@@ -369,14 +373,19 @@ Every refusal is a `HubError` with a stable `code`. A tool branches on the code,
 | 400 | `remote_only` | The tool is talking to a workspace hub, which leaves branch creation, merges, deletions, registration and writes to `main` to its remote; `GET /discover` lists them (`role`, `remoteOnly`, `readOnlyBranches`) | Do it on the remote, or through the workspace manager; never retry |
 | 401 | `identity_required`, `unknown_user` | No `user`, or one not registered on `main` | Register the user, or ask who the caller is |
 | 403 | `host_not_allowed`, `origin_not_allowed` | The hub does not answer to the name the tool called it by, or to the web page the request came from | Call the hub by a loopback name or one its administrator lists in `ARMATURE_ALLOWED_HOSTS`; a page in a browser needs its origin in `ARMATURE_ALLOWED_ORIGINS` |
-| 403 | `forbidden` | The identity may not do this: `permission` names what is missing (`write`, `merge`, `delete`, `grant`, `register`, `write_requirement`), `branch` which branch | Show who holds the grant (`GET /documents/Grant?user=…` lists a person's; `branch` in a list query is the branch read, so filter `main`'s list by the field yourself), and ask them; never retry as someone else (ADR-0068) |
-| 400 | `grants_live_on_main`, `requirements_live_on_main`, `reserved_trailer` | A grant or a check requirement written to a branch; a message carrying a trailer the hub writes itself | Write grants and requirements with `branch: 'main'`; leave `Armature-On-Behalf-Of` to the hub and send the agent in `agent` |
+| 403 | `forbidden` | The identity may not do this: `permission` names what is missing (`write`, `merge`, `delete`, `grant`, `register`, `write_requirement`, `override_check`), `branch` which branch | Show who holds the grant (`GET /documents/Grant?user=…` lists a person's; `branch` in a list query is the branch read, so filter `main`'s list by the field yourself), and ask them; never retry as someone else (ADR-0068) |
+| 400 | `grants_live_on_main`, `requirements_live_on_main`, `reserved_trailer` | A grant or a check requirement written to a branch; a message carrying a trailer the hub writes itself | Write grants and requirements with `branch: 'main'`; leave `Armature-On-Behalf-Of` to the hub and send the agent in `agent`; never write `Armature-Check` or `Armature-Check-Override`, which the merge route writes |
+| 400 | `invalid_run` (with `issues`), `bad_cursor`, `cursor_too_old` (with `branch`) | A check run with a missing or unknown field; a feed cursor the hub cannot read, or one more than 1,000 commits behind on a branch | Fix the run; for a cursor, start again with `events.since()` and read what was missed from the branch's log |
 | 404 | `not_found`, `unknown_type`, `unknown_ref` | No such document, type, branch or commit | The tool's view is stale, or the identifier is from another instance |
 | 409 | `type_conflict` | The identifier is held by a document of another type (rule 12) | Mint a different identifier; identifiers are never reused across types |
 | 409 | `branch_exists`, `user_exists`, `unmerged_branch`, `branch_moved`, `registration_conflict` | Branch and user bookkeeping | Usually fine to treat as done (`branch_exists`, `user_exists`) or retry once |
 | 409 | `merge_conflict` (with `conflicts`), `no_common_ancestor` | Both sides changed the same field, or created the same identifier differently | Show the three values; nothing is resolved for you |
+| 409 | `bring_in_first` | A merge that required checks apply to, whose source does not yet hold the target's head (also a workspace hub's deliver before `main` is brought in) | Merge the target into the source, let the checks run on the result, then merge |
+| 409 | `checks_pending` (with `pending` and `checks`) | A required check has not reported on the source's head under the requirement's current settings: at a merge on a remote hub, or at a push on a workspace hub | Wait on the event feed and ask again; if the check service is down, someone who may merge can override with a reason |
 | 412 | `precondition_failed` | The branch moved since `ifMatch` | Re-read at the new head, reconcile, write again |
 | 422 | `invariant_violation` (with `violations`: `{ code, id?, index, field?, message }`) | The shape is right but a rule is broken: a reference to the wrong class, a duplicate position, a placement approved ahead of its item, an attestation naming a part that does not exist | Every violation at once, so fix them together. Codes are listed per rule in the [API reference](api.md#the-write-pipeline); most mean the tool's own state disagrees with the hub's |
+| 422 | `checks_failed` (with `failed` and `checks`) | A required check reported `fail` or `error` on the source's head; nothing was merged or pushed | Show each verdict's `summary` and `detailsUrl`; fix the design and let the check run again, or override with a reason. Waiting will not help |
+| 422 | `personal_checks_invalid` (with `issues`) | On a workspace hub: the owner's `checks.json` cannot be read as requirements, so the push is stopped | Tell the person; the file is theirs to correct, and no route writes it |
 | 500 | `store_unavailable`, `store_error`, `internal_error` | The hub or its database is in trouble; details are in the hub's log only | Retry later; `store_error` after a long wait under concurrent writers is the database giving up a transaction, and a retry succeeds |
 | 502 | `remote_unreachable` | A workspace hub could not reach its remote | Work locally; try again when online. A refusal the remote did give carries its own code with `remote: true` |
 
@@ -476,6 +485,75 @@ const then = await hub.intelligence.coverage('risks-and-ethics', { ref: asOf });
 
 The trace returns the dataset, assessment, items, objectives, needs and evidence the metric connects to, the modules that declare those objectives, and every note, finding and attestation about them. The coverage read at the dataset's `asOf` is the module's coverage as that cohort met it; in the seed it says *Distinguish Bias Types* was partially assessed then, and the same read without a ref says fully assessed now, since the designer added a second item after the pilot (the finding that explains why is among the annotations). See [How Armature Works](how-armature-works.md#174-trace-follow-the-chain-from-evidence-to-outcomes).
 
+#### 13.5 A check service, and the merge it gates (ADR-0070)
+
+A team wants no branch merged into `main` until its linter has passed it. The hub runs no design rules, so the linter is a tool like any other, with four things to do: be registered, be required, listen, and report.
+
+**Once: register the agent and require its check.** A person registers the agent; a maintainer of `main` writes the requirement, on `main`, with the linter's settings in `params`. The hub stores `params` and never reads it.
+
+```ts
+await hub.users.register({ message: 'Register the team linter',
+  user: { displayName: 'Team linter', externalId: 'agent:lint/team' } });
+
+await hub.documents.batch({ branch: 'main', message: 'Require the team linter before a merge into main',
+  documents: [{ '@type': 'CheckRequirement', check: 'lint/team', reporter: 'User/<the agent>',
+    level: 'Required', locked: false, status: 'Active',
+    params: { rules: { 'objective-without-activity': 'error', 'item-below-objective': 'warn' } },
+    rationale: 'Agreed at the October design review' }] });
+```
+
+The requirement has no `branch`, which means `main`; `fromPrefix: 'coqui-'` would bind only merges from branches so named. Like a junction, its `@id` comes from its key fields (`check`, `branch`, `fromPrefix`), so writing it again replaces it, and withdrawing it is the same document with `status: 'Revoked'`.
+
+**The service: listen, read, report.** The service runs under the agent's own credential (a service's token under `oidc`; ADR-0067 decision 4). Posting a run is the one thing such a credential may send to a remote hub besides reads, since a run is not a write to the graph.
+
+```ts
+const lint = createClient({ baseUrl, token: serviceToken });
+let { data: { cursor } } = await lint.events.since();               // start at the present
+
+for (;;) {
+  const { data } = await lint.events.since(cursor, { types: ['commit', 'merge', 'requirement.changed', 'hub.started'] });
+  cursor = data.cursor;                                             // keep it; it survives restarts
+
+  for (const event of data.events) {
+    if (event.type !== 'commit' && event.type !== 'merge') continue; // see below for the other two
+    if (event.branch === 'main') continue;
+
+    const { data: bound } = await lint.checks.requirements({ target: 'main', from: event.branch });
+    const mine = bound.requirements.find((r) => r.check === 'lint/team');
+    if (!mine) continue;
+
+    const { data: graph } = await lint.export.read({ ref: event.commit });   // the design at that commit
+    const problems = runRules(graph, mine.params);                           // the tool's own business
+
+    await lint.checks.report({ check: 'lint/team', commit: event.commit!, branch: event.branch!,
+      conclusion: problems.errors ? 'fail' : 'pass',
+      summary: `${problems.errors} errors, ${problems.warnings} warnings`,
+      counts: { errors: problems.errors, warnings: problems.warnings },
+      paramsHash: mine.paramsHash,                                           // copied, never computed
+      detailsUrl: `https://lint.example.edu/runs/${event.commit}` });
+  }
+}
+```
+
+Three details carry the weight. **`paramsHash` is copied from the hub.** The store reorders a JSON value's keys and prints `1.0` as `1`, so a hash of the text you sent would not match; the hub computes it over the value as stored and a run counts only under the requirement's current one. **A run counts only from the requirement's `reporter`**; a run by anyone else is kept and shown, and satisfies nothing. **Runs are held in memory**: on `hub.started` report again on the heads you care about, and on `requirement.changed` read the requirements again and report under the new hash. The finding itself, if a person should act on it, is still a `DesignFinding` a person records (Section 7.8); a run is a verdict about a commit, and reports about records, never about a person's work (ADR-0021).
+
+**The person: merge, and read the refusal.** Nothing changes in the call. What changes is that it can now be refused for three more reasons, each with `checks`, one verdict per requirement that applied.
+
+```ts
+try {
+  await hub.branches.merge('main', { message: 'Round 3 accepted', from: 'review-round-3' });
+} catch (e) {
+  if (!(e instanceof HubError)) throw e;
+  if (e.code === 'bring_in_first') { /* merge main into the round's branch, let the linter run, try again */ }
+  if (e.code === 'checks_pending') { /* e.details.pending: wait on the feed, try again */ }
+  if (e.code === 'checks_failed')  { /* e.details.checks: show each run's summary and detailsUrl */ }
+}
+```
+
+`dryRun: true` returns the same verdicts (`checks`, `bringInFirst`) without merging, which is how a tool shows the state of a branch before anyone presses the button. A person who may perform the merge may take a requirement on themselves with `overrides: [{ check: 'lint/team', reason: 'Linter is down; reviewed by hand with J.' }]`; a locked requirement needs an administrator (403 `forbidden`, `permission: 'override_check'`). Either way the merge commit's message records what it relied on, in `Armature-Check` and `Armature-Check-Override` trailers the hub writes, so `branches.log('main')` answers later which checks a change passed and who decided otherwise. A merge whose source is `main` is never gated: it is how a branch brings `main` in.
+
+**On a workspace hub** the same service runs on the person's machine as one more tool on loopback, and the gate is the push: the owner's own requirements, read from `checks.requirements({ target: '<workspace>' })` as `personal`, with the same codes from `workspace.push`. The remote's requirements are mirrored there for a preview and enforced by the remote alone, at delivery.
+
 ### 14. For research: what leaves the hub
 
 A learning scientist's tool reads the graph out whole: `export.read({ ref, profile, slice })` returns the graph at a commit as one JSON-LD document with its reloadable schema (ADR-0031). A **profile** rewrites people only (`full`, `pseudonymous` with stable tokens when the hub has an export key, `institutional`); a **slice** is a named list of classes (`export.slices()`), with every reference that leaves the slice reported as `unresolved` and never dropped. Free text is not scrubbed. The hub never lists documents by who made them, so questions about people are asked of the export, under the study's own rules, not of the API (ADR-0021). [`research-path.md`](research-path.md) walks a study through it.
@@ -506,4 +584,7 @@ What never changes for a tool's convenience: a stored derived value (Section 7.1
 - **Never treat a typed reference as checked by the database**; the hub checks it, and `reference_class` is the refusal.
 - **Never assume an empty set is present**; read `field ?? []`.
 - **Never write to `main` without `ifMatch`** when anything else might be writing there.
+- **Never compute a `paramsHash` yourself**; copy the one `checks.requirements()` returns.
+- **Never write a check run's verdict into the graph**, and never write the `Armature-Check` trailers; the merge route records what a merge relied on.
+- **Never summarize a person's work in a check run**; a run reports about records at a commit (ADR-0021).
 - **Never talk to TerminusDB.** Nothing a tool needs is behind the hub; what the hub does not offer is a question for the project, not a reason to go around it.
