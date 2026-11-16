@@ -72,7 +72,7 @@ Your workspaces are in the workspaces folder: by default inside the program's da
 
 ## Checks of your own
 
-*In the program from the release after 0.1.2.*
+*In the program since version 0.1.3.*
 
 A *check* is a tool that examines your work and reports a verdict, a design linter for one. The program runs no checks itself and knows no design rules; it waits for the tools' verdicts and shows them.
 
@@ -105,7 +105,7 @@ Closing the window does not stop the program: it stays in the tray (the menu bar
 
 The program checks for a new version when it starts and once a day. When there is one, a notice at the top of the window says which version, with its notes; choose **Install and restart** when it suits you. The hub stops while the update installs, which takes a few seconds, and your tools reach it again once the program is back. While a push, bring-in, delivery, clone or removal is running, the button waits for it, and so does quitting (up to half a minute), so nothing is cut off under it. **Settings → Check for updates** checks at once.
 
-The first version after 0.1.2 asks you to sign in once more after it installs: the sign-in the program keeps is now tied to the sign-in service that issued it, and the one an earlier version kept is removed rather than trusted. Your workspaces and your unpushed work are untouched.
+Version 0.1.3 asks you to sign in once more after it installs: the sign-in the program keeps is now tied to the sign-in service that issued it, and the one an earlier version kept is removed rather than trusted. Your workspaces and your unpushed work are untouched.
 
 On macOS, the first start after an update may ask for your login password for the keychain again; enter it and choose **Always Allow** (§ "Installing it" says why). An update is installed only if its signature verifies. If an install fails, or a download goes a minute without receiving anything, the program keeps running the version you have, says why, and offers to try again. If the release channel cannot be reached, or answers without a release, the program says so rather than calling your version the latest, and tries again within the hour. A `.deb` install does not check the channel at all: install the next package when one is released, as the table above says.
 
