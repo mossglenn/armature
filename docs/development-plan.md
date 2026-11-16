@@ -11,7 +11,8 @@ since 1 November, the file-backed store in part since the evening of 2 November 
 decision 4 that night, a workspace hub's one local store. The `oidc` resolver is built since
 5 November; the desktop program (ADR-0069) is built since 7 and 8 November and released on
 11 November; checks (ADR-0070: an event feed, check runs and required checks gating a merge or a
-push) were accepted on 12 November and built on the hub's side by 15 November.
+push) were accepted on 12 November and built by 15 November, the hub's side and the desktop
+program's pages for them, the pages not yet in a release.
 `.claude/SESSION.md` tracks day-to-day state against this plan. **Last reconciled with the code:**
 2026-10-30; §5's rows for ADR-0065 onward and §6's merge policy note brought up to 2026-11-15.
 
