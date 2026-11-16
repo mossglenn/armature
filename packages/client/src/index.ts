@@ -3,7 +3,7 @@
  * docs/development-plan.md; the API contract is docs/api.md).
  *
  * One function per /api/v1 route, grouped as the reference groups them:
- * documents, branches, users, checks, intelligence and export. The client adds nothing
+ * documents, branches, users, checks, events, intelligence and export. The client adds nothing
  * the routes do not have. What it carries so a plugin need not: the ref as
  * `?branch=` or `?ref=`, the commit every response was served from (the ETag,
  * returned as `commit`), optimistic concurrency (`ifMatch` → If-Match), the
@@ -28,7 +28,7 @@
 import type { CheckRequirement, ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-13';
+export const CLIENT_REVISION = '2026-11-15';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -277,6 +277,43 @@ export interface RequirementsResult {
   target: string;
   from?: string;
   requirements: Array<CheckRequirement & { paramsHash: string }>;
+}
+
+/** The types of event the feed tells (ADR-0070 decision 2; since 2026-11-15); `GET /discover` lists the ones a hub serves under `armature/checks`. */
+export type EventType = 'commit' | 'merge' | 'branch.created' | 'branch.deleted' | 'requirement.changed' | 'hub.started';
+
+/**
+ * One event of the feed: what a tool needs to decide whether to act, never the documents, which are read
+ * through `branches.changes`, `branches.log` and `export`.
+ */
+export interface FeedEvent {
+  type: EventType;
+  /** The branch the event is about; absent on `hub.started`, `main` on `requirement.changed`. */
+  branch?: string;
+  /** `commit`, `merge`, `requirement.changed`: the commit. `branch.created`: the commit the branch started from. `branch.deleted`: the last commit of it this client was told about. */
+  commit?: string;
+  parent?: string;
+  /** The commit's author, `User/<id>`, as the log gives it. */
+  author?: string;
+  /** The store's stamp of the commit, in seconds. The order across branches follows it and is advisory; within a branch the order is the log's. */
+  timestamp?: number;
+  /** On a `merge`: the source commit merged. */
+  mergeSource?: string;
+  /** When the commit is a push's replay: the workspace hub's commit it replays. */
+  workspaceCommit?: string;
+  /** How many documents the commit changed, by class; absent on a branch's first commit. */
+  changed?: Record<string, number>;
+  /** On `requirement.changed`: the ids of the `CheckRequirement`s the commit wrote or deleted. */
+  requirements?: string[];
+  /** On `hub.started`: when this life of the hub began. The hub's check runs are gone: report again on the heads you care about. */
+  startedAt?: string;
+}
+
+/** An answer of the feed: the events, oldest first, and the cursor to ask with next, also when there are none. */
+export interface EventsResult {
+  events: FeedEvent[];
+  /** Opaque: pass it back as given. */
+  cursor: string;
 }
 
 /**
@@ -758,6 +795,22 @@ export function createClient(options: ClientOptions) {
       /** `GET /checks/requirements?target=&from=`: the requirements in force that bind a merge into `target` (`main` by default) from `from`, with each `paramsHash`. */
       requirements(opts: { target?: string; from?: string } = {}) {
         return call<RequirementsResult>('/checks/requirements', { query: opts });
+      },
+    },
+
+    /** The event feed (ADR-0070 decision 2; since 2026-11-15), on both roles: what changed since a cursor, pulled. */
+    events: {
+      /**
+       * `GET /events?since=&types=&branch=&wait=&limit=`. With no `cursor`, no events and a cursor at the
+       * present, at once. With one, what changed since, oldest first, at most `limit` (100); when nothing
+       * has, the hub holds the request up to `wait` seconds (30 by default and at most; 0 answers at once)
+       * and returns on the next commit made through it. Keep `data.cursor` and ask again with it. A client
+       * `timeout` shorter than `wait` ends a held request first. `types` keeps those types; `branch` keeps
+       * one branch's events, with `requirement.changed` and `hub.started`. A cursor the hub cannot read is
+       * 400 `bad_cursor`; one too far behind, 400 `cursor_too_old`: start again without one.
+       */
+      since(cursor?: string, opts: { types?: EventType[]; branch?: string; wait?: number; limit?: number } = {}) {
+        return call<EventsResult>('/events', { query: { since: cursor, types: opts.types?.length ? opts.types.join(',') : undefined, branch: opts.branch, wait: opts.wait, limit: opts.limit } });
       },
     },
 
