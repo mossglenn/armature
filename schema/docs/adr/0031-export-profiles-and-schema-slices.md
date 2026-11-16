@@ -30,6 +30,14 @@ anticipated; ADR-0021 carries a dated note. Verified by `scripts/platform_checks
 > part. Free text is never rewritten, so the hub's own grant rationales name neither a branch
 > nor a person.
 
+> **Note (2026-11-15, checks):** check requirements (ADR-0070 decision 5) are documents on `main`
+> like grants, and since this date they are in the `full` slice too; between 2026-11-12 and this
+> date an export left them out, which the documents pass of 2026-11-15 found. The profiles treat
+> one as they treat a grant: `reporter` is rewritten as every reference to a person is, and a
+> `branch` or a `fromPrefix` that begins with a registered person's handle has the handle
+> replaced by the person's token. `params` is a plugin's settings, opaque to the hub (ADR-0070
+> decision 1), and is left as stored, as free text is.
+
 > **Note (2026-11-08):** since that date a workspace branch's handle is the local part of the
 > person's email, and the external identifier's only for a record without one (ADR-0065, note of
 > that date), so the profiles rewrite a branch that begins with either handle; a branch made

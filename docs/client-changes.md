@@ -15,6 +15,26 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-15 · The export's `full` slice carries check requirements
+
+**What changed.** `GET /export` under the `full` slice, the default, now includes every
+`CheckRequirement` at the ref (ADR-0070 decision 5; ADR-0031, note of this date), riding the
+day's revision. Until now the slice listed `DesignRecord`, `User` and `Grant`, so an export left
+requirements out, though `full` is the slice that reproduces a graph when re-imported.
+`GET /export/slices` shows the class in `full.classes`. Under the `pseudonymous` and
+`institutional` profiles a requirement's `reporter` is rewritten as every reference to a `User`
+is, and a `branch` or `fromPrefix` that begins with a registered person's handle
+(`<handle>_...`, a workspace branch) has the handle replaced by the person's token, as a grant's
+`branch` has; `params`, a plugin's settings, are left as stored, like all free values. A
+workspace hub's clone and its snapshots, which load the `full` export, now hold the requirements
+as the branch held them; what gates and what is shown there is still read from the mirror of
+`main`.
+
+**What a client does.** Nothing, unless it reads a full export and assumes every document is a
+design record, a user or a grant: it meets `CheckRequirement` documents where an instance has
+written any, with `armature.counts.byType` counting them. A study's own slice is unchanged and
+carries them only if it lists the class. **CoQui** needs nothing.
+
 ## 2026-11-15 · The push gate on a workspace hub: personal requirements in `checks.json`, `overrides` on push and deliver, the remote's requirements mirrored
 
 **What changed.** The same checks now work on a person's machine (ADR-0070 decision 8), riding

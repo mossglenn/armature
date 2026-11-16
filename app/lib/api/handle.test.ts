@@ -55,4 +55,35 @@ describe('the pseudonymous export rewrites either handle in a grant\'s branch', 
     expect(JSON.stringify(out)).not.toContain('designer@');
     expect(JSON.stringify(out)).not.toContain(SUB);
   });
+
+  it("does the same in a check requirement's branch and fromPrefix, and leaves its params as stored (ADR-0070 decision 5)", async () => {
+    const requirement = (id: string, fields: Record<string, unknown>): TerminusDocument => ({
+      '@type': 'CheckRequirement',
+      '@id': `CheckRequirement/${id}`,
+      check: 'lint/team',
+      reporter: 'User/lint',
+      level: 'Required',
+      locked: false,
+      params: { severity: 'error' },
+      status: 'Active',
+      ...fields,
+    });
+    const withRequirements: TerminusDocument[] = [
+      ...documents,
+      { '@type': 'User', '@id': 'User/lint', displayName: 'Lint', externalId: 'agent:lint/team' },
+      requirement('mine', { branch: 'designer_unit-3', fromPrefix: `${SUB}_` }),
+      requirement('rounds', { fromPrefix: 'coqui-' }),
+    ];
+    const out = (await applyProfile(withRequirements, 'pseudonymous', 'a key')).documents;
+    const token = (out[0]['@id'] as string).slice('User/'.length); // the designer, first in `documents`
+    const mine = out.find((d) => d['@id'] === 'CheckRequirement/mine')!;
+    expect(mine.branch).toBe(`${token}_unit-3`);
+    expect(mine.fromPrefix).toBe(`${token}_`);
+    expect(mine.reporter).toMatch(/^User\/[0-9a-f]{32}$/);
+    expect(mine.params).toEqual({ severity: 'error' });
+    const rounds = out.find((d) => d['@id'] === 'CheckRequirement/rounds')!;
+    expect(rounds.fromPrefix).toBe('coqui-');
+    expect(rounds.branch).toBeUndefined();
+    expect(JSON.stringify(out)).not.toContain(SUB);
+  });
 });
