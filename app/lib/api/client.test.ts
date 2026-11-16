@@ -179,6 +179,16 @@ describe('@armature/client over the app in-process', () => {
     expect(required.commit).toBeDefined();
   });
 
+  it('follows the event feed: a cursor at the present, then the commit made after it, typed', async () => {
+    const start = await hub.events.since();
+    expect(start.data.events).toEqual([]);
+    expect(start.commit).toBeUndefined(); // the feed reads at no one commit
+    const written = await hub.documents.put('LearningNeed', `client-feed-${stamp}`, { branch: BRANCH, message: 'For the feed', document: { label: 'Feed', rationale: 'r' } });
+    const next = await hub.events.since(start.data.cursor, { types: ['commit'], branch: BRANCH, wait: 0 });
+    expect(next.data.events).toEqual([expect.objectContaining({ type: 'commit', branch: BRANCH, commit: written.commit, changed: { LearningNeed: 1 } })]);
+    await expect(hub.events.since('nonsense')).rejects.toMatchObject({ status: 400, code: 'bad_cursor' });
+  });
+
   it('reads the coverage, alignment, trace, attestation and impact routes with ids in either spelling', async () => {
     const coverage = await hub.intelligence.coverage('Module/how-ai-works', { fullyAssessedAt: 1 });
     expect(coverage.data.thresholds.fullyAssessedAt).toBe(1);
