@@ -49,6 +49,9 @@ ADR-0055 decision 1 and ADR-0065 decision 8 carry dated notes pointing here (202
 > store's patch passes through unchanged, `applyPatch` learns that form, and `docs/api.md` says both
 > shapes apply (ADR-0070 decision 12). Decision 6's formula mints `CheckRequirement`'s Hash ids
 > unchanged, with two Optional key fields (check AP1).
+>
+> **Note (2026-11-15), built:** `applyPatch` applies the array form, held to AP4's patch as the
+> store gave it, and `docs/api.md` says both shapes apply (ADR-0070's note of this date).
 
 ## Context
 

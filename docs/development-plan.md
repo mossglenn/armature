@@ -1588,7 +1588,9 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   key as `SwapValue`, a list of scalars as `CopyList`, `PatchList`, `KeepList`, and a list of
   objects of equal length as a plain array of positional patches, `[{}, {"on": {...}}]`, which
   the vendored page covers with one sentence ("Arrays allow index swapping") and
-  `app/lib/api/filestore/patch.ts` neither emits nor applies.
+  `app/lib/api/filestore/patch.ts` neither emits nor applies. *Since 2026-11-15 it applies it
+  (`applyPatch`, held to AP4's patch as the store gave it; ADR-0070 decision 12) and still does not
+  emit it: each store's patch passes through unchanged.*
 - *Verified (2026-11-12, check AQ):* the log returns an `apply` commit's metadata and its one
   parent, so a merge is recognizable from the log alone (AQ1); commits written in turn on three
   branches, read from each head back to a common base and taken once each by identifier, come

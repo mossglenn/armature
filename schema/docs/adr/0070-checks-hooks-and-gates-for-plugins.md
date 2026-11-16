@@ -200,6 +200,19 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > Not built, and the program's: the Settings editor for `checks.json`, which a person writes by
 > hand until then, and showing verdicts on the workspace page. Still not built here: decision
 > 12's patcher, and the schema guide and the explainer.
+>
+> **Note (2026-11-15, late night), built:** decision 12. `applyPatch` in `filestore/patch.ts`
+> applies a plain array as positional patches, `{}` for an element unchanged and any element
+> past the array's end kept, and `patch.test.ts` holds it to AP4's patch as TerminusDB v12.0.7
+> gave it on this date (the check run again to copy it): a key added, a key removed, a scalar
+> patched inside a list, and the list of objects. Neither store's patch is rewritten, and
+> `docs/api.md` says both shapes apply. Found in the build, a limit of the format and not of
+> either store: an absent side is `null`, so a key set to `null` inside a JSON value and a key
+> removed are the same patch, and `applyPatch` reads both as removed; a client that needs the
+> difference reads the document at the two commits. No client revision: the routes answer as
+> they did. With this, every decision of this record is built on the hub's side; what is left
+> is the desktop program's editor for `checks.json` and its showing of verdicts, and the schema
+> guide and the explainer.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in
