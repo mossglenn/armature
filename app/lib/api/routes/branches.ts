@@ -6,7 +6,7 @@ import { grantOwner, revokeGrantsNaming } from '../grants';
 import { requirePermission } from '../authorization';
 import { commitMessage, resolveUser } from '../identity';
 import { isInternalBranch } from '../role';
-import { changesOf, idFromIri, isRecord, isUnknownRef, StoreError, type Commit, type ConflictWitness, type Ref, type Store, type WitnessField } from '../store';
+import { changesOf, idFromIri, isRecord, isUnknownRef, mergeSourceOf, StoreError, type Commit, type ConflictWitness, type Ref, type Store, type WitnessField } from '../store';
 import { checkBranch } from '../../operator/check';
 import type { Violation } from '../invariants';
 
@@ -76,12 +76,6 @@ function mergeMetadata(sourceCommit: string): Record<string, unknown> {
 type MergeConflict =
   | { id: string; field: string; base: unknown; target: unknown; source: unknown }
   | { id: string; op: 'InsertConflict' };
-
-function mergeSourceOf(commit: Commit): string | undefined {
-  const armature = commit.metadata?.armature;
-  const value = isRecord(armature) ? armature.mergeSource : undefined;
-  return typeof value === 'string' ? value : undefined;
-}
 
 const LOG_PAGE = 100;
 const LOG_PAGES = 50;

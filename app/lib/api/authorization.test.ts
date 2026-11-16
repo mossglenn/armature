@@ -612,4 +612,18 @@ describe("CheckRequirement documents through the routes (ADR-0070 decision 5; AD
     expect(byCheck((await read(`target=test-nothing-${stamp}`)).body)).toEqual([`test/everywhere-${stamp}`]);
     expect((await read('target=not a branch')).status).toBe(400);
   });
+
+  it('the event feed tells a requirement written as requirement.changed, naming the record, beside its commit on main (ADR-0070 decision 2)', async () => {
+    const { cursor } = (await json(await on('GET', '/events'))).body;
+    const written = await json(await reviewer('POST', '/documents', { message: 'A second check here', documents: [requirement({ check: `test/feed-${stamp}`, branch: MINE })] }));
+    expect(written.status).toBe(200);
+    const { events } = (await json(await on('GET', `/events?since=${cursor}&wait=0`))).body;
+    expect(events).toEqual([
+      expect.objectContaining({ type: 'commit', branch: 'main', commit: written.body.commit, changed: { CheckRequirement: 1 } }),
+      { type: 'requirement.changed', branch: 'main', commit: written.body.commit, requirements: written.body.ids },
+    ]);
+    // It concerns every branch, so a plugin following one branch is still told.
+    const following = (await json(await on('GET', `/events?since=${cursor}&wait=0&branch=${MINE}`))).body;
+    expect(following.events.map((e: { type: string }) => e.type)).toEqual(['requirement.changed']);
+  });
 });

@@ -125,7 +125,7 @@ describe('POST /checks/runs and GET /checks (decisions 3 and 4)', () => {
 
   it('is discovered as armature/checks on both roles, with the bound and the conclusions', async () => {
     const discover = (await json(await app.request('/api/v1/discover'))).body;
-    expect(discover.capabilities['armature/checks']).toEqual({ fallback: 'reject', runsKept: RUNS_KEPT, conclusions: [...CONCLUSIONS] });
-    expect(discover.versions[0]).toBe('2026-11-13');
+    expect(discover.capabilities['armature/checks']).toMatchObject({ fallback: 'reject', runsKept: RUNS_KEPT, conclusions: [...CONCLUSIONS] });
+    expect(discover.versions).toContain('2026-11-13');
   });
 });

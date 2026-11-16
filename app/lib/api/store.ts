@@ -29,6 +29,7 @@
  */
 
 import type { FileStore } from './filestore/store';
+import { committed } from './notifier';
 import { KeyedQueue } from './queue';
 
 /** A branch head or a commit. Reads accept either; writes need a branch. */
@@ -110,6 +111,17 @@ export function changesOf(entries: unknown): Array<{ id: string; op: ChangeOp }>
       return { id: idOf(e), op: 'update' };
     })
     .filter((change) => change.id);
+}
+
+/**
+ * The source commit a merge commit merged, from the metadata the merge route
+ * writes on it (`{ armature: { mergeSource } }`; ADR-0025 decision 5, check
+ * V): the store records one parent per commit, so this is the only trace.
+ */
+export function mergeSourceOf(commit: Commit): string | undefined {
+  const armature = commit.metadata?.armature;
+  const value = isRecord(armature) ? armature.mergeSource : undefined;
+  return typeof value === 'string' ? value : undefined;
 }
 
 export function idFromIri(iri: string): string {
@@ -456,7 +468,8 @@ export class TerminusStore implements OperatorStore {
   }
 
   exclusive<T>(work: () => Promise<T>): Promise<T> {
-    return writers.run(`${this.config.url}/${this.dbPath}/${this.branch}`, work);
+    // The feed's waiting requests are woken when the work ends, whatever it did (./notifier.ts).
+    return writers.run(`${this.config.url}/${this.dbPath}/${this.branch}`, work).finally(committed);
   }
 
   private get dbPath(): string {
