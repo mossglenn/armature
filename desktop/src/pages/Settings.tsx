@@ -20,7 +20,7 @@ import { useRequest } from '@/lib/useShell';
  * the remote's, with a check of the release channel on demand (the daily one is the shell's); and the
  * person's own required checks, which gate their pushes (components/PersonalChecksEditor.tsx).
  */
-export function Settings({ backend, state, connect, signedOut }: { backend: Backend; state?: ShellState; connect: () => void; signedOut: () => void }) {
+export function Settings({ backend, state, connect, signedOut }: { backend: Backend; state?: ShellState; connect: () => void; signedOut: (keychain?: string) => void }) {
   const { run, busy } = useRequest(backend);
   const [settings, setSettings] = useState<SettingsShape | undefined>();
   const [form, setForm] = useState({ folder: '', port: '', snapshots: '', user: '' });
@@ -112,9 +112,10 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   };
 
   const signOut = async () => {
-    const outcome = await run('signOut');
+    const outcome = await run<{ keychain?: string }>('signOut');
     if (!outcome.ok) return setRefusal(outcome);
-    signedOut();
+    // `keychain`: the shell's sentence when the keychain would not give the sign-in up, so the person is not told they are signed out and left signed in at the next start.
+    signedOut(outcome.body?.keychain);
   };
 
   const field = (key: keyof typeof form) => ({ value: form[key], onChange: (e: { target: { value: string } }) => setForm((all) => ({ ...all, [key]: e.target.value })) });

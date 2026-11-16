@@ -38,6 +38,12 @@ function hubLine(state?: ShellState): string {
 export function App({ backend }: { backend: Backend }) {
   const { state, refresh, link } = useShell(backend);
   const [page, setPage] = useState<Page | undefined>();
+  /**
+   * What the shell could not do about an action that otherwise went through, said on the page the
+   * action leads to: the keychain refusing to remove a sign-in after a sign-out or a change of
+   * remote (the 2026-11-09 review's S4). Shown until the person goes elsewhere.
+   */
+  const [warning, setWarning] = useState<string | undefined>();
 
   useEffect(() => {
     if (state && !page) setPage(firstPage(state));
@@ -57,8 +63,9 @@ export function App({ backend }: { backend: Backend }) {
     { page: { name: 'log' }, label: 'Log', shown: true },
     { page: { name: 'connect' }, label: 'Connect', shown: !connected },
   ];
-  const go = (next: Page) => {
+  const go = (next: Page, said?: string) => {
     setPage(next);
+    setWarning(said);
     void refresh();
   };
   const current = page?.name === 'workspace' ? 'workspaces' : page?.name;
@@ -95,12 +102,17 @@ export function App({ backend }: { backend: Backend }) {
       </nav>
       <main className="min-w-0 flex-1 overflow-auto p-8">
         {state?.update && <UpdateNotice backend={backend} update={state.update} blocked={state.actions?.[0]} refresh={() => void refresh()} />}
-        {page?.name === 'connect' && <Connect backend={backend} state={state} link={link} onDone={(next) => go({ name: next })} />}
+        {warning && (
+          <p className="mb-4 max-w-2xl rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+            {warning}
+          </p>
+        )}
+        {page?.name === 'connect' && <Connect backend={backend} state={state} link={link} onDone={(next, said) => go({ name: next }, said)} />}
         {page?.name === 'signIn' && <SignIn backend={backend} state={state} onDone={() => go({ name: 'workspaces' })} />}
         {page?.name === 'workspaces' && <Workspaces backend={backend} notice={page.notice} open={(branch) => go({ name: 'workspace', branch })} />}
         {page?.name === 'workspace' && <Workspace key={page.branch} backend={backend} branch={page.branch} back={(notice) => go({ name: 'workspaces', notice })} />}
         {page?.name === 'pairing' && <Pairing backend={backend} />}
-        {page?.name === 'settings' && <Settings backend={backend} state={state} connect={() => go({ name: 'connect' })} signedOut={() => go({ name: 'signIn' })} />}
+        {page?.name === 'settings' && <Settings backend={backend} state={state} connect={() => go({ name: 'connect' })} signedOut={(said) => go({ name: 'signIn' }, said)} />}
         {page?.name === 'log' && <Log backend={backend} state={state} />}
       </main>
     </div>

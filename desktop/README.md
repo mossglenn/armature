@@ -19,7 +19,7 @@ the page (src/, React)  ──invoke core_request──▶  the shell (src-tauri
 |---|---|
 | `src-tauri/src/core.rs` | The core's life: spawn, `start`, `credential`, `stop`, quit (stop, wait five seconds, end it), and the exit macOS sends without asking |
 | `src-tauri/src/relay.rs` | The rules: what a page may ask, what happens to each core event, the `armature://connect` link's remote, whole lines from the pipe |
-| `src-tauri/src/keychain.rs` | The refresh token under `refresh:<remote>` and the local token under `local-token`, service `com.mossglenn.armature` |
+| `src-tauri/src/keychain.rs` | The refresh token under `refresh:<remote>\|<issuer>\|<client id>` (bound to the provider that issued it; the earlier `refresh:<remote>` is removed, never read) and the local token under `local-token`, service `com.mossglenn.armature` |
 | `src-tauri/src/logs.rs` | The core's log, one file per day, seven kept |
 | `src-tauri/src/tray.rs` | The tray: Open, Pause or Resume the hub, Quit |
 | `src-tauri/src/update.rs` | The updater: the release channel checked at start and daily, an update installed when asked (downloaded, the core ended, installed, restarted) |
@@ -40,7 +40,7 @@ Rust (stable) is required, and on Linux Tauri's prerequisites (WebKitGTK 4.1 and
 
 **The data and where it lives.** The program's data folder holds `settings.json` (the core's; `app/lib/desktop/settings.ts`) and `workspaces/`; its log folder the daily logs. On macOS these are `~/Library/Application Support/com.mossglenn.armature` and `~/Library/Logs/com.mossglenn.armature`. The connect page points the program at a remote, for example a hub under `header` on this machine at `http://127.0.0.1:3100`; the program then needs a remote at its own contract revision or later (the connect page says when it is not).
 
-To start from nothing, quit the program, remove the data folder, and remove the keychain's items for the service `com.mossglenn.armature` (on macOS, `security delete-generic-password -s com.mossglenn.armature -a local-token`, and the same with `-a refresh:<remote>`).
+To start from nothing, quit the program, remove the data folder, and remove the keychain's items for the service `com.mossglenn.armature` (on macOS, `security delete-generic-password -s com.mossglenn.armature -a local-token`, and the same with `-a 'refresh:<remote>|<issuer>|<client id>'`).
 
 **A link** (`armature://connect?remote=https://api.<site>`) reaches the program on macOS only from a bundle, since the scheme is registered from its `Info.plist`: `npm run tauri build -- --debug --bundles app`, open the `.app` under `src-tauri/target/debug/bundle/macos/`, then `open "armature://connect?remote=..."`. Windows and Linux register it at run time.
 

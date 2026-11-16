@@ -114,6 +114,40 @@ pub struct ShellState {
     pub login_entry: Option<crate::login::LoginEntry>,
 }
 
+/// What a kept credential belongs to: a remote that signs people in, the provider it names and
+/// the program's client id there.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Binding {
+    pub remote: String,
+    pub issuer: String,
+    pub client_id: String,
+}
+
+impl Binding {
+    pub fn account(&self) -> String {
+        keychain::refresh_account(&self.remote, &self.issuer, &self.client_id)
+    }
+}
+
+/// The binding a reply names, or None when it names no remote that signs people in: `start`'s
+/// reply once the hub runs (`remote`, `resolver`, `issuer`, `clientId`), or the settings inside a
+/// reply (`connect`'s, and `start`'s before the hub can run).
+pub fn binding_of(body: &Value) -> Option<Binding> {
+    let text = |value: &Value| value.as_str().filter(|s| !s.is_empty()).map(str::to_string);
+    if body["resolver"] == "oidc" {
+        return Some(Binding { remote: text(&body["remote"])?, issuer: text(&body["issuer"])?, client_id: text(&body["clientId"])? });
+    }
+    let settings = &body["settings"];
+    if settings["identity"]["resolver"] == "oidc" {
+        return Some(Binding {
+            remote: text(&settings["remote"])?,
+            issuer: text(&settings["identity"]["issuer"])?,
+            client_id: text(&settings["identity"]["clientId"])?,
+        });
+    }
+    None
+}
+
 #[derive(Default)]
 pub struct Core {
     child: Mutex<Option<CommandChild>>,
@@ -123,8 +157,13 @@ pub struct Core {
     next_id: AtomicU64,
     lines: Mutex<LineBuffer>,
     state: Mutex<ShellState>,
-    /// The remote the settings name, from `start`'s reply and `connect`'s; the keychain's key.
-    remote: Mutex<Option<String>>,
+    /// The remote the settings name and, when it signs people in, its provider and the program's
+    /// client there, from `start`'s reply and `connect`'s: what the keychain's refresh token is kept
+    /// under and sent back with (the review's C6).
+    binding: Mutex<Option<Binding>>,
+    /// Set when the keychain could not be read at this start: what is drawn meanwhile is kept in
+    /// memory only, so a value the keychain still holds is not overwritten (the review's S5).
+    keychain_unreadable: AtomicBool,
     data_dir: Mutex<Option<PathBuf>>,
     logs: Mutex<Option<LogFiles>>,
     /// The latest log lines, as the page receives them, for a log page opened after them.
@@ -358,13 +397,20 @@ pub async fn start_hub(app: &AppHandle) {
         s.actions.clear();
     });
     let mut request = json!({ "type": "start", "dataDir": data_dir.display().to_string() });
+    core.keychain_unreadable.store(false, SeqCst);
     match keychain::local_token() {
         Ok(Some(token)) => {
             *core.local_token.lock().unwrap() = Some(token.clone());
             request["localToken"] = json!(token);
         }
         Ok(None) => {}
-        Err(err) => say(app, "warn", &format!("The keychain could not be read ({err}); a new pairing value is drawn at this start")),
+        // Not "no entry": the keychain may hold a value it cannot give just now (a keyring not yet
+        // unlocked when the program starts hidden at login). What this start draws is used and not
+        // written, so the kept value is still there at the next start and the paired tools work again.
+        Err(err) => {
+            core.keychain_unreadable.store(true, SeqCst);
+            say(app, "warn", &format!("The keychain could not be read ({err}); a pairing value is drawn for this start only and is not kept, so paired tools need it again until the keychain can be read"));
+        }
     }
     let reply = match ask(app, request).await {
         Ok(reply) => reply,
@@ -378,12 +424,14 @@ pub async fn start_hub(app: &AppHandle) {
     }
     if let Some(token) = body["localToken"].as_str() {
         *core.local_token.lock().unwrap() = Some(token.to_string());
-        if let Err(err) = keychain::keep_local_token(token) {
-            say(app, "warn", &format!("The pairing value could not be kept in the keychain ({err}); a new one is drawn at the next start"));
+        if !core.keychain_unreadable.load(SeqCst) {
+            if let Err(err) = keychain::keep_local_token(token) {
+                say(app, "warn", &format!("The pairing value could not be kept in the keychain ({err}); a new one is drawn at the next start"));
+            }
         }
     }
-    let remote = body["remote"].as_str().map(str::to_string).or_else(|| body["settings"]["remote"].as_str().map(str::to_string));
-    *core.remote.lock().unwrap() = remote.clone();
+    let binding = binding_of(&body);
+    *core.binding.lock().unwrap() = binding.clone();
     let running = body["started"] == true;
     set_state(app, |s| {
         s.core = if running { "running" } else { "stopped" };
@@ -392,16 +440,20 @@ pub async fn start_hub(app: &AppHandle) {
     });
     crate::login::follow(app, &body["settings"]);
     if body["resolver"] == "oidc" {
-        if let Some(remote) = remote {
-            send_credential(app, &remote).await;
+        if let Some(binding) = binding {
+            send_credential(app, &binding).await;
         }
     }
 }
 
-/// The keychain's refresh token for the remote, sent to the core (`credential`).
-async fn send_credential(app: &AppHandle, remote: &str) {
-    match keychain::refresh_token(remote) {
-        Ok(Some(token)) => match ask(app, json!({ "type": "credential", "remote": remote, "refreshToken": token })).await {
+/// The keychain's refresh token for the remote and its provider, sent to the core (`credential`)
+/// with the provider and the client it was kept under, which the core holds against its settings.
+/// An entry of the earlier form, under the remote's address alone, is removed and not sent.
+async fn send_credential(app: &AppHandle, binding: &Binding) {
+    let _ = keychain::forget_refresh_token(&keychain::legacy_refresh_account(&binding.remote));
+    let request = |token: String| json!({ "type": "credential", "remote": binding.remote, "issuer": binding.issuer, "clientId": binding.client_id, "refreshToken": token });
+    match keychain::refresh_token(&binding.account()) {
+        Ok(Some(token)) => match ask(app, request(token)).await {
             Ok(reply) if reply["status"] == 200 => set_state(app, |s| {
                 if let Some(started) = s.started.as_mut() {
                     started["signedIn"] = json!(true);
@@ -431,33 +483,49 @@ pub async fn stop_hub(app: &AppHandle) -> Result<(), String> {
 }
 
 /// What the shell does after the core answers a page's request: the keychain follows the remote,
-/// a sign-out and a new pairing value.
-pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) {
+/// a sign-out and a new pairing value. A keychain that refuses is returned as a sentence for the
+/// page, which the reply then carries as `keychain`: the page said "signed out" or showed a new
+/// pairing value, and the person must know when the keychain still holds the old one (the
+/// review's S4 and S5).
+pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) -> Option<String> {
     if reply["status"] != 200 {
-        return;
+        return None;
     }
     let core = app.state::<Core>();
+    let told = |line: String| {
+        say(app, "warn", &line);
+        Some(line)
+    };
     match request_type {
         "connect" => {
-            *core.remote.lock().unwrap() = reply["body"]["settings"]["remote"].as_str().map(str::to_string);
-        }
-        "settings" => crate::login::follow(app, &reply["body"]["settings"]),
-        "signOut" => {
-            if let Some(remote) = core.remote.lock().unwrap().clone() {
-                if let Err(err) = keychain::forget_refresh_token(&remote) {
-                    say(app, "warn", &format!("The keychain's credential could not be removed ({err})"));
-                }
+            let next = binding_of(&reply["body"]);
+            let before = std::mem::replace(&mut *core.binding.lock().unwrap(), next.clone());
+            // The remote or its provider changed: the credential for what was left is no longer wanted.
+            match before {
+                Some(before) if Some(&before) != next.as_ref() => match keychain::forget_refresh_token(&before.account()) {
+                    Ok(()) => None,
+                    Err(err) => told(format!("The sign-in kept for {} could not be removed from the keychain ({err}); remove it there yourself", before.remote)),
+                },
+                _ => None,
             }
         }
+        "settings" => {
+            crate::login::follow(app, &reply["body"]["settings"]);
+            None
+        }
+        "signOut" => match core.binding.lock().unwrap().clone().map(|binding| keychain::forget_refresh_token(&binding.account())) {
+            Some(Err(err)) => told(format!("You are signed out for now, but the sign-in kept in the keychain could not be removed ({err}), so the program will be signed in again at its next start; remove it in the keychain, or sign out again")),
+            _ => None,
+        },
         "resetPairing" => {
-            if let Some(token) = reply["body"]["localToken"].as_str() {
-                *core.local_token.lock().unwrap() = Some(token.to_string());
-                if let Err(err) = keychain::keep_local_token(token) {
-                    say(app, "warn", &format!("The new pairing value could not be kept in the keychain ({err})"));
-                }
+            let token = reply["body"]["localToken"].as_str()?;
+            *core.local_token.lock().unwrap() = Some(token.to_string());
+            match keychain::keep_local_token(token) {
+                Ok(()) => None,
+                Err(err) => told(format!("The new pairing value is in force now, but it could not be kept in the keychain ({err}), so the old value returns at the program's next start; reset again once the keychain can be written")),
             }
         }
-        _ => {}
+        _ => None,
     }
 }
 
@@ -493,8 +561,8 @@ fn on_line(app: &AppHandle, line: &str) {
     }
     match relay::classify(&message) {
         EventAction::KeepCredential(token) => {
-            let remote = core.remote.lock().unwrap().clone();
-            match remote.map(|remote| keychain::keep_refresh_token(&remote, &token)) {
+            let binding = core.binding.lock().unwrap().clone();
+            match binding.map(|binding| keychain::keep_refresh_token(&binding.account(), &token)) {
                 Some(Ok(())) => {}
                 Some(Err(err)) => say(app, "warn", &format!("The credential could not be kept in the keychain ({err}); sign in again at the next start")),
                 None => say(app, "warn", "A credential arrived before the remote was known; it is not kept"),
@@ -507,8 +575,8 @@ fn on_line(app: &AppHandle, line: &str) {
             let _ = app.emit("core-event", message);
         }
         EventAction::ForgetCredentialAndForward => {
-            if let Some(remote) = core.remote.lock().unwrap().clone() {
-                let _ = keychain::forget_refresh_token(&remote);
+            if let Some(binding) = core.binding.lock().unwrap().clone() {
+                let _ = keychain::forget_refresh_token(&binding.account());
             }
             let _ = app.emit("core-event", message);
         }
@@ -674,6 +742,25 @@ pub fn relaunch(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_credential_is_bound_to_the_remote_its_issuer_and_the_client() {
+        let running = json!({ "started": true, "remote": "https://api.example.edu", "resolver": "oidc", "issuer": "https://login.example.edu/realms/a", "clientId": "armature-desktop" });
+        let binding = binding_of(&running).unwrap();
+        assert_eq!(binding, Binding { remote: "https://api.example.edu".into(), issuer: "https://login.example.edu/realms/a".into(), client_id: "armature-desktop".into() });
+        assert_eq!(binding.account(), "refresh:https://api.example.edu|https://login.example.edu/realms/a|armature-desktop");
+        // The settings inside a reply name the same binding: connect's reply, and start's before the hub runs.
+        let connected = json!({ "settings": { "remote": "https://api.example.edu", "identity": { "resolver": "oidc", "issuer": "https://login.example.edu/realms/a", "clientId": "armature-desktop" } } });
+        assert_eq!(binding_of(&connected), Some(binding.clone()));
+        // A provider changed in the settings file or in the remote's profile is another binding, so another entry.
+        let moved = json!({ "started": true, "remote": "https://api.example.edu", "resolver": "oidc", "issuer": "https://login.example.net/realms/a", "clientId": "armature-desktop" });
+        assert_ne!(binding_of(&moved).unwrap().account(), binding.account());
+        // A remote under header keeps no credential; neither does a reply that names half of one.
+        assert_eq!(binding_of(&json!({ "started": true, "remote": "http://hub.test:3100", "resolver": "header", "user": "a@example.edu" })), None);
+        assert_eq!(binding_of(&json!({ "settings": { "remote": "http://hub.test:3100", "identity": { "resolver": "header" } } })), None);
+        assert_eq!(binding_of(&json!({ "started": true, "remote": "https://api.example.edu", "resolver": "oidc", "issuer": "https://login.example.edu" })), None);
+        assert_eq!(binding_of(&json!({ "started": false, "needs": "connect", "settings": {} })), None);
+    }
 
     fn environment(pairs: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
         pairs.iter().map(|(name, value)| (OsString::from(name), OsString::from(value))).collect()

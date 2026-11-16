@@ -96,7 +96,7 @@ export const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_
 export async function createBackend(): Promise<Backend> {
   if (!isTauri()) {
     const query = new URLSearchParams(window.location.search);
-    return (await import('./fakeCore')).fakeCore(query.get('scenario') ?? undefined, query.get('update') ?? undefined, { slow: query.has('slow'), login: query.get('login') ?? undefined });
+    return (await import('./fakeCore')).fakeCore(query.get('scenario') ?? undefined, query.get('update') ?? undefined, { slow: query.has('slow'), login: query.get('login') ?? undefined, keychain: query.get('keychain') ?? undefined });
   }
   const [{ invoke }, { listen }, { getVersion }] = await Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event'), import('@tauri-apps/api/app')]);
   return {

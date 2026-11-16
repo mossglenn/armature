@@ -476,6 +476,31 @@ test.describe('pairing, settings and the log', () => {
     await expect(value).toHaveValue(/^[0-9a-f]{64}$/);
   });
 
+  test('a keychain that refuses is said on the page: a reset whose value is not kept, a sign-out whose sign-in is not removed', async ({ page }) => {
+    // S5 of the 2026-11-09 review: the new value is in force, and the person is told the old one returns at the next start.
+    await page.goto('/?scenario=header&keychain=fails');
+    await nav(page, 'Pairing').click();
+    const before = await page.getByLabel('The pairing value').inputValue();
+    await page.getByRole('button', { name: 'Reset…' }).click();
+    await page.getByRole('button', { name: 'Reset the pairing' }).click();
+    await expect(page.getByLabel('The pairing value')).not.toHaveValue(before);
+    await expect(page.getByRole('alert')).toContainText('could not be kept in the keychain');
+    await expect(page.getByRole('alert')).toContainText('the old value returns');
+
+    // S4: "signed out" is not said alone when the keychain still holds the sign-in.
+    await page.goto('/?scenario=oidc&keychain=fails');
+    await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Signed in' })).toBeVisible();
+    await nav(page, 'Settings').click();
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('could not be removed');
+    await expect(page.getByRole('alert')).toContainText('signed in again at its next start');
+    // The warning belongs to that action: it goes when the person goes elsewhere.
+    await nav(page, 'Pairing').click();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+
   test('under oidc the identifier for tools is the one the remote resolves, shown once signed in', async ({ page }) => {
     await open(page, 'oidc');
     await nav(page, 'Pairing').click();

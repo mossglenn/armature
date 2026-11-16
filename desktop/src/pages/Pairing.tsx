@@ -21,6 +21,8 @@ export function Pairing({ backend }: { backend: Backend }) {
   const [copied, setCopied] = useState<'pairing-value' | 'tool-user' | undefined>();
   const [confirming, setConfirming] = useState(false);
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
+  /** The shell's sentence when the keychain would not keep the new value: it is in force now and the old one returns at the next start (the 2026-11-09 review's S5). */
+  const [keychain, setKeychain] = useState<string | undefined>();
 
   useEffect(() => void backend.pairingValue().then(setValue), [backend]);
   useEffect(() => {
@@ -45,9 +47,11 @@ export function Pairing({ backend }: { backend: Backend }) {
   const reset = async () => {
     setConfirming(false);
     setRefusal(undefined);
-    const outcome = await run<{ localToken: string }>('resetPairing');
-    if (outcome.ok) setValue(outcome.body.localToken);
-    else setRefusal(outcome);
+    setKeychain(undefined);
+    const outcome = await run<{ localToken: string; keychain?: string }>('resetPairing');
+    if (!outcome.ok) return setRefusal(outcome);
+    setValue(outcome.body.localToken);
+    setKeychain(outcome.body.keychain);
   };
 
   return (
@@ -95,6 +99,11 @@ export function Pairing({ backend }: { backend: Backend }) {
           <Button variant="outline" className="mt-3" disabled={busy !== undefined || !value} onClick={() => setConfirming(true)}>
             Reset…
           </Button>
+        )}
+        {keychain && (
+          <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+            {keychain}
+          </p>
         )}
         {refusal && (
           <div className="mt-3">
