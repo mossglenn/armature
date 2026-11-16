@@ -1058,7 +1058,7 @@ what evidence would be enough.
   `createdBy`. Evidence: the AI design assistant reference client becoming real, or a research
   question that needs the distinction. *Noted 2026-10-30:* the evidence arrived, in Quiver's
   drafter and lint agents (2026-10-28) and the MCP server plan (`docs/mcp-server-plan.md`).
-  ADR-0067 decision 3 (accepted 2026-10-30, not yet built) records whom an agent acted for in a hub-written
+  ADR-0067 decision 3 (accepted 2026-10-30, built 2026-11-01) records whom an agent acted for in a hub-written
   `Armature-On-Behalf-Of` trailer on the commit message, with the agent as the commit's author
   and the record's `createdBy`; decision 10 (2026-10-30) confines an agent's own writes to a
   workspace hub, so they reach a remote only through its push, acting for the workspace's owner.
