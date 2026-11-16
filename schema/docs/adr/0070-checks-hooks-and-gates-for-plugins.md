@@ -117,6 +117,45 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > next request. Tested on both stores (`events.test.ts`: the derivation over the file-backed
 > store, the route over TerminusDB; `requirement.changed` in `authorization.test.ts`). Still not
 > built: the gate, the trailers, the push gate and decision 12's patcher.
+>
+> **Note (2026-11-15, later), built:** decisions 6 and 7, the merge gate and its trailers
+> (`routes/branches.ts`, `verdictsOf` and `checkTrailers` in `checks.ts`): the three steps with
+> 409 `bring_in_first`, 409 `checks_pending` and 422 `checks_failed`, each carrying `checks`, one
+> verdict per requirement that applied; `overrides` with the row *override a required check* in
+> ADR-0068's table (`override_check`: whoever may merge, a locked requirement an administrator);
+> `dryRun` returning the verdicts and `bringInFirst`; `Armature-Check` and
+> `Armature-Check-Override` written on the merge commit and refused from clients on every write.
+> It rides revision 2026-11-15 with the feed, no hub having been deployed between the two, and
+> `armature/checks` gains `gate: ["merge"]`. Chosen in the build, each open to overrule but (a),
+> which Amos decided:
+> (a) **A merge whose source is `main` is not gated.** As written, decision 6 gates it: the
+> desktop program's bring-in is the remote's merge of `main` into the workspace's branch, whose
+> head is never in `main`, so step 1 would answer `bring_in_first` to the one action that
+> satisfies step 1, and a `locked` requirement, which binds merges into every branch, would stop
+> every bring-in on the instance. What `main` holds passed the gate into `main`. The other ways
+> out were to leave it to `fromPrefix` on every requirement, which a locked one would still
+> break, or to skip only step 1 for such a merge, whose verdict would then describe `main`'s head
+> and not what lands. **Decided (Amos, 2026-11-15): a merge whose source is `main` is not gated;
+> decision 6 is read with that exception.**
+> (b) `bring_in_first` is answered before the merge is checked, since with the target ahead the
+> check's own findings would be the bring-in's to resolve; a conflict or a broken rule is
+> answered before steps 2 and 3, as the decision orders them.
+> (c) `checks_failed` is answered before `checks_pending` when both hold: waiting will not help.
+> (d) An override is used only where its requirement is not satisfied, so a check that passed
+> meanwhile is recorded as passed; one that is used spares its requirement step 1 as well; an
+> override naming no required check of the merge is 400 `bad_request`.
+> (e) An `Advisory` requirement has a verdict and a trailer, marked `advisory`, and never
+> refuses; a requirement with no run is recorded `pending`. The trailer always carries `params=`,
+> and a reason is written on one line, quoted as JSON quotes a string.
+> (f) A run counts by its commit, reporter and `paramsHash`, whatever branch it names: the
+> source's head may be the head of two branches.
+> **Found in the build, for decision 8:** decision 7 refuses `Armature-Check-Override` from
+> clients, and decision 8 has a workspace hub's push write one on its first replayed commit as
+> the pusher's claim. The two cannot both hold as written; the push gate will need either its
+> own trailer name or an exception for a push's replay. The requirements are read before the
+> merge's check and the target's queue, as grants are, so one written during a merge is unseen by
+> it (the note of 2026-11-13's window). Still not built: the push gate and `checks.json`, and
+> decision 12's patcher.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in

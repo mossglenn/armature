@@ -106,6 +106,10 @@ annotate:
 > run is advisory unless the gate finds its reporter is the agent the requirement names, and it
 > is the one operation an agent's own credential performs on a remote hub, a run being no write
 > to the graph (ADR-0067 decision 10, note).
+>
+> **Note (2026-11-15), built:** a row the gate needed and this table lacked, *override a required
+> check*, `override_check`: whoever may perform the merge, and for a `locked` requirement an
+> administrator, as ADR-0070 decision 6 says in words (its note of this date).
 
 ## Context
 

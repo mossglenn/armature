@@ -15,6 +15,37 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-15 · The merge gate: required checks stop a merge, `overrides`, and the `Armature-Check` trailers
+
+**What changed.** `POST /branches/:name/merge` now enforces the `CheckRequirement`s in force that
+apply to the merge (ADR-0070 decisions 6 and 7); it rides the day's revision with the feed, and
+discovery's `armature/checks` says so with `gate: ["merge"]`. For each `Required` one the source
+must hold the target's head (**409** `bring_in_first`), a run by the requirement's `reporter`
+under its current `paramsHash` must exist at the source's head (**409** `checks_pending`, with
+`pending`), and that run must conclude `pass` or `neutral` (**422** `checks_failed`, with
+`failed`, the target unchanged). Each refusal carries `checks`, one verdict per requirement:
+`{ check, requirement, level, locked, reporter, paramsHash, conclusion, run?, satisfied,
+overridden? }`. The body takes `overrides: [{ check, reason }]`: whoever may perform the merge
+takes an unlocked requirement on themselves, a locked one an administrator (**403** `forbidden`,
+`permission: "override_check"`). A merge that lands carries `checks` in its answer, and its
+commit's message one `Armature-Check: <check> <conclusion> run=<id> params=sha256:<hash>` trailer
+per requirement and one `Armature-Check-Override: <check> reason="..."` per override used; both
+names are refused from clients (**400** `reserved_trailer`), on every write. A dry run carries
+`checks` and `bringInFirst`. A merge no requirement applies to is unchanged, and a merge whose
+source is `main` is never gated. `@armature/client`: `branches.merge` takes `overrides`, and
+`MergeResult` carries `checks` (`CheckVerdict`) and `bringInFirst`.
+
+**What a client does.** Nothing until someone writes a requirement on its instance. Then a tool
+that merges handles three more answers: on `bring_in_first` it merges the target into the source
+first; on `checks_pending` it waits (the event feed, or asking again) for the check service to
+report on the source's head; on `checks_failed` it shows `checks`, each with its run's `summary`
+and `detailsUrl`, and offers an override with a reason to someone who may give one. A check
+service posts its runs with the `paramsHash` it read from `GET /checks/requirements`, about the
+head of the branch to be merged. A message that carries a line beginning `Armature-Check` is now
+refused. **CoQui:** a round merged into a branch that requires `coqui/round-complete` (a
+requirement with `fromPrefix: "coqui-"`) needs the target merged into the round's branch first,
+then its own run at that head.
+
 ## 2026-11-15 · The event feed: `GET /events`
 
 **What changed.** A tool can now learn what changed on a hub without polling each branch (ADR-0070
