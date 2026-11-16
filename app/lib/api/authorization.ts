@@ -38,6 +38,8 @@ import { findExisting } from './write';
  *                            decision 4's note of 2026-11-12). Judged on the record as written
  *                            and on the one it replaces, since `locked` is not in the key: the
  *                            right to unlock a requirement is the right to lock one
+ *   override a required check   whoever may perform the merge; a `locked` requirement, an
+ *                            Administrator (ADR-0070 decision 6)
  *
  * A branch with no Owner in force is writable, mergeable and deletable by any
  * registered User, as before this decision: the migration window of decision
@@ -67,7 +69,9 @@ export type Operation =
   /** A `CheckRequirement` for merges into `branch` (`main` when the record names none); `locked` when the record written or replaced is. */
   | { permission: 'write_requirement'; branch: string; locked: boolean }
   /** A check run about a commit on `branch` (ADR-0070 decision 4). */
-  | { permission: 'report_check'; branch: string };
+  | { permission: 'report_check'; branch: string }
+  /** Overriding a required check on a merge into `branch` (ADR-0070 decision 6); `locked` when a requirement it overrides is. */
+  | { permission: 'override_check'; branch: string; check: string; locked: boolean };
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -124,6 +128,9 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
       return admin ? undefined : 'registering a person needs an Administrator';
     case 'list_users':
       return maintains(REGISTRY_BRANCH) || admin ? undefined : `listing users needs Maintainer of ${REGISTRY_BRANCH} or an Administrator`;
+    case 'override_check':
+      // The merge itself is checked first, so only the lock is left to judge.
+      return !op.locked || admin ? undefined : `overriding ${op.check}, a locked requirement, needs an Administrator`;
     case 'report_check':
       return undefined; // any identity that may read; whether the run counts is the gate's (ADR-0070 decisions 4 and 6)
     case 'write_requirement': {

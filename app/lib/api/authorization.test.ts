@@ -627,3 +627,181 @@ describe("CheckRequirement documents through the routes (ADR-0070 decision 5; AD
     expect(following.events.map((e: { type: string }) => e.type)).toEqual(['requirement.changed']);
   });
 });
+
+describe('the merge gate (ADR-0070 decisions 6 and 7)', () => {
+  const asReviewer = { 'Content-Type': 'application/json', 'Armature-User': 'demo-reviewer@example.edu' };
+  const REPORTER = `agent:test/gate-${stamp}`;
+  const as = (headers: Record<string, string>) => (method: string, path: string, body?: unknown) =>
+    hub.request(`/api/v1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const reviewer = as(asReviewer);
+  const service = as({ 'Content-Type': 'application/json', 'Armature-User': REPORTER });
+  const TARGET = `test-gate-${stamp}`;
+  const LINT = `gate/lint-${stamp}`;
+  const ADVICE = `gate/advice-${stamp}`;
+  const PARAMS = { severity: 'error' };
+  let agentId = '';
+  let n = 0;
+
+  const requirement = (fields: Record<string, unknown>) => ({ '@type': 'CheckRequirement', reporter: agentId, level: 'Required', locked: false, params: PARAMS, status: 'Active', ...fields });
+  /** A branch cut from `from` with one commit of its own; its name and head. */
+  const work = async (from: string, who = on) => {
+    const name = `${TARGET}-s${++n}`;
+    expect((await who('POST', '/branches', { name, from: { branch: from } })).status).toBe(201);
+    const written = await json(await who('PUT', `/documents/LearningNeed/gate-${stamp}-${n}?branch=${name}`, { message: 'Work to merge', document: { label: `Gate ${n}`, rationale: 'r' } }));
+    expect(written.status).toBe(200);
+    return { name, head: written.body.commit as string };
+  };
+  const merge = async (target: string, from: string, extra: Record<string, unknown> = {}, who = on) => json(await who('POST', `/branches/${target}/merge`, { message: `Merge ${from}`, from, ...extra }));
+  const report = (branch: string, commit: string, conclusion: string, extra: Record<string, unknown> = {}, who = service) =>
+    who('POST', '/checks/runs', { check: LINT, branch, commit, conclusion, paramsHash: paramsHash(PARAMS), ...extra });
+  const headMessage = async (branch: string) => (await json(await on('GET', `/branches/${branch}/log?count=1`))).body.commits[0].message as string;
+
+  beforeAll(async () => {
+    const registered = await json(await on('POST', '/users', { message: 'A check service for the gate', user: { displayName: 'Gate (test)', externalId: REPORTER } }));
+    expect(registered.status).toBe(201);
+    agentId = registered.body.id;
+    expect((await on('POST', '/branches', { name: TARGET })).status).toBe(201);
+    // The groups above leave a locked requirement in force, which binds every merge: withdrawn, as an administrator would.
+    const left = (await json(await on('GET', `/checks/requirements?target=${TARGET}`))).body.requirements as Array<Record<string, unknown>>;
+    for (const requirement of left) {
+      // The key fields find the record; a Hash-keyed write carries no id, and paramsHash is the read's, not the record's.
+      const record: Record<string, unknown> = { ...requirement, status: 'Revoked', rationale: 'Withdrawn before the gate is tested' };
+      delete record['@id'];
+      delete record.paramsHash;
+      expect((await write([record], 'Withdraw')).status).toBe(200);
+    }
+  });
+
+  it('a merge no requirement applies to is as before: no checks in the answer, no trailer on the commit', async () => {
+    const source = await work(TARGET);
+    const merged = await merge(TARGET, source.name);
+    expect(merged.status).toBe(200);
+    expect(merged.body).not.toHaveProperty('checks');
+    expect(await headMessage(TARGET)).toBe(`Merge ${source.name}`);
+  });
+
+  it('with a required check and no run at the source head: 409 checks_pending, and the dry run says the same without refusing', async () => {
+    expect((await write([requirement({ check: LINT, branch: TARGET })], 'Lint before anything merges here')).status).toBe(200);
+    const source = await work(TARGET);
+    const refused = await merge(TARGET, source.name);
+    expect(refused.status).toBe(409);
+    expect(refused.body).toMatchObject({ error: 'checks_pending', pending: [LINT], source: source.head });
+    expect(refused.body.checks).toEqual([
+      { check: LINT, requirement: expect.stringMatching(/^CheckRequirement\//), level: 'Required', locked: false, reporter: agentId, paramsHash: paramsHash(PARAMS), conclusion: 'pending', satisfied: false },
+    ]);
+    const dry = await merge(TARGET, source.name, { dryRun: true });
+    expect(dry.status).toBe(200);
+    expect(dry.body).toMatchObject({ dryRun: true, bringInFirst: false, conflicts: [], violations: [] });
+    expect(dry.body.checks[0]).toMatchObject({ check: LINT, conclusion: 'pending', satisfied: false });
+
+    // A run by anyone but the requirement's reporter is advisory, and one under other settings is stale: neither counts.
+    expect((await report(source.name, source.head, 'pass', {}, on)).status).toBe(201);
+    expect((await report(source.name, source.head, 'pass', { paramsHash: paramsHash({ severity: 'warn' }) })).status).toBe(201);
+    expect((await merge(TARGET, source.name)).body.error).toBe('checks_pending');
+
+    // The reporter's own, failing: 422 checks_failed, naming the run and where its detail is; the target unchanged.
+    const before = (await json(await on('GET', `/branches/${TARGET}`))).body.head.commit;
+    const failing = await json(await report(source.name, source.head, 'fail', { summary: '2 required', detailsUrl: 'https://lint.example.edu/runs/7' }));
+    const failed = await merge(TARGET, source.name);
+    expect(failed.status).toBe(422);
+    expect(failed.body).toMatchObject({ error: 'checks_failed', failed: [LINT] });
+    expect(failed.body.checks[0]).toMatchObject({ conclusion: 'fail', satisfied: false, run: { id: failing.body.id, summary: '2 required', detailsUrl: 'https://lint.example.edu/runs/7' } });
+    expect((await json(await on('GET', `/branches/${TARGET}`))).body.head.commit).toBe(before);
+
+    // An override is a list of { check, reason } naming a required check of this merge.
+    for (const overrides of ['yes', [{ check: LINT }], [{ check: LINT, reason: ' ' }], [{ check: LINT, reason: 'a' }, { check: LINT, reason: 'b' }], [{ check: `gate/other-${stamp}`, reason: 'x' }]]) {
+      const bad = await merge(TARGET, source.name, { overrides });
+      expect(bad.status, JSON.stringify(overrides)).toBe(400);
+      expect(bad.body.error).toBe('bad_request');
+    }
+    // Whoever may merge overrides an unlocked requirement, with a reason; the commit records both.
+    const overridden = await merge(TARGET, source.name, { overrides: [{ check: LINT, reason: 'The two findings are\nfalse positives; see "note 12"' }] });
+    expect(overridden.status).toBe(200);
+    expect(overridden.body.checks[0]).toMatchObject({ conclusion: 'fail', overridden: { reason: 'The two findings are\nfalse positives; see "note 12"' } });
+    expect(await headMessage(TARGET)).toBe(
+      [
+        `Merge ${source.name}`,
+        '',
+        `Armature-Check: ${LINT} fail run=${failing.body.id} params=${paramsHash(PARAMS)} overridden`,
+        `Armature-Check-Override: ${LINT} reason="The two findings are false positives; see \\"note 12\\""`,
+      ].join('\n')
+    );
+  });
+
+  it('a passing run by the reporter at the source head opens the gate; an advisory requirement is shown and recorded, and never refuses', async () => {
+    expect((await write([requirement({ check: ADVICE, branch: TARGET, level: 'Advisory' })], 'Shown, never required')).status).toBe(200);
+    const source = await work(TARGET);
+    const run = await json(await report(source.name, source.head, 'neutral'));
+    const merged = await merge(TARGET, source.name);
+    expect(merged.status).toBe(200);
+    const byCheck = Object.fromEntries(merged.body.checks.map((v: { check: string }) => [v.check, v]));
+    expect(byCheck[LINT]).toMatchObject({ conclusion: 'neutral', satisfied: true, run: { id: run.body.id } });
+    expect(byCheck[LINT]).not.toHaveProperty('overridden');
+    expect(byCheck[ADVICE]).toMatchObject({ level: 'Advisory', conclusion: 'pending', satisfied: false });
+    const message = await headMessage(TARGET);
+    expect(message).toContain(`Armature-Check: ${LINT} neutral run=${run.body.id} params=${paramsHash(PARAMS)}`);
+    expect(message).toContain(`Armature-Check: ${ADVICE} pending params=${paramsHash(PARAMS)} advisory`);
+    expect(message).not.toContain('Armature-Check-Override');
+  });
+
+  it('an override given where the check passes is not used: the commit records the pass', async () => {
+    const source = await work(TARGET);
+    await report(source.name, source.head, 'pass');
+    const merged = await merge(TARGET, source.name, { overrides: [{ check: LINT, reason: 'In case it fails' }] });
+    expect(merged.status).toBe(200);
+    expect(await headMessage(TARGET)).not.toContain('overridden');
+  });
+
+  it('the source must hold the target\'s head: 409 bring_in_first before anything else, until the target is merged in and the check runs on the result', async () => {
+    const source = await work(TARGET);
+    await report(source.name, source.head, 'pass');
+    // The target moves on: a pass at the source's head no longer describes what would land.
+    expect((await on('PUT', `/documents/LearningNeed/gate-ahead-${stamp}?branch=${TARGET}`, { message: 'Meanwhile', document: { label: 'Ahead', rationale: 'r' } })).status).toBe(200);
+    const refused = await merge(TARGET, source.name);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toBe('bring_in_first');
+    expect((await merge(TARGET, source.name, { dryRun: true })).body).toMatchObject({ bringInFirst: true });
+    // Bringing the target in is a merge into the source, which no requirement binds.
+    const broughtIn = await merge(source.name, TARGET);
+    expect(broughtIn.status).toBe(200);
+    expect(broughtIn.body).not.toHaveProperty('checks');
+    expect((await merge(TARGET, source.name)).body.error).toBe('checks_pending');
+    await report(source.name, broughtIn.body.commit, 'pass');
+    expect((await merge(TARGET, source.name)).status).toBe(200);
+  });
+
+  it('a merge from main is not gated: it is how a branch brings main in', async () => {
+    const merged = await merge(TARGET, 'main');
+    expect(merged.status).toBe(200);
+    expect(merged.body.upToDate).toBe(false);
+    expect(merged.body).not.toHaveProperty('checks');
+  });
+
+  it("refuses the gate's trailers from a client (400 reserved_trailer)", async () => {
+    for (const line of [`Armature-Check: ${LINT} pass`, `Armature-Check-Override: ${LINT} reason="mine"`]) {
+      const res = await json(await on('POST', `/branches/${TARGET}/merge`, { message: `Merge\n\n${line}`, from: 'main' }));
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('reserved_trailer');
+    }
+  });
+
+  it('a locked requirement binds merges into every branch, and only an administrator overrides it', async () => {
+    const LOCKED = `gate/locked-${stamp}`;
+    const theirs = `${TARGET}-reviewers`;
+    expect((await reviewer('POST', '/branches', { name: theirs })).status).toBe(201);
+    const source = await work(theirs, reviewer);
+    expect((await write([requirement({ check: LOCKED, branch: TARGET, locked: true })], 'Everywhere')).status).toBe(200);
+    try {
+      expect((await merge(theirs, source.name, {}, reviewer)).body).toMatchObject({ error: 'checks_pending', pending: [LOCKED] });
+      // The branch's owner may merge into it, and may not set a locked requirement aside.
+      const refused = await merge(theirs, source.name, { overrides: [{ check: LOCKED, reason: 'Mine to decide' }] }, reviewer);
+      expect(refused.status).toBe(403);
+      expect(refused.body).toMatchObject({ error: 'forbidden', permission: 'override_check', branch: theirs, check: LOCKED, locked: true });
+      const merged = await merge(theirs, source.name, { overrides: [{ check: LOCKED, reason: 'The service is down today' }] });
+      expect(merged.status).toBe(200);
+      expect(await headMessage(theirs)).toContain(`Armature-Check-Override: ${LOCKED} reason="The service is down today"`);
+    } finally {
+      expect((await write([requirement({ check: LOCKED, branch: TARGET, locked: true, status: 'Revoked', rationale: 'The test is over' })], 'Withdraw')).status).toBe(200);
+    }
+  });
+});

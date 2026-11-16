@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Context } from 'hono';
+import type { TerminusDocument } from './store';
+import { CHECK_OVERRIDE_TRAILER, CHECK_TRAILER } from './trailers';
 
 /**
  * Check runs (architecture decision record ADR-0070 decisions 3 and 4): a
@@ -119,3 +121,86 @@ export function canonicalJson(value: unknown): string {
 export const paramsHash = (params: unknown): string => `sha256:${createHash('sha256').update(canonicalJson(params)).digest('hex')}`;
 
 export const PARAMS_HASH = /^sha256:[0-9a-f]{64}$/;
+
+/**
+ * The one question the hub answers about requirements (decision 5): which of
+ * those in force apply to a merge from `from` into `target`. Those naming the
+ * target (`main` when a record names none), those `locked`, filtered by
+ * `fromPrefix` against the source when one is given; with no source every
+ * prefix is kept.
+ */
+export function requirementsFor(requirements: TerminusDocument[], target: string, from?: string): TerminusDocument[] {
+  return requirements
+    .filter((r) => r.locked === true || ((r.branch as string | undefined) ?? 'main') === target)
+    .filter((r) => from === undefined || typeof r.fromPrefix !== 'string' || from.startsWith(r.fromPrefix));
+}
+
+/**
+ * What the merge gate found for one requirement (decision 6): the newest run
+ * at the source's head by the requirement's reporter under its current
+ * `paramsHash`, or `pending` when there is none. A run by anyone else, or
+ * under other settings, is advisory and does not count.
+ */
+export interface CheckVerdict {
+  check: string;
+  /** The `CheckRequirement`'s id. */
+  requirement: string;
+  level: 'Required' | 'Advisory';
+  locked: boolean;
+  /** `User/<id>`, the agent whose runs count. */
+  reporter: string;
+  paramsHash: string;
+  conclusion: Conclusion | 'pending';
+  /** The run that counted. */
+  run?: { id: string; reportedAt: string; summary?: string; detailsUrl?: string };
+  /** `pass` or `neutral` (decision 6, step 3). */
+  satisfied: boolean;
+  /** A person with the right to merge took the requirement on themselves, with this reason; set only where the requirement was not satisfied. */
+  overridden?: { reason: string };
+}
+
+/** The verdict for each requirement at `commit`, the source's head; `overrides` maps a check's name to the reason given. */
+export function verdictsOf(requirements: TerminusDocument[], runs: RunStore, commit: string, overrides: ReadonlyMap<string, string> = new Map()): CheckVerdict[] {
+  return requirements.map((requirement) => {
+    const check = String(requirement.check);
+    const hash = paramsHash(requirement.params);
+    const run = runs.list({ commit, check }).find((r) => r.reporter === requirement.reporter && r.paramsHash === hash);
+    const satisfied = run?.conclusion === 'pass' || run?.conclusion === 'neutral';
+    const level = requirement.level === 'Advisory' ? 'Advisory' : 'Required';
+    const reason = overrides.get(check);
+    return {
+      check,
+      requirement: requirement['@id'],
+      level,
+      locked: requirement.locked === true,
+      reporter: String(requirement.reporter),
+      paramsHash: hash,
+      conclusion: run?.conclusion ?? 'pending',
+      ...(run ? { run: { id: run.id, reportedAt: run.reportedAt, ...(run.summary !== undefined ? { summary: run.summary } : {}), ...(run.detailsUrl !== undefined ? { detailsUrl: run.detailsUrl } : {}) } } : {}),
+      satisfied,
+      ...(level === 'Required' && !satisfied && reason !== undefined ? { overridden: { reason } } : {}),
+    };
+  });
+}
+
+/** Whether a verdict stops the merge: a `Required` requirement neither satisfied nor overridden. An `Advisory` one is shown and never refuses. */
+export const blocks = (verdict: CheckVerdict): boolean => verdict.level === 'Required' && !verdict.satisfied && !verdict.overridden;
+
+/** A check's name as a trailer carries it: as it is, or quoted when it holds a space or a quote. */
+const named = (check: string): string => (/^[^\s"]+$/.test(check) ? check : JSON.stringify(check));
+
+/**
+ * The merge commit's record of what it relied on (decision 7): one
+ * `Armature-Check` line per requirement that applied, and one
+ * `Armature-Check-Override` per check overridden, with the reason on one
+ * line. They outlive the runs, which are held in memory.
+ */
+export function checkTrailers(verdicts: CheckVerdict[]): string[] {
+  const lines = verdicts.map((v) =>
+    [`${CHECK_TRAILER}: ${named(v.check)}`, v.conclusion, ...(v.run ? [`run=${v.run.id}`] : []), `params=${v.paramsHash}`, ...(v.level === 'Advisory' ? ['advisory'] : []), ...(v.overridden ? ['overridden'] : [])].join(' ')
+  );
+  const reasons = new Map<string, string>();
+  for (const v of verdicts) if (v.overridden) reasons.set(v.check, v.overridden.reason);
+  for (const [check, reason] of reasons) lines.push(`${CHECK_OVERRIDE_TRAILER}: ${named(check)} reason=${JSON.stringify(reason.replace(/\s+/g, ' ').trim())}`);
+  return lines;
+}

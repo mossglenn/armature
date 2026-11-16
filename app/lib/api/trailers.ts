@@ -10,13 +10,21 @@ import { ApiError } from './errors';
  *   Armature-On-Behalf-Of: <person externalId>   an agent acted for this person (decision 3)
  *   Armature-Relayed-By: <agent externalId>      a service delivered this person's work (decision 5)
  *
+ * Two more are the merge gate's record of what a merge relied on (ADR-0070
+ * decision 7), written on the merge commit and refused from clients alike:
+ *
+ *   Armature-Check: <check> <conclusion> run=<id> params=sha256:<hash>   one per requirement that applied
+ *   Armature-Check-Override: <check> reason="<the reason given>"         one per check a person overrode
+ *
  * Every other trailer is the caller's claim, kept as sent: the workspace
  * trailers of ADR-0065 decision 5, `Co-Authored-By` for someone who
  * contributed without signing in.
  */
 export const ON_BEHALF_OF_TRAILER = 'Armature-On-Behalf-Of';
 export const RELAYED_BY_TRAILER = 'Armature-Relayed-By';
-export const RESERVED_TRAILERS: readonly string[] = [ON_BEHALF_OF_TRAILER, RELAYED_BY_TRAILER];
+export const CHECK_TRAILER = 'Armature-Check';
+export const CHECK_OVERRIDE_TRAILER = 'Armature-Check-Override';
+export const RESERVED_TRAILERS: readonly string[] = [ON_BEHALF_OF_TRAILER, RELAYED_BY_TRAILER, CHECK_TRAILER, CHECK_OVERRIDE_TRAILER];
 
 const TRAILER_LINE = /^[A-Za-z][A-Za-z0-9-]*: \S.*$/;
 
@@ -38,7 +46,7 @@ export function refuseReservedTrailers(message: string): void {
     const lower = line.trim().toLowerCase();
     const reserved = RESERVED_TRAILERS.find((name) => lower.startsWith(`${name.toLowerCase()}:`));
     if (reserved) {
-      throw new ApiError(400, 'reserved_trailer', `${reserved} is a trailer the hub writes itself, never a client (ADR-0067 decision 6)`);
+      throw new ApiError(400, 'reserved_trailer', `${reserved} is a trailer the hub writes itself, never a client (ADR-0067 decision 6; ADR-0070 decision 7)`);
     }
   }
 }
