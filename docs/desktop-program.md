@@ -35,7 +35,7 @@ An instance that says **"No sign-in: you say who you are"** is a development or 
 
 ## Signing in
 
-**Sign in** opens your browser at your institution's sign-in page. Once you have signed in there, the browser says you can return to the program, and the program shows who the instance says you are. You stay signed in across restarts: the program keeps its credential in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the program says so, since you would otherwise be signed in again at the next start. The credential is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After updating from version 0.1.2 or earlier you sign in once, for the same reason. The program signs in only at a provider reached over `https`.
+**Sign in** opens your browser at your institution's sign-in page. While the program waits for you there, **Cancel the sign-in** ends the wait, for when you closed the tab or changed your mind; if you leave the page and come back, it tells you a sign-in is still waiting. Once you are signed in, the page says who the instance knows you as. Once you have signed in there, the browser says you can return to the program, and the program shows who the instance says you are. You stay signed in across restarts: the program keeps its credential in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the program says so, since you would otherwise be signed in again at the next start. The credential is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After updating from version 0.1.2 or earlier you sign in once, for the same reason. The program signs in only at a provider reached over `https`.
 
 ## Your workspaces
 
@@ -130,7 +130,7 @@ Every refusal shows the message, a code and whether your instance or this machin
 | `personal_checks_invalid` | The program cannot read your `checks.json` | Open **Settings**, which lists the problems, and save your checks again; or correct or remove the file by hand |
 | `discard_mismatch` | The number of unpushed commits changed after the program showed it to you, usually because a tool wrote meanwhile | Read the new number and confirm again, or push |
 | `workspaces_exist` | You asked to connect elsewhere while workspaces exist | Deliver or remove them first |
-| `port_in_use` | Another program holds the port | Choose another port in **Settings** and restart the hub |
+| `port_in_use` | Another program holds the port | The program opens on **Settings**: choose another port, save, and choose **Start the hub** |
 | `folder_locked` | Another copy of the program, or another hub, holds the workspaces folder | Quit the other one |
 
 ## Removing the program
