@@ -6,6 +6,56 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-15 (ADR-0070 built on the hub's side: the event feed, the merge gate, the push gate, the patcher; PRs #152 to #156)
+
+**Where things stood at the close.** **Phase 8, 2026-11-15; ADR-0070 built on the hub's side whole (PRs #152 to #156).** A tool pulls what changed from `GET /events` (derived from the logs, a cursor of branch heads, long-poll woken where `Store.exclusive`'s work ends); the merge route enforces the `CheckRequirement`s that apply (409 `bring_in_first`, 409 `checks_pending`, 422 `checks_failed`, `overrides`, the `Armature-Check` trailers), never on a merge from `main`; a workspace hub gates its push by the owner's `checks.json` (the same codes, `Armature-Local-Check-Override`), mirrors the remote's requirements and passes `overrides` and `dryRun` through deliver; `applyPatch` reads the store's positional array (decision 12). Client revision 2026-11-15, three entries. Left around ADR-0070: the desktop shell's editor for `checks.json`, its sending of overrides and showing of verdicts, and the schema guide and explainer pass. officepi serves revision 2026-11-12 and refuses writes from a hub built from `main` until updated. `desktop-v0.1.2` is the released program and holds none of this. 704 tests in the app, 27 browser tests in the shell. **Next: Amos's call among the shell's checks pages, the documents pass, officepi's update, the Windows PC's update and logoff, and 0.1.3 (item 38).**
+
+### Done
+
+- **The event feed (PR #152; ADR-0070 decision 2).** `GET /events?since=&types=&branch=&wait=&limit=` on both roles under `armature/checks`: `events.ts` derives every answer from the store's logs, `routes/events.ts` holds a request up to 30 seconds, `notifier.ts` wakes it. The cursor is base64url text of each branch's commit told up to, the newest stamp among them and an id for the hub's life, so `hub.started` falls out of comparing ids. `mergeSourceOf` moved to `store.ts`. `@armature/client`: `events.since`. Client revision 2026-11-15. Tested on both stores (`events.test.ts`; `requirement.changed` in `authorization.test.ts`), and against the built bundle on a spare port: a held request returned 2.5 s in, on a grant commit sent 2 s in.
+- **The merge gate (PR #153; decisions 6 and 7).** `POST /branches/:name/merge` enforces the requirements that apply: 409 `bring_in_first` before the merge check, then 422 `checks_failed` before 409 `checks_pending`, each with `checks`, one verdict per requirement; `overrides: [{ check, reason }]` with the row `override_check` in ADR-0068's table (a locked requirement, an administrator); `Armature-Check` and `Armature-Check-Override` on the merge commit, both reserved; `dryRun` with the verdicts and `bringInFirst`. Eight tests in `authorization.test.ts` over its scratch database.
+- **A push's override is `Armature-Local-Check-Override` (PR #154).** A "Later change" on ADR-0070 decision 8.
+- **The push gate (PR #155; decision 8, the hub's side).** `checks.json` at the root of the hub's folder, read through `WorkspaceRecords.getChecks`, no writer under the API; `POST /workspace/:name/push` gated before anything is replayed and before the remote is asked; `overrides` on the push as the trailer above on the first replayed commit; `mirrorMain` copies the remote's `CheckRequirement`s into the local `main`, at the clone and before each push and delivery; `GET /checks/requirements` adds `personal`; deliver passes `overrides` and takes `dryRun`. `HubConfig.runs` and `feed`, so the desktop core's two apps share one run store. `parseOverrides` moved to `checks.ts`. A "Checks of your own" section in `docs/desktop-program.md`. Tested in `cycle.test.ts`, through the real core (`core.test.ts`) and on the folder's reader.
+- **`applyPatch` reads the store's positional array (PR #156; decision 12).** Held to AP4's patch as TerminusDB v12.0.7 gave it, the platform checks run again to copy it. No client revision.
+- 658 tests in the app became 704; `docs/client-changes.md` gained three entries dated 2026-11-15; dated notes on ADR-0070 (five), ADR-0068 and ADR-0066; CLAUDE.md's map and its line on merges.
+
+### Session notes
+
+- The session ran ADR-0070's remaining order one step at a time, each its own branch and pull request: the proposed commits shown, "commit, push and open PR", then "confirm and merge" after CI was read by the REST API, then CI on `main` confirmed. Five times, none red.
+- Building the accepted record found two places where it could not hold as written, each put to Amos as options with a recommendation. Decision 6 gated the desktop program's bring-in, the remote's merge of `main` into a workspace's branch, whose head is never in `main`: one locked requirement would have stopped every bring-in. Decisions 7 and 8 gave `Armature-Check-Override` to the hub alone and to a pusher's claim.
+- The gate's first test run failed on a locked requirement an earlier group of the same suite left in force, which gated every merge in the new tests: the gate working. The new group withdraws what it finds before it starts.
+- The desktop core serves one app and acts through another, each with its own run store; a plugin's run would never have reached the program's push. Found by reading `core.ts` before writing the gate, fixed with `HubConfig.runs`, held by a test through the real core.
+- `armature_test`'s `main` had grown long enough that a merge took 8.4 s and a deletion over 6 s, timing a new test out; recreated from the seed (item 20's remedy). The local `armature` was not touched.
+
+### Facts from 2026-11-15 worth keeping
+
+- On a remote hub a branch starts from its own `Owner` grant's commit on `main`, written before the branch is cut, not from `main`'s head before the request (`events.test.ts` holds it; ADR-0068 decision 3).
+- A branch made, merged and deleted between two requests of the feed leaves nothing to list, so nothing of it is told (ADR-0070's note; SESSION.md item 42).
+- TerminusDB's patch format writes an absent side as `null`, so inside a JSON value a key set to `null` and a key removed are one patch (`filestore/patch.ts`; `docs/api.md`, the diff route).
+- `checks.json` and `store.json` sit at the root of a workspace hub's folder beside the branch folders; both match `BRANCH_NAME`, and the store and the records skip a file where a folder would be.
+- A zsh variable holding `-H Name:value` is passed as one word; write the header out in a curl. (Claude's memory, `armature-tooling-facts`, has zsh's other habits.)
+- `node scripts/platform_checks.js` with `app/.env.local` sourced runs every check on `armature_platform_checks` and deletes it; AP4's line is the patch `patch.test.ts` copies.
+
+### Decisions taken
+
+- **A merge whose source is `main` is not gated** (Amos, 2026-11-15): ADR-0070, note of 2026-11-15 (later), (a); `routes/branches.ts`. Declined: relying on `fromPrefix`, which a locked requirement still breaks; skipping only step 1, whose verdict would describe `main`'s head.
+- **A push's override is `Armature-Local-Check-Override`** (Amos, 2026-11-15): ADR-0070, the later change to decision 8; PR #154. Declined: an exception for a push's replay, reserving the name on the merge route only, keeping the override local.
+- **Chosen in the builds, open to overrule**, each in ADR-0070's notes of this date: the notifier at `Store.exclusive`; `wait`, `limit` and 400 `cursor_too_old` past 1,000 commits; the `branch` filter keeping `requirement.changed` and `hub.started`; the cursor in the query; a tie of stamps repeating a commit, never losing one; `bring_in_first` before the merge check and `checks_failed` before `checks_pending`; an override used only where its requirement is unsatisfied; an `Advisory` requirement recorded and never refusing; a run counting by commit, reporter and `paramsHash` whatever branch it names; `checks.json` as `{ "requirements": [...] }` with its defaults; any run on the machine counting for a personal requirement; an unreadable file stopping the push; `dryRun` on deliver as the dry run that carries the remote's verdicts; the mirror refresh as the whole of `mirrorMain`; the gates riding revision 2026-11-15 with the feed, `gate` in `armature/checks` saying `merge` or `push`.
+
+### Moved from SESSION.md
+
+To keep the file in its budget; each as it stood.
+
+- **Choices of 2026-11-13, open to overrule** (PRs #150, #151; ADR-0070's two notes of that date, ADR-0068's, ADR-0067 decision 10's; HISTORY.md, 2026-11-13, Decisions taken): a branch with no owner takes a requirement only from a maintainer; the `report_check` row refuses no reader, counting is the gate's; a run's shape is checked in the route, not a generated schema; the feed and the gate ride revisions of their own. Settled by Amos: `requireWrite` as a per-class operation map, authorization inside the pipeline deferred until the race is seen
+
+- **Earlier choices and names, 2026-11-01 to 2026-11-11 night, open to overrule** (PRs #105 to #136): the lists are in HISTORY.md's entries of those dates, Decisions taken, those of 2026-11-11 night moved there whole on 2026-11-12 (2026-11-05: the `oidc` names and codes, a service told from a person by the absence of `name`, relays deliver documents only; 2026-11-05 evening: the hub's Caddy site uncompressed, `reason: etag_altered`; the night of 2026-11-06: no limit on the queue's wait, a merge's check and a dry run outside it, no client revision for it). The review of 2026-11-09 questioned two of them (D1 the service rule, D2 `email_verified`), both changed on 2026-11-12
+
+**Watch:** GitHub was partly degraded on 2026-10-30 (`gh run watch` returned early once; a run was marked complete while its contract job still ran), so check jobs by the REST API when a status looks wrong.
+
+`gh run watch` returned success on 2026-11-06 with five of six jobs on `main` still running, so confirm a run by the REST API's `status` before calling it green.
+
+---
+
 ## 2026-11-13 (ADR-0070's route writes and check runs; PRs #150 and #151)
 
 **Where things stood at the close.** **Phase 8, 2026-11-13; ADR-0070 built in part through its run routes (PRs #150 and #151).** `CheckRequirement` is written through the document routes under ADR-0068 decision 4's *write a requirement* row (`write_requirement`, judged on the record and the one it replaces); the hub keeps check runs in memory (`POST /checks/runs`, `GET /checks`, the newest 50 per check and branch, one store per app) and answers which requirements bind a merge with each `paramsHash` (`GET /checks/requirements?target=&from=`); the `report_check` row refuses no reader; capability `armature/checks` and client revision 2026-11-13. Left of ADR-0070: the event feed, the merge gate and its trailers, the push gate and `checks.json`, decision 12's patcher, the schema guide and explainer pass. officepi serves revision 2026-11-12 and refuses writes from a hub built from `main` until updated. `desktop-v0.1.2` is the released program. 658 tests in the app, 27 browser tests in the shell. **Next: the event feed (ADR-0070 decision 2); officepi's update; the Windows PC's update and logoff; 0.1.3 when Amos wants it (item 38); Amos's call.**
