@@ -211,6 +211,34 @@ export interface MergeResult {
   dryRun?: boolean;
   conflicts?: MergeConflict[];
   violations?: Violation[];
+  /**
+   * The merge gate's verdicts (ADR-0070 decision 6; since 2026-11-15), one per requirement that applied; absent
+   * when none did. On a merge that landed, what it relied on; on a dry run, what it would find.
+   */
+  checks?: CheckVerdict[];
+  /** On a dry run with requirements: the target has commits the source lacks, and a merge would be 409 `bring_in_first`. */
+  bringInFirst?: boolean;
+}
+
+/**
+ * What the merge gate found for one requirement: the newest run at the source's head by the requirement's
+ * reporter under its current `paramsHash`, or `pending`. Also in the bodies of 409 `bring_in_first`,
+ * 409 `checks_pending` and 422 `checks_failed`, as `checks` in a `HubError`'s details.
+ */
+export interface CheckVerdict {
+  check: string;
+  /** The `CheckRequirement`'s id. */
+  requirement: string;
+  level: 'Required' | 'Advisory';
+  locked: boolean;
+  reporter: string;
+  paramsHash: string;
+  conclusion: CheckConclusion | 'pending';
+  run?: { id: string; reportedAt: string; summary?: string; detailsUrl?: string };
+  /** `pass` or `neutral`. */
+  satisfied: boolean;
+  /** Set where an override was used: the requirement was not satisfied and someone with the right took it on themselves. */
+  overridden?: { reason: string };
 }
 
 /** One rule a write or a checked merge breaks (the hub's `invariant_violation` body). */
@@ -744,8 +772,12 @@ export function createClient(options: ClientOptions) {
        * `POST /branches/:name/merge`: three-way merge of `from` into `name`, checked before it commits
        * (2026-11-01): 409 `merge_conflict` carries `conflicts`, 422 `invariant_violation` the rules the
        * result would break; `dryRun` returns both without a commit; `ifMatch` pins the target head.
+       * Since 2026-11-15 the merge is gated by the required checks that apply (ADR-0070 decision 6): 409
+       * `bring_in_first` when the source lacks the target's head, 409 `checks_pending` (wait on the feed and
+       * ask again), 422 `checks_failed`, each with `checks`. `overrides` takes a requirement on the caller,
+       * with a reason the merge commit records; a locked one needs an administrator (403).
        */
-      merge(name: string, opts: { message: string; from: string; dryRun?: boolean; ifMatch?: string }) {
+      merge(name: string, opts: { message: string; from: string; dryRun?: boolean; overrides?: Array<{ check: string; reason: string }>; ifMatch?: string }) {
         const { ifMatch, ...body } = opts;
         return call<MergeResult>(`/branches/${encodeURIComponent(name)}/merge`, { method: 'POST', body, ifMatch });
       },
