@@ -43,7 +43,7 @@ describe('GET /api/v1/export (ADR-0031)', () => {
   it('lists the declared slices', async () => {
     const { body } = await json('/api/v1/export/slices');
     expect(Object.keys(body)).toEqual(expect.arrayContaining(['full', 'outcomes-loop', 'review']));
-    expect(body.full.classes).toEqual(['DesignRecord', 'User', 'Grant']);
+    expect(body.full.classes).toEqual(['DesignRecord', 'User', 'Grant', 'CheckRequirement']);
   });
 
   it('exports the whole graph at a ref: context, reloadable schema, every document, no unresolved reference', async () => {

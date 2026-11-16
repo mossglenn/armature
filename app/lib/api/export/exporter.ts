@@ -135,7 +135,11 @@ const hex = (bytes: ArrayBuffer): string =>
  * minted for this export and the result says so. A `Grant` names a branch,
  * and a workspace branch begins with its owner's handle (`<handle>_<name>`,
  * ADR-0065), so that prefix is rewritten to the person's token too (ADR-0068);
- * a branch name that begins with no registered handle is left as it is.
+ * a branch name that begins with no registered handle is left as it is. A
+ * `CheckRequirement` names a branch too, and in `fromPrefix` the beginning of
+ * branch names, so both are rewritten the same way (ADR-0070 decision 5);
+ * its `reporter` is a reference to a `User` like any other, and its `params`
+ * are a plugin's settings, left as stored like every free value.
  */
 export async function applyProfile(
   documents: TerminusDocument[],
@@ -188,7 +192,11 @@ export async function applyProfile(
         copy[field] = await Promise.all(value.map(async (v) => (typeof v === 'string' ? `User/${await tokenFor(v)}` : v)));
       }
     }
-    if (doc['@type'] === 'Grant' && typeof copy.branch === 'string') copy.branch = await rewriteBranch(copy.branch);
+    if (doc['@type'] === 'Grant' || doc['@type'] === 'CheckRequirement') {
+      for (const field of ['branch', 'fromPrefix']) {
+        if (typeof copy[field] === 'string') copy[field] = await rewriteBranch(copy[field] as string);
+      }
+    }
     out.push(copy);
   }
   return { documents: out, pseudonyms: key ? 'stable' : 'per-export' };

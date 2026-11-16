@@ -589,6 +589,21 @@ describe("CheckRequirement documents through the routes (ADR-0070 decision 5; AD
     expect(forMine.sort()).toEqual([`test/lint-${stamp}`, `test/locked-${stamp}`]);
   });
 
+  it('exports requirements in the full slice, and the pseudonymous profile rewrites the reporter', async () => {
+    const mine = (d: TerminusDocument) => d['@type'] === 'CheckRequirement' && d.branch === MINE;
+    const full = (await json(await on('GET', '/export'))).body;
+    const requirements = full.documents.filter(mine);
+    expect(requirements.map((r: TerminusDocument) => r.check).sort()).toEqual([`test/lint-${stamp}`, `test/locked-${stamp}`]);
+    expect(requirements.every((r: TerminusDocument) => r.reporter === agentId)).toBe(true);
+    expect(full.armature.unresolved).toEqual([]);
+    const hidden = (await json(await on('GET', '/export?profile=pseudonymous'))).body.documents.filter(mine);
+    expect(hidden.length).toBe(requirements.length);
+    for (const r of hidden) {
+      expect(r.reporter).toMatch(/^User\/[0-9a-f]{32}$/);
+      expect(r.params).toEqual(requirements.find((f: TerminusDocument) => f['@id'] === r['@id']).params);
+    }
+  });
+
   it('GET /checks/requirements answers which apply to a merge into a target from a source: by target, by lock, by prefix, each with its paramsHash (ADR-0070 decisions 3 and 5)', async () => {
     // A requirement bound to review-round branches only, and a locked one that binds every target.
     expect((await write([requirement({ check: `test/rounds-${stamp}`, branch: MINE, fromPrefix: 'coqui-', params: { b: 1, a: [1.0] } })], 'Rounds only')).status).toBe(200);
