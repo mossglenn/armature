@@ -11,6 +11,7 @@ import { drawLocalToken, LOCAL_TOKEN_HEADER } from '../api/localToken';
 import { CURRENT_REVISION } from '../api/version';
 import { startHub, type RunningHub } from '../hub';
 import { folderFiles, folderRecords, lockFolder } from '../workspaceFolder';
+import { readChecks, writeChecks } from './checks';
 import { credential, type Credential } from './credential';
 import { syncedFolderWarning } from './folder';
 import { answerFromResponse, ok, openChannel, type Answer, type ControlEvent, type ControlRequest, type Handler } from './protocol';
@@ -407,6 +408,19 @@ export function runCore(options: CoreOptions): Core {
       settings = next;
       const warning = syncedFolderWarning(workspacesFolder(dir, next));
       return ok({ settings: next, restart: running !== undefined && needsRestart(current, next), ...(warning ? { warning } : {}) });
+    },
+
+    // The owner's own required checks, `checks.json` in the workspaces folder (ADR-0070 decision 8): read for
+    // the Settings page, and with `set: { requirements }` written whole. The core writes the file because no
+    // route may (./checks.ts); the hub reads it at each push, so a change needs no restart, and the folder is
+    // the one the settings name, whether or not the hub is running.
+    checks: async (request) => {
+      const { dataDir: dir, settings: current } = opened();
+      const folder = workspacesFolder(dir, current);
+      const change = request.set;
+      if (change === undefined) return ok(await readChecks(folder));
+      if (typeof change !== 'object' || change === null || Array.isArray(change)) throw new ApiError(400, 'bad_request', 'checks takes set, an object with requirements', { field: 'set' });
+      return ok(await writeChecks(folder, (change as Record<string, unknown>).requirements));
     },
 
     signIn: async (request, context) => {
