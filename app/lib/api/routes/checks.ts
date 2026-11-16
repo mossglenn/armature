@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requirePermission } from '../authorization';
-import { CONCLUSIONS, PARAMS_HASH, paramsHash, runsOf, type Conclusion, type RunInput } from '../checks';
+import { CONCLUSIONS, PARAMS_HASH, paramsHash, requirementsFor, runsOf, type Conclusion, type RunInput } from '../checks';
 import { storeFor } from '../config';
 import { ApiError } from '../errors';
 import { activeRequirements } from '../grants';
@@ -116,10 +116,7 @@ checks.get('/requirements', async (c) => {
     throw new ApiError(400, 'bad_query', 'target and from are branch names');
   }
   const { requirements, commit } = await activeRequirements(registry(c));
-  const applicable = requirements
-    .filter((r) => r.locked === true || (r.branch ?? REGISTRY_BRANCH) === target)
-    .filter((r) => from === undefined || typeof r.fromPrefix !== 'string' || from.startsWith(r.fromPrefix))
-    .map((r) => ({ ...r, paramsHash: paramsHash(r.params) }));
+  const applicable = requirementsFor(requirements, target, from).map((r) => ({ ...r, paramsHash: paramsHash(r.params) }));
   setEtag(c, commit);
   return c.json({ target, ...(from !== undefined ? { from } : {}), requirements: applicable });
 });

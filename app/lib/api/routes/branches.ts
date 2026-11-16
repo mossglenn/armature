@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { hubOf, storeFor } from '../config';
 import { ApiError } from '../errors';
 import { BRANCH_NAME, ifMatchFrom, intQuery, readEnvelope, readJson, requireCommit, setEtag } from '../http';
-import { grantOwner, revokeGrantsNaming } from '../grants';
+import { activeRequirements, grantOwner, revokeGrantsNaming } from '../grants';
+import { blocks, checkTrailers, requirementsFor, runsOf, verdictsOf, type CheckVerdict } from '../checks';
+import { withTrailer } from '../trailers';
 import { requirePermission } from '../authorization';
-import { commitMessage, resolveUser } from '../identity';
+import { commitMessage, registry, REGISTRY_BRANCH, resolveUser } from '../identity';
 import { isInternalBranch } from '../role';
 import { changesOf, idFromIri, isRecord, isUnknownRef, mergeSourceOf, StoreError, type Commit, type ConflictWitness, type Ref, type Store, type WitnessField } from '../store';
 import { checkBranch } from '../../operator/check';
@@ -17,7 +19,8 @@ import type { Violation } from '../invariants';
  *   GET  /                      every branch with its head commit
  *   POST /                      { name, from?: { branch } | { commit } }  → 201; the caller owns it
  *   GET  /:name                 the head commit
- *   POST /:name/merge           { message, from, dryRun? }  three-way merge, checked before it commits; 409 on conflict, 422 on a rule; If-Match pins the target
+ *   POST /:name/merge           { message, from, dryRun?, overrides? }  three-way merge, checked before it commits; 409 on conflict, 422 on a rule; If-Match pins the target;
+ *                               gated by the required checks that apply (409 bring_in_first, 409 checks_pending, 422 checks_failed)
  *   GET  /:name/changes?since=  changed document ids since a commit
  *   GET  /:name/log?start=&count=  the branch's commits, newest first, paged, read at its head
  *   DELETE /:name               only when another branch holds the head; 409 otherwise
@@ -235,6 +238,23 @@ branches.get('/:name', async (c) => {
   return c.json({ name, head: toHead(head) });
 });
 
+const MAX_REASON = 1000;
+
+/** A merge's `overrides` as check name to reason; 400 `bad_request` for anything but `[{ check, reason }]` with a reason given. */
+function parseOverrides(value: unknown): Map<string, string> {
+  const overrides = new Map<string, string>();
+  if (value === undefined) return overrides;
+  const bad = () => new ApiError(400, 'bad_request', `overrides must be [{ check, reason }], each check once, each reason given and at most ${MAX_REASON} characters`);
+  if (!Array.isArray(value)) throw bad();
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.check !== 'string' || typeof entry.reason !== 'string') throw bad();
+    const reason = entry.reason.trim();
+    if (!entry.check || !reason || reason.length > MAX_REASON || overrides.has(entry.check) || Object.keys(entry).length !== 2) throw bad();
+    overrides.set(entry.check, reason);
+  }
+  return overrides;
+}
+
 /** The conflicts of a failed apply, each with the source's value read from the source head. */
 async function conflictsOf(witnesses: ConflictWitness[], atSource: Store): Promise<MergeConflict[]> {
   // A per-field witness carries the base and target values; the source value
@@ -279,6 +299,32 @@ async function conflictsOf(witnesses: ConflictWitness[], atSource: Store): Promi
  * run commits nothing, and writers should not wait on either. With `dryRun`,
  * the conflicts and the violations are returned and nothing is committed.
  * `If-Match` pins the target head the caller inspected (the review's H3).
+ *
+ * **The gate** (ADR-0070 decisions 6 and 7; since 2026-11-15). When
+ * `CheckRequirement`s in force apply to the merge (those naming the target,
+ * those locked, by `fromPrefix`), then for each `Required` one:
+ *
+ * 1. the source must hold the target's head, so that the merged state is the
+ *    source's head and a verdict on that commit is a verdict on what lands;
+ *    409 `bring_in_first` otherwise, before the check is run;
+ * 2. a run by the requirement's reporter under its current `paramsHash` must
+ *    exist at the source's head; 409 `checks_pending` otherwise;
+ * 3. that run must conclude `pass` or `neutral`; 422 `checks_failed`
+ *    otherwise, which is answered before `checks_pending` when both hold,
+ *    since waiting will not help.
+ *
+ * `overrides: [{ check, reason }]` lets whoever may perform the merge take a
+ * requirement on themselves, a locked one an administrator. The merge commit
+ * records one `Armature-Check` trailer per requirement that applied and one
+ * `Armature-Check-Override` per override used, so what a merge relied on
+ * outlives the runs. A merge no requirement applies to behaves as before, and
+ * its answer carries no `checks`.
+ *
+ * A merge whose source is `main` is not gated (decided 2026-11-15, Amos;
+ * ADR-0070's note of that date): that merge is how a branch brings `main`
+ * in, which step 1 asks of every gated merge, and its target's head is never
+ * in `main`, so the gate would refuse the one action that satisfies it. What
+ * `main` holds passed the gate into `main`.
  */
 branches.post('/:name/merge', async (c) => {
   const { name: targetName } = c.req.param();
@@ -290,6 +336,7 @@ branches.post('/:name/merge', async (c) => {
   if (sourceName === targetName) throw new ApiError(400, 'bad_request', 'A branch cannot be merged into itself');
   const dryRun = envelope.dryRun === true;
   if (envelope.dryRun !== undefined && typeof envelope.dryRun !== 'boolean') throw new ApiError(400, 'bad_request', 'dryRun must be a boolean');
+  const overrides = parseOverrides(envelope.overrides);
 
   const target = storeFor(c, { branch: targetName });
   const who = await resolveUser(c);
@@ -312,6 +359,23 @@ branches.post('/:name/merge', async (c) => {
     return c.json({ commit: targetHead.id, ...sides, upToDate: true, ...(dryRun ? { dryRun: true, conflicts: [], violations: [] } : {}) });
   }
 
+  // The gate's requirements, read once; a merge from main is how a branch brings main in, and is not gated.
+  const required = sourceName === REGISTRY_BRANCH ? [] : requirementsFor((await activeRequirements(registry(c))).requirements, targetName, sourceName);
+  for (const [check] of overrides) {
+    const named = required.filter((r) => r.check === check && r.level !== 'Advisory');
+    if (!named.length) throw new ApiError(400, 'bad_request', `overrides names ${check}, which no required check of this merge is`, { check });
+    await requirePermission(c, who, { permission: 'override_check', branch: targetName, check, locked: named.some((r) => r.locked === true) });
+  }
+  const verdicts = (): CheckVerdict[] => verdictsOf(required, runsOf(c), sourceHead.id, overrides);
+  // Step 1: a verdict on the source's head is a verdict on what lands only when the source holds the target's head.
+  const bringInFirst = base !== targetHead.id && required.some((r) => r.level !== 'Advisory' && !overrides.has(String(r.check)));
+  if (bringInFirst && !dryRun) {
+    throw new ApiError(409, 'bring_in_first', `${targetName} has commits ${sourceName} does not hold, and this merge has required checks; merge ${targetName} into ${sourceName}, let the checks run on the result, then merge`, {
+      ...sides,
+      checks: verdicts(),
+    });
+  }
+
   // The check, on a transient branch cut at the target's head.
   const transientName = `operator-merge-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
   await target.createBranch(transientName, { commit: targetHead.id });
@@ -326,7 +390,7 @@ branches.post('/:name/merge', async (c) => {
   }
   if (dryRun) {
     setEtag(c, targetHead.id);
-    return c.json({ ...sides, upToDate: false, dryRun: true, conflicts, violations });
+    return c.json({ ...sides, upToDate: false, dryRun: true, conflicts, violations, ...(required.length ? { checks: verdicts(), bringInFirst } : {}) });
   }
   if (conflicts.length) {
     throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflicts.length} field(s)`, { ...sides, conflicts });
@@ -338,6 +402,19 @@ branches.post('/:name/merge', async (c) => {
     });
   }
 
+  // Steps 2 and 3, read as late as may be so that a run posted during the check counts.
+  const found = verdicts();
+  const stopping = found.filter(blocks);
+  if (stopping.some((v) => v.conclusion !== 'pending')) {
+    const failed = stopping.filter((v) => v.conclusion !== 'pending').map((v) => v.check);
+    throw new ApiError(422, 'checks_failed', `Merging ${sourceName} into ${targetName} needs ${failed.join(', ')} to pass at ${sourceHead.id}; ${targetName} is unchanged`, { ...sides, failed, checks: found });
+  }
+  if (stopping.length) {
+    const pending = stopping.map((v) => v.check);
+    throw new ApiError(409, 'checks_pending', `Merging ${sourceName} into ${targetName} waits for ${pending.join(', ')} to report on ${sourceHead.id}`, { ...sides, pending, checks: found });
+  }
+  const message = checkTrailers(found).reduce(withTrailer, commitMessage(who, envelope.message));
+
   // The checked result lands only on the head it was checked against (check AK: apply takes no precondition).
   const result = await target.exclusive(async () => {
     const now = await target.head();
@@ -348,7 +425,7 @@ branches.post('/:name/merge', async (c) => {
       base,
       source: sourceHead.id,
       author,
-      message: commitMessage(who, envelope.message),
+      message,
       metadata: mergeMetadata(sourceHead.id),
     });
   });
@@ -358,7 +435,7 @@ branches.post('/:name/merge', async (c) => {
     throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflictsNow.length} field(s)`, { ...sides, conflicts: conflictsNow });
   }
   setEtag(c, result.commit);
-  return c.json({ commit: result.commit, ...sides, upToDate: false });
+  return c.json({ commit: result.commit, ...sides, upToDate: false, ...(found.length ? { checks: found } : {}) });
 });
 
 /**

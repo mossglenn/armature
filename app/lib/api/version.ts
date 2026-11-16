@@ -66,12 +66,13 @@ export const CAPABILITIES: Record<string, Capability> = {
   'armature/export': { fallback: 'reject', routes: ['/api/v1/export'], settings: { profiles: ['full', 'pseudonymous', 'institutional'] } },
   /**
    * Check runs and the requirements that apply to a merge (ADR-0070 decisions 3 to 5; routes/checks.ts), and since
-   * 2026-11-15 the event feed (decision 2; routes/events.ts), both roles; the gate joins it when it is built.
+   * 2026-11-15 the event feed (decision 2; routes/events.ts), both roles, and the merge gate (decisions 6 and 7;
+   * routes/branches.ts), which `gate` names the actions of: `merge` on a remote hub, where merges happen.
    */
   'armature/checks': {
     fallback: 'reject',
     routes: ['/api/v1/checks', '/api/v1/events'],
-    settings: { runsKept: RUNS_KEPT, conclusions: [...CONCLUSIONS], events: [...EVENT_TYPES], eventsPage: EVENTS_PAGE, eventsWait: EVENTS_WAIT, eventsBacklog: EVENTS_BACKLOG },
+    settings: { runsKept: RUNS_KEPT, conclusions: [...CONCLUSIONS], events: [...EVENT_TYPES], eventsPage: EVENTS_PAGE, eventsWait: EVENTS_WAIT, eventsBacklog: EVENTS_BACKLOG, gate: ['merge'] },
   },
   /** What a tool asks a hub about itself, and since 2026-11-05 the two health probes (routes/health.ts). */
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema', '/api/v1/health'], settings: {} },
