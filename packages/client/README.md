@@ -1,6 +1,6 @@
 # @armature/client
 
-A thin typed client for the Armature API: every `/api/v1` route as a function, grouped as [the API reference](../../docs/api.md) groups them (`documents`, `branches`, `users`, `intelligence`, `export`, and on a workspace hub `workspace`). It adds nothing the routes do not have. What it carries so a plugin need not:
+A thin typed client for the Armature API: every `/api/v1` route as a function, grouped as [the API reference](../../docs/api.md) groups them (`documents`, `branches`, `users`, `checks`, `events`, `intelligence`, `export`, and on a workspace hub `workspace`). It adds nothing the routes do not have. What it carries so a plugin need not:
 
 - the ref: `{ branch }` or `{ ref: '<commit-id>' }` on every read, `main` when neither;
 - the commit every response was served from or created, read from the `ETag` and returned as `commit`;
@@ -33,6 +33,20 @@ try {
   if (err instanceof HubError && err.code === 'invariant_violation') console.log(err.details.violations);
 }
 ```
+
+**Checks and the event feed (ADR-0070; since 2026-11-13 and 2026-11-15).** A tool that reacts to changes pulls them, and a tool that judges a commit posts a verdict the hub can require before a merge:
+
+```ts
+let { data: { cursor } } = await hub.events.since();                        // no events, a cursor at the present
+const { data } = await hub.events.since(cursor, { types: ['commit'], wait: 30 });   // held open until a commit lands, or 30 s
+cursor = data.cursor;
+
+const { data: bound } = await hub.checks.requirements({ target: 'main', from: 'round-3' });
+await hub.checks.report({ check: 'lint/team', commit: data.events[0].commit!, branch: 'round-3',
+  conclusion: 'pass', paramsHash: bound.requirements[0].paramsHash });      // the hash is copied, never computed
+```
+
+`branches.merge` then answers a gated merge with `HubError` codes `bring_in_first`, `checks_pending` or `checks_failed`, each with `details.checks` (one `CheckVerdict` per requirement that applied), and takes `overrides: [{ check, reason }]` and `dryRun`; on a workspace hub `workspace.push` and `workspace.deliver` take `overrides` too. A client `timeout` (milliseconds; none by default) shorter than the `wait` asked for ends a held `events.since` first, so set it above the wait. The [schema guide](../../docs/schema-guide.md) §13.5 is the walk-through.
 
 **Testing a plugin without a server.** `createClient` takes a `fetch`. Hand it a Hono app's `request` and every call runs in-process; the hub's own contract test does exactly this (`app/lib/api/client.test.ts`):
 
