@@ -6,29 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Backend } from '@/lib/backend';
-import { isVerdicts, stops, type CheckVerdict, type CommitEntry, type Refusal, type RemoveResult, type WorkspaceStatus } from '@/lib/types';
+import { isVerdicts, stops, type BringInResult, type CheckVerdict, type CommitEntry, type DeliverResult, type PushResult, type Refusal, type RemoveResult, type WorkspaceStatus } from '@/lib/types';
 import { shortCommit } from '@/lib/utils';
 import { useRequest } from '@/lib/useShell';
 import { StatusBadges } from './Workspaces';
-
-interface PushResult {
-  pushed: unknown[];
-  upToDate: boolean;
-  checks?: CheckVerdict[];
-}
-interface BringInResult {
-  upToDate: boolean;
-  broughtIn?: { local: string; documents: number };
-}
-interface DeliverResult {
-  delivered: { commit: string; upToDate: boolean };
-  deleted: boolean;
-  checks?: CheckVerdict[];
-  /** A dry run: what the remote's merge into main would find, nothing changed. */
-  dryRun?: true;
-  conflicts?: unknown[];
-  violations?: unknown[];
-}
 
 /** The two actions a gate stops: a push, by the person's own checks; a delivery, by the instance's. */
 type Gated = 'push' | 'deliver';
@@ -66,6 +47,10 @@ export function removedSentence(branch: string, result: RemoveResult): string {
   return `${branch} is removed from this machine. The remote keeps the branch, since it has work main does not; clone it again to go on with it.`;
 }
 
+/** Why the remote was not asked, as the status says it: unreachable, or for want of a sign-in to ask with. */
+export const notAsked = (reason?: 'signed_out' | 'issuer_unreachable'): string =>
+  reason === 'signed_out' ? 'You are signed out, so the remote was not asked' : reason === 'issuer_unreachable' ? 'Your sign-in provider could not be reached, so the remote was not asked' : 'The remote could not be reached';
+
 /** Commit messages are stored with the hub's trailers (Armature-Workspace-Commit and the like); the page shows the person's words. */
 const firstLine = (message: string) => message.split('\n')[0] ?? message;
 
@@ -98,15 +83,24 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   /** The verdicts the last push, delivery or dry run answered with when it was not refused. */
   const [relied, setRelied] = useState<{ action: Gated; checks: CheckVerdict[] } | undefined>();
 
-  const load = useCallback(async () => {
-    const [s, c] = await Promise.all([run<WorkspaceStatus>('status', { workspace: branch }), run<{ commits: CommitEntry[] }>('commits', { workspace: branch, count: 50 })]);
-    if (s.ok) setStatus(s.body);
-    else setRefusal(s);
-    if (c.ok) setCommits(c.body.commits);
-  }, [run, branch]);
+  /**
+   * Reads the status and the commits. `afterRefusal`: an action was just refused, and its refusal
+   * stays on the page whatever this read says; the read still runs, since a refused push may have
+   * landed some of its commits and a refused delivery may have merged (the 2026-11-09 review's P7).
+   */
+  const load = useCallback(
+    async (afterRefusal = false) => {
+      const [s, c] = await Promise.all([run<WorkspaceStatus>('status', { workspace: branch }), run<{ commits: CommitEntry[] }>('commits', { workspace: branch, count: 50 })]);
+      if (s.ok) setStatus(s.body);
+      else if (!afterRefusal) setRefusal(s);
+      if (c.ok) setCommits(c.body.commits);
+    },
+    [run, branch]
+  );
   useEffect(() => void load(), [load]);
 
-  const act = async <T,>(type: string, fields: Record<string, unknown>, said: (body: T) => string) => {
+  /** `leaves`: the action removes the workspace when it succeeds, so nothing is read again here: the page is about to be left, and a status of a workspace that is gone is a 404 (P7). */
+  const act = async <T,>(type: string, fields: Record<string, unknown>, said: (body: T) => string, leaves: (body: T) => boolean = () => false) => {
     setRefusal(undefined);
     setDone(undefined);
     setGate(undefined);
@@ -115,12 +109,14 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
     const gated = type === 'push' || type === 'deliver' ? type : undefined;
     if (!outcome.ok) {
       if (gated && GATE_CODES.includes(outcome.refusal.error) && isVerdicts(outcome.refusal.checks)) setGate({ action: gated, checks: outcome.refusal.checks });
-      return setRefusal(outcome);
+      setRefusal(outcome);
+      void load(true);
+      return undefined;
     }
     const checks = (outcome.body as { checks?: unknown } | null)?.checks;
     if (gated && isVerdicts(checks) && checks.length) setRelied({ action: gated, checks });
     setDone(said(outcome.body));
-    await load();
+    if (!leaves(outcome.body)) await load();
     return outcome.body;
   };
 
@@ -130,7 +126,8 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
       'deliver',
       // A dry run commits nothing, so it needs no reason of its own; the route still asks for a message.
       { message: deliverMessage.trim() || (extra.dryRun ? 'Asking what a delivery would find' : ''), ...(deleteAfter && !extra.dryRun ? { deleteWorkspace: true } : {}), ...extra },
-      (r) => (r.dryRun ? dryRunSentence(r) : r.deleted ? `Delivered into main as ${shortCommit(r.delivered.commit)}; the workspace is deleted.` : `Delivered into main as ${shortCommit(r.delivered.commit)}.`)
+      (r) => (r.dryRun ? dryRunSentence(r) : r.deleted ? `Delivered into main as ${shortCommit(r.delivered.commit)}; the workspace is deleted.` : `Delivered into main as ${shortCommit(r.delivered.commit)}.`),
+      (r) => r.deleted === true
     ).then((r) => {
       if (!r || r.dryRun) return;
       if (r.deleted) back(`${branch} is delivered into main and deleted, here and on the remote.`);
@@ -146,7 +143,18 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
       <PageHeader title={branch}>{status ? <StatusBadges status={status} /> : 'Reading the workspace…'}</PageHeader>
 
       <div className="rounded-lg border" aria-label="Unpushed commits">
-        <p className="border-b px-4 py-2 text-sm font-medium">{unpushed.length ? `${unpushed.length} commit${unpushed.length === 1 ? '' : 's'} not yet on the remote` : 'Everything here is on the remote'}</p>
+        {/* Nothing is said about the remote until the status is read: with none, "everything is on the remote" was a guess, shown under an alert to a person offline with commits waiting (the 2026-11-09 review's P1). */}
+        <p className="border-b px-4 py-2 text-sm font-medium">
+          {status === undefined
+            ? refusal
+              ? 'The workspace could not be read, so what is waiting to be pushed is not known.'
+              : 'Reading the workspace…'
+            : status.unpushed > 0
+              ? `${commitsOf(status.unpushed)} not yet on the remote`
+              : 'reachable' in status.remote
+                ? `Nothing here is waiting to be pushed. ${notAsked(status.remote.reason)}, so whether it has moved is not known.`
+                : 'Everything here is on the remote'}
+        </p>
         {unpushed.length > 0 && (
           <ul className="divide-y text-sm">
             {unpushed.map((commit) => (
@@ -257,7 +265,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
               disabled={busy !== undefined}
               onClick={() => {
                 setConfirmingRemove(false);
-                void act<RemoveResult>('remove', {}, (r) => removedSentence(branch, r)).then((r) => r && back(removedSentence(branch, r)));
+                void act<RemoveResult>('remove', {}, (r) => removedSentence(branch, r), () => true).then((r) => r && back(removedSentence(branch, r)));
               }}
             >
               Remove
@@ -290,7 +298,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
                     const discard = confirmingDiscard;
                     setConfirmingDiscard(undefined);
                     // Refused (the count moved since it was shown): the page reads the status again, so the next confirmation names what is there.
-                    void act<RemoveResult>('remove', { discard }, (r) => removedSentence(branch, r)).then((r) => (r ? back(removedSentence(branch, r)) : void load()));
+                    void act<RemoveResult>('remove', { discard }, (r) => removedSentence(branch, r), () => true).then((r) => r && back(removedSentence(branch, r)));
                   }}
                 >
                   Discard and remove

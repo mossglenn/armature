@@ -17,6 +17,8 @@ type Page = { name: 'connect' } | { name: 'signIn' } | { name: 'workspaces'; not
 /** Where the program opens (docs/desktop-program-plan.md §4, in the order a person meets the pages). */
 function firstPage(state: ShellState): Page {
   const started = state.started;
+  // The hub could not start (a port another program holds): the settings are where that is put right (the 2026-11-09 review's P4).
+  if (state.core === 'failed') return { name: 'settings' };
   if (!started || started.needs === 'connect' || started.needs === 'user') return { name: 'connect' };
   if (started.resolver === 'oidc' && started.signedIn !== true) return { name: 'signIn' };
   return { name: 'workspaces' };
@@ -45,8 +47,14 @@ export function App({ backend }: { backend: Backend }) {
    */
   const [warning, setWarning] = useState<string | undefined>();
 
+  /** The hub is being started or stopped from this window: one at a time (the 2026-11-09 review's P3). */
+  const [hubBusy, setHubBusy] = useState(false);
+
+  // The opening page is chosen once the core has answered its `start`, not from the first state the
+  // window happens to read: on a cold launch that state is still `starting`, with nothing in it, and
+  // a connected person opened on an empty Connect page (the 2026-11-09 review's P5).
   useEffect(() => {
-    if (state && !page) setPage(firstPage(state));
+    if (state && !page && state.core !== 'starting') setPage(firstPage(state));
   }, [state, page]);
   useEffect(() => {
     if (link) setPage({ name: 'connect' });
@@ -93,15 +101,29 @@ export function App({ backend }: { backend: Backend }) {
         <div className="mt-auto text-xs" aria-label="The hub">
           <p className={cn('font-medium', state?.core === 'failed' && 'text-destructive')}>{hubLine(state)}</p>
           {running && typeof state?.started?.url === 'string' && <p className="text-muted-foreground font-mono break-all">{state.started.url}</p>}
-          {state?.started?.started !== undefined && (
-            <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => void backend.setHub(!running).then(() => refresh())}>
-              {running ? 'Pause the hub' : 'Resume the hub'}
+          {(state?.started?.started !== undefined || state?.core === 'failed') && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 w-full"
+              disabled={hubBusy}
+              onClick={() => {
+                setHubBusy(true);
+                void backend
+                  .setHub(!running)
+                  .catch(() => undefined)
+                  .then(() => refresh())
+                  .finally(() => setHubBusy(false));
+              }}
+            >
+              {running ? 'Pause the hub' : state?.core === 'failed' ? 'Start the hub' : 'Resume the hub'}
             </Button>
           )}
         </div>
       </nav>
       <main className="min-w-0 flex-1 overflow-auto p-8">
         {state?.update && <UpdateNotice backend={backend} update={state.update} blocked={state.actions?.[0]} refresh={() => void refresh()} />}
+        {!page && <p className="text-muted-foreground text-sm">Starting the hub…</p>}
         {warning && (
           <p className="mb-4 max-w-2xl rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
             {warning}

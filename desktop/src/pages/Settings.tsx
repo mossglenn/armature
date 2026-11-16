@@ -10,6 +10,9 @@ import type { Backend, ShellState } from '@/lib/backend';
 import type { Profile, Refusal, Settings as SettingsShape, SettingsReply, WorkspaceRecord } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
+/** A field's text as a whole number of 0 or more, or undefined when it is not one. */
+const wholeNumber = (text: string): number | undefined => (/^\d+$/.test(text.trim()) ? Number(text.trim()) : undefined);
+
 /**
  * Settings (docs/desktop-program-plan.md §4, item 6; §9): the remote (changed on the connect page,
  * and only while no workspace exists), the folder with the synced-folder warning, the port, the
@@ -31,6 +34,9 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   const [version, setVersion] = useState<string | undefined>();
   const [remoteVersions, setRemoteVersions] = useState<string[] | 'unreachable' | undefined>();
   const [checked, setChecked] = useState<{ busy: boolean; line?: string }>({ busy: false });
+  /** What the page refuses to send: a port or a count that is not a number. */
+  const [problem, setProblem] = useState<string | undefined>();
+  const [restarting, setRestarting] = useState(false);
   /** The workspaces a check can be bound to; none when the hub is not running, and a check can still bind every workspace. */
   const [workspaces, setWorkspaces] = useState<string[]>([]);
 
@@ -55,11 +61,18 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   const save = async () => {
     if (!settings) return;
     setRefusal(undefined);
+    setProblem(undefined);
     setSaved(false);
+    // Checked here, not left to the core: `Number('31o1')` is NaN, which travels as null, which the
+    // core reads as "restore the default", and the page then said "Saved." (the 2026-11-09 review's P2).
+    const port = wholeNumber(form.port);
+    const snapshots = wholeNumber(form.snapshots);
+    if (port === undefined || port < 1 || port > 65535) return setProblem('The port is a whole number from 1 to 65535.');
+    if (snapshots === undefined) return setProblem('The number of older commits kept is a whole number, 0 or more.');
     const set: Record<string, unknown> = {
       folder: form.folder.trim() ? form.folder.trim() : null,
-      port: Number(form.port),
-      snapshots: Number(form.snapshots),
+      port,
+      snapshots,
     };
     if (settings.identity?.resolver === 'header') set.user = form.user.trim() || null;
     const outcome = await run<SettingsReply>('settings', { set });
@@ -105,10 +118,21 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
           : undefined))
       : undefined;
 
+  // A hub that is not running is started, not stopped first: after a start that failed (a port in
+  // use) there is nothing to stop, and this is the way back without quitting (the 2026-11-09 review's P4).
+  const hubRunning = state?.core === 'running';
   const restartHub = async () => {
-    await backend.setHub(false);
-    await backend.setHub(true);
-    setRestart(false);
+    setRestarting(true);
+    try {
+      if (hubRunning) await backend.setHub(false);
+      await backend.setHub(true);
+      setRestart(false);
+      setSaved(false);
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRestarting(false);
+    }
   };
 
   const signOut = async () => {
@@ -182,15 +206,20 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
           <Button type="submit" disabled={busy !== undefined || !settings}>
             Save
           </Button>
-          {saved && !restart && <span className="text-muted-foreground text-sm">Saved.</span>}
+          {saved && !restart && hubRunning && <span className="text-muted-foreground text-sm">Saved.</span>}
         </div>
-        {restart && (
+        {(restart || (saved && !hubRunning && settings?.remote !== undefined)) && (
           <div className="flex items-center gap-3 rounded-md bg-amber-50 p-2 text-sm text-amber-900" role="status">
-            The hub uses these from its next start.
-            <Button size="sm" variant="outline" onClick={() => void restartHub()}>
-              Restart the hub
+            {hubRunning ? 'The hub uses these from its next start.' : 'Saved. The hub is not running.'}
+            <Button type="button" size="sm" variant="outline" disabled={restarting} onClick={() => void restartHub()}>
+              {hubRunning ? 'Restart the hub' : 'Start the hub'}
             </Button>
           </div>
+        )}
+        {problem && (
+          <p className="text-destructive text-sm" role="alert">
+            {problem}
+          </p>
         )}
         {refusal && <RefusalNotice {...refusal} />}
       </form>

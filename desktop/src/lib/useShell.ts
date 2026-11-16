@@ -31,21 +31,29 @@ export function outcomeOf<T>(reply: CoreReply<unknown>): Outcome<T> {
   return { ok: false, status: reply.status, refusal };
 }
 
-/** A request that tracks whether it is running, so a page disables its button meanwhile. */
+/**
+ * Requests that track what is running, so a page disables its buttons meanwhile. Every request in
+ * flight is counted, and `busy` is the oldest of them: a push stays the page's `busy` while a
+ * status read made during it comes and goes. One slot that any finishing request cleared let a
+ * returning read enable Deliver and Remove in the middle of a push (the 2026-11-09 review's P3).
+ */
 export function useRequest(backend: Backend) {
-  const [busy, setBusy] = useState<string | undefined>();
+  const [inFlight, setInFlight] = useState<string[]>([]);
   const run = useCallback(
     async <T>(type: string, fields?: Record<string, unknown>): Promise<Outcome<T>> => {
-      setBusy(type);
+      setInFlight((all) => [...all, type]);
       try {
         return outcomeOf<T>(await backend.request(type, fields));
       } catch (err) {
         return { ok: false, status: 0, refusal: { error: 'shell_error', message: err instanceof Error ? err.message : String(err) } };
       } finally {
-        setBusy(undefined);
+        setInFlight((all) => {
+          const at = all.indexOf(type);
+          return at < 0 ? all : [...all.slice(0, at), ...all.slice(at + 1)];
+        });
       }
     },
     [backend]
   );
-  return { run, busy };
+  return { run, busy: inFlight[0] };
 }

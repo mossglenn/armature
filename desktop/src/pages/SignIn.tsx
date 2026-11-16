@@ -18,9 +18,12 @@ export function SignIn({ backend, state, onDone }: { backend: Backend; state?: S
   const [opened, setOpened] = useState<string | undefined>();
   const [person, setPerson] = useState<{ person: Person; staysSignedIn: boolean } | undefined>();
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
+  /** A sign-in begun on an earlier visit to this page is still waiting on the browser. */
+  const [waitingElsewhere, setWaitingElsewhere] = useState(false);
   const remote = typeof state?.started?.remote === 'string' ? state.started.remote : 'the remote';
   // Where the browser opens, as the settings keep it, so the person sees the provider before it does.
   const issuer = typeof state?.started?.issuer === 'string' ? state.started.issuer : undefined;
+  const signedIn = state?.started?.signedIn === true;
 
   useEffect(
     () =>
@@ -30,13 +33,31 @@ export function SignIn({ backend, state, onDone }: { backend: Backend; state?: S
     [backend]
   );
 
+  // Already signed in (an earlier visit, or the keychain's sign-in at start): the page says who,
+  // where it used to offer "Sign in" again (the 2026-11-09 review's P8).
+  useEffect(() => {
+    if (!signedIn) return;
+    void run<{ person: Person; staysSignedIn: boolean }>('whoAmI').then((outcome) => outcome.ok && setPerson(outcome.body));
+  }, [signedIn, run]);
+
   const signIn = async (offline = true) => {
     setRefusal(undefined);
     setOpened(undefined);
+    setWaitingElsewhere(false);
     const outcome = await run<{ person: Person; staysSignedIn: boolean }>('signIn', offline ? {} : { offline: false });
     setOpened(undefined);
-    if (outcome.ok) setPerson(outcome.body);
-    else setRefusal(outcome);
+    if (outcome.ok) return setPerson(outcome.body);
+    // The sign-in this page began on an earlier visit is still waiting: say so, with the way out, not a bare refusal.
+    if (outcome.refusal.error === 'sign_in_in_progress') return setWaitingElsewhere(true);
+    // Cancelled from this page: nothing went wrong, so nothing is shown but the button again.
+    if (outcome.refusal.error === 'sign_in_cancelled') return;
+    setRefusal(outcome);
+  };
+
+  const cancel = async () => {
+    await run('cancelSignIn');
+    setWaitingElsewhere(false);
+    setOpened(undefined);
   };
 
   if (person) {
@@ -67,6 +88,17 @@ export function SignIn({ backend, state, onDone }: { backend: Backend; state?: S
           <p className="font-medium">Continue in your browser</p>
           <p className="text-muted-foreground mt-1 text-sm">The program is waiting for your identity provider. Come back here when it says you are signed in.</p>
           {opened && <p className="text-muted-foreground mt-2 text-xs break-all">If no browser opened, go to {opened}</p>}
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => void cancel()}>
+            Cancel the sign-in
+          </Button>
+        </div>
+      ) : waitingElsewhere ? (
+        <div className="max-w-xl rounded-lg border p-4" role="status">
+          <p className="font-medium">A sign-in is already waiting in your browser</p>
+          <p className="text-muted-foreground mt-1 text-sm">Finish it there, or cancel it and start again.</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => void cancel()}>
+            Cancel the sign-in
+          </Button>
         </div>
       ) : (
         <Button onClick={() => void signIn()}>Sign in</Button>
