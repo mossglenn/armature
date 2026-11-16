@@ -131,12 +131,77 @@ describe('signIn', () => {
     const cancelled = signIn({ issuer: ISSUER, clientId: CLIENT, openBrowser: () => controller.abort(), fetch: issuer.fetch, signal: controller.signal });
     await expect(cancelled).rejects.toMatchObject({ code: 'sign_in_cancelled' });
   });
+
+  it('is cancelled by a cancel that arrives while the metadata is read, and opens no browser (the 2026-11-09 review’s C9)', async () => {
+    const issuer = fakeIssuer();
+    const controller = new AbortController();
+    let opened = 0;
+    const slow: FetchLike = async (input, init) => {
+      // The person cancels while the provider is still answering the first request.
+      controller.abort();
+      return issuer.fetch(input, init);
+    };
+    await expect(signIn({ issuer: ISSUER, clientId: CLIENT, openBrowser: () => void (opened += 1), fetch: slow, signal: controller.signal })).rejects.toMatchObject({ status: 409, code: 'sign_in_cancelled' });
+    expect(opened).toBe(0);
+  });
+
+  it('tells a provider in trouble from a refusal at the exchange, and follows no redirect with the code (C4, C7)', async () => {
+    const issuer = fakeIssuer();
+    const inits: RequestInit[] = [];
+    const troubled: FetchLike = async (input, init) => {
+      if (String(input) === `${ISSUER}/token`) {
+        inits.push(init ?? {});
+        return new Response('<html>Bad Gateway</html>', { status: 502 });
+      }
+      return issuer.fetch(input, init);
+    };
+    await expect(signIn({ issuer: ISSUER, clientId: CLIENT, openBrowser: issuer.browser, fetch: troubled })).rejects.toMatchObject({ status: 503, code: 'issuer_unreachable', details: { status: 502 } });
+    expect(inits[0].redirect).toBe('error');
+    expect(inits[0].signal).toBeInstanceOf(AbortSignal);
+  });
 });
 
 describe('issuerMetadata', () => {
   it('reads the endpoints, and refuses metadata naming another issuer', async () => {
     expect(await issuerMetadata(`${ISSUER}/`, fakeIssuer().fetch)).toEqual({ issuer: ISSUER, authorizationEndpoint: `${ISSUER}/auth`, tokenEndpoint: `${ISSUER}/token` });
     await expect(issuerMetadata(ISSUER, fakeIssuer({ metadataIssuer: 'https://evil.example.com' }).fetch)).rejects.toMatchObject({ status: 502, code: 'issuer_error' });
+  });
+
+  it('refuses an issuer, or an endpoint of one, that is not https, except on this machine (the 2026-11-09 review’s C7)', async () => {
+    const serving = (metadata: Record<string, string>): FetchLike => async () => Response.json(metadata);
+    const refused = { status: 400, code: 'insecure_issuer' };
+    // The issuer itself: nothing is asked of it.
+    let asked = 0;
+    await expect(
+      issuerMetadata('http://login.example.edu/realms/armature', async () => {
+        asked += 1;
+        return Response.json({});
+      })
+    ).rejects.toMatchObject(refused);
+    expect(asked).toBe(0);
+    // An https issuer naming a plain or a non-web endpoint.
+    for (const [name, endpoint] of [
+      ['token_endpoint', 'http://login.example.edu/token'],
+      ['authorization_endpoint', 'file:///Applications/Calculator.app'],
+      ['authorization_endpoint', 'not an address'],
+    ]) {
+      const metadata = { issuer: ISSUER, authorization_endpoint: `${ISSUER}/auth`, token_endpoint: `${ISSUER}/token`, [name]: endpoint };
+      await expect(issuerMetadata(ISSUER, serving(metadata)), endpoint).rejects.toMatchObject({ ...refused, details: { endpoint: name } });
+    }
+    // An endpoint on another origin is a provider's to choose, and a provider beside the program for a rehearsal is plain http on loopback.
+    const elsewhere = { issuer: ISSUER, authorization_endpoint: 'https://auth.example.org/authorize', token_endpoint: 'https://tokens.example.org/token' };
+    expect(await issuerMetadata(ISSUER, serving(elsewhere))).toMatchObject({ authorizationEndpoint: elsewhere.authorization_endpoint, tokenEndpoint: elsewhere.token_endpoint });
+    const local = 'http://127.0.0.1:8080/realms/armature';
+    expect(await issuerMetadata(local, serving({ issuer: local, authorization_endpoint: `${local}/auth`, token_endpoint: 'http://localhost:8080/token' }))).toMatchObject({ issuer: local });
+  });
+
+  it('gives the provider a deadline for its metadata (C9)', async () => {
+    let init: RequestInit | undefined;
+    await issuerMetadata(ISSUER, async (_input, given) => {
+      init = given;
+      return Response.json({ issuer: ISSUER, authorization_endpoint: `${ISSUER}/auth`, token_endpoint: `${ISSUER}/token` });
+    });
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('answers an issuer it cannot reach 503', async () => {

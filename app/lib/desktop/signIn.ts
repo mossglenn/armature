@@ -69,18 +69,46 @@ export interface SignInOptions {
 }
 
 export const SIGN_IN_TIMEOUT_MS = 5 * 60_000;
+/** Each request to the identity provider ends within this; the runtime's own default is five minutes (the 2026-11-09 review's C9). */
+export const ISSUER_CALL_MS = 15_000;
 const base64url = (bytes: Buffer) => bytes.toString('base64url');
 
 /** A whole-number lifetime in seconds from a token response, five minutes when absent. */
 const lifetimeOf = (value: unknown) => (typeof value === 'number' && value > 0 ? value : 300);
 
-/** The issuer's metadata; 503 `issuer_unreachable` when it cannot be read, 502 `issuer_error` when it is not what an issuer serves. */
+const isLoopbackHost = (host: string) => host === 'localhost' || host === '[::1]' || host.endsWith('.localhost') || /^127\.\d+\.\d+\.\d+$/.test(host);
+
+/**
+ * Whether the program may send a credential to `address`: `https`, or `http` to this machine
+ * alone (a provider run beside the program for a rehearsal). The remote was already held to
+ * this (`insecure_remote`); the issuer and its endpoints were not, and an authorization code or
+ * a refresh token posted over plain `http` is readable on the way (the 2026-11-09 review's C7).
+ */
+export function isSecureAddress(address: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return false;
+  }
+  return url.protocol === 'https:' || (url.protocol === 'http:' && isLoopbackHost(url.hostname));
+}
+
+/**
+ * The issuer's metadata; 503 `issuer_unreachable` when it cannot be read, 502 `issuer_error` when
+ * it is not what an issuer serves, 400 `insecure_issuer` when the issuer or one of its endpoints
+ * is not `https` (or this machine). An endpoint on another origin than the issuer's is allowed:
+ * providers do serve their endpoints from other hosts.
+ */
 export async function issuerMetadata(issuer: string, fetchFn: FetchLike = fetch): Promise<IssuerMetadata> {
   const expected = issuer.replace(/\/+$/, '');
   const address = `${expected}/.well-known/openid-configuration`;
+  if (!isSecureAddress(expected)) {
+    throw new ApiError(400, 'insecure_issuer', `The identity provider ${expected} is not reached over https, so the program will not sign in there`, { issuer: expected });
+  }
   let res: Response;
   try {
-    res = await fetchFn(address, { headers: { Accept: 'application/json' } });
+    res = await fetchFn(address, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(ISSUER_CALL_MS) });
   } catch {
     throw new ApiError(503, 'issuer_unreachable', `The identity provider at ${expected} could not be reached`, { issuer: expected });
   }
@@ -93,14 +121,34 @@ export async function issuerMetadata(issuer: string, fetchFn: FetchLike = fetch)
   if (typeof authorization_endpoint !== 'string' || typeof token_endpoint !== 'string') {
     throw new ApiError(502, 'issuer_error', `${address} names no authorization_endpoint or token_endpoint`, { issuer: expected });
   }
+  for (const [name, endpoint] of [['authorization_endpoint', authorization_endpoint], ['token_endpoint', token_endpoint]] as const) {
+    if (!isSecureAddress(endpoint)) {
+      throw new ApiError(400, 'insecure_issuer', `${address} names the ${name} ${JSON.stringify(endpoint)}, which is not an https address, so the program will not sign in there`, { issuer: expected, endpoint: name });
+    }
+  }
   return { issuer: expected, authorizationEndpoint: authorization_endpoint, tokenEndpoint: token_endpoint };
 }
 
-/** A token endpoint's answer as tokens, or its refusal as an `ApiError`. */
+/**
+ * A token endpoint's answer as tokens, or what went wrong as an `ApiError`.
+ *
+ * Only an OAuth error answer is the provider's refusal (RFC 6749 §5.2: 400, or 401 for the
+ * client, with `error` in the body): 403 `sign_in_refused`, on which a refresh signs the person
+ * out. A 5xx or a 429 is the provider or a proxy before it in trouble, 503 `issuer_unreachable`,
+ * and any other answer without tokens is 502 `issuer_error`; neither is the person's to fix by
+ * signing in again, and neither clears a kept token (the 2026-11-09 review's C4: a proxy's 502
+ * during the provider's restart signed everyone out and deleted the keychain's entry).
+ */
 export async function tokensFrom(res: Response, now: () => number, what: string): Promise<Tokens> {
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    const reason = typeof body.error === 'string' ? body.error : `status_${res.status}`;
+    if (res.status >= 500 || res.status === 429) {
+      throw new ApiError(503, 'issuer_unreachable', `The identity provider answered ${res.status} to ${what}; it is busy or restarting, so try again shortly`, { status: res.status });
+    }
+    if ((res.status !== 400 && res.status !== 401) || typeof body.error !== 'string') {
+      throw new ApiError(502, 'issuer_error', `The identity provider answered ${res.status} to ${what}, with no reason a token endpoint gives`, { status: res.status });
+    }
+    const reason = body.error;
     const description = typeof body.error_description === 'string' ? body.error_description : undefined;
     throw new ApiError(403, 'sign_in_refused', `The identity provider refused ${what}: ${reason}${description ? ` (${description})` : ''}`, {
       reason,
@@ -127,7 +175,11 @@ export async function signIn(options: SignInOptions): Promise<Tokens> {
   const fetchFn = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const offline = options.offline ?? true;
+  const cancelled = () => new ApiError(409, 'sign_in_cancelled', 'The sign-in was cancelled');
   const metadata = await issuerMetadata(options.issuer, fetchFn);
+  // A cancel that arrived while the metadata was read: no listener was there yet to hear it, and
+  // the browser would open on a sign-in nobody is waiting for (the 2026-11-09 review's C9).
+  if (options.signal?.aborted) throw cancelled();
 
   const verifier = base64url(randomBytes(32));
   const challenge = base64url(createHash('sha256').update(verifier).digest());
@@ -177,6 +229,9 @@ export async function signIn(options: SignInOptions): Promise<Tokens> {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
           body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: options.clientId, code_verifier: verifier }).toString(),
+          // A redirect would post the code again wherever it points (C7); a silent endpoint is given up on (C9).
+          redirect: 'error',
+          signal: AbortSignal.timeout(ISSUER_CALL_MS),
         });
       } catch {
         throw new ApiError(503, 'issuer_unreachable', `The identity provider's token endpoint, ${metadata.tokenEndpoint}, could not be reached`, { issuer: metadata.issuer });
@@ -201,7 +256,7 @@ export async function signIn(options: SignInOptions): Promise<Tokens> {
     () => settle.reject(new ApiError(408, 'sign_in_timeout', 'The sign-in was not completed in the browser in time; sign in again')),
     options.timeoutMs ?? SIGN_IN_TIMEOUT_MS
   );
-  const abort = () => settle.reject(new ApiError(409, 'sign_in_cancelled', 'The sign-in was cancelled'));
+  const abort = () => settle.reject(cancelled());
   options.signal?.addEventListener('abort', abort, { once: true });
 
   try {

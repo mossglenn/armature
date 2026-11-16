@@ -30,7 +30,13 @@ import { ApiError } from '../api/errors';
  * malformed line is a bug to see in the log, not a reason to stop the hub.
  * The input's end is the shell gone (ADR-0069 decision 4), which the core
  * treats as `stop`; `closed` resolves once every request in flight has been
- * answered.
+ * answered. That wait is bounded (`drainMs`), and `onInputEnd` runs first: a
+ * request may be waiting on a person, as a sign-in waits five minutes for the
+ * browser, and the core would meanwhile hold the port and the folder's lock
+ * with no shell to speak to, so a relaunch met `folder_locked` (the
+ * 2026-11-09 review's C3). A request still running at the bound is abandoned
+ * with the hub's stop, as a crash would abandon it; a push is settled by the
+ * next one (ADR-0066 decision 2, note).
  */
 
 export type RequestId = string | number;
@@ -69,14 +75,24 @@ export interface ChannelOptions {
   output: Writable;
   /** The handler for a request's `type`; undefined answers 400 `unknown_request`. */
   handlerFor: (type: string) => Handler | undefined;
+  /**
+   * Called once when the input ends, before the requests in flight are waited for: the host ends
+   * what would otherwise keep one of them waiting on a person who is gone (a sign-in in the browser).
+   */
+  onInputEnd?: () => void;
+  /** How long `closed` waits for the requests in flight once the input has ended; ten seconds by default. */
+  drainMs?: number;
 }
 
 export interface Channel {
   /** Sends an event that belongs to no request (a log line, a rotated credential, the hub's state). */
   emit: (event: ControlEvent) => void;
-  /** Resolves once the input has ended and every request in flight has been answered. */
+  /** Resolves once the input has ended and every request in flight has been answered, or `drainMs` after the input's end, whichever is first. */
   closed: Promise<void>;
 }
+
+/** How long the channel waits for requests in flight after its input ends. */
+export const DRAIN_MS = 10_000;
 
 /** A successful answer. */
 export const ok = (body: unknown, status = 200): Answer => ({ status, body });
@@ -127,7 +143,7 @@ function parse(line: string): { request: ControlRequest } | { refused: ControlRe
 }
 
 /** Opens the channel over a pair of streams and answers each request as its handler does. */
-export function openChannel({ input, output, handlerFor }: ChannelOptions): Channel {
+export function openChannel({ input, output, handlerFor, onInputEnd, drainMs = DRAIN_MS }: ChannelOptions): Channel {
   // Each message is written whole, as one line, so a reply and an event never interleave.
   const send = (message: ControlReply | ControlEvent) => {
     output.write(`${JSON.stringify(message)}\n`);
@@ -169,7 +185,16 @@ export function openChannel({ input, output, handlerFor }: ChannelOptions): Chan
 
   const closed = new Promise<void>((resolve) => {
     lines.once('close', () => {
-      void Promise.allSettled([...inFlight]).then(() => resolve());
+      try {
+        onInputEnd?.();
+      } catch {
+        // The host's cleanup failing must not keep the channel from closing.
+      }
+      const bound = setTimeout(resolve, drainMs);
+      void Promise.allSettled([...inFlight]).then(() => {
+        clearTimeout(bound);
+        resolve();
+      });
     });
   });
 

@@ -209,6 +209,33 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('settings', { set: { user: DESIGNER, port: await freePort() } })).toMatchObject({ status: 200, body: { settings: { user: DESIGNER } } });
   });
 
+  it('reports the local token it drew at a start that then failed, at the start that succeeds (the 2026-11-09 review’s C8)', async () => {
+    // The first launch finds the port taken: the token is drawn, the hub does not start, and the reply is a refusal.
+    const port = ((await driver.ask('settings')).body!.settings as { port: number }).port;
+    const squatter = createServer();
+    await new Promise<void>((resolve) => squatter.listen(port, '127.0.0.1', resolve));
+    try {
+      expect(await driver.ask('start', { dataDir })).toMatchObject({ status: 409, body: { error: 'port_in_use', port } });
+    } finally {
+      await new Promise((resolve) => squatter.close(resolve));
+    }
+    // The next start carries no token either, so the one in force is reported: the hub enforces it, and the shell has never seen it.
+    const started = await driver.ask('start', { dataDir });
+    expect(started).toMatchObject({ status: 200, body: { started: true } });
+    const drawn = started.body!.localToken as string;
+    expect(drawn).toMatch(/^[0-9a-f]{64}$/);
+    const url = started.body!.url as string;
+    const write = (token: string) =>
+      fetch(`${url}/api/v1/workspace`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Armature-User': DESIGNER, 'Armature-Local-Token': token }, body: JSON.stringify({}) });
+    expect((await write('0'.repeat(64))).status).toBe(403);
+    expect((await write(drawn)).status).not.toBe(403);
+    expect((await driver.ask('stop')).status).toBe(200);
+    // A start that carries the keychain's token is told nothing back: the shell already has it.
+    const again = await driver.ask('start', { dataDir, localToken: drawn });
+    expect(again.body!.localToken).toBeUndefined();
+    expect((await driver.ask('stop')).status).toBe(200);
+  });
+
   it('starts the hub, drawing a local token the shell keeps, with the action routes refused to tools', async () => {
     expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 409, body: { error: 'not_started' } });
     const started = await driver.ask('start', { dataDir });
@@ -488,7 +515,8 @@ describe('the sign-in and a push through the token source, against a remote unde
 
   it('starts offline of the issuer, signed out, and says so when the remote is needed', async () => {
     const started = await driver.ask('start', { dataDir });
-    expect(started).toMatchObject({ status: 200, body: { started: true, resolver: 'oidc', signedIn: false } });
+    // The issuer and the client id come with the reply: the shell keeps the sign-in under the remote and both (C6).
+    expect(started).toMatchObject({ status: 200, body: { started: true, resolver: 'oidc', signedIn: false, issuer: ISSUER, clientId: CLIENT_ID } });
     hub = started.body!.url as string;
     localToken = started.body!.localToken as string;
     expect(exchanges).toHaveLength(0);
@@ -549,11 +577,23 @@ describe('the sign-in and a push through the token source, against a remote unde
     driver = drive({ fetch: issuer, now: () => clock });
     const started = await driver.ask('start', { dataDir, localToken });
     expect(started.body).toMatchObject({ started: true, remote: oidcRemote.url, signedIn: false });
-    expect(await driver.ask('credential', { remote: 'https://other.example.edu', refreshToken: `refresh-${refreshes}` })).toMatchObject({
+    const kept = { issuer: ISSUER, clientId: CLIENT_ID, refreshToken: `refresh-${refreshes}` };
+    expect(await driver.ask('credential', { ...kept, remote: 'https://other.example.edu' })).toMatchObject({
       status: 409,
       body: { error: 'other_remote', remote: oidcRemote.url },
     });
-    expect(await driver.ask('credential', { remote: `${oidcRemote.url}/`, refreshToken: `refresh-${refreshes}` })).toMatchObject({ status: 200, body: { signedIn: true } });
+    // A token another provider issued, or issued to another client, is not sent to the one the settings name (C6):
+    // the settings are a plain file, and a remote may change the provider its profile names.
+    const before = exchanges.length;
+    expect(await driver.ask('credential', { ...kept, remote: oidcRemote.url, issuer: 'https://login.example.net/realms/armature' })).toMatchObject({
+      status: 409,
+      body: { error: 'other_issuer', issuer: ISSUER, clientId: CLIENT_ID },
+    });
+    expect(await driver.ask('credential', { ...kept, remote: oidcRemote.url, clientId: 'another-client' })).toMatchObject({ status: 409, body: { error: 'other_issuer' } });
+    expect(await driver.ask('credential', { remote: oidcRemote.url, refreshToken: kept.refreshToken })).toMatchObject({ status: 400, body: { error: 'bad_request', field: 'issuer' } });
+    expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 401, body: { error: 'signed_out' } });
+    expect(exchanges).toHaveLength(before);
+    expect(await driver.ask('credential', { ...kept, remote: `${oidcRemote.url}/`, issuer: `${ISSUER}/` })).toMatchObject({ status: 200, body: { signedIn: true } });
     expect((await driver.ask('push', { workspace: WS })).status).toBe(200);
   });
 
@@ -569,5 +609,20 @@ describe('the sign-in and a push through the token source, against a remote unde
     expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 401, body: { error: 'signed_out' } });
     // Reads of the workspace stay local and need no sign-in.
     expect((await driver.ask('workspaces')).status).toBe(200);
+  });
+
+  it('stops at once when the shell goes while a sign-in waits on the browser, releasing the folder (the 2026-11-09 review’s C3)', async () => {
+    const lock = join(dataDir, 'workspaces', 'lock');
+    expect(existsSync(lock)).toBe(true);
+    const seen = driver.events.length;
+    const waiting = driver.ask('signIn');
+    await driver.event((m) => m.event === 'open' && driver.events.indexOf(m) >= seen);
+    const ended = Date.now();
+    driver.end();
+    expect(await waiting).toMatchObject({ status: 409, body: { error: 'sign_in_cancelled' } });
+    await driver.core.closed;
+    // The sign-in would have waited five minutes; the core is closed and the lock released within moments.
+    expect(Date.now() - ended).toBeLessThan(3000);
+    expect(existsSync(lock)).toBe(false);
   });
 });
