@@ -12,7 +12,7 @@
  * afterwards. The core runs in-process over a pair of streams, as the shell
  * would speak to it; the bundle's own life over real pipes is bundle.test.ts.
  */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
@@ -274,6 +274,46 @@ describe('the cycle through the protocol, against a remote under header', () => 
       expect((await tool('PUT', '/workspace/checks', { requirements: [] })).status).toBe(404);
     } finally {
       await rm(checks, { force: true });
+    }
+  });
+
+  it("reads and writes the owner's checks.json for the Settings page, by the hub's own check of it, and the next push is gated by what was written", async () => {
+    const file = join(dataDir, 'workspaces', 'checks.json');
+    try {
+      expect(await driver.ask('checks')).toMatchObject({ status: 200, body: { file, requirements: [] } });
+      // What the gate could not read is refused whole, every problem named, and nothing is written.
+      const bad = await driver.ask('checks', { set: { requirements: [{ check: '', level: 'Sometimes' }, { check: 'lint/mine', reporter: 'User/x' }] } });
+      expect(bad).toMatchObject({ status: 422, body: { error: 'personal_checks_invalid' } });
+      expect((bad.body!.issues as Array<{ path: string }>).map((i) => i.path)).toEqual(['requirements[0].check', 'requirements[0].level', 'requirements[1].reporter']);
+      expect(existsSync(file)).toBe(false);
+      expect(await driver.ask('checks', { set: [] })).toMatchObject({ status: 400, body: { error: 'bad_request', field: 'set' } });
+      expect(await driver.ask('checks', { set: {} })).toMatchObject({ status: 400, body: { error: 'bad_request', field: 'requirements' } });
+      expect(await driver.ask('checks', { set: { requirements: [{ check: 'lint/mine' }, { check: 'lint/mine', level: 'Advisory' }] } })).toMatchObject({ status: 400, body: { error: 'bad_request', check: 'lint/mine' } });
+
+      const set = await driver.ask('checks', { set: { requirements: [{ check: 'lint/mine', params: { strict: true }, branch: WS, rationale: 'Before anything leaves' }, { check: 'style/advice', level: 'Advisory' }] } });
+      const written = [
+        { check: 'lint/mine', branch: WS, level: 'Required', params: { strict: true }, status: 'Active', rationale: 'Before anything leaves' },
+        { check: 'style/advice', level: 'Advisory', params: {}, status: 'Active' },
+      ];
+      expect(set.status).toBe(200);
+      expect(set.body).toEqual({ file, requirements: written });
+      expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ requirements: written });
+      expect((await driver.ask('checks')).body).toEqual({ file, requirements: written });
+
+      // The hub reads the file at the next push, with no restart.
+      const GATED = `LearningNeed/desktop-edited-${stamp}`;
+      expect((await tool('PUT', `/documents/${GATED}?branch=${WS}`, { message: 'Gated by the page', document: { label: 'gated', rationale: 'r' } })).status).toBe(200);
+      expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 409, body: { error: 'checks_pending', pending: ['lint/mine'] } });
+      expect(await driver.ask('checks', { set: { requirements: [{ check: 'lint/mine', params: { strict: true }, branch: WS, status: 'Revoked' }] } })).toMatchObject({ status: 200 });
+      expect((await driver.ask('push', { workspace: WS })).status).toBe(200);
+
+      // A file written by hand that the gate cannot read is shown with its problems, and an empty list replaces it.
+      await writeFile(file, '{ "requirements": [ { "check": 7 } ] }');
+      const broken = await driver.ask('checks');
+      expect(broken).toMatchObject({ status: 200, body: { file, requirements: [], invalid: { issues: [{ path: 'requirements[0].check' }] } } });
+      expect((await driver.ask('checks', { set: { requirements: [] } })).body).toEqual({ file, requirements: [] });
+    } finally {
+      await rm(file, { force: true });
     }
   });
 
