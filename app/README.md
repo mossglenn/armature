@@ -79,17 +79,24 @@ lib/
   desktop/                    The desktop core: protocol (JSON lines), settings (the file in the data folder), folder (the synced-folder warning), signIn (PKCE on a loopback port), credential (the token behind hub.remoteToken), core (the requests); core.test.ts the cycle and a sign-in through the protocol, bundle.test.ts the built core over real pipes
   api/                        The Armature API (Hono; never imports from next)
     app.ts                    The app: base path /api/v1, route groups, error mapping
+    config.ts, role.ts        HubConfig per request, the only reader of the environment; a hub's role and what a workspace hub leaves to its remote
+    boundary.ts, version.ts   The Host and Origin checks; the revisions and capabilities (ADR-0059)
     store.ts                  The only module that talks to TerminusDB (ADR-0055)
+    queue.ts, notifier.ts     The per-branch write queue behind Store.exclusive; what wakes the event feed's held requests when queued work ends
     http.ts                   Refs (?branch=, ?ref=), ETag and If-Match, write envelopes
-    identity.ts               Identity resolution (ADR-0032)
+    identity.ts, oidc.ts      Identity resolution (ADR-0032); the bearer token verified (ADR-0067)
+    authorization.ts, grants.ts, trailers.ts  Who may (ADR-0068); the hub's own grant writes; the trailers the hub writes and refuses from clients
     classes.ts                What the generated schema data says about a class
     write.ts                  The one write pipeline for every type
     errors.ts                 ApiError: status, stable code, message
-    invariants/               The invariants engine: rules 0 to 20, one module per constrained type
+    invariants/               The invariants engine: rules 0 to 24, one module per constrained type
     intelligence/             The coverage algorithm and the per-request graph reader
-    routes/                   documents, branches, users, intelligence, export, discover
+    checks.ts, events.ts      Checks (ADR-0070): the check runs held in memory, paramsHash, the gates' verdicts and the Armature-Check trailers, a person's checks.json parsed; the event feed derived from the branches' logs, its cursor of branch heads
+    routes/                   documents, branches (the merge gate), users, checks, events, intelligence, export, discover, health, workspace
     export/                   The export's slices (slices.json) and profiles (ADR-0031)
-    *.test.ts                 Integration tests (app, write, intelligence, export)
+    filestore/                The file-backed store a workspace hub runs over (ADR-0066)
+    workspace/                A workspace hub's clone, records, push (the push gate), bring-in, deliver and snapshots (ADR-0065)
+    *.test.ts                 The contract suite over app.request()
 vitest.config.mts             Test configuration: the @ alias, and .env.local so tests hit the same database
 ```
 
