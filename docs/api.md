@@ -127,7 +127,7 @@ Response: `{ id, branch, start, count, entries: [ { commit, author, message, tim
 
 ### `GET /documents/:type/:id/diff?from=<commit>&to=<commit>`
 
-The structural difference in one document between two commits, as TerminusDB's JSON patch (`docs/vendor/terminusdb/json-diff-and-patch.md`), passed through unchanged; every store under a hub produces it (ADR-0066 decision 5, accepted 2026-11-02; the file-backed store's segmentation of a list may differ, its operations do not). Both are required (400 `range_required`) and must exist (404 `unknown_ref`). Response: `{ id, from, to, diff }`.
+The structural difference in one document between two commits, as TerminusDB's JSON patch (`docs/vendor/terminusdb/json-diff-and-patch.md`), passed through unchanged; every store under a hub produces it (ADR-0066 decision 5, accepted 2026-11-02; the file-backed store's segmentation of a list may differ, its operations do not, except inside a JSON value). Inside a JSON value, a `CheckRequirement`'s `params`, the operations may differ too, and both shapes apply (ADR-0070 decision 12): TerminusDB patches a list of objects of equal length as a plain array with one patch per position, `[{}, { "on": { "@op": "SwapValue", ... } }]`, an empty object for an element unchanged, where a workspace hub's store gives a `CopyList`, `PatchList`, `KeepList` chain for the same change. A client that applies patches reads an array where a list was as positional patches, and keeps any element past its end. An absent side is `null` in this format, so a key set to `null` inside a JSON value reads as a key removed. Both are required (400 `range_required`) and must exist (404 `unknown_ref`). Response: `{ id, from, to, diff }`.
 
 ### The write pipeline
 
