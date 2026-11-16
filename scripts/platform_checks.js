@@ -1273,7 +1273,7 @@ async function main() {
     const apPatch = r.json?.params;
     const apNested = JSON.stringify(apPatch ?? null).match(/"@op"/g)?.length ?? 0;
     record("AP4", "INFO",
-      `the store's diff of the replace (${r.status}), its params entry: ${JSON.stringify(apPatch ?? r.json).slice(0, 1200)}; ${apNested} "@op" ${apNested === 1 ? "(the whole value swapped)" : "(a patch inside the JSON value: filestore/patch.test.ts holds diffValue to it)"}`);
+      `the store's diff of the replace (${r.status}), its params entry: ${JSON.stringify(apPatch ?? r.json).slice(0, 1200)}; ${apNested} "@op" ${apNested === 1 ? "(the whole value swapped)" : "(a patch inside the JSON value: filestore/patch.test.ts holds applyPatch to it, ADR-0070 decision 12)"}`);
 
     // Export reloaded (AE's path): the schema read at the head loads into an empty branch, and the
     // requirements post back with their ids and read back equal.
