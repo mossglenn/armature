@@ -225,6 +225,21 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > requirements out. The slice lists the class now, and the profiles rewrite a requirement's
 > `reporter`, `branch` and `fromPrefix` as they do a grant's fields (ADR-0031, note of this
 > date); it rides revision 2026-11-15.
+>
+> **Note (2026-11-15, the program's side), built:** the desktop program's part of decision 8
+> (`docs/desktop-program-plan.md` §14, step 5a). The core answers a request `checks`
+> (`app/lib/desktop/checks.ts`): the file read for the Settings page, and with
+> `set: { requirements }` written whole after the hub's own `parsePersonalChecks`, so what the
+> page accepts is what the gate reads; the writer is under `app/lib/desktop/`, reached over the
+> control channel alone, and no route writes the file. The workspace page lists a gate's verdicts
+> under a refused push or delivery, takes the reason beside each check that stops it and sends
+> the action again with `overrides`, asks deliver's `dryRun`, and shows the verdicts an action
+> relied on. Chosen in the build, each open to overrule: two personal requirements for the same
+> check and the same workspaces are refused by the writer (400 `bad_request`), since an override
+> names a check and could not say which it sets aside, though the hub's reader accepts such a
+> file written by hand; `locked` is not written back. Tested against the fake core in a browser
+> and, for the request, against a workspace hub (`core.test.ts`); not yet seen in the real
+> program, which waits for the next release's rehearsal.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in
