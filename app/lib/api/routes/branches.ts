@@ -3,7 +3,7 @@ import { hubOf, storeFor } from '../config';
 import { ApiError } from '../errors';
 import { BRANCH_NAME, ifMatchFrom, intQuery, readEnvelope, readJson, requireCommit, setEtag } from '../http';
 import { activeRequirements, grantOwner, revokeGrantsNaming } from '../grants';
-import { blocks, checkTrailers, requirementsFor, runsOf, verdictsOf, type CheckVerdict } from '../checks';
+import { blocks, checkTrailers, parseOverrides, requirementsFor, runsOf, verdictsOf, type CheckVerdict } from '../checks';
 import { withTrailer } from '../trailers';
 import { requirePermission } from '../authorization';
 import { commitMessage, registry, REGISTRY_BRANCH, resolveUser } from '../identity';
@@ -237,23 +237,6 @@ branches.get('/:name', async (c) => {
   setEtag(c, head.id);
   return c.json({ name, head: toHead(head) });
 });
-
-const MAX_REASON = 1000;
-
-/** A merge's `overrides` as check name to reason; 400 `bad_request` for anything but `[{ check, reason }]` with a reason given. */
-function parseOverrides(value: unknown): Map<string, string> {
-  const overrides = new Map<string, string>();
-  if (value === undefined) return overrides;
-  const bad = () => new ApiError(400, 'bad_request', `overrides must be [{ check, reason }], each check once, each reason given and at most ${MAX_REASON} characters`);
-  if (!Array.isArray(value)) throw bad();
-  for (const entry of value) {
-    if (!isRecord(entry) || typeof entry.check !== 'string' || typeof entry.reason !== 'string') throw bad();
-    const reason = entry.reason.trim();
-    if (!entry.check || !reason || reason.length > MAX_REASON || overrides.has(entry.check) || Object.keys(entry).length !== 2) throw bad();
-    overrides.set(entry.check, reason);
-  }
-  return overrides;
-}
 
 /** The conflicts of a failed apply, each with the source's value read from the source head. */
 async function conflictsOf(witnesses: ConflictWitness[], atSource: Store): Promise<MergeConflict[]> {

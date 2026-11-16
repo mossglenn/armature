@@ -37,7 +37,9 @@ const schemaKey = (entries: Record<string, unknown>[]) =>
   );
 
 /**
- * Brings the local `main` level with the remote's: its schema, and the `User`
+ * Brings the local `main` level with the remote's: its schema, its
+ * `CheckRequirement`s (since 2026-11-15; refreshed before a push and a
+ * delivery, `./push.ts` and `./bringIn.ts`), and the `User`
  * documents identity resolves here, the owner's own and every agent, as the
  * remote holds them, read at one remote commit, which is returned. Not every
  * person: a workspace hub holds one owner (plan §7), the registry of everyone
@@ -62,6 +64,14 @@ export async function mirrorMain(hub: HubConfig, remote: ArmatureClient, owner: 
   delete me.grants;
   delete me.relayedBy;
   const users = { data: [me, ...(agents.data as unknown as Record<string, unknown>[]).filter((u) => u['@id'] !== me['@id'])] };
+  // The remote's requirements, shown here and never enforced (ADR-0070 decision 8): a local plugin reads their
+  // `params` from this hub's GET /checks/requirements and posts a preview. A remote older than the class has none.
+  let requirements: TerminusDocument[] = [];
+  try {
+    requirements = (await fromRemote(hub, () => remote.documents.list('CheckRequirement', { ref: at }))).data as unknown as TerminusDocument[];
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.code !== 'unknown_type') throw err;
+  }
   const from = `from ${hub.remote} at ${at}`;
 
   const entries = schema.data.schema as Record<string, unknown>[];
@@ -73,6 +83,14 @@ export async function mirrorMain(hub: HubConfig, remote: ArmatureClient, owner: 
     const changed = (users.data as unknown as TerminusDocument[]).filter((u) => held.get(u['@id']) !== canonical(u));
     if (changed.length) {
       await main.putDocuments(changed, { author: owner.id, message: `Mirror ${MIRROR_BRANCH}'s users ${from}`, create: true });
+    }
+    // After the users, since a requirement names its reporter, an agent mirrored above.
+    if (requirements.length || (await main.getSchema()).entries.some((e) => e['@id'] === 'CheckRequirement')) {
+      const kept = new Map((await main.queryDocuments('CheckRequirement', {})).documents.map((r) => [r['@id'], canonical(r)]));
+      const moved = requirements.filter((r) => kept.get(r['@id']) !== canonical(r));
+      if (moved.length) {
+        await main.putDocuments(moved, { author: owner.id, message: `Mirror ${MIRROR_BRANCH}'s check requirements ${from}`, create: true });
+      }
     }
   });
   return at;

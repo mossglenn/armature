@@ -160,7 +160,16 @@ export interface WorkspaceRecords {
    * where it went, relative to the hub's folder.
    */
   setAside(branch: string, stamp: string): Promise<string>;
+  /**
+   * The text of `checks.json` in the hub's folder, the owner's personal requirements (ADR-0070 decision 8;
+   * ../checks.ts reads it), or undefined when there is none. Read only: the host writes the file (the
+   * desktop program's Settings), and nothing under the API does, so no route can relax the owner's gate.
+   */
+  getChecks(): Promise<string | undefined>;
 }
+
+/** The personal requirements' file, at the root of the hub's folder beside the store's marker. */
+export const PERSONAL_CHECKS = 'checks.json';
 
 /**
  * The folder discarded workspaces are set aside in. Not a branch name (`BRANCH_NAME` begins with a
@@ -171,13 +180,16 @@ export const DISCARDED = '_discarded';
 /** Where one discarded workspace is set aside, relative to the hub's folder. */
 export const setAsidePath = (branch: string, stamp: string): string => `${DISCARDED}/${branch}.${stamp}`;
 
-/** Records held in memory, for the tests and for a hub that need not outlive its process. */
-export function memoryRecords(): WorkspaceRecords {
+/** Records held in memory, for the tests and for a hub that need not outlive its process; `checks` stands for the file the host writes. */
+export function memoryRecords(checks: () => string | undefined = () => undefined): WorkspaceRecords {
   const held = new Map<string, WorkspaceRecord>();
   const tables = new Map<string, PushTable>();
   const snapshots = new Map<string, Snapshots>();
   const logs = new Map<string, RemoteLog>();
   return {
+    async getChecks() {
+      return checks();
+    },
     // In memory the records are all this interface holds; the branch's commit files are the store's.
     async setAside(branch, stamp) {
       return setAsidePath(branch, stamp);

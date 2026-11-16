@@ -67,7 +67,8 @@ export const CAPABILITIES: Record<string, Capability> = {
   /**
    * Check runs and the requirements that apply to a merge (ADR-0070 decisions 3 to 5; routes/checks.ts), and since
    * 2026-11-15 the event feed (decision 2; routes/events.ts), both roles, and the merge gate (decisions 6 and 7;
-   * routes/branches.ts), which `gate` names the actions of: `merge` on a remote hub, where merges happen.
+   * routes/branches.ts) and the push gate (decision 8; workspace/push.ts), which `gate` names the actions of:
+   * `merge` on a remote hub, where merges happen, `push` on a workspace hub (set by `discovery`).
    */
   'armature/checks': {
     fallback: 'reject',
@@ -162,6 +163,8 @@ export async function discovery(hub: HubConfig, hostname: string) {
   for (const id of ['armature/branches', 'armature/users']) {
     capabilities[id].remoteOnly = remoteOnlyRoutes(hub.role, id);
   }
+  // What the required checks gate on this hub (ADR-0070 decisions 6 and 8): a merge on a remote, where merges happen; a push on a workspace hub.
+  capabilities['armature/checks'].gate = hub.role === 'workspace' ? ['push'] : ['merge'];
   // A workspace hub says whether push, bring in and deliver are routes here or the program's own actions (since 2026-11-03).
   if (capabilities['armature/workspace']) capabilities['armature/workspace'].actions = hub.actionRoutes ? 'routes' : 'program';
   const instance = await instanceEntry(hub, hostname);

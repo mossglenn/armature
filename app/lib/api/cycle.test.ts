@@ -12,6 +12,7 @@ import { createClient } from '@armature/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startHub, type RunningHub } from '../hub';
 import { app, createApp } from './app';
+import { paramsHash } from './checks';
 import { configFromEnv, type HubConfig } from './config';
 import { handleOf } from './routes/workspace';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from './store';
@@ -62,8 +63,10 @@ describe('over the file-backed store in memory', () => {
   const localConfig = { files: openFileStore(files) };
   // The records, with one save of a push table made to fail when a test asks: the process ending there.
   let failSaveOf: ((table: PushTable) => boolean) | undefined;
+  // The owner's checks.json, as the host would have written it; no route writes it.
+  let personalChecks: string | undefined;
   const records: WorkspaceRecords = (() => {
-    const inner = memoryRecords();
+    const inner = memoryRecords(() => personalChecks);
     return {
       ...inner,
       async putPush(branch, table) {
@@ -511,4 +514,139 @@ describe('over the file-backed store in memory', () => {
     });
   });
 
+
+  describe("checks on a person's machine: the push gate, the mirror and delivery's wait (ADR-0070 decision 8)", () => {
+    const G = `${handleOf(DESIGNER)}_gate-${stamp}`;
+    const LINT = `lint/mine-${stamp}`;
+    const TEAM = `lint/team-${stamp}`;
+    const SERVICE = `agent:test/cycle-lint-${stamp}`;
+    const PARAMS = { strict: true };
+    let n = 0;
+    const work = async () => {
+      const written = await json(await on('PUT', `/documents/LearningNeed/cycle-gate-${stamp}-${++n}?branch=${G}`, need(`gate ${n}`)));
+      expect(written.status).toBe(200);
+      return written.body.commit as string;
+    };
+    const push = async (body?: unknown) => json(await on('POST', `/workspace/${G}/push`, body));
+    const report = (commit: string, conclusion: string, extra: Record<string, unknown> = {}) =>
+      on('POST', '/checks/runs', { check: LINT, branch: G, commit, conclusion, paramsHash: paramsHash(PARAMS), ...extra });
+    const remoteMessage = async () => (await onMain.branches.log(G, { count: 1 })).data.commits[0].message;
+
+    beforeAll(async () => {
+      expect((await on('POST', '/workspace', { name: `gate-${stamp}` })).status).toBe(201);
+    });
+
+    afterAll(() => {
+      personalChecks = undefined;
+    });
+
+    it('with no checks.json a push is as before; with one, and nothing to push, nothing is gated or even read', async () => {
+      await work();
+      const plain = await push();
+      expect(plain.status).toBe(200);
+      expect(plain.body).not.toHaveProperty('checks');
+      personalChecks = 'not json';
+      expect((await push()).body).toMatchObject({ upToDate: true });
+    });
+
+    it('a checks.json the hub cannot read stops the push (422 personal_checks_invalid), with every problem, rather than opening the gate', async () => {
+      await work();
+      const unreadable = await push();
+      expect(unreadable.status).toBe(422);
+      expect(unreadable.body.error).toBe('personal_checks_invalid');
+      personalChecks = JSON.stringify({ requirements: [{ check: '', level: 'Sometimes', reporter: 'User/x', params: null }, 'lint'] });
+      const invalid = await push();
+      expect(invalid.status).toBe(422);
+      expect(invalid.body.issues.map((i: { path: string }) => i.path)).toEqual(['requirements[0].reporter', 'requirements[0].check', 'requirements[0].level', 'requirements[0].params', 'requirements[1]']);
+      // One for another workspace, one revoked, one by a prefix this workspace lacks: none binds this push.
+      personalChecks = JSON.stringify({ requirements: [{ check: LINT, branch: 'someone_else' }, { check: LINT, status: 'Revoked' }, { check: LINT, fromPrefix: 'zz' }] });
+      expect((await push()).status).toBe(200);
+    });
+
+    it("a personal requirement stops the push until a run on this machine passes at the workspace's head: 409 checks_pending, 422 checks_failed, nothing replayed", async () => {
+      personalChecks = JSON.stringify({ requirements: [{ check: LINT, params: PARAMS, rationale: 'I lint before I push' }] });
+      const before = (await onMain.branches.head(G)).data.head.commit;
+      const head = await work();
+      const pending = await push();
+      expect(pending.status).toBe(409);
+      expect(pending.body).toMatchObject({ error: 'checks_pending', pending: [LINT], commit: head });
+      expect(pending.body.checks).toEqual([{ check: LINT, requirement: `checks.json#${LINT}`, level: 'Required', locked: false, paramsHash: paramsHash(PARAMS), conclusion: 'pending', satisfied: false }]);
+
+      // What a plugin on the machine reads to know what to run, and under which hash.
+      const asked = (await json(await on('GET', `/checks/requirements?target=${G}`))).body;
+      expect(asked.personal).toEqual([{ check: LINT, level: 'Required', params: PARAMS, status: 'Active', rationale: 'I lint before I push', paramsHash: paramsHash(PARAMS) }]);
+
+      // A run under other settings does not count; one that fails stops the push as failed.
+      expect((await report(head, 'pass', { paramsHash: paramsHash({ strict: false }) })).status).toBe(201);
+      expect((await push()).body.error).toBe('checks_pending');
+      expect((await report(head, 'fail', { summary: '1 required' })).status).toBe(201);
+      const failed = await push();
+      expect(failed.status).toBe(422);
+      expect(failed.body).toMatchObject({ error: 'checks_failed', failed: [LINT] });
+      expect(failed.body.checks[0]).toMatchObject({ conclusion: 'fail', run: { summary: '1 required' } });
+      expect((await onMain.branches.head(G)).data.head.commit).toBe(before);
+    });
+
+    it("the owner's override opens it, and the reason reaches the remote as the pusher's claim on the first commit replayed", async () => {
+      for (const overrides of ['yes', [{ check: LINT }], [{ check: `lint/other-${stamp}`, reason: 'x' }]]) {
+        const bad = await push({ overrides });
+        expect(bad.status, JSON.stringify(overrides)).toBe(400);
+        expect(bad.body.error).toBe('bad_request');
+      }
+      const pushed = await push({ overrides: [{ check: LINT, reason: 'A known false positive' }] });
+      expect(pushed.status).toBe(200);
+      expect(pushed.body.pushed).toHaveLength(1);
+      expect(pushed.body.checks[0]).toMatchObject({ conclusion: 'fail', overridden: { reason: 'A known false positive' } });
+      const message = await remoteMessage();
+      expect(message).toContain(`Armature-Local-Check-Override: ${LINT} reason="A known false positive"`);
+      expect(message).toContain('Armature-Workspace-Commit: ');
+      // The remote wrote none of its own: the claim is the pusher's, and the remote's name stays the remote's.
+      expect(message).not.toContain('Armature-Check-Override');
+      expect(message).not.toContain('Armature-Check:');
+    });
+
+    it('a passing run at the head opens it with nothing to claim', async () => {
+      const head = await work();
+      expect((await report(head, 'pass')).status).toBe(201);
+      const pushed = await push();
+      expect(pushed.status).toBe(200);
+      expect(pushed.body.checks[0]).toMatchObject({ conclusion: 'pass', satisfied: true });
+      expect(await remoteMessage()).not.toContain('Armature-Local-Check-Override');
+    });
+
+    it("the remote's requirements are mirrored for the tools here to read, and a delivery waits on the remote's check: its dry run and its refusal carry the remote's verdicts", async () => {
+      personalChecks = undefined;
+      const agent = (await onMain.users.register({ message: 'A lint service for the cycle', user: { displayName: 'Lint (cycle)', externalId: SERVICE } })).data.id;
+      const required = { '@type': 'CheckRequirement', check: TEAM, reporter: agent, level: 'Required', locked: false, params: { severity: 'error' }, status: 'Active' };
+      const written = await onMain.documents.batch({ message: 'Lint before anything reaches main', documents: [required as never] });
+      try {
+        // main moved (the agent, the requirement): brought in first, a merge from main, which no gate stops.
+        expect((await on('POST', `/workspace/${G}/bring-in`)).status).toBe(200);
+        const dry = await json(await on('POST', `/workspace/${G}/deliver`, { message: 'Deliver the gate', dryRun: true }));
+        expect(dry.status).toBe(200);
+        expect(dry.body).toMatchObject({ dryRun: true, deleted: false, conflicts: [], violations: [] });
+        expect(dry.body.checks).toEqual([expect.objectContaining({ check: TEAM, reporter: agent, conclusion: 'pending', satisfied: false })]);
+        // The delivery refreshed the mirror: the requirement is read here, with the hash a preview runs under.
+        const mirrored = (await json(await on('GET', '/checks/requirements?target=main'))).body;
+        expect(mirrored.requirements.map((r: { check: string; paramsHash: string }) => [r.check, r.paramsHash])).toContainEqual([TEAM, paramsHash({ severity: 'error' })]);
+        expect(mirrored.personal).toEqual([]);
+
+        const waiting = await json(await on('POST', `/workspace/${G}/deliver`, { message: 'Deliver the gate' }));
+        expect(waiting.status).toBe(409);
+        expect(waiting.body).toMatchObject({ error: 'checks_pending', remote: true, pending: [TEAM] });
+        // The service reports on the remote, about the remote's head of the branch; then the delivery lands.
+        const head = (await onMain.branches.head(G)).data.head.commit;
+        const service = createClient({ baseUrl: remote.url, user: SERVICE });
+        await service.checks.report({ check: TEAM, branch: G, commit: head, conclusion: 'pass', paramsHash: paramsHash({ severity: 'error' }) });
+        const delivered = await json(await on('POST', `/workspace/${G}/deliver`, { message: 'Deliver the gate' }));
+        expect(delivered.status).toBe(200);
+        expect(delivered.body.checks).toEqual([expect.objectContaining({ check: TEAM, conclusion: 'pass', satisfied: true })]);
+        expect((await onMain.branches.log('main', { count: 1 })).data.commits[0].message).toContain(`Armature-Check: ${TEAM} pass run=`);
+      } finally {
+        // Withdrawn, so nothing after this group is gated.
+        await onMain.documents.batch({ message: 'Withdraw', documents: [{ ...required, status: 'Revoked', rationale: 'The test is over' } as never] });
+        expect(written.data.ids).toHaveLength(1);
+      }
+    });
+  });
 });

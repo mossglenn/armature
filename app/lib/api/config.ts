@@ -1,5 +1,7 @@
 import type { Context } from 'hono';
 import type { JWTVerifyGetKey } from 'jose';
+import type { RunStore } from './checks';
+import type { EventFeed } from './events';
 import type { WorkspaceRecords } from './workspace/records';
 import { workspaceStore } from './workspace/store';
 import { createStore, storeConfigFromEnv, type Ref, type Store, type StoreConfig } from './store';
@@ -107,6 +109,14 @@ export interface HubConfig {
   actionRoutes: boolean;
   /** The key the pseudonymous and institutional export profiles hash with (ADR-0031); absent, a random one per export. */
   exportKey?: string;
+  /**
+   * The check runs and the life of the hub, when a host runs more than one app as one hub: the desktop
+   * program serves one and performs its actions through another (app/lib/desktop/core.ts), and a push
+   * there is gated by the runs a plugin posted to the first (ADR-0070 decision 8). Absent, each app
+   * holds its own (`createApp`).
+   */
+  runs?: RunStore;
+  feed?: EventFeed;
 }
 
 // The request's configuration under `hub`, typed for every route group.

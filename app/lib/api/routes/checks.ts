@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { requirePermission } from '../authorization';
-import { CONCLUSIONS, PARAMS_HASH, paramsHash, requirementsFor, runsOf, type Conclusion, type RunInput } from '../checks';
-import { storeFor } from '../config';
+import { CONCLUSIONS, PARAMS_HASH, paramsHash, parsePersonalChecks, personalIn, requirementsFor, runsOf, type Conclusion, type RunInput } from '../checks';
+import { hubOf, storeFor } from '../config';
 import { ApiError } from '../errors';
 import { activeRequirements } from '../grants';
 import { BRANCH_NAME, readJson, requireCommit, setEtag } from '../http';
@@ -106,7 +106,9 @@ checks.get('/', async (c) => {
  * `locked`, filtered by `fromPrefix` against the source when one is given;
  * with no source, every prefix is kept and the client filters. Layering their
  * `params` is the plugin's. On a workspace hub `main` is the mirror, which
- * holds none until the remote's are mirrored (decision 8, not built).
+ * holds the remote's as of the clone or the last push or delivery (decision
+ * 8): shown there, enforced by the remote alone; and `personal` lists the
+ * owner's own, which gate a push of `target` from that machine.
  */
 checks.get('/requirements', async (c) => {
   await resolveUser(c);
@@ -118,5 +120,12 @@ checks.get('/requirements', async (c) => {
   const { requirements, commit } = await activeRequirements(registry(c));
   const applicable = requirementsFor(requirements, target, from).map((r) => ({ ...r, paramsHash: paramsHash(r.params) }));
   setEtag(c, commit);
-  return c.json({ target, ...(from !== undefined ? { from } : {}), requirements: applicable });
+  // On a workspace hub, also the owner's personal requirements that bind a push of `target` (decision 8), each with
+  // its paramsHash: what a plugin on the machine runs under to open the push gate. From checks.json, never a record.
+  const hub = hubOf(c);
+  const personal =
+    hub.role === 'workspace' && hub.workspaces
+      ? { personal: personalIn(parsePersonalChecks(await hub.workspaces.getChecks()), target).map((r) => ({ ...r, paramsHash: paramsHash(r.params) })) }
+      : {};
+  return c.json({ target, ...(from !== undefined ? { from } : {}), requirements: applicable, ...personal });
 });

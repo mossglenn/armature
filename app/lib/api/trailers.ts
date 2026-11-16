@@ -60,6 +60,12 @@ export function refuseReservedTrailers(message: string): void {
 export const WORKSPACE_COMMIT_TRAILER = 'Armature-Workspace-Commit';
 export const AUTHORED_AT_TRAILER = 'Armature-Authored-At';
 export const WORKSPACE_PART_TRAILER = 'Armature-Workspace-Part';
+/**
+ * A push's own claim that the owner set a personal requirement aside (ADR-0070 decision 8, later change of
+ * 2026-11-15): kept as sent, never refused, and never the remote's `Armature-Check-Override`, which only
+ * the remote hub writes.
+ */
+export const LOCAL_CHECK_OVERRIDE_TRAILER = 'Armature-Local-Check-Override';
 
 /** The value of the last `name: value` line in the message, or undefined; CRLF accepted (platform check AJ3). */
 export function trailerValue(message: string, name: string): string | undefined {

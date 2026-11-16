@@ -12,7 +12,7 @@
  * afterwards. The core runs in-process over a pair of streams, as the shell
  * would speak to it; the bundle's own life over real pipes is bundle.test.ts.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
@@ -251,6 +251,30 @@ describe('the cycle through the protocol, against a remote under header', () => 
     const delivered = await driver.ask('deliver', { workspace: WS, message: 'Deliver from the desktop' });
     expect(delivered.status, JSON.stringify(delivered.body)).toBe(200);
     expect((await onMain.documents.get('LearningNeed', MINE.split('/')[1])).data.label).toBe('mine');
+  });
+
+  it("gates its push by the owner's checks.json, counting a run a tool posted to the served hub: one hub in two apps (ADR-0070 decision 8)", async () => {
+    const GATED = `LearningNeed/desktop-gated-${stamp}`;
+    const written = await tool('PUT', `/documents/${GATED}?branch=${WS}`, { message: 'Gated', document: { label: 'gated', rationale: 'r' } });
+    expect(written.status).toBe(200);
+    const head = ((await written.json()) as { commit: string }).commit;
+    const checks = join(dataDir, 'workspaces', 'checks.json');
+    await writeFile(checks, JSON.stringify({ requirements: [{ check: 'lint/mine', params: { strict: true } }] }));
+    try {
+      expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 409, body: { error: 'checks_pending', pending: ['lint/mine'], commit: head } });
+      // The tool reads what to run under from the hub it can reach, and reports there; the program's push counts it.
+      const asked = (await (await tool('GET', `/checks/requirements?target=${WS}`)).json()) as { personal: Array<{ paramsHash: string }> };
+      expect((await tool('POST', '/checks/runs', { check: 'lint/mine', branch: WS, commit: head, conclusion: 'fail', paramsHash: asked.personal[0].paramsHash })).status).toBe(201);
+      expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 422, body: { error: 'checks_failed' } });
+      expect(await driver.ask('push', { workspace: WS, overrides: 'yes' })).toMatchObject({ status: 400, body: { error: 'bad_request' } });
+      const pushed = await driver.ask('push', { workspace: WS, overrides: [{ check: 'lint/mine', reason: 'Known and harmless' }] });
+      expect(pushed.status, JSON.stringify(pushed.body)).toBe(200);
+      expect((pushed.body!.checks as Array<{ overridden?: { reason: string } }>)[0].overridden).toEqual({ reason: 'Known and harmless' });
+      // No route writes the file: a tool with the pairing value cannot relax the gate.
+      expect((await tool('PUT', '/workspace/checks', { requirements: [] })).status).toBe(404);
+    } finally {
+      await rm(checks, { force: true });
+    }
   });
 
   it('answers a refusal as the route does, and a request it does not know', async () => {
