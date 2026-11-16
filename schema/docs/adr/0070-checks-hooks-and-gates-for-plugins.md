@@ -168,6 +168,38 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > reserving it on the merge route only, since any client can make a write look like a replay and
 > the name would stop being the hub's; and keeping the override on the person's machine, which
 > loses the trail decision 8 wanted. Not built: it is the push gate's.
+>
+> **Note (2026-11-15, night), built:** decision 8's hub side (`workspace/push.ts`,
+> `workspace/clone.ts`, `workspace/bringIn.ts`, `parsePersonalChecks` in `checks.ts`). Personal
+> requirements are read from `checks.json` at the root of the hub's folder through the records'
+> one reader, `getChecks`, with no writer under the API; the push is gated by them before anything
+> is replayed and before the remote is asked anything, with the merge gate's codes and verdicts;
+> `overrides` on the push write `Armature-Local-Check-Override` on the first commit replayed (the
+> later change above); the remote's requirements are mirrored into the local `main` by
+> `mirrorMain`, at the clone and before each push and delivery; `GET /checks/requirements` on a
+> workspace hub adds `personal`; deliver passes `overrides` to the remote's merge and takes
+> `dryRun`, whose answer carries the remote's verdicts. `armature/checks` says `gate: ["push"]`
+> on a workspace hub. It rides revision 2026-11-15. Chosen in the build, each open to overrule:
+> (a) **The file is `{ "requirements": [...] }`**, the record's shape without `reporter`; `branch`
+> names the workspace bound, `fromPrefix` the beginning of the names bound, neither binds every
+> workspace; `level` and `status` default to `Required` and `Active`; `locked` is accepted and
+> means nothing on one machine.
+> (b) **Any run on the machine under the requirement's `paramsHash` counts**, there being no
+> reporter to name: every tool on loopback acts as the owner (ADR-0065 decision 7).
+> (c) **A file the hub cannot read as requirements stops the push**, 422
+> `personal_checks_invalid` with every problem, rather than opening the gate; a push with nothing
+> to replay is not gated and does not read the file.
+> (d) **The dry run that carries the remote's verdicts is a new `dryRun` on deliver**, the
+> remote's dry run of the merge into `main`. Decision 8 says "deliver's existing dry run", which
+> is of `main` into the workspace, a merge from `main` and so never gated (the note above).
+> (e) **The desktop program's two apps share one run store and one life** (`HubConfig.runs`,
+> `feed`): it serves one app and performs its actions through another, so a run a plugin posted
+> to the first would otherwise never be seen by the push in the second.
+> (f) The mirror refresh is the whole of `mirrorMain` (the schema, the agents a requirement
+> names, the requirements), three reads of the remote more per push and delivery.
+> Not built, and the program's: the Settings editor for `checks.json`, which a person writes by
+> hand until then, and showing verdicts on the workspace page. Still not built here: decision
+> 12's patcher, and the schema guide and the explainer.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in
