@@ -26,7 +26,10 @@ import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, Settings,
  * `?slow` makes each long action (push, bring in, deliver, create, clone, remove) take a moment and
  * show in the state as the shell shows it, so a page's holding of the install button meanwhile can be
  * seen; `?login=fails` makes the system refuse the start-at-login entry, as the shell reports it;
- * `?keychain=fails` makes the keychain refuse to forget a sign-in or keep a new pairing value.
+ * `?keychain=fails` makes the keychain refuse to forget a sign-in or keep a new pairing value;
+ * `?start=slow` holds the core in `starting` for a moment, as a cold launch does; `?port=busy` starts
+ * with the hub failed on a port in use, until the port is changed; `?signin=waits` leaves a sign-in
+ * waiting on the browser until it is cancelled.
  *
  * Required checks (ADR-0070) are set up by a test through `window.__fakeCore`: `reportRun` (a tool here
  * reports on a workspace's latest commit), `remoteRequires` and `remoteReports` (the instance requires
@@ -43,7 +46,7 @@ const OIDC_REMOTE = 'https://api.armature.example.edu';
 const HEADER_REMOTE = 'http://hub.example.test:3100';
 const HOSTILE_REMOTE = 'https://api.armature-x.example.net';
 const HUB_URL = 'http://127.0.0.1:3101';
-const REVISION = '2026-11-06';
+const REVISION = '2026-11-15';
 const DATA_DIR = '/Users/someone/Library/Application Support/com.mossglenn.armature';
 const ISSUER = 'https://login.example.edu/realms/armature';
 const SYNCED = /(^|\/)(OneDrive[^/]*|Dropbox[^/]*|Google ?Drive|My Drive|iCloudDrive)(\/|$)|Library\/(Mobile Documents|CloudStorage)/i;
@@ -165,6 +168,8 @@ function seededWorkspaces(owner: string, remote: string): Model['workspaces'] {
     base: commitId(),
     local: commitId(),
     clonedAt: new Date(Date.now() - 86_400_000).toISOString(),
+    // As the clone keeps it: the remote's connection profile at the time.
+    instance: profiles[remote]?.instance,
   });
   const unit3 = record('unit-3');
   const glossary = record('glossary');
@@ -206,7 +211,7 @@ const OFFERED: UpdateState = { version: '0.2.0', current: '0.1.0', date: '2026-1
 /** The requests the shell counts as actions in flight (src-tauri/src/core.rs `ACTIONS`). */
 const ACTIONS = ['create', 'clone', 'push', 'bringIn', 'deliver', 'remove'];
 
-export function fakeCore(scenario = 'header', update?: string, options: { slow?: boolean; login?: string; keychain?: string } = {}): Backend {
+export function fakeCore(scenario = 'header', update?: string, options: { slow?: boolean; login?: string; keychain?: string; start?: string; port?: string; signin?: string } = {}): Backend {
   const model = modelFor(scenario);
   if (update === 'available' || update === 'fails') model.update = { ...OFFERED };
   const actions: string[] = [];
@@ -216,6 +221,24 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     listeners.forEach((listener) => listener(event));
   };
   let firstScopeTry = true;
+  /** `?start=slow`: the core has not answered its `start` yet, as on a cold first launch (P5). */
+  let starting = options.start === 'slow';
+  /** `?port=busy`: the hub could not start, another program holding its port; it starts once the port is changed (P4). */
+  let portBusy = options.port === 'busy';
+  /** A sign-in waiting on the browser, and how to end it (`?signin=waits`, P8). */
+  let waitingSignIn: (() => void) | undefined;
+  /** Set by a test: the remote cannot be reached, or the status cannot be read at all (P1). */
+  let remoteDown = false;
+  let statusFails = false;
+  /** Set by a test: the next push finds the branch moved on the remote after its first commit landed; the next bring-in breaks a rule (P6). */
+  let pushMeetsAMove = false;
+  let bringInBreaksARule = false;
+  if (starting) {
+    setTimeout(() => {
+      starting = false;
+      emit({ event: 'shell' });
+    }, 600);
+  }
 
   const ownerOf = (): string | undefined => (model.settings.identity?.resolver === 'oidc' ? model.signedIn?.externalId : model.settings.user);
   const started = (): Record<string, unknown> => {
@@ -234,6 +257,10 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
   };
   const state = (): ShellState => {
     const body = started();
+    if (starting) return { core: 'starting', dataDir: DATA_DIR, logDir: '/Users/someone/Library/Logs/com.mossglenn.armature' };
+    if (portBusy) {
+      return { core: 'failed', error: `Port ${model.settings.port} is in use by another program; choose another port in the settings`, dataDir: DATA_DIR, logDir: '/Users/someone/Library/Logs/com.mossglenn.armature' };
+    }
     return {
       core: body.started === true ? 'running' : 'stopped',
       started: body,
@@ -255,7 +282,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       pushed: w.pushed,
       unpushed: w.commits.length - w.pushed,
       snapshots: { budget: model.settings.snapshots, held: [], declined: [] },
-      remote: { head: commitId(), moved: w.remoteMoved },
+      remote: remoteDown ? { reachable: false } : { head: commitId(), moved: w.remoteMoved },
     };
   };
   const needsHub = (): CoreReply | undefined => (model.running && started().started === true ? undefined : refuse(409, 'not_started', 'The hub is not running; send start'));
@@ -353,7 +380,14 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     },
     signIn: async ({ offline }) => {
       if (model.settings.identity?.resolver !== 'oidc') return refuse(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
+      if (waitingSignIn) return refuse(409, 'sign_in_in_progress', 'A sign-in is already waiting for the browser');
       emit({ event: 'open', url: `${ISSUER}/protocol/openid-connect/auth?client_id=armature-desktop` });
+      if (options.signin === 'waits') {
+        // The person never finishes in the browser: the sign-in waits until it is cancelled.
+        await new Promise<void>((resolve) => (waitingSignIn = resolve));
+        waitingSignIn = undefined;
+        return refuse(409, 'sign_in_cancelled', 'The sign-in was cancelled');
+      }
       await new Promise((resolve) => setTimeout(resolve, 400));
       if (scenario === 'oidc-scope' && offline !== false && firstScopeTry) {
         firstScopeTry = false;
@@ -364,6 +398,15 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       }
       model.signedIn = { id: 'User/someone', externalId: 'someone@example.edu', displayName: 'Someone at Example' };
       return ok({ signedIn: true, person: model.signedIn, staysSignedIn: offline !== false });
+    },
+    cancelSignIn: () => {
+      const waiting = waitingSignIn !== undefined;
+      waitingSignIn?.();
+      return ok({ cancelled: waiting });
+    },
+    whoAmI: () => {
+      if (model.settings.identity?.resolver !== 'oidc') return refuse(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
+      return model.signedIn ? ok({ signedIn: true, person: model.signedIn, staysSignedIn: true }) : refuse(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in');
     },
     // `keychain`: what the shell adds to a reply when the keychain refused what the reply implies (src-tauri/src/core.rs `after_reply`).
     signOut: () => {
@@ -392,7 +435,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         : refuse(409, 'no_user', 'The remote runs under header; set your identifier on it in the settings (user)');
     },
     workspaces: () => needsHub() ?? ok([...model.workspaces.values()].map((w) => w.record)),
-    status: (fields) => needsHub() ?? (workspaceOf(fields) ? ok(statusOf(String(fields.workspace))) : refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`)),
+    status: (fields) => (statusFails ? refuse(500, 'store_unreadable', 'The workspace folder could not be read') : undefined) ?? needsHub() ?? (workspaceOf(fields) ? ok(statusOf(String(fields.workspace))) : refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`)),
     commits: (fields) => {
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `Branch ${String(fields.workspace)} has no commits`);
@@ -405,7 +448,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const branch = `${handleOf(owner)}_${String(name)}`;
       if (!/^[A-Za-z0-9_-]+$/.test(String(name))) return refuse(400, 'bad_name', `The workspace's branch, ${branch}, must match ^[A-Za-z0-9_-]+$`);
       if (model.workspaces.has(branch)) return refuse(409, 'workspace_exists', `This hub already holds the workspace ${branch}`);
-      const record: WorkspaceRecord = { branch, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, from: String(from ?? 'main'), base: commitId(), local: commitId(), clonedAt: new Date().toISOString() };
+      const record: WorkspaceRecord = { branch, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, from: String(from ?? 'main'), base: commitId(), local: commitId(), clonedAt: new Date().toISOString(), instance: model.settings.instance };
       model.workspaces.set(branch, { record, commits: [], pushed: 0, remoteMoved: false, conflict: false });
       return ok({ ...record, snapshots: [] }, 201);
     },
@@ -416,7 +459,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (model.workspaces.has(name)) return refuse(409, 'workspace_exists', `This hub already holds the workspace ${name}`);
       if (name === 'missing') return refuse(404, 'not_found', `The remote refused: Branch ${name} has no commits`, { remote: true });
       const owner = ownerOf()!;
-      const record: WorkspaceRecord = { branch: name, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, base: commitId(), local: commitId(), clonedAt: new Date().toISOString() };
+      const record: WorkspaceRecord = { branch: name, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, base: commitId(), local: commitId(), clonedAt: new Date().toISOString(), instance: model.settings.instance };
       model.workspaces.set(name, { record, commits: [], pushed: 0, remoteMoved: false, conflict: false });
       const theirs = !name.startsWith(`${handleOf(owner)}_`);
       return ok(
@@ -434,6 +477,9 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
       const unpushed = w.commits.slice(0, w.commits.length - w.pushed).reverse();
+      // As the route: the overrides' shape is checked whether or not anything waits to be pushed.
+      const overrides = overridesOf(fields.overrides);
+      if (!(overrides instanceof Map)) return overrides;
       // The push gate (ADR-0070 decision 8): with something to push, the person's own requirements in force are held to the head.
       let checks: CheckVerdict[] = [];
       if (unpushed.length > 0) {
@@ -441,8 +487,6 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         if (model.checksInvalid) {
           return refuse(422, 'personal_checks_invalid', `checks.json in the hub's folder cannot be read as personal requirements (${model.checksInvalid.length} problem(s)); until it is put right nothing is pushed`, { issues: model.checksInvalid });
         }
-        const overrides = overridesOf(fields.overrides);
-        if (!(overrides instanceof Map)) return overrides;
         const bound = model.checks.filter((r) => r.status === 'Active' && (r.branch === undefined || r.branch === branch));
         const stray = [...overrides.keys()].find((check) => !bound.some((r) => r.check === check && r.level === 'Required'));
         if (stray) return refuse(400, 'bad_request', `${stray} is not a required check of your own for this push`);
@@ -456,6 +500,17 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
           return refuse(409, 'checks_pending', `Pushing ${branch} waits for ${pending.join(', ')} to report on ${head}, by your own requirement; nothing was pushed`, { commit: head, pending, checks });
         }
       }
+      // As the route: the remote's 412 when the branch moved under the push, with what landed before it, where it stopped and what changed there.
+      if (pushMeetsAMove && unpushed.length > 1) {
+        pushMeetsAMove = false;
+        w.pushed += 1;
+        return refuse(412, 'precondition_failed', `The remote refused: ${w.record.branch} moved since the commit this push expected`, {
+          remote: true,
+          pushed: [{ local: unpushed[0]!.commit, remote: commitId(), parts: 1, pushedAt: new Date().toISOString() }],
+          at: { local: unpushed[1]!.commit, part: 1, total: 1 },
+          moved: [{ id: 'AssessmentItem/item-4', op: 'update' }, { id: 'ItemInstance/placement-4', op: 'update' }],
+        });
+      }
       w.pushed = w.commits.length;
       return ok({ workspace: w.record, pushed: unpushed.map((c) => ({ local: c.commit, remote: commitId(), parts: 1 })), remoteHead: commitId(), upToDate: unpushed.length === 0, ...(checks.length ? { checks } : {}) });
     },
@@ -466,6 +521,13 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
       const unpushed = w.commits.length - w.pushed;
       if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} local commit(s) of ${w.record.branch} are not on the remote; push before bringing in main`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
+      if (bringInBreaksARule) {
+        bringInBreaksARule = false;
+        return refuse(422, 'invariant_violation', 'The remote refused: the merged state breaks 1 rule; nothing was merged', {
+          remote: true,
+          violations: [{ code: 'duplicate_sequence', id: 'ModuleActivityLink/a1b2', index: 0, field: 'sequence', message: 'Sequence 2 is taken in Module/how-ai-works' }],
+        });
+      }
       if (w.conflict) {
         return refuse(409, 'merge_conflict', 'The remote refused: the merge has conflicts', {
           remote: true,
@@ -560,6 +622,11 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const w = model.workspaces.get(branch);
       if (w) model.remoteRuns.set(`${branch} ${check}`, { commit: w.commits[0]?.commit ?? w.record.local, conclusion, ...(summary ? { summary } : {}) });
     },
+    // The remote cannot be reached (the status still answers, saying so), or the status cannot be read at all.
+    pushMeetsAMove: () => void (pushMeetsAMove = true),
+    bringInBreaksARule: () => void (bringInBreaksARule = true),
+    remoteUnreachable: () => void (remoteDown = true),
+    statusUnreadable: () => void (statusFails = true),
     // checks.json written by hand into something the push gate cannot read.
     breakChecksFile: () => void (model.checksInvalid = [{ path: 'requirements[0].check', message: 'check is the name of a check' }]),
     // The oidc remote's provider changes between a page's read and its connect, as a hostile hub's could (C2).
@@ -592,6 +659,14 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     },
     state: async () => state(),
     setHub: async (running) => {
+      // As the shell: a start on a port another program holds fails, and the state says why.
+      if (running && portBusy) {
+        portBusy = model.settings.port === 3101;
+        if (portBusy) {
+          emit({ event: 'shell' });
+          return state();
+        }
+      }
       model.running = running;
       const s = state();
       emit({ event: 'log', level: 'info', line: running ? `Armature hub (revision ${REVISION}) listening at ${HUB_URL}/api/v1` : 'Armature hub stopped' });

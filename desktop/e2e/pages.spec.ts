@@ -120,6 +120,35 @@ test.describe('signing in', () => {
     await expect(page.getByText('Ask your instance’s administrator to register you')).toBeVisible();
   });
 
+  test('a waiting sign-in is cancelled from its page, found again after leaving it, and a signed-in person is told who they are (the 2026-11-09 review’s P8)', async ({ page }) => {
+    await page.goto('/?scenario=oidc&signin=waits');
+    await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByText('Continue in your browser')).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel the sign-in' }).click();
+    // Cancelled by the person: the button again, and no refusal.
+    await expect(page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+
+    // Begun, then the page left: on return the sign-in is still waiting, and the page says so with the way out.
+    await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByText('Continue in your browser')).toBeVisible();
+    await nav(page, 'Pairing').click();
+    await nav(page, 'Sign in').click();
+    await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('A sign-in is already waiting in your browser');
+    await page.getByRole('button', { name: 'Cancel the sign-in' }).click();
+    await expect(page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+
+    // Signed in, the page left and opened again: it says who, and does not offer to sign in.
+    await open(page, 'oidc');
+    await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Signed in' })).toBeVisible();
+    await nav(page, 'Pairing').click();
+    await nav(page, 'Sign in').click();
+    await expect(page.getByRole('heading', { name: 'Signed in' })).toBeVisible();
+    await expect(page.getByText('someone@example.edu')).toBeVisible();
+  });
+
   test('signed out, a workspace cannot be made, and signing in makes it possible', async ({ page }) => {
     await open(page, 'oidc');
     await nav(page, 'Workspaces').click();
@@ -187,6 +216,62 @@ test.describe('the workspaces', () => {
     await expect(alert).toContainText('1 conflict: open the tool you edit these records in');
     await expect(alert).toContainText('AssessmentItem/item-4 · stem');
     await expect(alert).toContainText('Which of these biases…');
+  });
+
+  test('a refusal shows what the hub sent with it: how far a push got and what moved, the rules a merge would break, and words for the person (the 2026-11-09 review’s P6, P7)', async ({ page }) => {
+    await open(page, 'header');
+    const fake = (name: string) => page.evaluate((hook) => (window as unknown as { __fakeCore: Record<string, () => void> }).__fakeCore[hook]!(), name);
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_unit-3/ }).click();
+    await expect(page.getByLabel('Unpushed commits')).toContainText('2 commits not yet on the remote');
+
+    // A push stopped after its first commit: the progress, where it stopped, what changed on the remote.
+    await fake('pushMeetsAMove');
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('412 precondition_failed');
+    await expect(alert).toContainText('1 commit was pushed before this and is on the remote.');
+    await expect(alert).toContainText('It stopped at commit');
+    await expect(alert.getByRole('list', { name: 'Changed on the remote' })).toContainText('AssessmentItem/item-4');
+    // The page read the workspace again after the refusal: one commit is left, not the two it showed before (P7).
+    await expect(page.getByLabel('Unpushed commits')).toContainText('1 commit not yet on the remote');
+
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Pushed 1 commit.');
+    await fake('bringInBreaksARule');
+    await page.getByRole('button', { name: 'Bring in main' }).click();
+    await expect(alert).toContainText('422 invariant_violation');
+    await expect(alert).toContainText('1 rule broken: open the tool you edit these records in');
+    await expect(alert.getByRole('list', { name: 'Broken rules' })).toContainText('ModuleActivityLink/a1b2 · sequence · duplicate_sequence: Sequence 2 is taken');
+
+    // A message written for the shell is said for the person: with the hub paused, not "send start".
+    await page.getByLabel('The hub').getByRole('button', { name: 'Pause the hub' }).click();
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(alert).toContainText('The hub is not running. Resume it from the sidebar, then try again.');
+    await expect(alert).not.toContainText('send start');
+    await expect(alert).toContainText('409 not_started');
+  });
+
+  test('nothing is said about the remote until the status is read, and an unreachable remote is said as such (the 2026-11-09 review’s P1)', async ({ page }) => {
+    await open(page, 'header');
+    await page.evaluate(() => (window as unknown as { __fakeCore: { remoteUnreachable: () => void } }).__fakeCore.remoteUnreachable());
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_glossary/ }).click();
+    await expect(page.getByLabel('Unpushed commits')).toContainText('The remote could not be reached, so whether it has moved is not known.');
+    await page.getByRole('button', { name: '← Workspaces' }).click();
+    await expect(page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_glossary/ })).toContainText('Remote unreachable');
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_glossary/ }).click();
+    await expect(page.getByLabel('Unpushed commits')).not.toContainText('Everything here is on the remote');
+    await page.getByRole('button', { name: '← Workspaces' }).click();
+    // With commits waiting and the remote away, the count is still said.
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_unit-3/ }).click();
+    await expect(page.getByLabel('Unpushed commits')).toContainText('2 commits not yet on the remote');
+
+    // A status that cannot be read at all: the page says it does not know, under the refusal.
+    await page.evaluate(() => (window as unknown as { __fakeCore: { statusUnreadable: () => void } }).__fakeCore.statusUnreadable());
+    await page.getByRole('button', { name: '← Workspaces' }).click();
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_glossary/ }).click();
+    await expect(page.getByRole('alert')).toContainText('500 store_unreadable');
+    await expect(page.getByLabel('Unpushed commits')).toContainText('what is waiting to be pushed is not known');
+    await expect(page.getByLabel('Unpushed commits')).not.toContainText('Everything here is on the remote');
   });
 
   test('a workspace is made from main, and a branch someone else owns is cloned with the remote’s warning', async ({ page }) => {
@@ -518,7 +603,7 @@ test.describe('pairing, settings and the log', () => {
     await nav(page, 'Settings').click();
     await expect(page.getByLabel('The remote', { exact: true })).toContainText(HEADER_REMOTE);
     await expect(page.getByLabel('Versions')).toContainText('0.1.0');
-    await expect(page.getByLabel('Versions')).toContainText('2026-11-06');
+    await expect(page.getByLabel('Versions')).toContainText('2026-11-15');
 
     await page.getByLabel('Workspaces folder').fill('/Users/someone/Dropbox/Armature');
     await page.getByLabel('Port').fill('3102');
@@ -528,9 +613,51 @@ test.describe('pairing, settings and the log', () => {
     await expect(page.getByRole('button', { name: 'Restart the hub' })).toBeHidden();
     await expect(page.getByLabel('The hub')).toContainText('http://127.0.0.1:3102');
 
-    await page.getByLabel('Port').fill('70000');
+    // A port that is not a number, or out of range, is refused on the page and nothing is sent: `Number('31o1')` is
+    // NaN, which travels as null, which the core reads as "restore the default" (the 2026-11-09 review's P2).
+    for (const bad of ['31o1', '70000', '']) {
+      await page.getByLabel('Port').fill(bad);
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(page.getByRole('form', { name: 'This machine' }).getByRole('alert')).toContainText('The port is a whole number from 1 to 65535.');
+    }
+    await page.getByLabel('Port').fill('3102');
+    await page.getByLabel('Older commits kept').fill('many');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('400 bad_settings');
+    await expect(page.getByRole('form', { name: 'This machine' }).getByRole('alert')).toContainText('whole number, 0 or more');
+    await nav(page, 'Pairing').click();
+    await nav(page, 'Settings').click();
+    await expect(page.getByLabel('Port')).toHaveValue('3102');
+    await expect(page.getByLabel('Older commits kept')).toHaveValue('20');
+
+    // What the core refuses is still shown as the core gave it.
+    await page.getByLabel('Workspaces folder').fill('relative/path');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('form', { name: 'This machine' }).getByRole('alert')).toContainText('400 bad_settings');
+  });
+
+  test('a hub that could not start is started from the window once its port is changed (the 2026-11-09 review’s P4)', async ({ page }) => {
+    await page.goto('/?scenario=header&port=busy');
+    // The program opens where the port is put right, and the sidebar says why the hub is not running.
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByLabel('The hub')).toContainText('Port 3101 is in use by another program');
+    await page.getByLabel('The hub').getByRole('button', { name: 'Start the hub' }).click();
+    await expect(page.getByLabel('The hub')).toContainText('Port 3101 is in use');
+
+    await page.getByLabel('Port').fill('3102');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    const offer = page.getByRole('form', { name: 'This machine' }).getByRole('status');
+    await expect(offer).toContainText('Saved. The hub is not running.');
+    await offer.getByRole('button', { name: 'Start the hub' }).click();
+    await expect(page.getByLabel('The hub')).toContainText('The hub is running');
+    await expect(page.getByLabel('The hub')).toContainText('http://127.0.0.1:3102');
+  });
+
+  test('the opening page waits for the core’s start, so a connected person does not open on Connect (the 2026-11-09 review’s P5)', async ({ page }) => {
+    await page.goto('/?scenario=header&start=slow');
+    await expect(page.getByRole('main')).toContainText('Starting the hub…');
+    await expect(page.getByRole('heading', { name: 'Connect to your instance' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Your workspaces' })).toContainText('demo-designer_unit-3');
   });
 
   test('the log keeps the earlier lines and follows the hub, paused and resumed from the sidebar', async ({ page }) => {

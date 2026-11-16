@@ -17,7 +17,7 @@ export function StatusBadges({ status }: { status?: WorkspaceStatus }) {
   return (
     <span className="flex flex-wrap gap-1">
       {status.unpushed > 0 ? <Badge variant="warning">{status.unpushed} unpushed</Badge> : <Badge variant="success">All pushed</Badge>}
-      {'reachable' in remote ? <Badge variant="muted">Remote unreachable</Badge> : remote.moved ? <Badge variant="outline">The remote moved</Badge> : null}
+      {'reachable' in remote ? <Badge variant="muted">{remote.reason === 'signed_out' ? 'Signed out' : 'Remote unreachable'}</Badge> : remote.moved ? <Badge variant="outline">The remote moved</Badge> : null}
     </span>
   );
 }
