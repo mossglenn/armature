@@ -156,6 +156,18 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > merge's check and the target's queue, as grants are, so one written during a merge is unseen by
 > it (the note of 2026-11-13's window). Still not built: the push gate and `checks.json`, and
 > decision 12's patcher.
+>
+> **Later change (2026-11-15, Amos), to decision 8:** a push's override is written as
+> `Armature-Local-Check-Override: <check> reason="..."`, a trailer of its own, not as
+> `Armature-Check-Override`. Decision 7 reserves that name for the remote hub, which refuses it
+> from every client, and a push is a client's write, so the two decisions gave one name to a line
+> only the hub writes and to a pusher's claim. With its own name the claim is kept as sent and
+> never refused, beside `Armature-Authored-At` (ADR-0065 decision 5), and
+> `Armature-Check-Override` keeps meaning that the remote's gate was overridden by someone with
+> the right to merge. Weighed and declined: accepting the reserved name on a push's replay, or
+> reserving it on the merge route only, since any client can make a write look like a replay and
+> the name would stop being the hub's; and keeping the override on the person's machine, which
+> loses the trail decision 8 wanted. Not built: it is the push gate's.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in
