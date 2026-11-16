@@ -113,3 +113,43 @@ describe('applyPatch', () => {
     expect(applyPatch(doc, diffDocument(doc, undefined))).toBeUndefined();
   });
 });
+
+// ADR-0070 decision 12: inside a JSON value the two stores' operations may differ, and applyPatch
+// reads both. The patch below is TerminusDB v12.0.7's own, copied from platform check AP4's record
+// (node scripts/platform_checks.js, 2026-11-15) for the replace of one CheckRequirement's params.
+describe('a patch inside a JSON value (platform check AP4)', () => {
+  const before = { n: 1, ignore: ['a', 'b', 'c'], nested: { keep: 1, change: 1 }, list: [{ id: 'r1', on: true }, { id: 'r2', on: true }] };
+  const after = { alpha: { severity: 'warning' }, added: [3], ignore: ['a', 'x', 'c'], nested: { keep: 1, change: 2 }, list: [{ id: 'r1', on: true }, { id: 'r2', on: false }] };
+  const fromTheStore = {
+    added: { '@after': [3], '@before': null, '@op': 'SwapValue' },
+    alpha: { '@after': { severity: 'warning' }, '@before': null, '@op': 'SwapValue' },
+    ignore: { '@op': 'CopyList', '@rest': { '@op': 'PatchList', '@patch': [{ '@after': 'x', '@before': 'b', '@op': 'SwapValue' }], '@rest': { '@op': 'KeepList' } }, '@to': 1 },
+    list: [{}, { on: { '@after': false, '@before': true, '@op': 'SwapValue' } }],
+    n: { '@after': null, '@before': 1, '@op': 'SwapValue' },
+    nested: { change: { '@after': 2, '@before': 1, '@op': 'SwapValue' } },
+  };
+
+  it("applies the store's own patch: a key added, one removed, a scalar patched in a list, and a list of objects as a plain array of positional patches", () => {
+    same(applyPatch(before, fromTheStore), after);
+  });
+
+  it('applies the positional array on its own: `{}` keeps an element, and an element past the end of the patch is kept', () => {
+    const list = [{ id: 'r1', on: true }, { id: 'r2', on: true }, { id: 'r3', on: true }];
+    same(applyPatch(list, [{}, { on: { '@op': 'SwapValue', '@before': true, '@after': false } }]), [{ id: 'r1', on: true }, { id: 'r2', on: false }, { id: 'r3', on: true }]);
+    same(applyPatch(list, []), list);
+    same(applyPatch({ list }, { list: [{ id: { '@op': 'SwapValue', '@before': 'r1', '@after': 'first' } }] }), { list: [{ id: 'first', on: true }, list[1], list[2]] });
+  });
+
+  it("this store's patch for the same change is a chain where the store's is an array, and gives the same after state", () => {
+    const ours = diffValue(before, after) as Record<string, unknown>;
+    expect(ours.list).toEqual({ '@op': 'CopyList', '@to': 1, '@rest': { '@op': 'PatchList', '@patch': [{ on: { '@op': 'SwapValue', '@before': true, '@after': false } }], '@rest': { '@op': 'KeepList' } } });
+    expect(Array.isArray(fromTheStore.list)).toBe(true);
+    same(applyPatch(before, ours), after);
+    same(applyPatch(before, ours), applyPatch(before, fromTheStore));
+  });
+
+  it('cannot tell a key set to null from a key removed, as the format cannot: both read as removed', () => {
+    expect(diffValue({ a: 1 }, { a: null })).toEqual(diffValue({ a: 1 }, {}));
+    same(applyPatch({ a: 1, b: 2 }, diffValue({ a: 1, b: 2 }, { a: null, b: 2 })), { b: 2 });
+  });
+});

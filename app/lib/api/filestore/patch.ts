@@ -20,6 +20,19 @@ import { canonical } from '../fragments';
  * The segmentation of a list may differ from the store's own where several
  * chains describe one change; every patch here applies with `applyPatch` to
  * give the after state, and the tests hold it to that.
+ *
+ * **Inside a JSON value** (a `sys:JSON` field, `CheckRequirement.params`) the
+ * two stores' operations may differ too (ADR-0070 decision 12): TerminusDB
+ * patches a list of objects of equal length as a plain array of positional
+ * patches, `[{}, { "on": { "@op": "SwapValue", ... } }]`, an empty object for
+ * an element unchanged (platform check AP4), where this module emits a
+ * `PatchList` chain. Neither store's patch is rewritten on its way out.
+ * `applyPatch` is the reference reader of both: it applies the store's
+ * array form as it applies this module's chain, and a test holds it to
+ * AP4's patch as the store gave it. The format cannot tell a key removed
+ * from a key set to `null`, since an absent side is `null`: `applyPatch`
+ * reads `"@after": null` as removed, which inside a JSON value loses a key
+ * whose new value is `null`.
  */
 
 export type Patch = Record<string, unknown>;
@@ -89,6 +102,12 @@ export function diffDocuments(before: ReadonlyMap<string, Record<string, unknown
 
 /** `before` with `patch` applied: the after state (a `Delete` gives undefined). */
 export function applyPatch(before: unknown, patch: unknown): unknown {
+  // TerminusDB's form for a list of objects of equal length inside a JSON value: one patch per position, `{}` for
+  // an element unchanged (check AP4). An element past the patch's end is kept, as past a chain's `KeepList`.
+  if (Array.isArray(patch)) {
+    const list = Array.isArray(before) ? before : [];
+    return [...patch.map((p, i) => applyPatch(list[i], p)), ...list.slice(patch.length)];
+  }
   if (!isRecord(patch)) return before;
   switch (patch['@op']) {
     case undefined: {
