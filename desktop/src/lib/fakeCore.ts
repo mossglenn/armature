@@ -25,7 +25,8 @@ import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, Settings,
  *
  * `?slow` makes each long action (push, bring in, deliver, create, clone, remove) take a moment and
  * show in the state as the shell shows it, so a page's holding of the install button meanwhile can be
- * seen; `?login=fails` makes the system refuse the start-at-login entry, as the shell reports it.
+ * seen; `?login=fails` makes the system refuse the start-at-login entry, as the shell reports it;
+ * `?keychain=fails` makes the keychain refuse to forget a sign-in or keep a new pairing value.
  *
  * Required checks (ADR-0070) are set up by a test through `window.__fakeCore`: `reportRun` (a tool here
  * reports on a workspace's latest commit), `remoteRequires` and `remoteReports` (the instance requires
@@ -205,7 +206,7 @@ const OFFERED: UpdateState = { version: '0.2.0', current: '0.1.0', date: '2026-1
 /** The requests the shell counts as actions in flight (src-tauri/src/core.rs `ACTIONS`). */
 const ACTIONS = ['create', 'clone', 'push', 'bringIn', 'deliver', 'remove'];
 
-export function fakeCore(scenario = 'header', update?: string, options: { slow?: boolean; login?: string } = {}): Backend {
+export function fakeCore(scenario = 'header', update?: string, options: { slow?: boolean; login?: string; keychain?: string } = {}): Backend {
   const model = modelFor(scenario);
   if (update === 'available' || update === 'fails') model.update = { ...OFFERED };
   const actions: string[] = [];
@@ -364,13 +365,24 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       model.signedIn = { id: 'User/someone', externalId: 'someone@example.edu', displayName: 'Someone at Example' };
       return ok({ signedIn: true, person: model.signedIn, staysSignedIn: offline !== false });
     },
+    // `keychain`: what the shell adds to a reply when the keychain refused what the reply implies (src-tauri/src/core.rs `after_reply`).
     signOut: () => {
       model.signedIn = undefined;
-      return ok({ signedOut: true });
+      return ok({
+        signedOut: true,
+        ...(options.keychain === 'fails'
+          ? { keychain: 'You are signed out for now, but the sign-in kept in the keychain could not be removed (the keychain is locked), so the program will be signed in again at its next start; remove it in the keychain, or sign out again' }
+          : {}),
+      });
     },
     resetPairing: () => {
       model.localToken = Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('');
-      return ok({ localToken: model.localToken });
+      return ok({
+        localToken: model.localToken,
+        ...(options.keychain === 'fails'
+          ? { keychain: 'The new pairing value is in force now, but it could not be kept in the keychain (the keychain is locked), so the old value returns at the program’s next start; reset again once the keychain can be written' }
+          : {}),
+      });
     },
     toolIdentity: () => {
       const user = ownerOf();

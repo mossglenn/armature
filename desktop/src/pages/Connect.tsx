@@ -20,7 +20,7 @@ import { useRequest } from '@/lib/useShell';
  * for the person's identifier instead, and says it is a development arrangement. The link is
  * untrusted: it only fills the address field.
  */
-export function Connect({ backend, state, link, onDone }: { backend: Backend; state?: ShellState; link?: string; onDone: (next: 'signIn' | 'workspaces') => void }) {
+export function Connect({ backend, state, link, onDone }: { backend: Backend; state?: ShellState; link?: string; onDone: (next: 'signIn' | 'workspaces', keychain?: string) => void }) {
   const { run, busy } = useRequest(backend);
   const current = typeof state?.started?.remote === 'string' ? state.started.remote : undefined;
   const needsUser = state?.started?.needs === 'user';
@@ -29,6 +29,7 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
   const [user, setUser] = useState('');
   const [askUser, setAskUser] = useState(needsUser);
+  const [keychain, setKeychain] = useState<string | undefined>();
 
   useEffect(() => {
     if (link) {
@@ -55,11 +56,13 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
   const confirm = async () => {
     if (!profile) return;
     setRefusal(undefined);
-    const outcome = await run<SettingsReply>('connect', { remote: profile.remote, identity: profile.identity, ...(profile.instance ? { instance: profile.instance } : {}) });
+    const outcome = await run<SettingsReply & { keychain?: string }>('connect', { remote: profile.remote, identity: profile.identity, ...(profile.instance ? { instance: profile.instance } : {}) });
     if (!outcome.ok) return setRefusal(outcome);
+    // The shell's sentence when the keychain kept the sign-in for the remote left behind.
+    setKeychain(outcome.body.keychain);
     if (profile.identity.resolver === 'header' && !outcome.body.settings.user) return setAskUser(true);
     await restartHub();
-    onDone(profile.identity.resolver === 'oidc' ? 'signIn' : 'workspaces');
+    onDone(profile.identity.resolver === 'oidc' ? 'signIn' : 'workspaces', outcome.body.keychain);
   };
 
   const saveUser = async () => {
@@ -67,7 +70,7 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
     const outcome = await run<SettingsReply>('settings', { set: { user } });
     if (!outcome.ok) return setRefusal(outcome);
     await restartHub();
-    onDone('workspaces');
+    onDone('workspaces', keychain);
   };
 
   if (askUser) {

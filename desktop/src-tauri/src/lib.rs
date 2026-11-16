@@ -27,8 +27,14 @@ async fn core_request(app: AppHandle, request: Value) -> Result<Value, String> {
     if !relay::allowed_from_webview(&request_type) {
         return Ok(json!({ "status": 403, "body": { "error": "shell_only", "message": format!("{request_type} is the shell's own request, not a page's") } }));
     }
-    let reply = core::ask(&app, request).await?;
-    core::after_reply(&app, &request_type, &reply);
+    let mut reply = core::ask(&app, request).await?;
+    // A keychain that refused what the reply implies (the sign-in removed, the new pairing value
+    // kept) is said in the reply, so the page tells the person rather than only the log.
+    if let Some(problem) = core::after_reply(&app, &request_type, &reply) {
+        if let Some(body) = reply["body"].as_object_mut() {
+            body.insert("keychain".to_string(), json!(problem));
+        }
+    }
     Ok(reply)
 }
 
