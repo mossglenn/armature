@@ -106,3 +106,46 @@ export interface WorkspaceWarning {
   message: string;
   holders: string[];
 }
+
+/**
+ * One required check's verdict, as a gate gives it (ADR-0070 decisions 6 and 8): in a push's or a
+ * delivery's refusal (`checks_pending`, `checks_failed`), in its success, and in a delivery's dry
+ * run. `reporter` is absent on a personal requirement, where any run on the machine counts.
+ */
+export interface CheckVerdict {
+  check: string;
+  requirement: string;
+  level: 'Required' | 'Advisory';
+  locked: boolean;
+  reporter?: string;
+  paramsHash: string;
+  conclusion: 'pass' | 'fail' | 'neutral' | 'error' | 'pending';
+  run?: { id: string; reportedAt: string; summary?: string; detailsUrl?: string };
+  satisfied: boolean;
+  overridden?: { reason: string };
+}
+
+export const isVerdicts = (value: unknown): value is CheckVerdict[] =>
+  Array.isArray(value) && value.every((v) => typeof v === 'object' && v !== null && typeof (v as CheckVerdict).check === 'string' && typeof (v as CheckVerdict).conclusion === 'string');
+
+/** A verdict that stops its gate: required, not satisfied, not set aside. */
+export const stops = (verdict: CheckVerdict): boolean => verdict.level === 'Required' && !verdict.satisfied && !verdict.overridden;
+
+/** A check a person asks of their own pushes: an entry of `checks.json` in the workspaces folder (ADR-0070 decision 8). */
+export interface PersonalRequirement {
+  check: string;
+  /** The workspace it binds; every workspace when absent. */
+  branch?: string;
+  fromPrefix?: string;
+  level: 'Required' | 'Advisory';
+  params: unknown;
+  status: 'Active' | 'Revoked';
+  rationale?: string;
+}
+
+/** `checks`' answer: the file, what it holds, and why the push gate cannot read it when it cannot. */
+export interface PersonalChecks {
+  file: string;
+  requirements: PersonalRequirement[];
+  invalid?: { message: string; issues: Array<{ path: string; message: string }> };
+}

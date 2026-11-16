@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { CheckVerdicts, type Override } from '@/components/CheckVerdicts';
 import { PageHeader } from '@/components/PageHeader';
 import { RefusalNotice } from '@/components/RefusalNotice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Backend } from '@/lib/backend';
-import type { CommitEntry, Refusal, RemoveResult, WorkspaceStatus } from '@/lib/types';
+import { isVerdicts, stops, type CheckVerdict, type CommitEntry, type Refusal, type RemoveResult, type WorkspaceStatus } from '@/lib/types';
 import { shortCommit } from '@/lib/utils';
 import { useRequest } from '@/lib/useShell';
 import { StatusBadges } from './Workspaces';
@@ -13,6 +14,7 @@ import { StatusBadges } from './Workspaces';
 interface PushResult {
   pushed: unknown[];
   upToDate: boolean;
+  checks?: CheckVerdict[];
 }
 interface BringInResult {
   upToDate: boolean;
@@ -21,6 +23,29 @@ interface BringInResult {
 interface DeliverResult {
   delivered: { commit: string; upToDate: boolean };
   deleted: boolean;
+  checks?: CheckVerdict[];
+  /** A dry run: what the remote's merge into main would find, nothing changed. */
+  dryRun?: true;
+  conflicts?: unknown[];
+  violations?: unknown[];
+}
+
+/** The two actions a gate stops: a push, by the person's own checks; a delivery, by the instance's. */
+type Gated = 'push' | 'deliver';
+const GATE_CODES = ['checks_pending', 'checks_failed'];
+
+/** What a delivery's dry run found, as a sentence. */
+export function dryRunSentence(result: DeliverResult): string {
+  const conflicts = result.conflicts?.length ?? 0;
+  const violations = result.violations?.length ?? 0;
+  const stopping = (result.checks ?? []).filter(stops);
+  const found = [
+    conflicts ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}` : '',
+    violations ? `${violations} broken rule${violations === 1 ? '' : 's'}` : '',
+    stopping.length ? `${stopping.length} required check${stopping.length === 1 ? '' : 's'} not passed` : '',
+  ].filter(Boolean);
+  if (found.length) return `Nothing was delivered. A delivery now would be refused: ${found.join(', ')}.`;
+  return result.checks?.length ? 'Nothing was delivered. A delivery now would go through: every required check has passed.' : 'Nothing was delivered. A delivery now would go through.';
 }
 
 /** A count of commits, as a sentence says it: "1 commit", "3 commits". */
@@ -49,6 +74,12 @@ const firstLine = (message: string) => message.split('\n')[0] ?? message;
  * messages; push; bring main in with an optional message; deliver with a required one and the choice
  * of deleting the workspace. Each action's refusal is shown as the hub gave it, with its code; a
  * merge's conflicts are listed, and their review is the tool's (plan §6).
+ *
+ * Required checks (ADR-0070; plan §14, step 5a): a push the person's own checks stop, and a delivery
+ * the instance's checks stop, list the verdicts under the refusal, each with a field for the reason
+ * it is set aside; the action then goes again with those overrides. A delivery can be asked about
+ * first, which changes nothing and shows the instance's verdicts. An action that went through shows
+ * the verdicts it relied on.
  */
 export function Workspace({ backend, branch, back }: { backend: Backend; branch: string; back: (notice?: string) => void }) {
   const { run, busy } = useRequest(backend);
@@ -62,6 +93,10 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   /** The number of unpushed commits the person was shown when they asked to discard: what the confirmation names and the hub checks. */
   const [confirmingDiscard, setConfirmingDiscard] = useState<number | undefined>();
+  /** The verdicts of the gate that stopped the last push or delivery, for the override. */
+  const [gate, setGate] = useState<{ action: Gated; checks: CheckVerdict[] } | undefined>();
+  /** The verdicts the last push, delivery or dry run answered with when it was not refused. */
+  const [relied, setRelied] = useState<{ action: Gated; checks: CheckVerdict[] } | undefined>();
 
   const load = useCallback(async () => {
     const [s, c] = await Promise.all([run<WorkspaceStatus>('status', { workspace: branch }), run<{ commits: CommitEntry[] }>('commits', { workspace: branch, count: 50 })]);
@@ -74,12 +109,33 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   const act = async <T,>(type: string, fields: Record<string, unknown>, said: (body: T) => string) => {
     setRefusal(undefined);
     setDone(undefined);
+    setGate(undefined);
+    setRelied(undefined);
     const outcome = await run<T>(type, { workspace: branch, ...fields });
-    if (!outcome.ok) return setRefusal(outcome);
+    const gated = type === 'push' || type === 'deliver' ? type : undefined;
+    if (!outcome.ok) {
+      if (gated && GATE_CODES.includes(outcome.refusal.error) && isVerdicts(outcome.refusal.checks)) setGate({ action: gated, checks: outcome.refusal.checks });
+      return setRefusal(outcome);
+    }
+    const checks = (outcome.body as { checks?: unknown } | null)?.checks;
+    if (gated && isVerdicts(checks) && checks.length) setRelied({ action: gated, checks });
     setDone(said(outcome.body));
     await load();
     return outcome.body;
   };
+
+  const pushedSentence = (r: PushResult) => (r.upToDate ? 'Nothing to push: the remote has everything.' : `Pushed ${commitsOf(r.pushed.length)}.`);
+  const deliver = (extra: { overrides?: Override[]; dryRun?: true } = {}) =>
+    act<DeliverResult>(
+      'deliver',
+      // A dry run commits nothing, so it needs no reason of its own; the route still asks for a message.
+      { message: deliverMessage.trim() || (extra.dryRun ? 'Asking what a delivery would find' : ''), ...(deleteAfter && !extra.dryRun ? { deleteWorkspace: true } : {}), ...extra },
+      (r) => (r.dryRun ? dryRunSentence(r) : r.deleted ? `Delivered into main as ${shortCommit(r.delivered.commit)}; the workspace is deleted.` : `Delivered into main as ${shortCommit(r.delivered.commit)}.`)
+    ).then((r) => {
+      if (!r || r.dryRun) return;
+      if (r.deleted) back(`${branch} is delivered into main and deleted, here and on the remote.`);
+      else setDeliverMessage('');
+    });
 
   const unpushed = status ? commits.slice(0, status.unpushed) : [];
   return (
@@ -110,9 +166,25 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
           {done}
         </p>
       )}
+      {relied && (
+        <div className="mt-4">
+          <CheckVerdicts verdicts={relied.checks} whose={relied.action === 'push' ? 'yours' : 'instance'} />
+        </div>
+      )}
       {refusal && (
         <div className="mt-4">
           <RefusalNotice {...refusal} />
+        </div>
+      )}
+      {gate && (
+        <div className="mt-4">
+          <CheckVerdicts
+            verdicts={gate.checks}
+            whose={gate.action === 'push' ? 'yours' : 'instance'}
+            again={gate.action === 'push' ? 'Push anyway' : 'Deliver anyway'}
+            busy={busy !== undefined}
+            onOverride={(overrides) => void (gate.action === 'push' ? act<PushResult>('push', { overrides }, pushedSentence) : deliver({ overrides }))}
+          />
         </div>
       )}
 
@@ -123,7 +195,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
           <Button
             className="mt-auto"
             disabled={busy !== undefined}
-            onClick={() => void act<PushResult>('push', {}, (r) => (r.upToDate ? 'Nothing to push: the remote has everything.' : `Pushed ${r.pushed.length} commit${r.pushed.length === 1 ? '' : 's'}.`))}
+            onClick={() => void act<PushResult>('push', {}, pushedSentence)}
           >
             {busy === 'push' ? 'Pushing…' : 'Push'}
           </Button>
@@ -150,12 +222,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
           aria-label="Deliver"
           onSubmit={(e) => {
             e.preventDefault();
-            void act<DeliverResult>('deliver', { message: deliverMessage.trim(), ...(deleteAfter ? { deleteWorkspace: true } : {}) }, (r) =>
-              r.deleted ? `Delivered into main as ${shortCommit(r.delivered.commit)}; the workspace is deleted.` : `Delivered into main as ${shortCommit(r.delivered.commit)}.`
-            ).then((r) => {
-              if (r?.deleted) back(`${branch} is delivered into main and deleted, here and on the remote.`);
-              else setDeliverMessage('');
-            });
+            void deliver();
           }}
         >
           <p className="font-medium">Deliver into main</p>
@@ -165,9 +232,14 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
             <input type="checkbox" checked={deleteAfter} onChange={(e) => setDeleteAfter(e.target.checked)} />
             Delete the workspace afterwards
           </label>
-          <Button type="submit" variant="outline" className="mt-auto" disabled={!deliverMessage.trim() || busy !== undefined}>
-            {busy === 'deliver' ? 'Delivering…' : 'Deliver'}
-          </Button>
+          <div className="mt-auto flex flex-col gap-2">
+            <Button type="button" variant="ghost" size="sm" disabled={busy !== undefined} onClick={() => void deliver({ dryRun: true })}>
+              Ask what a delivery would find
+            </Button>
+            <Button type="submit" variant="outline" disabled={!deliverMessage.trim() || busy !== undefined}>
+              {busy === 'deliver' ? 'Delivering…' : 'Deliver'}
+            </Button>
+          </div>
         </form>
       </div>
 

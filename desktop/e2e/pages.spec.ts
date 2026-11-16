@@ -211,6 +211,174 @@ test.describe('the workspaces', () => {
   });
 });
 
+interface ChecksHooks {
+  reportRun: (branch: string, check: string, conclusion: string, summary?: string, detailsUrl?: string) => void;
+  remoteRequires: (check: string, locked?: boolean) => void;
+  remoteReports: (branch: string, check: string, conclusion: string, summary?: string) => void;
+  breakChecksFile: () => void;
+}
+const hooks = <T extends unknown[]>(page: Page, work: (fake: ChecksHooks, ...args: T) => void, ...args: T) =>
+  page.evaluate(([source, given]) => new Function('fake', '...args', `return (${source})(fake, ...args)`)((window as unknown as { __fakeCore: ChecksHooks }).__fakeCore, ...(given as unknown[])), [work.toString(), args] as const);
+
+test.describe('required checks', () => {
+  const UNIT3 = 'demo-designer_unit-3';
+  const GLOSSARY = 'demo-designer_glossary';
+  const openWorkspace = (page: Page, branch: string) => page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: new RegExp(branch) }).click();
+  const checks = (page: Page) => page.getByLabel('Checks', { exact: true });
+
+  test('a check of your own is added in Settings, stops a push until its tool reports, and a failing one is set aside with a reason', async ({ page }) => {
+    await open(page, 'header');
+    await nav(page, 'Settings').click();
+    const mine = page.getByRole('form', { name: 'Checks of your own' });
+    await expect(mine).toContainText('No checks: every push goes straight to the remote.');
+    await expect(mine).toContainText('workspaces/checks.json');
+
+    await mine.getByRole('button', { name: 'Add a check' }).click();
+    await mine.getByLabel('Check', { exact: true }).fill('lint/mine');
+    await mine.getByLabel('The tool’s settings (JSON)').fill('{"strict": true');
+    await mine.getByRole('button', { name: 'Save checks' }).click();
+    await expect(mine.getByRole('alert')).toContainText('The settings of lint/mine are not JSON');
+    await mine.getByLabel('The tool’s settings (JSON)').fill('{"strict": true}');
+    await mine.getByLabel('Why (optional)').fill('Before anything leaves this machine');
+    await mine.getByRole('button', { name: 'Save checks' }).click();
+    await expect(mine).toContainText('Saved. The next push reads them.');
+    // Kept as the core wrote it: the settings in the hub's order of reading, the check in force.
+    await expect(mine.getByLabel('The tool’s settings (JSON)')).toHaveValue('{"strict":true}');
+    await expect(mine.getByLabel('In force')).toBeChecked();
+
+    await nav(page, 'Workspaces').click();
+    await openWorkspace(page, UNIT3);
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('409 checks_pending');
+    await expect(page.getByRole('alert')).toContainText('from this machine');
+    await expect(checks(page)).toContainText('Checks you ask of your own pushes');
+    await expect(checks(page).getByRole('listitem', { name: 'lint/mine' })).toContainText('not reported yet');
+    await expect(page.getByLabel('Unpushed commits')).toContainText('2 commits not yet on the remote');
+
+    await hooks(page, (fake, branch) => fake.reportRun(branch, 'lint/mine', 'fail', '2 errors, 1 warning', 'http://127.0.0.1:4100/runs/7'), UNIT3);
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('422 checks_failed');
+    await expect(checks(page).getByRole('listitem', { name: 'lint/mine' })).toContainText('failed');
+    await expect(checks(page)).toContainText('2 errors, 1 warning');
+    await expect(checks(page)).toContainText('http://127.0.0.1:4100/runs/7');
+
+    // An override needs its reason; then the push goes, and the page shows what it relied on.
+    await expect(page.getByRole('button', { name: 'Push anyway' })).toBeDisabled();
+    await page.getByLabel('Why lint/mine is set aside').fill('Known and harmless');
+    await page.getByRole('button', { name: 'Push anyway' }).click();
+    await expect(page.getByRole('status')).toContainText('Pushed 2 commits.');
+    await expect(checks(page)).toContainText('Set aside: Known and harmless');
+    await expect(page.getByRole('button', { name: 'Push anyway' })).toBeHidden();
+    await expect(page.getByLabel('Unpushed commits')).toContainText('Everything here is on the remote');
+  });
+
+  test('a passing run lets a push through, an advisory check never stops one, and a check taken out of force gates nothing', async ({ page }) => {
+    await open(page, 'header');
+    await nav(page, 'Settings').click();
+    const mine = page.getByRole('form', { name: 'Checks of your own' });
+    await mine.getByRole('button', { name: 'Add a check' }).click();
+    await mine.getByLabel('Check', { exact: true }).fill('lint/mine');
+    await mine.getByLabel('Workspace', { exact: true }).selectOption(UNIT3);
+    await mine.getByRole('button', { name: 'Add a check' }).click();
+    const advice = mine.getByRole('listitem', { name: 'Check 2' });
+    await advice.getByLabel('Check', { exact: true }).fill('style/advice');
+    await mine.getByRole('listitem', { name: 'style/advice' }).getByLabel('When it has not passed').selectOption('Advisory');
+    // The same check for the same workspaces twice is refused, since an override could not say which it sets aside.
+    await mine.getByRole('button', { name: 'Add a check' }).click();
+    await mine.getByRole('listitem', { name: 'Check 3' }).getByLabel('Check', { exact: true }).fill('style/advice');
+    await mine.getByRole('button', { name: 'Save checks' }).click();
+    await expect(mine.getByRole('alert')).toContainText('400 bad_request');
+    await mine.getByRole('listitem', { name: 'style/advice' }).last().getByRole('button', { name: 'Remove' }).click();
+    await mine.getByRole('button', { name: 'Save checks' }).click();
+    await expect(mine).toContainText('Saved.');
+
+    await nav(page, 'Workspaces').click();
+    await openWorkspace(page, UNIT3);
+    await hooks(page, (fake, branch) => fake.reportRun(branch, 'lint/mine', 'pass', 'No problems'), UNIT3);
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Pushed 2 commits.');
+    await expect(checks(page).getByRole('listitem', { name: 'lint/mine' })).toContainText('passed');
+    await expect(checks(page).getByRole('listitem', { name: 'style/advice' })).toContainText('not reported yet');
+    await expect(checks(page).getByRole('listitem', { name: 'style/advice' })).toContainText('advisory');
+
+    // Bound to unit-3 alone, the required check asks nothing of the glossary.
+    await page.getByRole('button', { name: '← Workspaces' }).click();
+    await hooks(page, (fake, branch) => (fake as unknown as { writeAsTool: (b: string, m: string) => void }).writeAsTool(branch, 'Define "anchoring"'), GLOSSARY);
+    await openWorkspace(page, GLOSSARY);
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Pushed 1 commit.');
+  });
+
+  test('a checks file the push gate cannot read stops the push, says where, and is replaced from Settings', async ({ page }) => {
+    await open(page, 'header');
+    await hooks(page, (fake) => fake.breakChecksFile());
+    await openWorkspace(page, UNIT3);
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('422 personal_checks_invalid');
+    await expect(alert).toContainText('requirements[0].check: check is the name of a check');
+    await expect(alert).toContainText('Put the file right on the Settings page');
+
+    await nav(page, 'Settings').click();
+    const mine = page.getByRole('form', { name: 'Checks of your own' });
+    await expect(mine.getByRole('alert')).toContainText('The file cannot be read as checks');
+    await expect(mine.getByRole('alert')).toContainText('requirements[0].check');
+    await mine.getByRole('button', { name: 'Save checks' }).click();
+    await expect(mine).toContainText('No checks: every push goes straight to the remote.');
+
+    await nav(page, 'Workspaces').click();
+    await openWorkspace(page, UNIT3);
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Pushed 2 commits.');
+  });
+
+  test('a delivery the instance’s checks stop is asked about first, waited for, then set aside with a reason', async ({ page }) => {
+    await open(page, 'header');
+    await hooks(page, (fake) => fake.remoteRequires('lint/team'));
+    await openWorkspace(page, GLOSSARY);
+
+    // Asking changes nothing and needs no reason of its own.
+    await page.getByRole('button', { name: 'Ask what a delivery would find' }).click();
+    await expect(page.getByRole('status')).toContainText('Nothing was delivered. A delivery now would be refused: 1 required check not passed.');
+    await expect(checks(page)).toContainText('Checks your instance requires');
+    await expect(checks(page).getByRole('listitem', { name: 'lint/team' })).toContainText('not reported yet');
+    await expect(page.getByRole('button', { name: 'Deliver anyway' })).toBeHidden();
+
+    await page.getByLabel('Why (required)').fill('The glossary, reviewed');
+    await page.getByRole('button', { name: 'Deliver', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('409 checks_pending');
+    await expect(page.getByRole('alert')).toContainText('from the remote');
+
+    await hooks(page, (fake, branch) => fake.remoteReports(branch, 'lint/team', 'fail', 'Objective 3 has no practice activity'), GLOSSARY);
+    await page.getByRole('button', { name: 'Deliver', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('422 checks_failed');
+    await expect(checks(page)).toContainText('Objective 3 has no practice activity');
+    // The reason for the delivery is kept across the refusal, and the override carries it.
+    await expect(page.getByLabel('Why (required)')).toHaveValue('The glossary, reviewed');
+    await page.getByLabel('Why lint/team is set aside').fill('The activity lands in unit 4, agreed with J.');
+    await page.getByRole('button', { name: 'Deliver anyway' }).click();
+    await expect(page.getByRole('status')).toContainText('Delivered into main as');
+    await expect(checks(page)).toContainText('Set aside: The activity lands in unit 4, agreed with J.');
+
+    await page.getByRole('button', { name: 'Ask what a delivery would find' }).click();
+    await expect(page.getByRole('status')).toContainText('A delivery now would be refused');
+  });
+
+  test('a locked check is said to be the administrator’s, and the remote’s refusal of an override is shown as given', async ({ page }) => {
+    await open(page, 'header');
+    await hooks(page, (fake) => fake.remoteRequires('policy/accessibility', true));
+    await openWorkspace(page, GLOSSARY);
+    await page.getByLabel('Why (required)').fill('The glossary');
+    await page.getByRole('button', { name: 'Deliver', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('409 checks_pending');
+    await expect(checks(page).getByRole('listitem', { name: 'policy/accessibility' })).toContainText('locked');
+    await page.getByLabel(/Why policy\/accessibility is set aside \(locked/).fill('Trying anyway');
+    await page.getByRole('button', { name: 'Deliver anyway' }).click();
+    await expect(page.getByRole('alert')).toContainText('403 forbidden');
+    await expect(page.getByRole('alert')).toContainText('from the remote');
+  });
+});
+
 test.describe('removing a workspace', () => {
   test('refused with anything unpushed, confirmed first, and the remote keeps the branch until main has its work', async ({ page }) => {
     await open(page, 'header');
@@ -329,14 +497,14 @@ test.describe('pairing, settings and the log', () => {
 
     await page.getByLabel('Workspaces folder').fill('/Users/someone/Dropbox/Armature');
     await page.getByLabel('Port').fill('3102');
-    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('looks like a folder a sync client keeps in sync')).toBeVisible();
     await page.getByRole('button', { name: 'Restart the hub' }).click();
     await expect(page.getByRole('button', { name: 'Restart the hub' })).toBeHidden();
     await expect(page.getByLabel('The hub')).toContainText('http://127.0.0.1:3102');
 
     await page.getByLabel('Port').fill('70000');
-    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('400 bad_settings');
   });
 
