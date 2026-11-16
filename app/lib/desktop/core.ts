@@ -2,6 +2,8 @@ import type { Readable, Writable } from 'node:stream';
 import { isAbsolute } from 'node:path';
 import { createClient, HubError, type Discovery } from '@armature/client';
 import { createApp } from '../api/app';
+import { RunStore } from '../api/checks';
+import { EventFeed } from '../api/events';
 import type { HubConfig } from '../api/config';
 import { ApiError } from '../api/errors';
 import { openFileStore } from '../api/filestore/store';
@@ -222,6 +224,9 @@ export function runCore(options: CoreOptions): Core {
       allowedHosts: new Set(),
       allowedOrigins: new Set(),
       workspaces: folderRecords(folder),
+      // One hub in two apps, the served one and the program's own: the runs a plugin posts gate the program's push.
+      runs: new RunStore(),
+      feed: new EventFeed(),
     };
     let hub: RunningHub;
     try {
@@ -482,7 +487,8 @@ export function runCore(options: CoreOptions): Core {
     },
     create: async (request) => viaProgram('POST', '/workspace', { name: text(request, 'name'), ...(request.from !== undefined ? { from: text(request, 'from') } : {}) }, true),
     clone: async (request) => viaProgram('POST', '/workspace', { existing: text(request, 'branch') }, true),
-    push: async (request) => viaProgram('POST', `/workspace/${named(request)}/push`, undefined, true),
+    // `overrides`, [{ check, reason }], sets personal requirements aside for this push (ADR-0070 decision 8); the route checks its shape.
+    push: async (request) => viaProgram('POST', `/workspace/${named(request)}/push`, request.overrides === undefined ? undefined : { overrides: request.overrides }, true),
     bringIn: async (request) => viaProgram('POST', `/workspace/${named(request)}/bring-in`, request.message === undefined ? undefined : { message: request.message }, true),
     // DELETE /workspace/:name (since 2026-11-07): this machine's copy, and the remote's branch when main holds its head.
     // With `discard`, the number of unpushed commits the person confirmed giving up (since 2026-11-12): this machine's alone.
@@ -494,7 +500,18 @@ export function runCore(options: CoreOptions): Core {
       return viaProgram('DELETE', `/workspace/${named(request)}${discard === undefined ? '' : `?discard=${discard}`}`, undefined, true);
     },
     deliver: async (request) =>
-      viaProgram('POST', `/workspace/${named(request)}/deliver`, { message: request.message, ...(request.deleteWorkspace !== undefined ? { deleteWorkspace: request.deleteWorkspace } : {}) }, true),
+      viaProgram(
+        'POST',
+        `/workspace/${named(request)}/deliver`,
+        {
+          message: request.message,
+          ...(request.deleteWorkspace !== undefined ? { deleteWorkspace: request.deleteWorkspace } : {}),
+          // The remote's gate: `overrides` are the remote merge's, `dryRun` asks what it would find (ADR-0070 decisions 6 and 8).
+          ...(request.overrides !== undefined ? { overrides: request.overrides } : {}),
+          ...(request.dryRun !== undefined ? { dryRun: request.dryRun } : {}),
+        },
+        true
+      ),
   };
 
   const channel = openChannel({ input: options.input, output: options.output, handlerFor: (type) => handlers[type] });

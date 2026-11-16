@@ -3,6 +3,7 @@ import { storeOf, type HubConfig } from '../config';
 import { ApiError } from '../errors';
 import { MIRROR_BRANCH } from '../role';
 import { createOperatorStore, isUnknownRef, type OperatorStore } from '../store';
+import { mirrorMain } from './clone';
 import { localCommitsSince, mappingOf } from './commits';
 import { settleBringIn, writeMerged, type Merged } from './merged';
 import { emptyPushTable, type WorkspaceRecord, type WorkspaceRecords } from './records';
@@ -116,6 +117,21 @@ export interface DeliverResult {
   delivered: { commit: string; base: string; source: string; target: string; upToDate: boolean };
   /** True when the workspace was deleted on the remote and here. */
   deleted: boolean;
+  /** The remote's verdicts on its required checks for this merge (ADR-0070 decision 6); absent when none applied. */
+  checks?: MergeResult['checks'];
+  /** On a dry run: what the remote's merge would find, nothing merged. */
+  dryRun?: true;
+  conflicts?: MergeResult['conflicts'];
+  violations?: MergeResult['violations'];
+}
+
+export interface DeliverOptions {
+  message: string;
+  deleteWorkspace?: boolean;
+  /** The remote merge's `overrides`: its required checks the caller takes on themselves, where they may. */
+  overrides?: Array<{ check: string; reason: string }>;
+  /** Asks the remote what the merge would find, its checks' verdicts among it, and merges nothing. */
+  dryRun?: boolean;
 }
 
 /** The local commits the push table does not hold, and whether the local branch is still there; one already gone has none. */
@@ -197,7 +213,7 @@ export function deliver(
   hub: HubConfig,
   records: WorkspaceRecords,
   record: WorkspaceRecord,
-  opts: { message: string; deleteWorkspace?: boolean }
+  opts: DeliverOptions
 ): Promise<DeliverResult> {
   return localOf(hub, record.branch).exclusive(() => deliverHeld(hub, records, record, opts));
 }
@@ -206,11 +222,14 @@ async function deliverHeld(
   hub: HubConfig,
   records: WorkspaceRecords,
   record: WorkspaceRecord,
-  opts: { message: string; deleteWorkspace?: boolean }
+  opts: DeliverOptions
 ): Promise<DeliverResult> {
   const { branch } = record;
   await requireNothingUnpushed(hub, records, record, 'delivering');
   const remote = await ownerClient(hub, record);
+  // The remote's requirements, mirrored again for the tools here to read (ADR-0070 decision 8). The remote enforces
+  // them on the merge below, and its refusals, `checks_pending` and `checks_failed` with their verdicts, come back as given.
+  await mirrorMain(hub, remote, { id: record.owner, externalId: record.ownerExternalId });
   // main brought in cleanly: the merge of main into the workspace has nothing left to do.
   const preview: MergeResult = (await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: 'preview', dryRun: true }))).data;
   if (!preview.upToDate) {
@@ -219,12 +238,18 @@ async function deliverHeld(
       violations: preview.violations ?? [],
     });
   }
-  const delivered: MergeResult = (await fromRemote(hub, () => remote.branches.merge(MIRROR_BRANCH, { from: branch, message: opts.message }))).data;
+  const overrides = opts.overrides?.length ? { overrides: opts.overrides } : {};
+  const delivered: MergeResult = (
+    await fromRemote(hub, () => remote.branches.merge(MIRROR_BRANCH, { from: branch, message: opts.message, ...overrides, ...(opts.dryRun ? { dryRun: true } : {}) }))
+  ).data;
   const result: DeliverResult = {
     workspace: record,
     delivered: { commit: delivered.commit ?? '', base: delivered.base, source: delivered.source, target: delivered.target, upToDate: delivered.upToDate },
     deleted: false,
+    ...(delivered.checks ? { checks: delivered.checks } : {}),
   };
+  // A dry run is the remote's: what its merge would find, its checks' verdicts among it, and nothing changed anywhere.
+  if (opts.dryRun) return { ...result, dryRun: true, conflicts: delivered.conflicts ?? [], violations: delivered.violations ?? [] };
   if (!opts.deleteWorkspace) return result;
   await fromRemote(hub, () => remote.branches.delete(branch));
   await deleteLocal(hub, branch);

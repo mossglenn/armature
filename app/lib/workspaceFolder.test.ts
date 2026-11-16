@@ -42,6 +42,16 @@ describe('folderRecords', () => {
     expect(await readdir(join(dir, 'not-yet', 'a_one'))).toEqual(['workspace.json']);
   });
 
+  it("reads the owner's checks.json from the folder's root as text, undefined when there is none, and lists no workspace for it", async () => {
+    const records = folderRecords(dir);
+    expect(await records.getChecks()).toBeUndefined();
+    await writeFile(join(dir, 'checks.json'), '{"requirements":[]}');
+    expect(await records.getChecks()).toBe('{"requirements":[]}');
+    await records.put(record('a_one'));
+    expect((await records.list()).map((r) => r.branch)).toEqual(['a_one']);
+    await rm(join(dir, 'checks.json'));
+  });
+
   it('replaces a record whole and leaves no temporary file behind', async () => {
     const records = folderRecords(dir);
     await records.put(record('a_one'));

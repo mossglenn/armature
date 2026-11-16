@@ -107,7 +107,7 @@ describe('every commit of the API is in the write queue', () => {
     },
     'workspace/bringIn.ts': { calls: 1, queue: 'workspace/bringIn.ts' },
     'workspace/merged.ts': { calls: 1, queue: 'workspace/bringIn.ts', outside: 'None: a bring-in holds the queue, and push takes it to settle one (workspace/push.ts)' },
-    'workspace/clone.ts': { calls: 6, queue: 'routes/workspace.ts', outside: 'None: the mirror takes its own queue here, the clone runs in the one its route holds' },
+    'workspace/clone.ts': { calls: 7, queue: 'routes/workspace.ts', outside: 'None: the mirror takes its own queue here, the clone runs in the one its route holds' },
     'workspace/snapshots.ts': { calls: 3, queue: 'workspace/snapshots.ts' },
   };
 

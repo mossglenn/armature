@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Context } from 'hono';
 import type { TerminusDocument } from './store';
-import { CHECK_OVERRIDE_TRAILER, CHECK_TRAILER } from './trailers';
+import { ApiError } from './errors';
+import { CHECK_OVERRIDE_TRAILER, CHECK_TRAILER, LOCAL_CHECK_OVERRIDE_TRAILER } from './trailers';
 
 /**
  * Check runs (architecture decision record ADR-0070 decisions 3 and 4): a
@@ -147,8 +148,8 @@ export interface CheckVerdict {
   requirement: string;
   level: 'Required' | 'Advisory';
   locked: boolean;
-  /** `User/<id>`, the agent whose runs count. */
-  reporter: string;
+  /** `User/<id>`, the agent whose runs count; absent on a personal requirement, where anyone's run on the machine counts. */
+  reporter?: string;
   paramsHash: string;
   conclusion: Conclusion | 'pending';
   /** The run that counted. */
@@ -164,7 +165,8 @@ export function verdictsOf(requirements: TerminusDocument[], runs: RunStore, com
   return requirements.map((requirement) => {
     const check = String(requirement.check);
     const hash = paramsHash(requirement.params);
-    const run = runs.list({ commit, check }).find((r) => r.reporter === requirement.reporter && r.paramsHash === hash);
+    // A personal requirement names no reporter: every tool on the machine acts as its owner (decision 8).
+    const run = runs.list({ commit, check }).find((r) => (requirement.reporter === undefined || r.reporter === requirement.reporter) && r.paramsHash === hash);
     const satisfied = run?.conclusion === 'pass' || run?.conclusion === 'neutral';
     const level = requirement.level === 'Advisory' ? 'Advisory' : 'Required';
     const reason = overrides.get(check);
@@ -173,7 +175,7 @@ export function verdictsOf(requirements: TerminusDocument[], runs: RunStore, com
       requirement: requirement['@id'],
       level,
       locked: requirement.locked === true,
-      reporter: String(requirement.reporter),
+      ...(requirement.reporter !== undefined ? { reporter: String(requirement.reporter) } : {}),
       paramsHash: hash,
       conclusion: run?.conclusion ?? 'pending',
       ...(run ? { run: { id: run.id, reportedAt: run.reportedAt, ...(run.summary !== undefined ? { summary: run.summary } : {}), ...(run.detailsUrl !== undefined ? { detailsUrl: run.detailsUrl } : {}) } } : {}),
@@ -203,4 +205,108 @@ export function checkTrailers(verdicts: CheckVerdict[]): string[] {
   for (const v of verdicts) if (v.overridden) reasons.set(v.check, v.overridden.reason);
   for (const [check, reason] of reasons) lines.push(`${CHECK_OVERRIDE_TRAILER}: ${named(check)} reason=${JSON.stringify(reason.replace(/\s+/g, ' ').trim())}`);
   return lines;
+}
+
+/**
+ * A merge's or a push's `overrides` as check name to reason; 400
+ * `bad_request` for anything but `[{ check, reason }]` with a reason given.
+ */
+export const MAX_REASON = 1000;
+export function parseOverrides(value: unknown): Map<string, string> {
+  const overrides = new Map<string, string>();
+  if (value === undefined) return overrides;
+  const bad = () => new ApiError(400, 'bad_request', `overrides must be [{ check, reason }], each check once, each reason given and at most ${MAX_REASON} characters`);
+  if (!Array.isArray(value)) throw bad();
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) throw bad();
+    const { check, reason } = entry as Record<string, unknown>;
+    if (typeof check !== 'string' || typeof reason !== 'string') throw bad();
+    const given = reason.trim();
+    if (!check || !given || given.length > MAX_REASON || overrides.has(check) || Object.keys(entry).length !== 2) throw bad();
+    overrides.set(check, given);
+  }
+  return overrides;
+}
+
+/**
+ * A personal requirement (decision 8): what a person asks of their own
+ * pushes, kept by the host in `checks.json` in the hub's folder and never
+ * written through a route, so a tool on loopback cannot relax its owner's
+ * gate. The record's shape without `reporter`: `branch` names the workspace
+ * it binds (every workspace when absent) and `fromPrefix` the beginning of the
+ * names it binds; `locked` is accepted and means nothing on one machine.
+ */
+export interface PersonalRequirement {
+  check: string;
+  branch?: string;
+  fromPrefix?: string;
+  level: 'Required' | 'Advisory';
+  params: unknown;
+  status: 'Active' | 'Revoked';
+  rationale?: string;
+}
+
+const PERSONAL_FIELDS = new Set(['check', 'branch', 'fromPrefix', 'level', 'locked', 'params', 'status', 'rationale']);
+
+/**
+ * The personal requirements of `checks.json`, from its text:
+ * `{ "requirements": [ ... ] }`. No file is no requirement. A file the hub
+ * cannot read as that is 422 `personal_checks_invalid` with every problem,
+ * never an open gate: the person asked for something and the hub cannot tell
+ * what.
+ */
+export function parsePersonalChecks(text: string | undefined): PersonalRequirement[] {
+  if (text === undefined || !text.trim()) return [];
+  const invalid = (issues: Array<{ path: string; message: string }>) =>
+    new ApiError(422, 'personal_checks_invalid', `checks.json in the hub's folder cannot be read as personal requirements (${issues.length} problem(s)); until it is put right nothing is pushed`, { issues });
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (err) {
+    throw invalid([{ path: '', message: `not JSON: ${(err as Error).message}` }]);
+  }
+  const list = value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>).requirements : undefined;
+  if (!Array.isArray(list)) throw invalid([{ path: 'requirements', message: 'the file is an object with a list under requirements' }]);
+  const issues: Array<{ path: string; message: string }> = [];
+  const out: PersonalRequirement[] = [];
+  list.forEach((entry, i) => {
+    const at = (field: string) => `requirements[${i}].${field}`;
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return void issues.push({ path: `requirements[${i}]`, message: 'a requirement is an object' });
+    const r = entry as Record<string, unknown>;
+    const before = issues.length;
+    for (const key of Object.keys(r)) if (!PERSONAL_FIELDS.has(key)) issues.push({ path: at(key), message: `${key} is not a field of a personal requirement` });
+    if (typeof r.check !== 'string' || !r.check.trim()) issues.push({ path: at('check'), message: 'check is the name of a check' });
+    for (const key of ['branch', 'fromPrefix', 'rationale']) if (r[key] !== undefined && typeof r[key] !== 'string') issues.push({ path: at(key), message: `${key} is text` });
+    if (r.level !== undefined && r.level !== 'Required' && r.level !== 'Advisory') issues.push({ path: at('level'), message: 'level is Required or Advisory' });
+    if (r.status !== undefined && r.status !== 'Active' && r.status !== 'Revoked') issues.push({ path: at('status'), message: 'status is Active or Revoked' });
+    if (r.params === null) issues.push({ path: at('params'), message: 'params is any JSON value but null' });
+    if (issues.length > before) return;
+    out.push({
+      check: r.check as string,
+      ...(r.branch !== undefined ? { branch: r.branch as string } : {}),
+      ...(r.fromPrefix !== undefined ? { fromPrefix: r.fromPrefix as string } : {}),
+      level: (r.level as PersonalRequirement['level'] | undefined) ?? 'Required',
+      params: r.params ?? {},
+      status: (r.status as PersonalRequirement['status'] | undefined) ?? 'Active',
+      ...(r.rationale !== undefined ? { rationale: r.rationale as string } : {}),
+    });
+  });
+  if (issues.length) throw invalid(issues);
+  return out;
+}
+
+/** The personal requirements in force that bind a push of `workspace`, as the gate reads requirements: each under an id that names the file. */
+export function personalFor(requirements: PersonalRequirement[], workspace: string): TerminusDocument[] {
+  return personalIn(requirements, workspace).map((r) => ({ ...r, '@id': `checks.json#${r.check}`, '@type': 'PersonalRequirement', locked: false }) as unknown as TerminusDocument);
+}
+
+/** The personal requirements in force that bind a push of `workspace`, as the file has them. */
+export const personalIn = (requirements: PersonalRequirement[], workspace: string): PersonalRequirement[] =>
+  requirements.filter((r) => r.status === 'Active' && (r.branch === undefined || r.branch === workspace) && (r.fromPrefix === undefined || workspace.startsWith(r.fromPrefix)));
+
+/** A push's record of the personal requirements its owner set aside: one line per check, the pusher's claim (decision 8, later change of 2026-11-15). */
+export function localOverrideTrailers(verdicts: CheckVerdict[]): string[] {
+  const reasons = new Map<string, string>();
+  for (const v of verdicts) if (v.overridden) reasons.set(v.check, v.overridden.reason);
+  return [...reasons].map(([check, reason]) => `${LOCAL_CHECK_OVERRIDE_TRAILER}: ${named(check)} reason=${JSON.stringify(reason.replace(/\s+/g, ' ').trim())}`);
 }

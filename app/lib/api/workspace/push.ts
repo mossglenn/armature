@@ -1,10 +1,12 @@
 import type { ArmatureClient } from '@armature/client';
 
+import { blocks, localOverrideTrailers, parsePersonalChecks, personalFor, verdictsOf, type CheckVerdict, type RunStore } from '../checks';
 import { ApiError } from '../errors';
 import { isAgentExternalId, type UserDocument } from '../identity';
 import { MIRROR_BRANCH } from '../role';
 import { storeOf, type HubConfig } from '../config';
 import { changesOf, type Commit, type Store, type TerminusDocument } from '../store';
+import { mirrorMain } from './clone';
 import { localCommitsSince, mappingOf } from './commits';
 import { settleBringIn } from './merged';
 import {
@@ -40,6 +42,20 @@ import { GroupTooLarge, PART_LIMITS, splitIntoParts, type PartLimits } from './s
  * (ADR-0066 decision 2, note). A bring-in that did not finish leaves its own
  * marker, settled before anything is replayed (`./merged.ts`).
  *
+ * **The gate** (ADR-0070 decision 8; since 2026-11-15). Before anything is
+ * replayed, and before the remote is asked anything, the owner's personal
+ * requirements (`checks.json` in the hub's folder, ../checks.ts) are held to
+ * the workspace's head against the runs this hub holds: a run with the
+ * requirement's current `paramsHash` must exist there (409 `checks_pending`)
+ * and conclude `pass` or `neutral` (422 `checks_failed`), the codes and the
+ * verdicts of the remote's merge gate. No reporter is named: every tool on the
+ * machine acts as the owner. `overrides` sets a requirement aside with a
+ * reason, written on the first commit this push replays as
+ * `Armature-Local-Check-Override`, the pusher's claim, which the remote keeps
+ * and does not enforce. A push with nothing to replay is not gated. The
+ * remote's own requirements are mirrored again first when the remote
+ * answers, to be shown here, never enforced here.
+ *
  * What stops a push: 403 `forbidden` before its first commit (the owner may
  * not write the branch on the remote), 412 `precondition_failed` (the branch
  * moved on the remote: someone else with a grant wrote it, or the owner
@@ -58,6 +74,14 @@ export interface PushResult {
   remoteHead: string;
   /** True when nothing was left to push. */
   upToDate: boolean;
+  /** The gate's verdicts on the personal requirements that applied (ADR-0070 decision 8); absent when none did. */
+  checks?: CheckVerdict[];
+}
+
+/** What the push gate reads: the runs this hub holds, and the requirements the owner sets aside for this push. */
+export interface PushGate {
+  runs: RunStore;
+  overrides?: ReadonlyMap<string, string>;
 }
 
 const LOG_PAGE = 100;
@@ -177,13 +201,51 @@ async function explained(err: ApiError, hub: HubConfig, client: ArmatureClient, 
   return new ApiError(err.status, err.code, err.message, details);
 }
 
-export async function pushWorkspace(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, limits: PartLimits = PART_LIMITS): Promise<PushResult> {
+/**
+ * The push gate: the verdicts on the personal requirements that bind this
+ * workspace at its head, refused as the merge gate refuses when one stops the
+ * push. Read from this machine alone, so it answers offline. Nothing to
+ * replay, nothing gated: `overrides` are then left unjudged.
+ */
+async function gateOf(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, gate: PushGate): Promise<CheckVerdict[]> {
+  const { branch } = record;
+  const local = storeOf(hub, { branch });
+  const mapping = mappingOf(record, (await records.getPush(branch)) ?? emptyPushTable());
+  const unpushed = (await localCommitsSince(local, record.local)).filter((commit) => !mapping.has(commit.id));
+  if (!unpushed.length) return [];
+  const personal = personalFor(parsePersonalChecks(await records.getChecks()), branch);
+  const overrides = gate.overrides ?? new Map<string, string>();
+  for (const check of overrides.keys()) {
+    if (!personal.some((r) => r.check === check && r.level !== 'Advisory')) {
+      throw new ApiError(400, 'bad_request', `overrides names ${check}, which no personal required check of this push is`, { check });
+    }
+  }
+  const head = unpushed[0].id; // newest first: the workspace's head
+  const found = verdictsOf(personal, gate.runs, head, overrides);
+  const stopping = found.filter(blocks);
+  if (stopping.some((v) => v.conclusion !== 'pending')) {
+    const failed = stopping.filter((v) => v.conclusion !== 'pending').map((v) => v.check);
+    throw new ApiError(422, 'checks_failed', `Pushing ${branch} needs ${failed.join(', ')} to pass at ${head}, by your own requirement; nothing was pushed`, { commit: head, failed, checks: found });
+  }
+  if (stopping.length) {
+    const pending = stopping.map((v) => v.check);
+    throw new ApiError(409, 'checks_pending', `Pushing ${branch} waits for ${pending.join(', ')} to report on ${head}, by your own requirement; nothing was pushed`, { commit: head, pending, checks: found });
+  }
+  return found;
+}
+
+export async function pushWorkspace(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, gate: PushGate, limits: PartLimits = PART_LIMITS): Promise<PushResult> {
   const { branch } = record;
   if (running.has(branch)) throw new ApiError(409, 'push_in_progress', `A push of ${branch} is already running on this hub`);
   running.add(branch);
   try {
+    // The owner's own gate first: it reads this machine alone, and stops the push before the remote is asked anything.
+    const checks = await gateOf(hub, records, record, gate);
+    let claims = localOverrideTrailers(checks);
     // Under a token, the remote must take this hub for the owner before anything is replayed as them.
     await requireRemoteIdentity(hub, { id: record.owner, externalId: record.ownerExternalId });
+    // The remote's requirements, mirrored again for the tools here to read; shown, never enforced (decision 8).
+    await mirrorMain(hub, remoteClient(hub, record.ownerExternalId), { id: record.owner, externalId: record.ownerExternalId });
     const local = storeOf(hub, { branch });
     // A bring-in that did not finish is settled first, in the branch's queue since it may commit here
     // (./merged.ts): the remote is then at the merge commit, which the replay below is conditioned on.
@@ -218,7 +280,9 @@ export async function pushWorkspace(hub: HubConfig, records: WorkspaceRecords, r
     const pending = (await localCommitsSince(local, record.local)).reverse().filter((commit) => !mapping.has(commit.id));
     for (const commit of pending) {
       const client = await clientFor(hub, record, commit.author);
-      const message = replayMessage(commit);
+      // The first commit replayed carries the owner's overrides, as their claim.
+      const message = claims.reduce(withTrailer, replayMessage(commit));
+      claims = [];
       let parts: TerminusDocument[][];
       try {
         parts = splitIntoParts(await documentsOf(local, commit, mapping), limits);
@@ -259,7 +323,7 @@ export async function pushWorkspace(hub: HubConfig, records: WorkspaceRecords, r
       await save();
       pushed.push(entry);
     }
-    return { workspace: record, pushed, remoteHead: lastRemote, upToDate: pending.length === 0 && pushed.length === 0 };
+    return { workspace: record, pushed, remoteHead: lastRemote, upToDate: pending.length === 0 && pushed.length === 0, ...(checks.length ? { checks } : {}) };
   } finally {
     running.delete(branch);
   }

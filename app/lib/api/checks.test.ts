@@ -8,7 +8,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app, createApp } from './app';
-import { canonicalJson, CONCLUSIONS, paramsHash, RUNS_KEPT, RunStore } from './checks';
+import { canonicalJson, checkTrailers, CONCLUSIONS, localOverrideTrailers, paramsHash, parseOverrides, parsePersonalChecks, personalFor, personalIn, RUNS_KEPT, RunStore, verdictsOf } from './checks';
+import { memoryRecords } from './workspace/records';
 import { configFromEnv } from './config';
 import { deleteDocument, deleteScratchBranch } from '../operator/repair';
 
@@ -52,6 +53,55 @@ describe('the run store (decision 3)', () => {
     ]);
     expect(runs.list({ check: 'structure/spof' })).toHaveLength(1);
     expect(runs.list()).toHaveLength(RUNS_KEPT + 2);
+  });
+});
+
+describe('personal requirements and the trailers (decisions 7 and 8)', () => {
+  it('reads checks.json: no file is no requirement, defaults are Required and Active, and the record’s shape is taken without a reporter', () => {
+    expect(parsePersonalChecks(undefined)).toEqual([]);
+    expect(parsePersonalChecks('  ')).toEqual([]);
+    const read = parsePersonalChecks(JSON.stringify({ requirements: [{ check: 'lint/mine' }, { check: 'x', branch: 'a_b', fromPrefix: 'a_', level: 'Advisory', locked: true, params: [1], status: 'Revoked', rationale: 'why' }] }));
+    expect(read).toEqual([
+      { check: 'lint/mine', level: 'Required', params: {}, status: 'Active' },
+      { check: 'x', branch: 'a_b', fromPrefix: 'a_', level: 'Advisory', params: [1], status: 'Revoked', rationale: 'why' },
+    ]);
+    for (const text of ['{', '[]', '{"requirements": {}}', '{"requirements": [{"check": "x", "reporter": "User/a"}]}']) {
+      expect(() => parsePersonalChecks(text), text).toThrowError(expect.objectContaining({ code: 'personal_checks_invalid', status: 422 }));
+    }
+  });
+
+  it('binds a push by the workspace named, by the prefix, or every workspace, when in force', () => {
+    const all = parsePersonalChecks(JSON.stringify({ requirements: [{ check: 'every' }, { check: 'named', branch: 'amos_a' }, { check: 'prefixed', fromPrefix: 'amos_' }, { check: 'gone', status: 'Revoked' }] }));
+    expect(personalIn(all, 'amos_a').map((r) => r.check)).toEqual(['every', 'named', 'prefixed']);
+    expect(personalIn(all, 'amos_b').map((r) => r.check)).toEqual(['every', 'prefixed']);
+    expect(personalIn(all, 'other').map((r) => r.check)).toEqual(['every']);
+  });
+
+  it('a personal requirement names no reporter, so any run on the machine under its hash counts; the trailers say what was set aside', () => {
+    const runs = new RunStore();
+    const [mine] = personalFor(parsePersonalChecks(JSON.stringify({ requirements: [{ check: 'lint mine', params: { a: 1 } }] })), 'w');
+    expect(verdictsOf([mine], runs, 'c1')[0]).toMatchObject({ conclusion: 'pending', satisfied: false });
+    runs.record({ check: 'lint mine', commit: 'c1', branch: 'w', conclusion: 'fail', paramsHash: paramsHash({ a: 1 }) }, 'User/anyone');
+    const [verdict] = verdictsOf([mine], runs, 'c1', new Map([['lint mine', 'It is\nfine']]));
+    expect(verdict).toMatchObject({ conclusion: 'fail', overridden: { reason: 'It is\nfine' } });
+    expect(verdict).not.toHaveProperty('reporter');
+    // A name with a space is quoted, and a reason is one line.
+    expect(localOverrideTrailers([verdict])).toEqual(['Armature-Local-Check-Override: "lint mine" reason="It is fine"']);
+    expect(checkTrailers([verdict])).toEqual([`Armature-Check: "lint mine" fail run=${verdict.run!.id} params=${paramsHash({ a: 1 })} overridden`, 'Armature-Check-Override: "lint mine" reason="It is fine"']);
+  });
+
+  it('overrides are [{ check, reason }], each check once, each reason given', () => {
+    expect([...parseOverrides(undefined)]).toEqual([]);
+    expect([...parseOverrides([{ check: 'a', reason: ' why ' }])]).toEqual([['a', 'why']]);
+    for (const bad of ['a', [null], [{ check: 'a' }], [{ check: 'a', reason: '' }], [{ check: 'a', reason: 'x', extra: 1 }], [{ check: 'a', reason: 'x' }, { check: 'a', reason: 'y' }], [{ check: 'a', reason: 'x'.repeat(1001) }]]) {
+      expect(() => parseOverrides(bad), JSON.stringify(bad)?.slice(0, 60)).toThrowError(expect.objectContaining({ code: 'bad_request' }));
+    }
+  });
+
+  it('checks.json is read and never written through the API: the records offer a reader and no writer', () => {
+    const keys = Object.keys(memoryRecords());
+    expect(keys).toContain('getChecks');
+    expect(keys.filter((key) => /checks/i.test(key))).toEqual(['getChecks']);
   });
 });
 

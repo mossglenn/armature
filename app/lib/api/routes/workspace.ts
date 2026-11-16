@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import type { ArmatureClient } from '@armature/client';
 import type { Grant } from '@armature/types';
 import { refusal } from '../authorization';
+import { parseOverrides, runsOf } from '../checks';
 import { hubOf, storeFor, type HubConfig } from '../config';
 import { ApiError } from '../errors';
 import { isActive, type GrantDocument } from '../grants';
@@ -37,14 +38,18 @@ import { ensureSnapshots, fetchRemoteLog, resolvableCommitsOf } from '../workspa
  *                             since the clone and how many are pushed, the
  *                             snapshots held and declined (plan §8), and the
  *                             remote branch's head when the remote can be reached
- *   POST /:name/push          replays the unpushed local commits on the remote
- *                             (../workspace/push.ts); the owner's action
+ *   POST /:name/push          { overrides? } replays the unpushed local commits on
+ *                             the remote (../workspace/push.ts); the owner's
+ *                             action, gated by their personal requirements
+ *                             (409 checks_pending, 422 checks_failed)
  *   POST /:name/bring-in      { message? } the remote's merge of main into the
  *                             workspace, read back as one local commit
  *                             (../workspace/bringIn.ts); 409 unpushed_commits
- *   POST /:name/deliver       { message, deleteWorkspace? } the remote's merge
- *                             of the workspace into main, after main was
- *                             brought in cleanly (409 bring_in_first)
+ *   POST /:name/deliver       { message, deleteWorkspace?, overrides?, dryRun? }
+ *                             the remote's merge of the workspace into main,
+ *                             after main was brought in cleanly (409
+ *                             bring_in_first); the remote's required checks
+ *                             gate it there, and a dry run returns their verdicts
  *   DELETE /:name             removes the workspace here with nothing left to
  *                             push, and its branch on the remote when the
  *                             remote's rule allows (since 2026-11-07);
@@ -237,26 +242,33 @@ async function ownedWorkspace(c: Context, action: 'push' | 'bring-in' | 'deliver
   return record;
 }
 
+/** A body that may be absent: a bare POST is `{}`. */
+async function optionalJson(c: Context): Promise<Record<string, unknown>> {
+  const raw = (await c.req.text()).trim();
+  if (!raw) return {};
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    throw new ApiError(400, 'bad_request', 'The body must be a JSON object');
+  }
+  if (!isRecord(body)) throw new ApiError(400, 'bad_request', 'The body must be a JSON object');
+  return body;
+}
+
 workspace.post('/:name/push', async (c) => {
   requireActionRoutes(c, 'push');
   const record = await ownedWorkspace(c, 'push');
-  return c.json(await pushWorkspace(hubOf(c), recordsOf(c), record));
+  // `overrides` sets the owner's personal requirements aside for this push, each with a reason (ADR-0070 decision 8).
+  const overrides = parseOverrides((await optionalJson(c)).overrides);
+  return c.json(await pushWorkspace(hubOf(c), recordsOf(c), record, { runs: runsOf(c), overrides }));
 });
 
 workspace.post('/:name/bring-in', async (c) => {
   requireActionRoutes(c, 'bring-in');
   const record = await ownedWorkspace(c, 'bring-in');
   // The body is optional: a bare POST brings main in with the default message.
-  const raw = (await c.req.text()).trim();
-  let body: Record<string, unknown> = {};
-  if (raw) {
-    try {
-      body = JSON.parse(raw);
-    } catch {
-      throw new ApiError(400, 'bad_request', 'The body must be a JSON object');
-    }
-    if (!isRecord(body)) throw new ApiError(400, 'bad_request', 'The body must be a JSON object');
-  }
+  const body = await optionalJson(c);
   if (body.message !== undefined && typeof body.message !== 'string') throw new ApiError(400, 'bad_request', 'message must be a string');
   return c.json(await bringIn(hubOf(c), recordsOf(c), record, body.message as string | undefined));
 });
@@ -267,7 +279,12 @@ workspace.post('/:name/deliver', async (c) => {
   const body = await readJson(c);
   if (typeof body.message !== 'string' || !body.message.trim()) throw new ApiError(400, 'message_required', 'A delivery needs a message saying why (ADR-0025)');
   if (body.deleteWorkspace !== undefined && typeof body.deleteWorkspace !== 'boolean') throw new ApiError(400, 'bad_request', 'deleteWorkspace must be a boolean');
-  return c.json(await deliver(hubOf(c), recordsOf(c), record, { message: body.message.trim(), deleteWorkspace: body.deleteWorkspace === true }));
+  if (body.dryRun !== undefined && typeof body.dryRun !== 'boolean') throw new ApiError(400, 'bad_request', 'dryRun must be a boolean');
+  // The remote's gate is the remote's to judge: the overrides are checked for shape here and passed on.
+  const overrides = [...parseOverrides(body.overrides)].map(([check, reason]) => ({ check, reason }));
+  return c.json(
+    await deliver(hubOf(c), recordsOf(c), record, { message: body.message.trim(), deleteWorkspace: body.deleteWorkspace === true, overrides, dryRun: body.dryRun === true })
+  );
 });
 
 workspace.delete('/:name', async (c) => {

@@ -10,6 +10,7 @@ import { createClient } from '@armature/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startHub, type RunningHub } from '../hub';
 import { app, createApp } from './app';
+import { RunStore } from './checks';
 import { configFromEnv, type HubConfig } from './config';
 import { ApiError } from './errors';
 import { normalizeSchema } from './export/exporter';
@@ -314,7 +315,7 @@ describe('over the file-backed store in memory', () => {
       });
       expect(batch.status).toBe(200);
       const record = (await records().get(BRANCH))!;
-      const result = await pushWorkspace(config, records(), record, { documents: 2, bytes: 1e9 });
+      const result = await pushWorkspace(config, records(), record, { runs: new RunStore() }, { documents: 2, bytes: 1e9 });
       expect(result.pushed).toHaveLength(1);
       expect(result.pushed[0].parts).toBe(2);
       const log = await remoteLog(2);

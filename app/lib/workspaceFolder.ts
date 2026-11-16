@@ -25,7 +25,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import type { StoreFiles } from './api/filestore/files';
 import { BRANCH_NAME } from './api/http';
 import { StoreError } from './api/store';
-import { DISCARDED, setAsidePath, type PushTable, type RemoteLog, type Snapshots, type WorkspaceRecord, type WorkspaceRecords } from './api/workspace/records';
+import { DISCARDED, PERSONAL_CHECKS, setAsidePath, type PushTable, type RemoteLog, type Snapshots, type WorkspaceRecord, type WorkspaceRecords } from './api/workspace/records';
 
 const RECORD = 'workspace.json';
 const PUSH = 'push.json';
@@ -307,6 +307,16 @@ export function folderRecords(dir: string): WorkspaceRecords {
       }
       const records = await Promise.all(entries.map(read));
       return records.filter((r): r is WorkspaceRecord => r !== undefined).sort((a, b) => a.branch.localeCompare(b.branch));
+    },
+    // The owner's personal requirements, written by the host alone (ADR-0070 decision 8); a file the system refuses is unreadable, not absent.
+    async getChecks() {
+      const target = join(dir, PERSONAL_CHECKS);
+      try {
+        return await readFile(target, 'utf8');
+      } catch (err) {
+        if (isMissing(err)) return undefined;
+        throw unreadable(err, target) ?? err;
+      }
     },
     put: (record) => writeJson(record.branch, RECORD, record),
     getPush: (branch) => readJson<PushTable>(branch, PUSH),

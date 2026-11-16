@@ -67,9 +67,11 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
 
   // The configuration first: everything after reads it from the request.
   app.use('*', async (c, next) => {
-    c.set('hub', config());
-    c.set('runs', runs);
-    c.set('feed', feed);
+    const hub = config();
+    c.set('hub', hub);
+    // A host that runs two apps as one hub gives both the same runs and life (./config.ts).
+    c.set('runs', hub.runs ?? runs);
+    c.set('feed', hub.feed ?? feed);
     await next();
   });
 
