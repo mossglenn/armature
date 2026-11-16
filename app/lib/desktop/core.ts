@@ -116,6 +116,8 @@ export function runCore(options: CoreOptions): Core {
   let running: Running | undefined;
   let starting: Promise<Answer> | undefined;
   let signingIn: AbortController | undefined;
+  /** Whether the last sign-in was given a refresh token, for `whoAmI`; unknown for a sign-in the keychain kept. */
+  let staysSignedIn: boolean | undefined;
 
   let emit: (event: ControlEvent) => void = () => undefined;
   const log = (line: string, level = 'info') => emit({ event: 'log', level, line });
@@ -460,7 +462,8 @@ export function runCore(options: CoreOptions): Core {
         if (tokens.refreshToken) context.emit({ event: 'credential', refreshToken: tokens.refreshToken });
         // Who the remote says the person is, the check the hub makes before any workspace work; a person it does not know sees its refusal.
         const person = await whoAmI();
-        return ok({ signedIn: true, person, staysSignedIn: tokens.refreshToken !== undefined });
+        staysSignedIn = tokens.refreshToken !== undefined;
+        return ok({ signedIn: true, person, staysSignedIn });
       } finally {
         signingIn = undefined;
       }
@@ -499,6 +502,16 @@ export function runCore(options: CoreOptions): Core {
       return ok({ signedIn: true });
     },
 
+    // Ends a sign-in that is waiting on the browser, and nothing else: the person closed the tab or
+    // changed their mind, and until now the only way out was the five-minute timeout, with every
+    // new attempt answered `sign_in_in_progress` meanwhile (the 2026-11-09 review's P8). Unlike
+    // `signOut` it leaves a credential already held alone.
+    cancelSignIn: async () => {
+      const waiting = signingIn !== undefined;
+      signingIn?.abort();
+      return ok({ cancelled: waiting });
+    },
+
     signOut: async () => {
       signingIn?.abort();
       held?.clear();
@@ -518,6 +531,15 @@ export function runCore(options: CoreOptions): Core {
     // identifier under header, the remote's externalId for the signed-in person under oidc, which is
     // the provider's sub and found nowhere else a person looks (the Keycloak rehearsal, 2026-11-08).
     toolIdentity: async () => ok({ user: await owner() }),
+
+    // Who the remote says the signed-in person is, for the sign-in page opened after the sign-in
+    // (a later visit, or a start with the keychain's token), which otherwise offered "Sign in" to
+    // someone already signed in (the 2026-11-09 review's P8). 401 `signed_out` when no one is.
+    whoAmI: async () => {
+      const identity = oidcOf(opened().settings.identity);
+      if (!identity) throw new ApiError(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
+      return ok({ signedIn: true, person: await whoAmI(), ...(staysSignedIn !== undefined ? { staysSignedIn } : { staysSignedIn: keptRefresh !== undefined }) });
+    },
 
     workspaces: async () => viaProgram('GET', '/workspace'),
     status: async (request) => viaProgram('GET', `/workspace/${named(request)}/status`),
