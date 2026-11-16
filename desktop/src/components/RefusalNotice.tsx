@@ -20,6 +20,8 @@ const shown = (value: unknown) => (value === undefined ? '(absent)' : typeof val
  */
 export function RefusalNotice({ refusal, status }: { refusal: Refusal; status?: number }) {
   const conflicts = Array.isArray(refusal.conflicts) ? (refusal.conflicts as Conflict[]) : [];
+  // A checks.json the push gate cannot read (422 personal_checks_invalid): every problem, by where it is in the file.
+  const issues = refusal.error === 'personal_checks_invalid' && Array.isArray(refusal.issues) ? (refusal.issues as Array<{ path?: string; message?: string }>) : [];
   return (
     <div role="alert" className="border-destructive/40 bg-destructive/5 rounded-md border p-3 text-sm">
       <p>{refusal.message}</p>
@@ -31,6 +33,19 @@ export function RefusalNotice({ refusal, status }: { refusal: Refusal; status?: 
         </Badge>
         <span>{refusal.remote ? 'from the remote' : 'from this machine'}</span>
       </p>
+      {issues.length > 0 && (
+        <div className="mt-3">
+          <p className="font-medium">Put the file right on the Settings page, under "Checks of your own", or in an editor:</p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {issues.map((issue, i) => (
+              <li key={`${issue.path}-${i}`}>
+                {issue.path ? <span className="font-mono">{issue.path}: </span> : null}
+                {issue.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {conflicts.length > 0 && (
         <div className="mt-3">
           <p className="font-medium">

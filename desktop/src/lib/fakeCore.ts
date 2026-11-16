@@ -1,5 +1,5 @@
 import type { Backend, CoreEvent, CoreReply, ShellState, UpdateCheck, UpdateState } from './backend';
-import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus } from './types';
+import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, Settings, WorkspaceRecord, WorkspaceStatus } from './types';
 
 /**
  * The core as the pages meet it when no shell is present: `npm run dev` in a
@@ -26,6 +26,11 @@ import type { CommitEntry, Profile, Settings, WorkspaceRecord, WorkspaceStatus }
  * `?slow` makes each long action (push, bring in, deliver, create, clone, remove) take a moment and
  * show in the state as the shell shows it, so a page's holding of the install button meanwhile can be
  * seen; `?login=fails` makes the system refuse the start-at-login entry, as the shell reports it.
+ *
+ * Required checks (ADR-0070) are set up by a test through `window.__fakeCore`: `reportRun` (a tool here
+ * reports on a workspace's latest commit), `remoteRequires` and `remoteReports` (the instance requires
+ * a check before a merge into main, and its service reports), `breakChecksFile` (checks.json edited by
+ * hand into something the push gate cannot read). The person's own checks are written by the page.
  *
  * Three remotes answer `profile`: https://api.armature.example.edu (oidc),
  * http://hub.example.test:3100 (header), and https://api.armature-x.example.net, a
@@ -81,7 +86,66 @@ interface Model {
   localToken: string;
   log: CoreEvent[];
   update?: UpdateState;
+  /** `checks.json`: the person's own requirements, or the problems of a file written by hand that cannot be read. */
+  checks: PersonalRequirement[];
+  checksInvalid?: Array<{ path: string; message: string }>;
+  /** The runs this machine's tools posted and the remote's check service posted, by `<branch> <check>`, each about one commit. */
+  runs: Map<string, Run>;
+  remoteRuns: Map<string, Run>;
+  /** The instance's required checks for a merge into main. */
+  remoteRequirements: Array<{ check: string; locked: boolean }>;
 }
+
+interface Run {
+  commit: string;
+  conclusion: 'pass' | 'fail' | 'neutral' | 'error';
+  summary?: string;
+  detailsUrl?: string;
+}
+
+/** A gate's verdicts, as `verdictsOf` gives them (app/lib/api/checks.ts): the run about the head, if any, and whether it was set aside. */
+function verdictsFor(
+  requirements: Array<{ check: string; level: 'Required' | 'Advisory'; locked: boolean; id: string; reporter?: string }>,
+  runs: Map<string, Run>,
+  branch: string,
+  head: string,
+  overrides: Map<string, string>
+): CheckVerdict[] {
+  return requirements.map((r) => {
+    const run = runs.get(`${branch} ${r.check}`);
+    const at = run && run.commit === head ? run : undefined;
+    const satisfied = at !== undefined && (at.conclusion === 'pass' || at.conclusion === 'neutral');
+    const reason = overrides.get(r.check);
+    return {
+      check: r.check,
+      requirement: r.id,
+      level: r.level,
+      locked: r.locked,
+      ...(r.reporter ? { reporter: r.reporter } : {}),
+      paramsHash: 'sha256:' + 'f'.repeat(64),
+      conclusion: at?.conclusion ?? 'pending',
+      ...(at ? { run: { id: `run-${r.check}`, reportedAt: new Date().toISOString(), ...(at.summary ? { summary: at.summary } : {}), ...(at.detailsUrl ? { detailsUrl: at.detailsUrl } : {}) } } : {}),
+      satisfied,
+      ...(reason !== undefined && !satisfied && r.level === 'Required' ? { overridden: { reason } } : {}),
+    };
+  });
+}
+
+/** `overrides` as the routes read it: [{ check, reason }], each check once with a reason, or the 400. */
+function overridesOf(given: unknown): Map<string, string> | CoreReply {
+  const out = new Map<string, string>();
+  if (given === undefined) return out;
+  if (!Array.isArray(given)) return refuse(400, 'bad_request', 'overrides is a list of { check, reason }');
+  for (const entry of given as Array<{ check?: unknown; reason?: unknown }>) {
+    if (typeof entry?.check !== 'string' || typeof entry.reason !== 'string' || !entry.reason.trim() || out.has(entry.check)) {
+      return refuse(400, 'bad_request', 'Each override names a check once and gives a reason');
+    }
+    out.set(entry.check, entry.reason.trim());
+  }
+  return out;
+}
+
+const stopping = (verdicts: CheckVerdict[]) => verdicts.filter((v) => v.level === 'Required' && !v.satisfied && !v.overridden);
 
 const refuse = (status: number, error: string, message: string, details: Record<string, unknown> = {}): CoreReply => ({ status, body: { error, message, ...details } });
 const ok = (body: unknown, status = 200): CoreReply => ({ status, body });
@@ -125,14 +189,15 @@ function modelFor(scenario: string): Model {
   const base = { port: 3101, snapshots: 20, startAtLogin: false };
   const localToken = 'f'.repeat(16) + 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4';
   const log: CoreEvent[] = [{ event: 'log', level: 'info', line: `Armature hub (revision ${REVISION}) listening at ${HUB_URL}/api/v1` }];
-  if (scenario === 'fresh') return { settings: base, running: false, workspaces: new Map(), localToken, log: [] };
+  const none = { checks: [], runs: new Map<string, Run>(), remoteRuns: new Map<string, Run>(), remoteRequirements: [] };
+  if (scenario === 'fresh') return { settings: base, running: false, workspaces: new Map(), localToken, log: [], ...none };
   if (scenario.startsWith('oidc')) {
     const p = profiles[OIDC_REMOTE]!;
-    return { settings: { ...base, remote: OIDC_REMOTE, instance: p.instance, identity: p.identity }, running: true, workspaces: new Map(), localToken, log };
+    return { settings: { ...base, remote: OIDC_REMOTE, instance: p.instance, identity: p.identity }, running: true, workspaces: new Map(), localToken, log, ...none };
   }
   const p = profiles[HEADER_REMOTE]!;
   const user = 'demo-designer@example.edu';
-  return { settings: { ...base, remote: HEADER_REMOTE, instance: p.instance, identity: p.identity, user }, running: true, workspaces: seededWorkspaces(user, HEADER_REMOTE), localToken, log };
+  return { settings: { ...base, remote: HEADER_REMOTE, instance: p.instance, identity: p.identity, user }, running: true, workspaces: seededWorkspaces(user, HEADER_REMOTE), localToken, log, ...none };
 }
 
 const OFFERED: UpdateState = { version: '0.2.0', current: '0.1.0', date: '2026-11-20T15:00:00Z', notes: 'Starts at login when asked.\nShows an available update.', state: 'available' };
@@ -255,6 +320,36 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const folder = next.folder ?? `${DATA_DIR}/workspaces`;
       return ok({ settings: next, restart, ...(SYNCED.test(folder) ? { warning: `${folder} looks like a folder a sync client keeps in sync.` } : {}) });
     },
+    // As the core (app/lib/desktop/checks.ts): the file read for the page, or written whole after the hub's check of it.
+    checks: ({ set }) => {
+      const file = `${model.settings.folder ?? `${DATA_DIR}/workspaces`}/checks.json`;
+      if (set === undefined) {
+        return ok({
+          file,
+          requirements: model.checksInvalid ? [] : model.checks,
+          ...(model.checksInvalid ? { invalid: { message: `checks.json in the hub's folder cannot be read as personal requirements (${model.checksInvalid.length} problem(s)); until it is put right nothing is pushed`, issues: model.checksInvalid } } : {}),
+        });
+      }
+      const given = (set as { requirements?: unknown }).requirements;
+      if (!Array.isArray(given)) return refuse(400, 'bad_request', 'checks takes set.requirements, a list of personal requirements', { field: 'requirements' });
+      const issues: Array<{ path: string; message: string }> = [];
+      const seen = new Set<string>();
+      const next: PersonalRequirement[] = [];
+      for (const [i, entry] of (given as Array<Partial<PersonalRequirement>>).entries()) {
+        if (typeof entry.check !== 'string' || !entry.check.trim()) {
+          issues.push({ path: `requirements[${i}].check`, message: 'check is the name of a check' });
+          continue;
+        }
+        const key = `${entry.check} ${entry.branch ?? ''}`;
+        if (seen.has(key)) return refuse(400, 'bad_request', `Two requirements name the check ${entry.check} for the same workspaces; keep one`, { field: 'requirements', check: entry.check });
+        seen.add(key);
+        next.push({ check: entry.check, ...(entry.branch ? { branch: entry.branch } : {}), level: entry.level ?? 'Required', params: entry.params ?? {}, status: entry.status ?? 'Active', ...(entry.rationale ? { rationale: entry.rationale } : {}) });
+      }
+      if (issues.length) return refuse(422, 'personal_checks_invalid', `checks.json in the hub's folder cannot be read as personal requirements (${issues.length} problem(s)); until it is put right nothing is pushed`, { issues });
+      model.checks = next;
+      model.checksInvalid = undefined;
+      return ok({ file, requirements: next });
+    },
     signIn: async ({ offline }) => {
       if (model.settings.identity?.resolver !== 'oidc') return refuse(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
       emit({ event: 'open', url: `${ISSUER}/protocol/openid-connect/auth?client_id=armature-desktop` });
@@ -327,8 +422,30 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
       const unpushed = w.commits.slice(0, w.commits.length - w.pushed).reverse();
+      // The push gate (ADR-0070 decision 8): with something to push, the person's own requirements in force are held to the head.
+      let checks: CheckVerdict[] = [];
+      if (unpushed.length > 0) {
+        const { branch } = w.record;
+        if (model.checksInvalid) {
+          return refuse(422, 'personal_checks_invalid', `checks.json in the hub's folder cannot be read as personal requirements (${model.checksInvalid.length} problem(s)); until it is put right nothing is pushed`, { issues: model.checksInvalid });
+        }
+        const overrides = overridesOf(fields.overrides);
+        if (!(overrides instanceof Map)) return overrides;
+        const bound = model.checks.filter((r) => r.status === 'Active' && (r.branch === undefined || r.branch === branch));
+        const stray = [...overrides.keys()].find((check) => !bound.some((r) => r.check === check && r.level === 'Required'));
+        if (stray) return refuse(400, 'bad_request', `${stray} is not a required check of your own for this push`);
+        const head = w.commits[0]!.commit;
+        checks = verdictsFor(bound.map((r) => ({ check: r.check, level: r.level, locked: false, id: `checks.json#${r.check}` })), model.runs, branch, head, overrides);
+        const stopped = stopping(checks);
+        const failed = stopped.filter((v) => v.conclusion !== 'pending').map((v) => v.check);
+        if (failed.length) return refuse(422, 'checks_failed', `Pushing ${branch} needs ${failed.join(', ')} to pass at ${head}, by your own requirement; nothing was pushed`, { commit: head, failed, checks });
+        if (stopped.length) {
+          const pending = stopped.map((v) => v.check);
+          return refuse(409, 'checks_pending', `Pushing ${branch} waits for ${pending.join(', ')} to report on ${head}, by your own requirement; nothing was pushed`, { commit: head, pending, checks });
+        }
+      }
       w.pushed = w.commits.length;
-      return ok({ workspace: w.record, pushed: unpushed.map((c) => ({ local: c.commit, remote: commitId(), parts: 1 })), remoteHead: commitId(), upToDate: unpushed.length === 0 });
+      return ok({ workspace: w.record, pushed: unpushed.map((c) => ({ local: c.commit, remote: commitId(), parts: 1 })), remoteHead: commitId(), upToDate: unpushed.length === 0, ...(checks.length ? { checks } : {}) });
     },
     bringIn: (fields) => {
       const refused = needsHub() ?? needsOwner();
@@ -359,10 +476,33 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const unpushed = w.commits.length - w.pushed;
       if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} local commit(s) of ${w.record.branch} are not on the remote; push before delivering`);
       if (w.remoteMoved) return refuse(409, 'bring_in_first', `main has moved since ${w.record.branch} last brought it in; bring it in, resolve what it reports, then deliver`, { conflicts: [], violations: [] });
+      // The remote's merge gate (ADR-0070 decision 6), its refusals as the remote gave them; a dry run answers with the verdicts and changes nothing.
+      const overrides = overridesOf(fields.overrides);
+      if (!(overrides instanceof Map)) return overrides;
+      const { branch } = w.record;
+      const head = w.commits[0]?.commit ?? w.record.local;
+      const required = model.remoteRequirements;
+      const stray = [...overrides.keys()].find((check) => !required.some((r) => r.check === check));
+      if (stray) return refuse(400, 'bad_request', `The remote refused: ${stray} is not a required check of this merge`, { remote: true });
+      const checks = verdictsFor(required.map((r) => ({ check: r.check, level: 'Required' as const, locked: r.locked, id: `CheckRequirement/${r.check}`, reporter: 'User/lint-service' })), model.remoteRuns, branch, head, overrides);
+      if (fields.dryRun === true) {
+        return ok({ workspace: w.record, delivered: { base: commitId(), source: head, target: commitId(), upToDate: false }, deleted: false, dryRun: true, conflicts: [], violations: [], ...(checks.length ? { checks } : {}) });
+      }
+      const locked = checks.find((v) => v.overridden && v.locked);
+      if (locked) {
+        return refuse(403, 'forbidden', `The remote refused: ${ownerOf()} may not: override the locked check ${locked.check} on main`, { remote: true, permission: 'override_check', branch: 'main', check: locked.check, locked: true });
+      }
+      const stopped = stopping(checks);
+      const failed = stopped.filter((v) => v.conclusion !== 'pending').map((v) => v.check);
+      if (failed.length) return refuse(422, 'checks_failed', `The remote refused: merging ${branch} into main needs ${failed.join(', ')} to pass at ${head}; nothing was merged`, { remote: true, failed, checks });
+      if (stopped.length) {
+        const pending = stopped.map((v) => v.check);
+        return refuse(409, 'checks_pending', `The remote refused: merging ${branch} into main waits for ${pending.join(', ')} to report on ${head}`, { remote: true, pending, checks });
+      }
       const deleted = fields.deleteWorkspace === true;
       if (deleted) model.workspaces.delete(w.record.branch);
       else w.deliveredAt = w.commits.length;
-      return ok({ workspace: w.record, delivered: { commit: commitId(), base: commitId(), source: commitId(), target: commitId(), upToDate: false }, deleted });
+      return ok({ workspace: w.record, delivered: { commit: commitId(), base: commitId(), source: commitId(), target: commitId(), upToDate: false }, deleted, ...(checks.length ? { checks } : {}) });
     },
     remove: (fields) => {
       const refused = needsHub() ?? needsOwner();
@@ -397,6 +537,19 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     writeAsTool,
     conflictOn: (branch: string) => void (model.workspaces.get(branch) && (model.workspaces.get(branch)!.conflict = true)),
     link: (remote: string) => emit({ event: 'deep-link', remote }),
+    // A tool on this machine reports on a workspace's latest commit, as a local linter would (POST /checks/runs).
+    reportRun: (branch: string, check: string, conclusion: Run['conclusion'], summary?: string, detailsUrl?: string) => {
+      const w = model.workspaces.get(branch);
+      if (w) model.runs.set(`${branch} ${check}`, { commit: w.commits[0]?.commit ?? w.record.local, conclusion, ...(summary ? { summary } : {}), ...(detailsUrl ? { detailsUrl } : {}) });
+    },
+    // The instance requires a check before a merge into main, and its check service reports on the branch's head there.
+    remoteRequires: (check: string, locked = false) => void model.remoteRequirements.push({ check, locked }),
+    remoteReports: (branch: string, check: string, conclusion: Run['conclusion'], summary?: string) => {
+      const w = model.workspaces.get(branch);
+      if (w) model.remoteRuns.set(`${branch} ${check}`, { commit: w.commits[0]?.commit ?? w.record.local, conclusion, ...(summary ? { summary } : {}) });
+    },
+    // checks.json written by hand into something the push gate cannot read.
+    breakChecksFile: () => void (model.checksInvalid = [{ path: 'requirements[0].check', message: 'check is the name of a check' }]),
     // The oidc remote's provider changes between a page's read and its connect, as a hostile hub's could (C2).
     changeIssuer: (issuer: string) => void (profiles[OIDC_REMOTE]!.identity = { resolver: 'oidc', issuer, clientId: 'armature-desktop' }),
   };

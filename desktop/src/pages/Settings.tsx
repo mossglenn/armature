@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
+import { PersonalChecksEditor } from '@/components/PersonalChecksEditor';
 import { RefusalNotice } from '@/components/RefusalNotice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend, ShellState } from '@/lib/backend';
-import type { Profile, Refusal, Settings as SettingsShape, SettingsReply } from '@/lib/types';
+import type { Profile, Refusal, Settings as SettingsShape, SettingsReply, WorkspaceRecord } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
 /**
@@ -16,7 +17,8 @@ import { useRequest } from '@/lib/useShell';
  * offers it; starting at login, saved as it is ticked (the shell makes the system's entry follow it,
  * src-tauri/src/login.rs, and the state says what the entry then is, shown beside the box when it
  * differs from the setting; the 2026-11-09 review's R10); sign out; and the versions: the program's, the hub revision it carries,
- * the remote's, with a check of the release channel on demand (the daily one is the shell's).
+ * the remote's, with a check of the release channel on demand (the daily one is the shell's); and the
+ * person's own required checks, which gate their pushes (components/PersonalChecksEditor.tsx).
  */
 export function Settings({ backend, state, connect, signedOut }: { backend: Backend; state?: ShellState; connect: () => void; signedOut: () => void }) {
   const { run, busy } = useRequest(backend);
@@ -29,6 +31,8 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   const [version, setVersion] = useState<string | undefined>();
   const [remoteVersions, setRemoteVersions] = useState<string[] | 'unreachable' | undefined>();
   const [checked, setChecked] = useState<{ busy: boolean; line?: string }>({ busy: false });
+  /** The workspaces a check can be bound to; none when the hub is not running, and a check can still bind every workspace. */
+  const [workspaces, setWorkspaces] = useState<string[]>([]);
 
   const show = (reply: SettingsReply) => {
     setSettings(reply.settings);
@@ -38,6 +42,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
 
   useEffect(() => {
     void backend.version().then(setVersion);
+    void run<WorkspaceRecord[]>('workspaces').then((outcome) => outcome.ok && setWorkspaces(outcome.body.map((w) => w.branch)));
     void run<SettingsReply>('settings').then((outcome) => {
       if (!outcome.ok) return setRefusal(outcome);
       show(outcome.body);
@@ -188,6 +193,8 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
         )}
         {refusal && <RefusalNotice {...refusal} />}
       </form>
+
+      <PersonalChecksEditor backend={backend} workspaces={workspaces} />
 
       <div className="mt-6 rounded-lg border p-4 text-sm" aria-label="Versions">
         <p className="font-medium">Versions</p>
