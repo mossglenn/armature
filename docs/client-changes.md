@@ -15,6 +15,40 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-15 · The event feed: `GET /events`
+
+**What changed.** A tool can now learn what changed on a hub without polling each branch (ADR-0070
+decision 2), on both roles, under the capability `armature/checks`. `GET /events` with no `since`
+answers at once with no events and a `cursor` at the present. `GET /events?since=<cursor>` answers
+`{ events, cursor }`: what changed since, oldest first, at most `limit` (100), and the cursor to
+ask with next; when nothing has changed the hub holds the request up to `wait` seconds (30, the
+default and the most; `0` answers at once) and returns on the next commit made through it. The
+events are `commit` and `merge` (`branch`, `commit`, `parent`, `author`, `timestamp`, `changed`,
+the count of changed documents by class, `mergeSource` on a merge, `workspaceCommit` on a push's
+replay), `branch.created` and `branch.deleted`, `requirement.changed` (a `CheckRequirement`
+written, `requirements` naming the records) and `hub.started` (the cursor is from before a
+restart: the hub's check runs are gone). An event never carries documents; those are read through
+`GET /branches/:name/changes`, `/log` and `/export`. `types=` keeps the types named, `branch=` one
+branch's events with `requirement.changed` and `hub.started`. The cursor is opaque, holds each
+branch's commit, and survives a restart of the hub; the hub keeps no event log, and derives every
+answer from the store's logs. Within a branch the order is the log's; across branches it follows
+the commits' timestamps and is advisory. New errors: **400** `bad_cursor`, and **400**
+`cursor_too_old` for a cursor more than 1,000 commits behind on a branch. Discovery's
+`armature/checks` gains `events`, `eventsPage`, `eventsWait` and `eventsBacklog`.
+`@armature/client`: `events.since(cursor?, { types, branch, wait, limit })`, with `FeedEvent`,
+`EventType` and `EventsResult`.
+
+**What a client does.** Nothing, unless it reacts to changes. A tool that does replaces its
+polling of `GET /branches/:name/changes` with a loop: ask without a cursor once, then ask with the
+last cursor, act on the events, and ask again; it sets its own request timeout above `wait`. A
+check service runs on each `commit` and `merge` of the branches it serves, reads the requirements
+again on `requirement.changed`, and on `hub.started` posts its runs again for the heads it cares
+about. A tool that was away is not told of commits on a branch deleted meanwhile, nor of a branch
+made and deleted meanwhile; the `merge` event of the branch that took them names the source
+commit. A workspace hub at this revision speaks it to its remote, so the remote is updated first.
+**CoQui:** nothing now; a round coordinator that waits for reviews could follow `branch=<round>`
+instead of polling.
+
 ## 2026-11-13 · Check runs and required checks: `POST /checks/runs`, `GET /checks`, `GET /checks/requirements`, and `CheckRequirement` through the document routes
 
 **What changed.** The first client-facing pieces of ADR-0070 (checks as hooks and gates for
