@@ -15,6 +15,37 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-15 · The push gate on a workspace hub: personal requirements in `checks.json`, `overrides` on push and deliver, the remote's requirements mirrored
+
+**What changed.** The same checks now work on a person's machine (ADR-0070 decision 8), riding
+the day's revision; a workspace hub's `armature/checks` says `gate: ["push"]`. A person's own
+requirements live in `checks.json` at the root of the hub's folder, `{ "requirements": [ { "check",
+"params", "branch"?, "fromPrefix"?, "level"?, "status"?, "rationale"? } ] }`, written by the host
+and by no route. `POST /workspace/:name/push` holds each `Required` one to the workspace's head
+against the runs the hub holds, before anything is replayed: **409** `checks_pending` or **422**
+`checks_failed` with `commit` and `checks`, the merge gate's verdicts without a `reporter`, since
+any run on the machine under the requirement's `paramsHash` counts. Its optional body takes
+`overrides: [{ check, reason }]`; a reason reaches the remote on the first replayed commit as
+`Armature-Local-Check-Override: <check> reason="..."`, the pusher's claim (ADR-0070 decision 8,
+later change of this date: not `Armature-Check-Override`, which stays the remote's). A file that
+cannot be read as requirements is **422** `personal_checks_invalid`. `GET /checks/requirements` on
+a workspace hub gains `personal`, the owner's requirements that gate a push of `target`, each with
+`paramsHash`, and its `requirements` are now the remote's, mirrored at the clone and before each
+push and delivery: shown, never enforced there. `POST /workspace/:name/deliver` takes `overrides`,
+passed to the remote's merge, and `dryRun`, which returns what the remote's merge would find, its
+`checks` among it; a delivery the remote's gate stops comes back as the remote's `checks_pending`
+or `checks_failed` with `remote: true`. `@armature/client`: `workspace.push(name, { overrides })`,
+`workspace.deliver(name, { ..., overrides, dryRun })`, `PushResult.checks`, `DeliverResult.checks`,
+`RequirementsResult.personal`, `PersonalRequirement`; `CheckVerdict.reporter` is now optional.
+
+**What a client does.** A tool on a person's machine that runs checks (a linter's watch mode)
+reads `GET /checks/requirements?target=<workspace>` on the workspace hub: for each `personal`
+entry it runs with those `params` and posts a run about the workspace's head with that
+`paramsHash`; for each of the remote's it may do the same as a preview, which the remote does not
+count. A tool that pushes or delivers for a person shows `checks` on the three new refusals and
+offers an override with a reason. A reader of `CheckVerdict` no longer assumes `reporter`.
+**CoQui:** nothing; it writes to a remote hub.
+
 ## 2026-11-15 · The merge gate: required checks stop a merge, `overrides`, and the `Armature-Check` trailers
 
 **What changed.** `POST /branches/:name/merge` now enforces the `CheckRequirement`s in force that

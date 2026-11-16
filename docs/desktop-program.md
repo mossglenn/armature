@@ -69,6 +69,17 @@ Your workspaces are in the workspaces folder: by default inside the program's da
 
 **Log** shows the latest lines and opens the log folder; the files are what to send with a report of a problem.
 
+
+## Checks of your own
+
+Your instance may require checks before your work is delivered into `main`, such as a design linter's verdict; the instance enforces those, and a delivery it stops says which check it is waiting for. You can also ask checks of your own pushes. Put a file named `checks.json` in the workspaces folder:
+
+```
+{ "requirements": [ { "check": "lint/mine", "params": { } } ] }
+```
+
+Each entry names a check a tool on your machine reports, with the settings that tool should run under. Add `"branch": "<workspace>"` to bind one workspace only. While the file is there, a push waits until that tool has reported on your latest work, and is refused if the check did not pass. The program has no page for this file yet: you write it by hand, and to push past a check of your own you take its entry out of the file, or set `"status": "Revoked"` on it. No tool can change the file through the hub, so only you can relax it.
+
 ## In the background
 
 Closing the window does not stop the program: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first.
@@ -97,6 +108,9 @@ Every refusal shows the message, a code and whether your instance or this machin
 | `unpushed_commits` | Something waits to be pushed | Push first. If the message says an earlier bring-in was not finished and names documents changed on both sides, pushing will not clear it, and the program has no way on from there yet; the work stays in the workspace's folder |
 | `bring_in_first` | `main` has moved since you last brought it in | Bring in `main`, then deliver |
 | `forbidden` | You may not do this on that branch; its reason says why | The message names who may |
+| `checks_pending` | A check has not reported yet: one your instance requires before a delivery, or one of your own before a push | Wait for the check to run, then try again |
+| `checks_failed` | A required check did not pass | Read what the check found and fix it. For a check of your own, see "Checks of your own" below |
+| `personal_checks_invalid` | The program cannot read your `checks.json` | Correct the file, or remove it |
 | `discard_mismatch` | The number of unpushed commits changed after the program showed it to you, usually because a tool wrote meanwhile | Read the new number and confirm again, or push |
 | `workspaces_exist` | You asked to connect elsewhere while workspaces exist | Deliver or remove them first |
 | `port_in_use` | Another program holds the port | Choose another port in **Settings** and restart the hub |
