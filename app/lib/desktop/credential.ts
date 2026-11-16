@@ -1,5 +1,5 @@
 import { ApiError } from '../api/errors';
-import { tokensFrom, type FetchLike, type Tokens } from './signIn';
+import { ISSUER_CALL_MS, tokensFrom, type FetchLike, type Tokens } from './signIn';
 
 /**
  * The desktop program's credential for its remote: the token source behind
@@ -18,8 +18,15 @@ import { tokensFrom, type FetchLike, type Tokens } from './signIn';
  * A refresh the provider refuses (the person was removed, the token expired
  * or was revoked) clears the credential and calls `onSignedOut`; that call
  * and every later one are 401 `signed_out`, which the shell answers with the
- * sign-in screen. A provider that cannot be reached is 503
- * `issuer_unreachable` and clears nothing: the next call tries again.
+ * sign-in screen. A provider that cannot be reached, or that answers a 5xx or
+ * a 429, is 503 `issuer_unreachable` and clears nothing: the next call tries
+ * again.
+ *
+ * `clear()` ends the credential for good: a refresh in flight when it is
+ * called changes nothing when it lands and calls nothing, so a sign-out is
+ * not undone by an answer already on its way, and a rotated token is not
+ * handed to a shell that has since connected elsewhere (the 2026-11-09
+ * review's C5). Whoever signs in again makes a new credential.
  *
  * Whose token it is stays the hub's question: before a workspace is made,
  * pushed, brought in or delivered, the remote's `GET /users/me` must resolve
@@ -60,6 +67,8 @@ export function credential(initial: Partial<Tokens>, options: CredentialOptions)
   let access = initial.accessToken !== undefined && initial.expiresAt !== undefined ? { token: initial.accessToken, expiresAt: initial.expiresAt } : undefined;
   let refreshToken = initial.refreshToken;
   let pending: Promise<string> | undefined;
+  /** Set by `clear()`; nothing changes this credential's state or calls its callbacks afterwards. */
+  let cleared = false;
 
   const fresh = () => access !== undefined && access.expiresAt - REFRESH_MARGIN_SECONDS * 1000 > now();
 
@@ -75,14 +84,19 @@ export function credential(initial: Partial<Tokens>, options: CredentialOptions)
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
         body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: sent, client_id: options.clientId }).toString(),
+        // A redirect would post the refresh token again wherever it points (C7); a silent endpoint is given up on (C9).
+        redirect: 'error',
+        signal: AbortSignal.timeout(ISSUER_CALL_MS),
       });
     } catch {
+      if (cleared) throw signedOut();
       throw new ApiError(503, 'issuer_unreachable', `The identity provider's token endpoint, ${options.tokenEndpoint}, could not be reached; the remote cannot be signed in to until it can`);
     }
     let tokens: Tokens;
     try {
       tokens = await tokensFrom(res, now, 'the refresh');
     } catch (err) {
+      if (cleared) throw signedOut();
       // A refusal (400 invalid_grant, as RFC 6749 §5.2 has it) ends the sign-in; a provider's
       // malformed answer is not the person's to fix by signing in again, and clears nothing.
       if (err instanceof ApiError && err.code === 'sign_in_refused') {
@@ -93,6 +107,8 @@ export function credential(initial: Partial<Tokens>, options: CredentialOptions)
       }
       throw err;
     }
+    // Signed out while the provider was answering: what it gave is dropped, and no one is told of a rotation.
+    if (cleared) throw signedOut();
     access = { token: tokens.accessToken, expiresAt: tokens.expiresAt };
     if (tokens.refreshToken && tokens.refreshToken !== sent) {
       refreshToken = tokens.refreshToken;
@@ -102,6 +118,7 @@ export function credential(initial: Partial<Tokens>, options: CredentialOptions)
   };
 
   const source = async (): Promise<string> => {
+    if (cleared) throw signedOut();
     if (fresh()) return access!.token;
     pending ??= refresh().finally(() => (pending = undefined));
     return pending;
@@ -110,6 +127,7 @@ export function credential(initial: Partial<Tokens>, options: CredentialOptions)
     forget: { value: () => (access = undefined) },
     clear: {
       value: () => {
+        cleared = true;
         access = undefined;
         refreshToken = undefined;
       },

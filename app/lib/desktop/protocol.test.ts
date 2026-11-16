@@ -136,6 +136,44 @@ describe('the control protocol', () => {
     expect(h.messages).toEqual([{ id: 1, status: 200, body: { pushed: [] } }]);
   });
 
+  it('tells the host the input ended before it waits, and waits no longer than its bound (the 2026-11-09 review’s C3)', async () => {
+    // A request waiting on a person, as a sign-in waits on the browser: the host's hook ends it.
+    let cancel!: () => void;
+    const waiting = new Promise<void>((_, reject) => (cancel = () => reject(new ApiError(409, 'sign_in_cancelled', 'The sign-in was cancelled'))));
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const lines: string[] = [];
+    output.on('data', (chunk: Buffer) => lines.push(chunk.toString('utf8')));
+    let ended = 0;
+    const channel = openChannel({
+      input,
+      output,
+      handlerFor: () => async () => {
+        await waiting;
+        return ok({});
+      },
+      onInputEnd: () => {
+        ended += 1;
+        cancel();
+      },
+    });
+    input.write(`${JSON.stringify({ id: 1, type: 'signIn' })}\n`);
+    input.end();
+    await channel.closed;
+    expect(ended).toBe(1);
+    expect(JSON.parse(lines.join(''))).toMatchObject({ id: 1, status: 409, body: { error: 'sign_in_cancelled' } });
+
+    // A request nothing ends is abandoned at the bound rather than holding the core open.
+    const stuck = new PassThrough();
+    const started = Date.now();
+    const bounded = openChannel({ input: stuck, output: new PassThrough(), handlerFor: () => () => new Promise(() => undefined), drainMs: 40 });
+    stuck.write(`${JSON.stringify({ id: 1, type: 'push' })}\n`);
+    stuck.end();
+    await bounded.closed;
+    expect(Date.now() - started).toBeGreaterThanOrEqual(35);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
   it('survives a reader that is gone: a write error is not the core’s end', async () => {
     const h = harness({ echo: async () => ok({}) });
     h.output.destroy(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }));

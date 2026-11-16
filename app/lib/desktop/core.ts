@@ -199,11 +199,17 @@ export function runCore(options: CoreOptions): Core {
     }
   };
 
-  const startHubNow = async (dir: string, current: DesktopSettings): Promise<Answer> => {
+  /**
+   * `carried`: whether the `start` request brought the keychain's local token. When it did not, the
+   * token in force is reported in the reply, whether it was drawn now or by an earlier start that
+   * failed after drawing it (a port in use): the hub enforces it either way, and a shell that never
+   * saw it has nothing to show on the pairing page or to keep (the 2026-11-09 review's C8).
+   */
+  const startHubNow = async (dir: string, current: DesktopSettings, carried: boolean): Promise<Answer> => {
     if (!current.remote || !current.identity) return ok({ started: false, needs: 'connect', settings: current });
     if (current.identity.resolver === 'header' && !current.user) return ok({ started: false, needs: 'user', settings: current });
-    const drawn = localToken ? undefined : drawLocalToken();
-    if (drawn) localToken = drawn;
+    if (!localToken) localToken = drawLocalToken();
+    const drawn = carried ? undefined : localToken;
     const folder = workspacesFolder(dir, current);
     let unlock: () => Promise<void>;
     try {
@@ -254,8 +260,11 @@ export function runCore(options: CoreOptions): Core {
       remote: current.remote,
       resolver: current.identity.resolver,
       // The issuer the browser will open at, so the sign-in page can show where it sends the person.
-      ...(current.identity.resolver === 'oidc' ? { signedIn: held?.signedIn ?? keptRefresh !== undefined, issuer: current.identity.issuer } : { user: current.user }),
-      // Drawn here, so the shell keeps it in the keychain; never written to the log (plan §9).
+      // The client id beside the issuer: the shell keeps the sign-in under the remote, the issuer and the client together (C6).
+      ...(current.identity.resolver === 'oidc'
+        ? { signedIn: held?.signedIn ?? keptRefresh !== undefined, issuer: current.identity.issuer, clientId: current.identity.clientId }
+        : { user: current.user }),
+      // The shell sent none, so it keeps this one in the keychain; never written to the log (plan §9).
       ...(drawn ? { localToken: drawn } : {}),
       ...(warning ? { warning } : {}),
     });
@@ -340,11 +349,12 @@ export function runCore(options: CoreOptions): Core {
         settings = await readSettings(dir);
         if (refresh !== undefined && refresh !== keptRefresh) {
           keptRefresh = refresh;
+          held?.clear();
           held = undefined;
           me = undefined;
         }
         if (kept !== undefined) localToken = kept;
-        return startHubNow(dir, settings);
+        return startHubNow(dir, settings, kept !== undefined);
       })();
       try {
         return await starting;
@@ -380,6 +390,9 @@ export function runCore(options: CoreOptions): Core {
       const refusal = changeRefusal(current, next, await workspaceNames());
       if (refusal) throw refusal;
       if (next.remote !== current.remote || JSON.stringify(next.identity) !== JSON.stringify(current.identity)) {
+        // Cleared, not only dropped: a refresh in flight for the remote left behind must not hand its
+        // rotated token to the shell, which would keep it under the new remote's name (C5).
+        held?.clear();
         held = undefined;
         keptRefresh = undefined;
         me = undefined;
@@ -440,6 +453,7 @@ export function runCore(options: CoreOptions): Core {
           now,
         });
         const { tokenEndpoint } = await issuerMetadata(identity.issuer, fetchFn);
+        held?.clear();
         held = makeCredential(identity, tokens, tokenEndpoint);
         keptRefresh = tokens.refreshToken;
         me = undefined;
@@ -454,17 +468,31 @@ export function runCore(options: CoreOptions): Core {
 
     // The keychain's refresh token, which the shell can name only once `start` has said which remote
     // the settings hold (the keychain keys it by the remote, plan §6). Shell-only: the shell's relay
-    // never forwards it from the webview. Used only when it is for the remote the settings name.
+    // never forwards it from the webview. Used only when it is for the remote the settings name,
+    // and for the provider and the client it was issued by, which the shell sends with it: the
+    // settings are a plain file and a remote may change the provider it names, and a refresh token
+    // posted to another provider than its own is handed to whoever runs that one (the 2026-11-09
+    // review's C6).
     credential: async (request) => {
       const { settings: current } = opened();
       const remote = text(request, 'remote').replace(/\/+$/, '');
       const refresh = text(request, 'refreshToken');
-      if (!oidcOf(current.identity)) throw new ApiError(409, 'not_oidc', 'The remote does not sign people in; there is no credential to keep');
+      const identity = oidcOf(current.identity);
+      if (!identity) throw new ApiError(409, 'not_oidc', 'The remote does not sign people in; there is no credential to keep');
       if (remote !== current.remote) {
         throw new ApiError(409, 'other_remote', `The settings name the remote ${current.remote}, not ${remote}; that credential is not for it`, { remote: current.remote });
       }
+      const issuer = text(request, 'issuer').replace(/\/+$/, '');
+      const clientId = text(request, 'clientId');
+      if (issuer !== identity.issuer.replace(/\/+$/, '') || clientId !== identity.clientId) {
+        throw new ApiError(409, 'other_issuer', `The settings name the identity provider ${identity.issuer} and the client ${identity.clientId}; that credential was issued by ${issuer} to ${clientId} and is not sent there`, {
+          issuer: identity.issuer,
+          clientId: identity.clientId,
+        });
+      }
       if (refresh !== keptRefresh) {
         keptRefresh = refresh;
+        held?.clear();
         held = undefined;
         me = undefined;
       }
@@ -528,7 +556,13 @@ export function runCore(options: CoreOptions): Core {
       ),
   };
 
-  const channel = openChannel({ input: options.input, output: options.output, handlerFor: (type) => handlers[type] });
+  const channel = openChannel({
+    input: options.input,
+    output: options.output,
+    handlerFor: (type) => handlers[type],
+    // The shell is gone: a sign-in waiting on the browser has no one to answer, and would hold the hub open for its five minutes (C3).
+    onInputEnd: () => signingIn?.abort(),
+  });
   emit = channel.emit;
   const closed = channel.closed.then(async () => {
     await stopHub();

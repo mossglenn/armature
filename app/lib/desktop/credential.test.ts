@@ -80,6 +80,73 @@ describe('the credential', () => {
     expect(await source()).toBe('access-1');
   });
 
+  it('keeps the person signed in through a provider in trouble: a 502, a 503, a 429 and an answer that is no refusal clear nothing (the 2026-11-09 review’s C4)', async () => {
+    const reasons: string[] = [];
+    const token = endpoint([
+      () => new Response('<html>Bad Gateway</html>', { status: 502 }),
+      () => Response.json({ error: 'temporarily_unavailable' }, { status: 503 }),
+      () => new Response('', { status: 429 }),
+      () => new Response('Not Found', { status: 404 }),
+      () => Response.json({ message: 'no reason a token endpoint gives' }, { status: 400 }),
+      tokens('access-1'),
+    ]);
+    const source = credential({ refreshToken: 'refresh-1' }, { tokenEndpoint: ENDPOINT, clientId: 'c', fetch: token.fetch, now: () => 0, onSignedOut: (r) => reasons.push(r) });
+    for (const status of [502, 503, 429]) await expect(source(), String(status)).rejects.toMatchObject({ status: 503, code: 'issuer_unreachable', details: { status } });
+    await expect(source()).rejects.toMatchObject({ status: 502, code: 'issuer_error', details: { status: 404 } });
+    await expect(source()).rejects.toMatchObject({ status: 502, code: 'issuer_error', details: { status: 400 } });
+    expect(reasons).toEqual([]);
+    expect(source.signedIn).toBe(true);
+    expect(await source()).toBe('access-1');
+    expect(token.requests.map((r) => r.get('refresh_token'))).toEqual(Array(6).fill('refresh-1'));
+  });
+
+  it('is not signed in again by a refresh that lands after a sign-out, and reports no rotation from it (the 2026-11-09 review’s C5)', async () => {
+    const rotated: string[] = [];
+    const reasons: string[] = [];
+    let answer!: (res: Response) => void;
+    const token = endpoint([() => new Promise<Response>((resolve) => (answer = resolve))]);
+    const source = credential({ refreshToken: 'refresh-1' }, { tokenEndpoint: ENDPOINT, clientId: 'c', fetch: token.fetch, now: () => 0, onRotated: (r) => rotated.push(r), onSignedOut: (r) => reasons.push(r) });
+    const inFlight = source();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    source.clear();
+    answer(Response.json({ access_token: 'access-late', expires_in: 300, refresh_token: 'refresh-rotated' }));
+    await expect(inFlight).rejects.toMatchObject({ status: 401, code: 'signed_out' });
+    expect(rotated).toEqual([]);
+    expect(source.signedIn).toBe(false);
+    await expect(source()).rejects.toMatchObject({ code: 'signed_out' });
+    expect(token.requests).toHaveLength(1);
+
+    // The same when the provider's late answer is a refusal: the sign-out already happened, and is not announced twice.
+    let refuse!: (res: Response) => void;
+    const second = endpoint([() => new Promise<Response>((resolve) => (refuse = resolve))]);
+    const other = credential({ refreshToken: 'refresh-1' }, { tokenEndpoint: ENDPOINT, clientId: 'c', fetch: second.fetch, now: () => 0, onSignedOut: (r) => reasons.push(r) });
+    const late = other();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    other.clear();
+    refuse(Response.json({ error: 'invalid_grant' }, { status: 400 }));
+    await expect(late).rejects.toMatchObject({ code: 'signed_out' });
+    expect(reasons).toEqual([]);
+  });
+
+  it('posts the refresh token where it was told and nowhere a redirect points, within a deadline (C7, C9)', async () => {
+    const seen: RequestInit[] = [];
+    const source = credential(
+      { refreshToken: 'refresh-1' },
+      {
+        tokenEndpoint: ENDPOINT,
+        clientId: 'c',
+        now: () => 0,
+        fetch: async (_input, init) => {
+          seen.push(init ?? {});
+          return Response.json({ access_token: 'access-1', expires_in: 300 });
+        },
+      }
+    );
+    await source();
+    expect(seen[0].redirect).toBe('error');
+    expect(seen[0].signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('is signed out when the access token expires and the provider issued no refresh token', async () => {
     let clock = 0;
     const source = credential({ accessToken: 'access-1', expiresAt: 300_000 }, { tokenEndpoint: ENDPOINT, clientId: 'c', fetch: endpoint([]).fetch, now: () => clock });
