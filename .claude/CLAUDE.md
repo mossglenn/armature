@@ -59,7 +59,7 @@ package.json               # The npm workspace root: app and packages/*
 packages/types/            # @armature/types, GENERATED src/ (types.ts, schemas.ts); do not edit
 packages/client/           # @armature/client, every route as a typed function; takes a fetch; install-check/ is CI's consumer test
 scripts/                   # Outside the workspace: generate-types.js, generate-schema-appendix.js, load_schema.js (--clear-instances, --recreate),
-                           #   seed_data.js (six commits; its header says what each adds), platform_checks.js (lettered probes; its header lists them), check_context_size.js
+                           #   seed_data.js (five commits; its header says what each adds), platform_checks.js (lettered probes; its header lists them), check_context_size.js
 app/server.ts              # The hub's entry (.env.local, PORT, HOST loopback by default); what build:hub bundles
 app/operator.ts            # The operator tools' command line: check, delete, put (ADR-0062); bundled, shipped in the hub image
 app/desktop.ts             # The desktop program's core (ADR-0069): a workspace hub's host driven by JSON lines on stdin and stdout; build:desktop; its own command-line driver
