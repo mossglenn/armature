@@ -24,6 +24,21 @@ host-neutral Hono application, which is what lets a third host exist). It amends
 ADR-0065 decision 7 carries a dated note of the same day for the local token kept across starts
 (the plan's §15 question 4), a separate decision.
 
+> **Note (2026-11-15):** built since 2026-11-07 and 08 (the plan's §14 steps 2 to 5) and released
+> as `desktop-v0.1.0` to `desktop-v0.1.2` on 2026-11-11; "Not built" above is the acceptance's.
+> On 2026-11-15 the sign-in findings of the code review of 2026-11-09 were fixed
+> (`docs/armature-code-review-2026-11-09.md`, its banner). Three bear on the decisions here.
+> Decision 4's exit when the shell goes (C3): the core ends a sign-in waiting on the browser as
+> its input closes and waits at most ten seconds for the other requests in flight, where it
+> used to hold the port and the folder's lock for the sign-in's five minutes. The keychain (C6):
+> the refresh token is kept under the remote, its issuer and the program's client id together,
+> and the core refuses one sent for another issuer or client (409 `other_issuer`), so a
+> provider changed in the settings file or in a remote's profile is never handed the token;
+> a program updated from 0.1.2 or before signs in once. The shell's replies (S4, S5): a
+> keychain that refuses to remove a sign-in or keep a new pairing value is said to the person
+> on the page, as `keychain` in the reply, and a keychain that cannot be read at a start is
+> not overwritten with the value drawn meanwhile.
+
 ## Context
 
 A workspace hub is the API in a second role on a person's machine (ADR-0065). Until now its hosts

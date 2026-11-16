@@ -604,6 +604,15 @@ how an instance runs.
 > the JWKS tests with decision 1 and the refused-trailer test with decision 6, in the workspace
 > hub plan's §14 order.
 >
+> **Note (2026-11-15), on decision 2:** the program's sign-in, as the code review of 2026-11-09
+> asked (C4, C7, C9). The program signs in only at an issuer reached over `https`, or on
+> loopback, and holds the issuer's two endpoints to the same, 400 `insecure_issuer`; an
+> endpoint on another origin than the issuer's stays allowed. A token post follows no redirect
+> and every request to the issuer ends within fifteen seconds. Only an OAuth error answer (400
+> or 401 with `error`) is the provider's refusal and signs the person out; a 5xx or a 429 is
+> 503 `issuer_unreachable` and any other answer 502 `issuer_error`, and neither removes the
+> kept token.
+
 > **Note (2026-11-05):** the signing-key tests are `app/lib/api/oidc.test.ts`, over a scratch
 > database since first encounters register on `main`: a valid token registers an admitted person
 > with the issuer and resolves them by `(issuer, sub)` after; a token not admitted is 403

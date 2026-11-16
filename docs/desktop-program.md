@@ -35,7 +35,7 @@ An instance that says **"No sign-in: you say who you are"** is a development or 
 
 ## Signing in
 
-**Sign in** opens your browser at your institution's sign-in page. Once you have signed in there, the browser says you can return to the program, and the program shows who the instance says you are. You stay signed in across restarts: the program keeps its credential in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it.
+**Sign in** opens your browser at your institution's sign-in page. Once you have signed in there, the browser says you can return to the program, and the program shows who the instance says you are. You stay signed in across restarts: the program keeps its credential in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the program says so, since you would otherwise be signed in again at the next start. The credential is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After updating from version 0.1.2 or earlier you sign in once, for the same reason. The program signs in only at a provider reached over `https`.
 
 ## Your workspaces
 
@@ -118,6 +118,8 @@ Every refusal shows the message, a code and whether your instance or this machin
 | `profile_changed` | The instance answered differently when you connected than when you read it | Choose **Read** again and check what it shows before connecting |
 | `not_registered` | You signed in, but the instance does not know you | Ask your administrator to register you |
 | `sign_in_refused`, `sign_in_timeout` | The sign-in did not complete in the browser | Sign in again |
+| `issuer_unreachable` | Your institution's sign-in provider did not answer, or answered that it is busy or restarting | Try again shortly. You stay signed in: nothing is removed |
+| `insecure_issuer` | The instance names a sign-in provider that is not reached over `https` | Tell your administrator; the program will not sign in there |
 | `signed_out` | The instance no longer accepts your sign-in | Sign in again |
 | `unsupported_version` | The instance is older than this program | Ask your administrator to update it |
 | `unpushed_commits` | Something waits to be pushed | Push first. If the message says an earlier bring-in was not finished and names documents changed on both sides, pushing will not clear it, and the program has no way on from there yet; the work stays in the workspace's folder |
