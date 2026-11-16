@@ -595,6 +595,8 @@ describe('the sign-in and a push through the token source, against a remote unde
     expect(exchanges).toHaveLength(before);
     expect(await driver.ask('credential', { ...kept, remote: `${oidcRemote.url}/`, issuer: `${ISSUER}/` })).toMatchObject({ status: 200, body: { signedIn: true } });
     expect((await driver.ask('push', { workspace: WS })).status).toBe(200);
+    // Who the remote says the kept sign-in is, for a sign-in page opened after it (the 2026-11-09 review's P8).
+    expect(await driver.ask('whoAmI')).toMatchObject({ status: 200, body: { signedIn: true, person: { id: ownerId, externalId: OWNER }, staysSignedIn: true } });
   });
 
   it('is signed out by a refused refresh and by signOut, each 401 signed_out at the next remote action', async () => {
@@ -611,6 +613,22 @@ describe('the sign-in and a push through the token source, against a remote unde
     expect((await driver.ask('workspaces')).status).toBe(200);
   });
 
+  it('cancels a sign-in that waits on the browser, and nothing else (the 2026-11-09 review’s P8)', async () => {
+    // Signed out by the test before: no one to name, and nothing waiting to cancel.
+    expect(await driver.ask('whoAmI')).toMatchObject({ status: 401, body: { error: 'signed_out' } });
+    expect(await driver.ask('cancelSignIn')).toMatchObject({ status: 200, body: { cancelled: false } });
+    const seen = driver.events.length;
+    const waiting = driver.ask('signIn');
+    await driver.event((m) => m.event === 'open' && driver.events.indexOf(m) >= seen);
+    // A second attempt meanwhile is told one is waiting; the cancel ends the first, and a new one can begin.
+    expect(await driver.ask('signIn')).toMatchObject({ status: 409, body: { error: 'sign_in_in_progress' } });
+    expect(await driver.ask('cancelSignIn')).toMatchObject({ status: 200, body: { cancelled: true } });
+    expect(await waiting).toMatchObject({ status: 409, body: { error: 'sign_in_cancelled' } });
+    expect(await driver.ask('cancelSignIn')).toMatchObject({ status: 200, body: { cancelled: false } });
+    // The hub was not stopped by it.
+    expect((await driver.ask('workspaces')).status).toBe(200);
+  });
+
   it('stops at once when the shell goes while a sign-in waits on the browser, releasing the folder (the 2026-11-09 review’s C3)', async () => {
     const lock = join(dataDir, 'workspaces', 'lock');
     expect(existsSync(lock)).toBe(true);
@@ -624,5 +642,111 @@ describe('the sign-in and a push through the token source, against a remote unde
     // The sign-in would have waited five minutes; the core is closed and the lock released within moments.
     expect(Date.now() - ended).toBeLessThan(3000);
     expect(existsSync(lock)).toBe(false);
+  });
+});
+
+/**
+ * The fake core the pages are tested against (desktop/src/lib/fakeCore.ts) answers as the core does
+ * (the 2026-11-09 review's P15 and D8, the both-answer-alike test, as filestore/contract.test.ts
+ * holds the two stores to each other): one script of requests sent to each, compared by status,
+ * by the refusal's code and field, and by the keys of a success's body. The fake is a model, so
+ * values differ (its commits and paths are invented); what a page reads is the shape and the code,
+ * and those may not drift. A difference here is fixed in the fake, or, when the fake was right
+ * about what a page needs, in the core.
+ *
+ * The fake is browser code, loaded here by a path the type-check does not follow (its neighbor
+ * imports the Tauri API, which only the shell's own install has); at run time it needs `window`
+ * for its test hooks alone.
+ */
+describe('the fake core answers as the core does (the 2026-11-09 review’s D8)', () => {
+  const NAME = `alike-${stamp}`;
+  const WS = `${handleOf(DESIGNER)}_${NAME}`;
+  let driver: ReturnType<typeof drive>;
+  let fake: { request: (type: string, fields?: Record<string, unknown>) => Promise<{ status: number; body: unknown }> };
+
+  beforeAll(async () => {
+    driver = drive();
+    const dataDir = await dataFolder();
+    await driver.ask('start', { dataDir });
+    const profile = await driver.ask('profile', { remote: headerRemote.url });
+    await driver.ask('connect', { remote: headerRemote.url, identity: profile.body!.identity, instance: profile.body!.instance });
+    await driver.ask('settings', { set: { user: DESIGNER, port: await freePort() } });
+    expect((await driver.ask('start', { dataDir })).body).toMatchObject({ started: true });
+
+    (globalThis as { window?: unknown }).window ??= {};
+    const path = new URL('../../../desktop/src/lib/fakeCore.ts', import.meta.url).pathname;
+    fake = ((await import(/* @vite-ignore */ path)) as { fakeCore: (scenario: string) => typeof fake }).fakeCore('header');
+  });
+
+  afterAll(async () => {
+    driver?.end();
+    await driver?.core.closed;
+  });
+
+  /** What a page reads of an answer: the status, a refusal's code and field, a success's keys (an array's, those of its first entry). */
+  const shape = (answer: { status?: number; body?: unknown }, ignore: string[] = []) => {
+    const body = answer.body as Record<string, unknown> | unknown[] | null;
+    if ((answer.status ?? 0) >= 300) {
+      const refusal = (body ?? {}) as Record<string, unknown>;
+      return { status: answer.status, error: refusal.error, ...(refusal.field !== undefined ? { field: refusal.field } : {}) };
+    }
+    const keysOf = (value: unknown) => (value !== null && typeof value === 'object' ? Object.keys(value).filter((k) => !ignore.includes(k)).sort() : typeof value);
+    return { status: answer.status, keys: Array.isArray(body) ? ['[]', ...(body.length ? [keysOf(body[0])].flat() : [])] : keysOf(body) };
+  };
+
+  // Each step: the request, its fields, and the keys that are one side's own (named with the reason).
+  const script: Array<[string, Record<string, unknown>?, string[]?]> = [
+    ['profile', { remote: 'not an address' }],
+    ['profile', { remote: 'http://127.0.0.1:9' }],
+    ['settings'],
+    ['settings', { set: { port: 70000 } }],
+    ['settings', { set: { snapshots: -1 } }],
+    ['settings', { set: { folder: 'relative/path' } }],
+    ['settings', { set: { remote: 'https://elsewhere.example.edu' } }],
+    ['connect', { remote: 'http://127.0.0.1:9', identity: { resolver: 'header' } }],
+    ['connect', { remote: 'http://127.0.0.1:9' }],
+    ['signIn'],
+    ['whoAmI'],
+    ['cancelSignIn'],
+    ['toolIdentity'],
+    ['checks'],
+    ['checks', { set: { requirements: 'none' } }],
+    ['checks', { set: { requirements: [{ check: '' }] } }],
+    ['checks', { set: { requirements: [{ check: 'lint/mine' }, { check: 'lint/mine' }] } }],
+    ['checks', { set: { requirements: [{ check: 'lint/mine', level: 'Advisory' }] } }],
+    ['checks', { set: { requirements: [] } }],
+    ['status', { workspace: 'nothing-here' }],
+    ['push', { workspace: 'nothing-here' }],
+    ['bringIn', { workspace: 'nothing-here' }],
+    ['deliver', { workspace: 'nothing-here', message: 'x' }],
+    ['remove', { workspace: 'nothing-here' }],
+    ['create', { name: 'not a name' }],
+    ['create', { name: NAME }],
+    ['create', { name: NAME }],
+    ['workspaces'],
+    // `head`: absent from the fake only when a workspace has no commit at all, which the real clone always has.
+    ['status', { workspace: WS }],
+    ['commits', { workspace: WS, count: 5 }],
+    ['push', { workspace: WS }],
+    ['push', { workspace: WS, overrides: 'yes' }],
+    ['bringIn', { workspace: WS }],
+    ['deliver', { workspace: WS }],
+    ['deliver', { workspace: WS, message: 'Alike', dryRun: true }],
+    ['remove', { workspace: WS, discard: 0 }],
+    ['remove', { workspace: WS, discard: 3 }],
+    ['deliver', { workspace: WS, message: 'Alike' }],
+    ['remove', { workspace: WS }],
+    ['status', { workspace: WS }],
+    ['no-such-request'],
+  ];
+
+  it('for every request a page sends: the same status, the same refusal, the same keys', async () => {
+    const differences: string[] = [];
+    for (const [type, fields, ignore] of script) {
+      const real = shape(await driver.ask(type, fields ?? {}), ignore);
+      const model = shape(await fake.request(type, fields ?? {}), ignore);
+      if (JSON.stringify(real) !== JSON.stringify(model)) differences.push(`${type} ${JSON.stringify(fields ?? {})}\n    core: ${JSON.stringify(real)}\n    fake: ${JSON.stringify(model)}`);
+    }
+    expect(differences, `\n${differences.join('\n')}\n`).toEqual([]);
   });
 });
