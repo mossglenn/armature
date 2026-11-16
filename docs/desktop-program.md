@@ -48,7 +48,7 @@ Open a workspace to work with it:
 
 - **Push** sends your commits to the instance. Your tools commit as you work; nothing leaves your machine until you push.
 - **Bring in `main`** merges what others have delivered into your workspace, so you deliver against the current design. If your work and theirs changed the same thing, the program lists each conflict, field by field, and says which tool to open to resolve it.
-- **Deliver** merges your workspace into `main`, with a message saying what it holds. Only a maintainer of `main` can deliver; anyone else is told whom to ask.
+- **Deliver** merges your workspace into `main`, with a message saying what it holds. Only a maintainer of `main` can deliver; anyone else is told whom to ask. **Ask what a delivery would find** changes nothing and says whether a delivery would go through now: conflicts, broken rules, and the checks your instance requires (below).
 - **Remove** deletes the workspace from your machine, once everything is pushed. Its branch on the instance is deleted too when `main` already holds all of it, and kept otherwise.
 - **Discard and remove** is for a workspace with commits that can never be pushed: the instance is gone, your access to the branch was withdrawn, or a push keeps being refused. It appears under Remove whenever commits are unpushed, says how many you would give up, and asks you to confirm that number. It works offline and signed out, and asks nothing of the instance, which keeps whatever you had pushed. Nothing is deleted outright: the workspace's files are copied to a `_discarded` folder inside your workspaces folder first (the message says where). The program never reads that folder again, so delete it when you are sure you no longer want what is in it. If you can still push, push instead.
 
@@ -72,13 +72,28 @@ Your workspaces are in the workspaces folder: by default inside the program's da
 
 ## Checks of your own
 
-Your instance may require checks before your work is delivered into `main`, such as a design linter's verdict; the instance enforces those, and a delivery it stops says which check it is waiting for. You can also ask checks of your own pushes. Put a file named `checks.json` in the workspaces folder:
+*In the program from the release after 0.1.2.*
+
+A *check* is a tool that examines your work and reports a verdict, a design linter for one. The program runs no checks itself and knows no design rules; it waits for the tools' verdicts and shows them.
+
+**Your instance's checks.** Your instance may require checks before work is delivered into `main`. The instance enforces those. A delivery it stops lists each check under the refusal: whether it has reported yet, what it concluded, and its own summary and the address of its details. `checks_pending` means a check has not reported on your latest work, so wait and deliver again. `checks_failed` means one did not pass. Whoever may deliver may set a check aside by giving a reason beside it and choosing **Deliver anyway**; the reason is recorded on the merge into `main`, with your name. A check marked *locked* can be set aside only by an administrator.
+
+**Checks of your own.** You can also ask checks of your own pushes. Open **Settings**, and under **Checks of your own** choose **Add a check**:
+
+- **Check** is the name the tool reports under, such as `lint/mine`.
+- **Workspace** binds it to one workspace, or to every workspace.
+- **When it has not passed** either stops the push or lets it go on and says so.
+- **The tool's settings** are whatever that tool reads, as JSON; write `{}` for none. The program stores them and never reads them.
+
+Choose **Save checks**. Nothing restarts: the next push reads them. While a check is in force, a push waits until that tool has reported on your latest work, and is refused if the check did not pass. Since the checks are yours, you may always push past one: give a reason beside it and choose **Push anyway**. The reason travels with the push as your own statement on its first commit. To stop a check for a while, clear **In force** and save.
+
+The checks are kept in a file named `checks.json` in the workspaces folder, which you may also edit by hand:
 
 ```
 { "requirements": [ { "check": "lint/mine", "params": { } } ] }
 ```
 
-Each entry names a check a tool on your machine reports, with the settings that tool should run under. Add `"branch": "<workspace>"` to bind one workspace only. While the file is there, a push waits until that tool has reported on your latest work, and is refused if the check did not pass. The program has no page for this file yet: you write it by hand, and to push past a check of your own you take its entry out of the file, or set `"status": "Revoked"` on it. No tool can change the file through the hub, so only you can relax it.
+Only the program and you can change that file. No tool can change it through the hub, so no tool can relax what you asked. If the file is edited into something the program cannot read, nothing is pushed until it is put right: the push says where the problem is, and saving on the Settings page replaces the file.
 
 ## In the background
 
@@ -108,9 +123,9 @@ Every refusal shows the message, a code and whether your instance or this machin
 | `unpushed_commits` | Something waits to be pushed | Push first. If the message says an earlier bring-in was not finished and names documents changed on both sides, pushing will not clear it, and the program has no way on from there yet; the work stays in the workspace's folder |
 | `bring_in_first` | `main` has moved since you last brought it in | Bring in `main`, then deliver |
 | `forbidden` | You may not do this on that branch; its reason says why | The message names who may |
-| `checks_pending` | A check has not reported yet: one your instance requires before a delivery, or one of your own before a push | Wait for the check to run, then try again |
-| `checks_failed` | A required check did not pass | Read what the check found and fix it. For a check of your own, see "Checks of your own" below |
-| `personal_checks_invalid` | The program cannot read your `checks.json` | Correct the file, or remove it |
+| `checks_pending` | A check has not reported yet: one your instance requires before a delivery, or one of your own before a push | Wait for the check to run, then try again; or give a reason beside the check and go on anyway (see "Checks of your own") |
+| `checks_failed` | A required check did not pass | Read what the check found, at the address it gives, and fix it; or give a reason beside the check and go on anyway (see "Checks of your own") |
+| `personal_checks_invalid` | The program cannot read your `checks.json` | Open **Settings**, which lists the problems, and save your checks again; or correct or remove the file by hand |
 | `discard_mismatch` | The number of unpushed commits changed after the program showed it to you, usually because a tool wrote meanwhile | Read the new number and confirm again, or push |
 | `workspaces_exist` | You asked to connect elsewhere while workspaces exist | Deliver or remove them first |
 | `port_in_use` | Another program holds the port | Choose another port in **Settings** and restart the hub |
