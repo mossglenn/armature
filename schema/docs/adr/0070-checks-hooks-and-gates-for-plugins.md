@@ -81,6 +81,42 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > revisions rather than this one, against decision 10's estimate of one. A run's shape is checked
 > in the route (400 `invalid_run`), not by a generated schema: a run is not a document. Still not
 > built: the feed, the gate, the trailers, the push gate and decision 12's patcher.
+>
+> **Note (2026-11-15), built:** decision 2's event feed (`events.ts`, `routes/events.ts`,
+> `notifier.ts`): `GET /events?since=&types=&branch=&wait=&limit=`, derived from the logs on every
+> request, on both roles, under `armature/checks` with the settings `events`, `eventsPage`,
+> `eventsWait` and `eventsBacklog`; client revision 2026-11-15. The cursor is the base64url text
+> of `{ v, hub, t, heads }`: each branch's commit told up to, the newest stamp among them, and the
+> life of the hub that gave it, so `hub.started` is told to a cursor from another life and the hub
+> still keeps nothing. Chosen in the build, each open to overrule:
+> (a) **The notifier is fed at `Store.exclusive`**, in the two stores, when queued work ends,
+> rather than by a call in each module `queue.test.ts` lists: that test already holds every commit
+> to the queue, so one place covers them and a new committing module cannot forget it. A wake
+> carries nothing and a woken request reads the heads again.
+> (b) **A new branch is told from the first commit another branch does not account for**: back to
+> a commit a known branch's new range holds, one the cursor holds, or one stamped before the
+> cursor's newest. Every `branch.created` of an answer is told at once, ahead of the page's limit,
+> so a branch is new only when made since the last request and the stamp rule needs no clock
+> between stores. On a tie of stamps (the file-backed store's milliseconds, check AQ) a commit is
+> taken as the branch's own, which can repeat one already told and never loses one.
+> (c) **Not told:** the commits written to a branch between a client's last request and the
+> branch's deletion, and so nothing of a branch made and deleted between two requests. Decision 2
+> says such commits are "held by another branch's log"; they are, and the `merge` event names the
+> source commit, but the feed does not walk there. A plugin that follows the feed is woken by
+> every commit and misses none; reaching them for one that was away waits for a plugin that needs
+> it.
+> (d) **Bounds and parameters the decision did not name:** `wait` (0 to 30 seconds) and `limit`
+> (1 to 100) on the request; a cursor more than 1,000 commits behind on a branch is 400
+> `cursor_too_old`, since each request reads back to the cursor; the `branch` filter keeps
+> `requirement.changed` and `hub.started`, which concern every branch; the transient branches of
+> a merge's check and an operator's repair, and a workspace hub's snapshots, are left out.
+> (e) **The cursor travels in the query**, about 60 bytes a branch before encoding; an instance
+> with some hundreds of branches would outgrow a URL, which is when the cursor moves to a body or
+> the hub keeps it (open question 1's last sentence).
+> A commit by a second hub on the store or by the operator tools wakes no one and is told at the
+> next request. Tested on both stores (`events.test.ts`: the derivation over the file-backed
+> store, the route over TerminusDB; `requirement.changed` in `authorization.test.ts`). Still not
+> built: the gate, the trailers, the push gate and decision 12's patcher.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in

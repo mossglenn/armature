@@ -262,13 +262,13 @@ Who may write a grant: `Maintainer` on a branch, its owner or an administrator; 
 
 A `CheckRequirement` says which plugin's verdict a merge into a branch must carry (ADR-0070 decision 5; written through the document routes since 2026-11-13). It is a document on `main` like a `Grant`, whatever branch it binds, so every change to what a merge requires is a commit with an author and a reason. Its fields: `check` (the name the plugin owns, such as `lint/team`), `branch` (the merge target; absent means `main`), `fromPrefix` (binds only merges from branches whose name starts with it), `reporter` (the agent `User` whose runs count), `level` (`Required` or `Advisory`), `locked` (binds merges into every branch, not only `branch`), `params` (the plugin's settings, any JSON value but `null`, which the hub stores and returns without reading), `status` (`Active` or `Revoked`) and `rationale`. Its identifier derives from `check`, `branch` and `fromPrefix`, so there is one current requirement per check, target and source prefix; withdrawing one is a replace with `status: "Revoked"`, never a delete, and deleting a branch revokes the requirements naming it in the commit that revokes its grants. Rules 21 to 24 (The write pipeline) hold it to `main` and its reporter to an agent.
 
-The requirements that apply to a merge are read with their `paramsHash` at `GET /checks/requirements` (Checks). Who may write one (**403** `forbidden`, `permission: "write_requirement"`, with `branch`, the target, and `locked`): for merges into `main`, a maintainer of `main` or of every branch; for merges into another branch, its owner or a maintainer of it or of every branch; a locked one, an administrator. The record replaced counts too: `locked` is not part of the identifier, so unlocking a requirement needs what locking it did. A branch with no owner takes a requirement only from a maintainer, migration window or not. A requirement alone in a write is judged by these rows; any other document beside it needs the right to write `main`. Requirements are listed by reporter, `GET /documents/CheckRequirement?reporter=User/<id>`; `branch` in a list query names the branch read, where no requirement lives, so a client filters `main`'s list by the `branch` field itself until `GET /checks/requirements?target=` exists. Nothing enforces a requirement yet: the feed and the merge gate are ADR-0070's remaining steps (its Status note).
+The requirements that apply to a merge are read with their `paramsHash` at `GET /checks/requirements` (Checks). Who may write one (**403** `forbidden`, `permission: "write_requirement"`, with `branch`, the target, and `locked`): for merges into `main`, a maintainer of `main` or of every branch; for merges into another branch, its owner or a maintainer of it or of every branch; a locked one, an administrator. The record replaced counts too: `locked` is not part of the identifier, so unlocking a requirement needs what locking it did. A branch with no owner takes a requirement only from a maintainer, migration window or not. A requirement alone in a write is judged by these rows; any other document beside it needs the right to write `main`. Requirements are listed by reporter, `GET /documents/CheckRequirement?reporter=User/<id>`; `branch` in a list query names the branch read, where no requirement lives, so a client filters `main`'s list by the `branch` field itself until `GET /checks/requirements?target=` exists. Nothing enforces a requirement yet: the merge gate is among ADR-0070's remaining steps (its Status note); a change to one is told by the event feed as `requirement.changed` (Events).
 
 ---
 
 ## Checks
 
-A plugin's verdict about one commit is a *check run* (ADR-0070 decisions 3 and 4; since 2026-11-13), kept by the hub in memory outside the design graph, on both roles: a plugin on a person's machine posts to the workspace hub on loopback as one more tool there. The hub hosts checks and never rules: it knows a check by its name, by the agent whose runs count and by the verdicts posted; it never reads a requirement's `params`, evaluates a design rule or calls a plugin (decision 1). Runs are bounded to the newest 50 per check and branch, and gone after a restart. The capability is `armature/checks`, with `runsKept` and `conclusions` as its settings. The event feed and the merge gate, which will make a run matter, are not built yet.
+A plugin's verdict about one commit is a *check run* (ADR-0070 decisions 3 and 4; since 2026-11-13), kept by the hub in memory outside the design graph, on both roles: a plugin on a person's machine posts to the workspace hub on loopback as one more tool there. The hub hosts checks and never rules: it knows a check by its name, by the agent whose runs count and by the verdicts posted; it never reads a requirement's `params`, evaluates a design rule or calls a plugin (decision 1). Runs are bounded to the newest 50 per check and branch, and gone after a restart. The capability is `armature/checks`, with `runsKept` and `conclusions` among its settings. A plugin learns what to check from the event feed (Events, since 2026-11-15); the merge gate, which will make a run matter, is not built yet.
 
 ### `POST /checks/runs`
 
@@ -281,6 +281,39 @@ The runs held, newest first, each `{ id, check, commit, branch, conclusion, summ
 ### `GET /checks/requirements?target=&from=`
 
 The `CheckRequirement`s in force on `main` that apply to a merge into `target` (`main` when absent) from `from`: those naming the target, those `locked`, filtered by `fromPrefix` against the source when one is given, every prefix kept when none is (decision 5). Response `{ target, from?, requirements: [ { ...the record, paramsHash } ] }`, `ETag` the commit of `main` read. `paramsHash` is `sha256:` and the hex SHA-256 of `params` in a canonical form (keys sorted at every depth, no whitespace, numbers as JSON prints them), computed by the hub over the value as the store returns it, since the store reorders a JSON value's keys and prints `1.0` as `1`: a plugin copies it into its runs rather than hashing the text it sent. Layering several requirements' `params` is the plugin's. On a workspace hub `main` is the mirror, which holds no requirement until the remote's are mirrored (decision 8, not built). 400 `bad_query` for a `target` or `from` that is not a branch name.
+
+---
+
+## Events
+
+What changed on this hub since a client last asked, pulled by the client (ADR-0070 decision 2; since 2026-11-15), on both roles. The hub calls nothing outside itself, so there are no webhooks: a tool that reacts to changes, a check service above all, asks the feed, holds the answer's cursor and asks again. The hub keeps no event log. Every event but `hub.started` is a commit the store holds or a branch appearing in or vanishing from its list, derived on each request from the branches' logs, so the feed survives a restart and has nothing to back up. The capability is `armature/checks`; its settings `events`, `eventsPage`, `eventsWait` and `eventsBacklog` are the types served and the three bounds below.
+
+### `GET /events?since=<cursor>&types=&branch=&wait=&limit=`
+
+Response `{ events: [ ... ], cursor }`. No `ETag`: the feed reads at no one commit. Any identity that may read may read it.
+
+**The cursor** is opaque text the hub gives and the client passes back as given. It records, for every branch, the commit the client has been told about up to, so it survives a restart of the hub and needs no clock. With no `since` the answer is at once: no events and a cursor at the present. With one, the answer is what changed since, oldest first, at most `limit` events (100, the default and the most), and the cursor after them; a client further behind asks again until an answer is empty. Every answer carries a cursor, also an empty one. A cursor the hub cannot read is **400** `bad_cursor`; one more than 1,000 commits behind on a branch is **400** `cursor_too_old` with `branch`, and the client starts again without `since` and reads what it missed from `GET /branches/:name/log`.
+
+**The wait.** When nothing has changed, the request is held open up to `wait` seconds (30, the default and the most; `0` answers at once) and returns as soon as a commit is made through this hub, or at its time with no events (long-poll). A commit made by another hub on the same store, or by the operator tools, wakes no one and is told at the next request. A client sets its own timeout above `wait`, and a proxy in front of the hub must allow a response that takes 30 seconds.
+
+**The events.**
+
+| `type` | Told when | Fields |
+|---|---|---|
+| `commit` | A commit landed on a branch | `branch`, `commit`, `parent`, `author`, `timestamp`, `changed`, `workspaceCommit`? |
+| `merge` | A merge landed on a branch (`POST /branches/:name/merge`) | as `commit`, with `mergeSource`, the source commit merged |
+| `branch.created` | A branch is listed that the cursor lacks | `branch`, `commit`: the commit it started from, absent when it started from nothing |
+| `branch.deleted` | A branch the cursor holds is gone | `branch`, `commit`: the last commit of it this client was told about |
+| `requirement.changed` | A commit on `main` wrote or deleted a `CheckRequirement` | `branch` (`main`), `commit`, `requirements`: the records' ids |
+| `hub.started` | The cursor was given by an earlier life of the hub | `startedAt` |
+
+An event names what a tool needs to decide whether to act, never the documents: `changed` is the count of documents the commit changed by class (`{ "AssessmentItem": 2, "ItemInstance": 1 }`, absent on a branch's first commit), and the documents themselves are read through `GET /branches/:name/changes`, `/log` and `/export`. `author` is the commit's, as the log gives it; the feed takes no filter on an author (ADR-0021; decision 11). `workspaceCommit` is present when the commit is a push's replay, naming the workspace hub's commit. `requirement.changed` follows the `commit` event of the same commit. `hub.started` comes first in its answer and means the hub's check runs, held in memory, are gone: a check service reports again on the heads it cares about. A branch creation on a remote hub is also a `commit` on `main`, its `Owner` grant, and the branch starts from that commit.
+
+**The order.** Within a branch, events follow its log. Across branches they follow the commits' timestamps, which is advisory: a workspace hub's store stamps to the millisecond. `branch.created` events come before the commits of an answer and `branch.deleted` after them.
+
+**The filters.** `types` is a comma-separated list of the types wanted (an unknown one is **400** `bad_query`); `branch` keeps one branch's events, with `requirement.changed` and `hub.started`, which concern every branch. The cursor moves past what a filter leaves out, and a held request is not ended by an event the caller filtered out.
+
+**What the feed leaves out.** The transient branches of a merge's check and of an operator's repair, and on a workspace hub the snapshots of the remote, are never told. The commits written to a branch between a client's last request and that branch's deletion are not told, and so nothing is told of a branch made and deleted between two requests: a deleted branch's log is gone, its commits stay held by the branch that merged it, and that branch's `merge` event names the source commit. A tool that follows the feed is woken by each commit and misses none of it.
 
 ---
 
@@ -450,7 +483,9 @@ What this hub is, for a client that wants to know before its first write (ADR-00
                   program: { releases: "https://github.com/mossglenn/armature/releases" } },
   capabilities: { "armature/documents": { fallback: "reject", batchLimit: 500, historyCount: 20, readOnlyBranches: [] },
                   "armature/branches": { fallback: "reject", remoteOnly: [] },
-                  "armature/checks": { fallback: "reject", runsKept: 50, conclusions: ["pass", "fail", "neutral", "error"] },  // since 2026-11-13
+                  "armature/checks": { fallback: "reject", runsKept: 50, conclusions: ["pass", "fail", "neutral", "error"],  // since 2026-11-13
+                                      events: ["commit", "merge", "branch.created", "branch.deleted", "requirement.changed", "hub.started"],
+                                      eventsPage: 100, eventsWait: 30, eventsBacklog: 1000 },               // the feed, since 2026-11-15
                   "armature/intelligence.coverage": { fallback: "reject", fullyAssessedAt: 2, overAssessedAbove: 4 },
                   ... },                                   // each with its fallback and its settings
   schema:       { route: "/api/v1/schema" }
@@ -546,6 +581,7 @@ Removes the workspace (since 2026-11-07), a program action as the three above, i
 | 400 | `message_required` | A write has no `message` |
 | 400 | `invalid_document` | A document fails its shape check (see `issues`) |
 | 400 | `invalid_run` | A check run fails its shape check (see `issues`; Checks; since 2026-11-13) |
+| 400 | `bad_cursor`, `cursor_too_old` | The event feed's `since` is not a cursor this hub gave, or is more than 1,000 commits behind on `branch`; ask again without it (Events; since 2026-11-15) |
 | 400 | `invalid_type` | The type cannot be written through the document routes |
 | 400 | `id_mismatch`, `type_mismatch` | The body's `@id` or `@type` disagrees with the path |
 | 400 | `duplicate_id`, `duplicate_capture` | The same identifier or capture twice in one batch |
