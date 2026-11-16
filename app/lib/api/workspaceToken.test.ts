@@ -12,6 +12,7 @@
  * the users its records name, which any person may read (ADR-0068 decision
  * 4, note of 2026-11-05).
  */
+import { ApiError } from './errors';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type CryptoKey } from 'jose';
 import { startHub, type RunningHub } from '../hub';
@@ -178,6 +179,28 @@ describe('a workspace hub reaching a remote under oidc with the owner’s token'
       const stranger = await json(await on('POST', `/workspace/${BRANCH}/push`));
       expect(stranger.status).toBe(403);
       expect(stranger.body).toMatchObject({ error: 'not_registered', remote: true });
+    } finally {
+      currentToken = () => token(OWNER);
+    }
+  });
+
+  it('answers the status without a credential to ask the remote with: what is waiting here is known offline (the 2026-11-09 review’s P1)', async () => {
+    const status = async () => json(await on('GET', `/workspace/${BRANCH}/status`));
+    const online = await status();
+    expect(online.status).toBe(200);
+    expect(online.body.remote).toMatchObject({ head: expect.any(String) });
+    try {
+      // Signed out, and offline of the identity provider: the token source refuses, and the status still answers.
+      for (const [status_, code] of [[401, 'signed_out'], [503, 'issuer_unreachable']] as const) {
+        currentToken = () => Promise.reject(new ApiError(status_, code, `The token source said ${code}`));
+        const offline = await status();
+        expect(offline.status, code).toBe(200);
+        expect(offline.body.remote).toEqual({ reachable: false, reason: code });
+        expect(offline.body).toMatchObject({ localCommits: online.body.localCommits, pushed: online.body.pushed, unpushed: online.body.unpushed });
+      }
+      // Any other failure of the token source is still a failure: the status does not hide what it cannot name.
+      currentToken = () => Promise.reject(new ApiError(502, 'issuer_error', 'The provider answered nonsense'));
+      expect((await status()).status).toBe(502);
     } finally {
       currentToken = () => token(OWNER);
     }
