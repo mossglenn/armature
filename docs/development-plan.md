@@ -8,9 +8,12 @@ larger store. ADR-0065 to ADR-0068 (the workspace hub, its store, authentication
 were proposed on 28 and 29 October; ADR-0065, ADR-0067 and ADR-0068 were accepted on 30 October
 after verification, and ADR-0066 on 2 November once check AI ran; the workspace cycle is built
 since 1 November, the file-backed store in part since the evening of 2 November and, by ADR-0066
-decision 4 that night, a workspace hub's one local store.
+decision 4 that night, a workspace hub's one local store. The `oidc` resolver is built since
+5 November; the desktop program (ADR-0069) is built since 7 and 8 November and released on
+11 November; checks (ADR-0070: an event feed, check runs and required checks gating a merge or a
+push) were accepted on 12 November and built on the hub's side by 15 November.
 `.claude/SESSION.md` tracks day-to-day state against this plan. **Last reconciled with the code:**
-2026-10-30.
+2026-10-30; §5's rows for ADR-0065 onward and §6's merge policy note brought up to 2026-11-15.
 
 **How to read this plan.** §1 states nine principles (P1 to P9) taken from the position paper;
 later sections cite them by label. §2 names the reference clients and the two-client test that
@@ -928,7 +931,7 @@ the explainer's figure for it is exported from the page with its commit.
 ## 5. ADR queue
 
 The decision records this plan reserved or produced, in number order, with their status as of
-2026-10-30. The full index of all decision records is `schema/docs/adr/README.md`. Numbers 0035 to
+2026-10-30, and from ADR-0065 onward as of 2026-11-15. The full index of all decision records is `schema/docs/adr/README.md`. Numbers 0035 to
 0053 are research candidates (`docs/research/adr-candidates.md`), not decisions.
 
 | ADR | Title | Phase | Status | Notes |
@@ -960,10 +963,13 @@ The decision records this plan reserved or produced, in number order, with their
 | 0063 | Outcome records name their source | 6 | Accepted and implemented 2026-10-20 | Constraint 20: a dataset has `producedBy` or an `externalRef`, a metric `derivedFrom` or an `externalRef`; closes the rule deferred since Phase 1; the seed gains one administration so Narrative 1 walks on `main` |
 | 0062 | Operator repair is a commit outside the plugin API | 7 (the toolkit), or on the first repair that needs it | Accepted and implemented 2026-10-22 (proposed 2026-10-20) | Gives 0024 decision 5 its meaning; 0025 decision 6 holds for operators; three tools (`check`, `delete`, `put --unchecked`) reusing the adapter and the invariants engine in-process; no superuser mode and no raw query route on `/api/v1` (§8) |
 | 0064 | `ActivityGroup` is `Lesson` | Decided 2026-10-22, outside a phase | Accepted and implemented 2026-10-22 | Renames the class and its two junctions (`ModuleLessonLink`, `LessonActivityLink`); constraints 3, 4 and 6 keep their numbers; the module-content read says `kind: "lesson"`; annotates 0003 and 0005 |
-| 0065 | The workspace hub | After Phase 8 (`docs/workspace-hub-plan.md`) | Accepted 2026-10-30 (proposed 2026-10-28, verified 2026-10-30); not yet built | The hub's own code in a second mode on a person's machine; workspaces are branches created on the remote, cloned from its export and pushed back through its API; branches, merges and Users stay on the remote; passed the two-client test on Quiver, the Storyline bridge and the MCP server |
+| 0065 | The workspace hub | After Phase 8 (`docs/workspace-hub-plan.md`) | Accepted 2026-10-30 (proposed 2026-10-28, verified 2026-10-30); built 2026-11-01 to 2026-11-12 (create, clone, push, bring in, deliver, snapshots, remove and discard); Quiver resumed on the program is the plan's last step | The hub's own code in a second mode on a person's machine; workspaces are branches created on the remote, cloned from its export and pushed back through its API; branches, merges and Users stay on the remote; passed the two-client test on Quiver, the Storyline bridge and the MCP server |
 | 0066 | The workspace hub's store | With 0065 (plan step 6) | Accepted 2026-11-02 (proposed 2026-10-29); built, decision 4 taken that night (the folder is the one local store); the Windows rehearsal run on a real machine 2026-11-03 and its findings built, a synced-folder warning left to step 7 | A folder of files behind an adapter interface, TerminusDB the test bed meanwhile; amends 0055 decision 1; names TerminusDB's JSON patch as the diff route's format (decision 5); by check AI (2026-11-02) the store computes Hash identifiers rather than mapping them (decision 6) |
-| 0067 | Authentication | Prerequisite of 0065 (plan §14) | Accepted 2026-10-30 (proposed 2026-10-29); decision 7 built 2026-10-30, decisions 3, 6 and 8 2026-11-01, the `oidc` resolver with discovery's `identity`, relays and the viewer's credential 2026-11-05, native sign-in and `api.<site>` to come; decision 10 added 2026-10-30 | The `oidc` resolver, agents acting for people with a hub-written `Armature-On-Behalf-Of` trailer, services and relays; decision 7 is the loopback boundary (`app/lib/api/boundary.ts`, 403 `host_not_allowed` and `origin_not_allowed`); decision 10 confines an agent's own writes to a workspace hub |
+| 0067 | Authentication | Prerequisite of 0065 (plan §14) | Accepted 2026-10-30 (proposed 2026-10-29); decision 7 built 2026-10-30, decisions 3, 6 and 8 2026-11-01, the `oidc` resolver with discovery's `identity`, relays, the viewer's credential and `api.<site>` 2026-11-05, native sign-in in the desktop program's core 2026-11-07; decision 10 added 2026-10-30 | The `oidc` resolver, agents acting for people with a hub-written `Armature-On-Behalf-Of` trailer, services and relays; decision 7 is the loopback boundary (`app/lib/api/boundary.ts`, 403 `host_not_allowed` and `origin_not_allowed`); decision 10 confines an agent's own writes to a workspace hub |
 | 0068 | Authorization | Prerequisite of 0065, built whole before its push (plan §14) | Accepted 2026-10-30 (proposed 2026-10-29); built 2026-11-01 under `header`, its `oidc` rows 2026-11-05, the migration window's close to come; decision 9 added 2026-10-30 | `Grant` documents on `main`, branch ownership, only a maintainer merges into `main`, 403 `forbidden`; adds one class, so it lands with a schema change; decision 9: a workspace hub does not authorize, the remote refuses at push |
+| 0069 | The desktop program is a Tauri shell over the hub on a Node sidecar | The workspace hub's step 7 (`docs/desktop-program-plan.md`) | Accepted 2026-11-05; built 2026-11-07 and 08; released as `desktop-v0.1.0` to `desktop-v0.1.2` on 2026-11-11 | A small native shell (windows, the tray, the keychain, links, updates) beside the workspace hub on the Node the program carries, the two over a private channel |
+| 0070 | Checks: an event feed, check runs and required checks | After the workspace hub; from `docs/lint-plan.md` | Accepted 2026-11-12; built on the hub's side 2026-11-12 to 2026-11-15; the desktop program's editor for `checks.json` and its showing of verdicts to come | The hub hosts checks and no rules: a pulled feed (`GET /events`), runs posted about a commit and held outside the graph, `CheckRequirement` on `main` (one class, one enum, constraints 23 and 24), the merge gate with overrides and `Armature-Check` trailers, the push gate on a workspace hub; passed the two-client test on Lint, CoQui's round check and the Structure analyzer; answers §6's merge policy in part |
+| 0071 | External alignment | With `docs/crosswalk-plan.md` | Proposed 2026-11-12; awaiting review; not built | A relationship record from an objective to an item in an outside framework; adopts candidate 0042 |
 
 ADR-0021 (non-goal) and ADR-0010 (deferrals) are amended where phases touch them rather than
 superseded. ADR-0026 is amended by ADR-0054.
@@ -1033,7 +1039,15 @@ what evidence would be enough.
   preview). The fragment-by-fragment review is placed in the workspace hub (ADR-0065 decision 6)
   if that record is accepted.* *Decided 2026-10-30 (review B3):* the remote refuses a merge whose
   result breaks a rule, 422, checked on a transient branch before the commit, with a dry run
-  (ADR-0025 decision 5, note); the workspace hub's post-merge check becomes a preview.
+  (ADR-0025 decision 5, note); the workspace hub's post-merge check becomes a preview. *Built
+  2026-11-01.* *Decided 2026-11-12 and built by 2026-11-15 (ADR-0070):* a merge may be made to
+  wait for a tool's verdict. A `CheckRequirement` on `main` names the check, the target and the
+  agent whose runs count; the merge route answers 409 `bring_in_first`, 409 `checks_pending` or
+  422 `checks_failed`, takes an override with a reason from whoever may merge, and records the
+  verdicts in the merge commit; a merge from `main` is not gated. This is the mechanism for
+  CoQui's "a round is merged only when every item is affirmed" and for a request for delivery
+  (ADR-0068 open question 2), each as a check a tool owns. Still open: findings and attestations
+  reaching `main` without approval, and the fragment-by-fragment conflict view.
 - **Project boundaries.** One TerminusDB database per course, per program, or per institution?
   Cross-database queries do not exist, and the research path wants comparability across
   courses. Evidence: a second course in any deployment, or the first research slice.
