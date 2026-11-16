@@ -205,14 +205,20 @@ workspace.get('/:name/status', async (c) => {
   const lastKnown = table?.commits.at(-1)?.remote ?? record.base;
   const snapshots = (await recordsOf(c).getSnapshots(record.branch))?.commits ?? [];
 
-  let remote: { head: string; moved: boolean } | { reachable: false };
+  let remote: { head: string; moved: boolean } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' };
   try {
     const summary = await fromRemote(hub, () => remoteClient(hub, record.ownerExternalId).branches.head(record.branch));
     // The body's head, not the ETag: a proxy in front of the remote can alter the ETag (remoteCommit in workspace/remote.ts), the body it cannot.
     const remoteHead = summary.data.head.commit;
     remote = { head: remoteHead, moved: remoteHead !== lastKnown };
   } catch (err) {
+    // The status is what this hub knows of the workspace, and it knows it offline: a remote that cannot be
+    // asked is said as such, never a failure of the read. That holds for the credential too: under oidc a
+    // person who is offline has no token to ask with (503 `issuer_unreachable`), and one who is signed out
+    // has none at all (401 `signed_out`), and until 2026-11-15 either failed the whole status, so the
+    // program's page had nothing to show of the commits waiting here (the 2026-11-09 review's P1).
     if (err instanceof ApiError && err.code === 'remote_unreachable') remote = { reachable: false };
+    else if (err instanceof ApiError && (err.code === 'signed_out' || err.code === 'issuer_unreachable')) remote = { reachable: false, reason: err.code };
     else throw err;
   }
   return c.json({

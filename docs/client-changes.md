@@ -15,6 +15,23 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-15 · A workspace's status answers without a credential for the remote
+
+**What changed.** `GET /workspace/:name/status` on a workspace hub whose remote signs people in
+(`oidc`) used to fail whole when the hub had no token to ask the remote with: 401 `signed_out`
+for a person signed out, 503 `issuer_unreachable` for one offline of the identity provider. It
+now answers 200 as it does when the remote cannot be reached, with
+`remote: { reachable: false, reason: "signed_out" | "issuer_unreachable" }`; the local commits,
+how many are pushed and the snapshots are known on the machine either way. A remote that cannot
+be reached is still `{ reachable: false }` with no `reason`. `@armature/client`:
+`WorkspaceStatus.remote` gains the optional `reason`, and the type now also declares `snapshots`
+and `WorkspaceRecord.instance`, which the routes have returned since 2026-11-02 and 2026-11-06.
+
+**What a client does.** A client that showed a workspace's status under `oidc` and treated a
+401 or a 503 from this route as "signed out" or "offline" reads `remote.reason` instead. One
+that only tests `'reachable' in remote` needs nothing. **CoQui** needs nothing: it talks to a
+remote hub.
+
 ## 2026-11-15 · The export's `full` slice carries check requirements
 
 **What changed.** `GET /export` under the `full` slice, the default, now includes every

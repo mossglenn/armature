@@ -533,6 +533,8 @@ export interface WorkspaceRecord {
   /** The local commit holding the clone. */
   local: string;
   clonedAt: string;
+  /** The remote's connection profile as the newest clone kept it (2026-11-06). */
+  instance?: InstanceProfile;
 }
 
 export interface WorkspaceStatus {
@@ -543,8 +545,13 @@ export interface WorkspaceStatus {
   localCommits: number;
   pushed: number;
   unpushed: number;
-  /** The remote branch's head and whether it has moved since the last commit this hub pushed (the base before any push), or that the remote could not be reached. */
-  remote: { head: string; moved: boolean } | { reachable: false };
+  /**
+   * The remote branch's head and whether it has moved since the last commit this hub pushed (the base before any push), or that the
+   * remote could not be asked: unreachable, or, with `reason` (since 2026-11-15), for want of a credential to ask with.
+   */
+  remote: { head: string; moved: boolean } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' };
+  /** The snapshots of the remote this hub holds for the workspace (2026-11-02): the budget, the commits held and those declined. */
+  snapshots?: { budget: number; held: string[]; declined: unknown[] };
 }
 
 /** What `POST /workspace` adds to the record when the remote says the owner may not write the branch (ADR-0068 decision 9; 2026-11-01). */

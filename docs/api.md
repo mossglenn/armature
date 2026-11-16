@@ -561,7 +561,7 @@ Both first mirror the remote's `main` into this hub's `main` (its schema, the ow
 
 ### `GET /workspace/:name/status`
 
-`{ workspace, head, localCommits, pushed, unpushed, snapshots, remote }`: the record, the local head, the number of local commits since the clone and how many of them are pushed, the snapshots (`{ budget, held: [commit], declined: [record] }`), and the remote branch's head with `moved` (whether it differs from the last commit this hub pushed, the base before any push), or `{ reachable: false }` when the remote cannot be reached. **404** `not_found` for a workspace this hub does not hold.
+`{ workspace, head, localCommits, pushed, unpushed, snapshots, remote }`: the record, the local head, the number of local commits since the clone and how many of them are pushed, the snapshots (`{ budget, held: [commit], declined: [record] }`), and the remote branch's head with `moved` (whether it differs from the last commit this hub pushed, the base before any push), or `{ reachable: false }` when the remote cannot be reached, with `reason: "signed_out"` or `"issuer_unreachable"` when it was not asked for want of a credential (since 2026-11-15: under `oidc` a person signed out, or offline of the identity provider, used to get the token source's 401 or 503 for the whole status, though everything else in it is known on the machine). **404** `not_found` for a workspace this hub does not hold.
 
 ### `POST /workspace/:name/push`
 
