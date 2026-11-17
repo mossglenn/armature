@@ -19,7 +19,7 @@ import { resolveUser } from '../identity';
 import { refuseMirrorWrite } from '../role';
 import { isRecord, type HistoryEntry, type Ref, type TerminusDocument } from '../store';
 import { CommitMemo } from '../memo';
-import { parseDocuments, writeDocuments } from '../write';
+import { arrivedAt, parseDocuments, writeDocuments } from '../write';
 
 /**
  * /api/v1/documents (architecture decision records ADR-0024 and ADR-0025
@@ -148,6 +148,8 @@ documents.put('/:type/:id', async (c) => {
   if (!isWritable(type)) throw new ApiError(400, 'invalid_type', `${type} is not a writable document type`);
   const ref = writeRef(c);
   const docId = `${type}/${id}`;
+  // Before the caller and their authority are read: what this write arrived at (write.ts, arrivedAt).
+  const arrived = await arrivedAt(storeFor(c, ref), ifMatchFrom(c));
 
   const envelope = await readEnvelope(c);
   const input = envelope.document;
@@ -167,6 +169,7 @@ documents.put('/:type/:id', async (c) => {
     who,
     message: envelope.message,
     ifMatch: ifMatchFrom(c),
+    arrived,
   });
   setEtag(c, commit);
   return c.json({ id: docId, commit });
@@ -174,6 +177,7 @@ documents.put('/:type/:id', async (c) => {
 
 documents.post('/', async (c) => {
   const ref = writeRef(c);
+  const arrived = await arrivedAt(storeFor(c, ref), ifMatchFrom(c));
   const envelope = await readEnvelope(c);
   const inputs = envelope.documents;
   if (!Array.isArray(inputs) || inputs.length === 0) {
@@ -189,6 +193,7 @@ documents.post('/', async (c) => {
     who,
     message: envelope.message,
     ifMatch: ifMatchFrom(c),
+    arrived,
   });
   setEtag(c, commit);
   return c.json({ commit, ids });

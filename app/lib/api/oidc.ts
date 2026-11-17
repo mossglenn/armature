@@ -106,6 +106,16 @@ export function claimsOf(payload: JWTPayload, oidc: OidcConfig): IdentityClaims 
   return { externalId: sub, issuer: oidc.issuer, admitted, ...(name ? { displayName: name } : {}), ...(email ? { email } : {}) };
 }
 
+/**
+ * The disagreement between the provider's clock and the hub's that a token's
+ * `exp`, `nbf` and `iat` are read with (the 2026-11-09 review's A8). `jose`
+ * allows none by default, so a hub a few seconds behind its provider refused a
+ * token just issued as not yet valid, and one a few seconds ahead ended a
+ * token early. Thirty seconds is under any access token's lifetime and over
+ * what synchronized machines drift.
+ */
+export const CLOCK_TOLERANCE_SECONDS = 30;
+
 /** Whether a token's header carries `crit`; a token whose header cannot be read is left for `jwtVerify` to refuse. */
 function criticalOf(token: string): boolean {
   try {
@@ -128,7 +138,7 @@ export const oidcResolver: IdentityResolver = async (c) => {
     if (criticalOf(match[1])) throw new jose.JWSInvalid('the token marks a header parameter critical (crit), and the hub understands none');
     // Inside the try: metadata that cannot be read is the issuer's failure too, 503 and not a 500.
     const keys = oidc.keys ?? (await keysFor(oidc));
-    const { payload } = await jwtVerify(match[1], keys, { issuer: oidc.issuer, audience: oidc.audience, algorithms: [...ALGORITHMS] });
+    const { payload } = await jwtVerify(match[1], keys, { issuer: oidc.issuer, audience: oidc.audience, algorithms: [...ALGORITHMS], clockTolerance: CLOCK_TOLERANCE_SECONDS });
     return claimsOf(payload, oidc);
   } catch (err) {
     const reason = reasonOf(err);

@@ -44,7 +44,7 @@ import { discover } from './routes/discover';
 import { documents } from './routes/documents';
 import { events } from './routes/events';
 import { exportRoutes } from './routes/export';
-import { health } from './routes/health';
+import { healthRoutes } from './routes/health';
 import { intelligence } from './routes/intelligence';
 import { users } from './routes/users';
 import { workspace } from './routes/workspace';
@@ -109,7 +109,7 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
   app.route('/intelligence', intelligence);
   app.route('/export', exportRoutes);
   app.route('/workspace', workspace);
-  app.route('/health', health);
+  app.route('/health', healthRoutes());
   app.route('/', discover);
 
   /**
