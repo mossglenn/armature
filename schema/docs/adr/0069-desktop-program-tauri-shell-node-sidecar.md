@@ -48,6 +48,15 @@ ADR-0065 decision 7 carries a dated note of the same day for the local token kep
 > again only when the core's reply carries the settings, which the reply of a hub that started
 > does not, so a program moved after the entry was made keeps an entry for the old place;
 > held for 0.1.4 (`docs/desktop-program-plan.md` §14, step 5).
+>
+> **Note (2026-11-16, night):** released as `desktop-v0.1.4` (published 03:46 UTC on 2026-11-17;
+> PR #165), with the two faults
+> above and one more: the core's `start` reply carries the settings whether or not the hub started,
+> so the login entry is made again at every start; under `header` the core's `whoAmI` asks the
+> remote whom it takes the identifier for, and the pages say when it knows no such one; the checks
+> editor says what it holds that the file does not. The core's protocol gains one refusal, 409
+> `not_connected`. Rehearsed on the Mac and the Windows PC first (`docs/desktop-program-plan.md`
+> §14 step 5).
 
 ## Context
 
