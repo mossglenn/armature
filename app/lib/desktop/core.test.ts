@@ -240,6 +240,9 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 409, body: { error: 'not_started' } });
     const started = await driver.ask('start', { dataDir });
     expect(started).toMatchObject({ status: 200, body: { started: true, resolver: 'header', user: DESIGNER } });
+    // The settings ride the reply of a hub that started too: the shell makes the login entry follow them at every start (0.1.4).
+    expect(started.body!.settings).toEqual((await driver.ask('settings')).body!.settings);
+    expect(started.body!.settings).toMatchObject({ user: DESIGNER, startAtLogin: false });
     hub = started.body!.url as string;
     localToken = started.body!.localToken as string;
     expect(localToken).toMatch(/^[0-9a-f]{64}$/);
@@ -248,6 +251,18 @@ describe('the cycle through the protocol, against a remote under header', () => 
     const refused = await tool('POST', `/workspace/${WS}/push`);
     expect(refused.status).toBe(403);
     expect(await refused.json()).toMatchObject({ reason: 'program_action' });
+  });
+
+  it('says whom the remote takes the identifier for, and the remote’s refusal of one it does not know, which is saved all the same (0.1.4)', async () => {
+    expect(await driver.ask('whoAmI')).toMatchObject({ status: 200, body: { person: { externalId: DESIGNER } } });
+    const known = (await driver.ask('whoAmI')).body!;
+    expect(Object.keys(known)).toEqual(['person']);
+    expect((known.person as { id: string }).id).toMatch(/^User\//);
+    const stranger = `nobody-${stamp}@example.edu`;
+    expect(await driver.ask('settings', { set: { user: stranger } })).toMatchObject({ status: 200, body: { settings: { user: stranger }, restart: true } });
+    expect(await driver.ask('whoAmI')).toMatchObject({ status: 401, body: { error: 'unknown_user', remote: true } });
+    expect(await driver.ask('settings', { set: { user: DESIGNER } })).toMatchObject({ status: 200, body: { settings: { user: DESIGNER } } });
+    expect(await driver.ask('whoAmI')).toMatchObject({ status: 200, body: { person: { externalId: DESIGNER } } });
   });
 
   it('creates a workspace, which a tool writes to through the hub with the local token', async () => {

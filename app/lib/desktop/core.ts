@@ -269,6 +269,9 @@ export function runCore(options: CoreOptions): Core {
       // The shell sent none, so it keeps this one in the keychain; never written to the log (plan §9).
       ...(drawn ? { localToken: drawn } : {}),
       ...(warning ? { warning } : {}),
+      // As the replies of a hub that did not start carry them: the shell makes the system's login entry follow
+      // `startAtLogin` from this reply, at every start (found at 0.1.3's rehearsal: an ordinary start left the entry as it was).
+      settings: current,
     });
   };
 
@@ -535,9 +538,22 @@ export function runCore(options: CoreOptions): Core {
     // Who the remote says the signed-in person is, for the sign-in page opened after the sign-in
     // (a later visit, or a start with the keychain's token), which otherwise offered "Sign in" to
     // someone already signed in (the 2026-11-09 review's P8). 401 `signed_out` when no one is.
+    //
+    // Under header, whom the remote takes the settings' identifier for, asked each time and never kept:
+    // a remote that does not know it answers 401 `unknown_user`, which the settings and connect pages
+    // say, where they used to save the identifier and show nothing until the first push was refused
+    // (found at 0.1.3's rehearsal). The identifier is saved either way; this is a read.
     whoAmI: async () => {
-      const identity = oidcOf(opened().settings.identity);
-      if (!identity) throw new ApiError(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
+      const { settings: current } = opened();
+      const identity = oidcOf(current.identity);
+      if (!identity) {
+        const remote = current.remote;
+        if (!remote || !current.identity) throw new ApiError(409, 'not_connected', 'The program is not connected to a remote; connect first');
+        const user = current.user;
+        if (!user) throw new ApiError(409, 'no_user', 'The remote runs under header; set your identifier on it in the settings (user)');
+        const person = (await fromRemote(remote, () => createClient({ baseUrl: remote, user, timeout: REMOTE_CALL_MS }).users.me())).data;
+        return ok({ person: { id: person['@id'], externalId: person.externalId, ...(person.displayName ? { displayName: person.displayName } : {}) } });
+      }
       return ok({ signedIn: true, person: await whoAmI(), ...(staysSignedIn !== undefined ? { staysSignedIn } : { staysSignedIn: keptRefresh !== undefined }) });
     },
 
