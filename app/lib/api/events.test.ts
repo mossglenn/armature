@@ -354,6 +354,6 @@ describe('GET /events on the seeded store', () => {
   it('is discovered under armature/checks with its types, its page, its wait and its backlog', async () => {
     const discover = (await json(await app.request('/api/v1/discover'))).body;
     expect(discover.capabilities['armature/checks']).toMatchObject({ events: [...EVENT_TYPES], eventsPage: EVENTS_PAGE, eventsWait: EVENTS_WAIT, eventsBacklog: EVENTS_BACKLOG });
-    expect(discover.versions[0]).toBe('2026-11-15');
+    expect(discover.versions[0]).toBe('2026-11-16');
   });
 });

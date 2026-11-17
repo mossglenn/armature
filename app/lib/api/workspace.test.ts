@@ -6,6 +6,8 @@
  * (platform check AN) and the suite deletes. Nothing is pushed yet: the remote
  * gains only the workspace branches, which are deleted too.
  */
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { createClient } from '@armature/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startHub, type RunningHub } from '../hub';
@@ -15,11 +17,13 @@ import { configFromEnv, type HubConfig } from './config';
 import { ApiError } from './errors';
 import { normalizeSchema } from './export/exporter';
 import { canonical } from './fragments';
-import { handleOf } from './routes/workspace';
+import { handleOf, profileOf } from './routes/workspace';
 import { createOperatorStore } from './store';
 import { cloneBranch } from './workspace/clone';
 import { pushWorkspace } from './workspace/push';
 import { memoryRecords, type WorkspaceRecord } from './workspace/records';
+import { remoteCommitOf } from './workspace/remote';
+import { asOfCommitsOf, fetchRemoteLog } from './workspace/snapshots';
 import { trailerValue } from './trailers';
 
 import { deleteScratchBranch } from '../operator/repair';
@@ -41,7 +45,8 @@ describe('over the file-backed store in memory', () => {
   const UNFINISHED = `test-ws-unfinished-${stamp}`;
   const WORKED = `test-ws-worked-${stamp}`;
   const FORBIDDEN = `test-ws-forbidden-${stamp}`;
-  const REMOTE_BRANCHES = [BRANCH, EXISTING, UNFINISHED, WORKED, FORBIDDEN];
+  const ELSEWHERE = `test-ws-elsewhere-${stamp}`;
+  const REMOTE_BRANCHES = [BRANCH, EXISTING, UNFINISHED, WORKED, FORBIDDEN, ELSEWHERE];
   const REVIEWER = 'demo-reviewer@example.edu';
   const AGENT = `agent:test/ws-${stamp}`;
   let agentId: string;
@@ -216,7 +221,11 @@ describe('over the file-backed store in memory', () => {
     });
 
     it('answers status with the remote unreachable, and 404 for a workspace it does not hold', async () => {
-      const offline = createApp(() => ({ ...config, remote: 'http://127.0.0.1:9' }));
+      // The workspace's own remote, out of reach: the record names the address the hub dials (another address would be another remote, W10 below).
+      const dead = 'http://127.0.0.1:9';
+      const held = config.workspaces!;
+      const workspaces = { ...held, get: async (branch: string) => held.get(branch).then((record) => record && { ...record, remote: dead }) };
+      const offline = createApp(() => ({ ...config, remote: dead, workspaces }));
       const status = await json(await on(offline, 'GET', `/workspace/${BRANCH}/status`));
       expect(status.status).toBe(200);
       expect(status.body.remote).toEqual({ reachable: false });
@@ -229,6 +238,143 @@ describe('over the file-backed store in memory', () => {
       expect(res.body.error).toBe('workspace_only');
       expect((await json(await on(app, 'GET', '/discover'))).body.capabilities['armature/workspace']).toBeUndefined();
       expect((await json(await on(workspace, 'GET', '/discover'))).body.capabilities['armature/workspace']).toEqual({ fallback: 'reject', profile: 'full', localToken: 'required', actions: 'routes' });
+    });
+  });
+
+  describe("what the remote supplies is checked before it is kept or followed (the 2026-11-09 review's W5 to W7, W9 and W10)", () => {
+    it("refuses to clone a branch under a name the hub's own folder and store use, before the remote is asked (W9)", async () => {
+      const nowhere = createApp(() => ({ ...config, remote: 'http://127.0.0.1:9' }));
+      for (const existing of ['main', 'at.abc123', 'lock', 'store.json', 'Checks.json']) {
+        const res = await json(await on(nowhere, 'POST', '/workspace', { existing }));
+        expect(res.status, existing).toBe(400);
+        expect(res.body, existing).toMatchObject({ error: 'bad_name', reserved: true });
+      }
+    });
+
+    it('follows no redirect from the remote: 502 remote_error naming where it pointed, and nothing sent there (W5)', async () => {
+      const reached: string[] = [];
+      const target = createServer((req, res) => {
+        reached.push(`${req.method} ${req.url}`);
+        res.end('{}');
+      });
+      const moved = createServer((req, res) => {
+        res.writeHead(307, { Location: `http://127.0.0.1:${(target.address() as AddressInfo).port}${req.url}` });
+        res.end();
+      });
+      await new Promise<void>((resolve) => target.listen(0, '127.0.0.1', resolve));
+      await new Promise<void>((resolve) => moved.listen(0, '127.0.0.1', resolve));
+      try {
+        const address = `http://127.0.0.1:${(moved.address() as AddressInfo).port}`;
+        const redirected = createApp(() => ({ ...config, remote: address }));
+        const res = await json(await on(redirected, 'POST', '/workspace', { name: `ws-moved-${stamp}` }));
+        expect(res.status).toBe(502);
+        expect(res.body).toMatchObject({ error: 'remote_error', remote: true, reason: 'redirect' });
+        expect(res.body.location).toContain('/api/v1/users/me');
+        expect(reached).toEqual([]);
+      } finally {
+        await new Promise((resolve) => moved.close(resolve));
+        await new Promise((resolve) => target.close(resolve));
+      }
+    });
+
+    it('sends a token to a remote over plain http only on loopback or in a rehearsal (W5)', () => {
+      const env = (remoteUrl: string, extra: Record<string, string> = {}) => ({
+        ARMATURE_ROLE: 'workspace',
+        ARMATURE_REMOTE_URL: remoteUrl,
+        ARMATURE_WORKSPACE_DIR: '/tmp/ws',
+        ARMATURE_REMOTE_TOKEN: 'a-token',
+        ...extra,
+      });
+      expect(() => configFromEnv(env('http://armature.example.edu'))).toThrow(/plain http/);
+      expect(configFromEnv(env('https://armature.example.edu')).remoteToken).toBeTypeOf('function');
+      expect(configFromEnv(env('http://localhost:3100')).remoteToken).toBeTypeOf('function');
+      expect(configFromEnv(env('http://hub:3100', { ARMATURE_REHEARSAL: '1' })).remoteToken).toBeTypeOf('function');
+      // Without a token nothing secret travels: a remote under header is reached as it always was.
+      expect(configFromEnv({ ...env('http://armature.example.edu'), ARMATURE_REMOTE_TOKEN: '' }).remote).toBe('http://armature.example.edu');
+    });
+
+    it("keeps the remote's log from the base back, and refuses one that repeats or lacks the base (W6)", async () => {
+      type Log = Parameters<typeof fetchRemoteLog>[1];
+      const entry = (commit: string) => ({ commit, author: 'User/a', message: 'm', timestamp: 1 });
+      const paged = (pages: Array<Array<{ commit: unknown }>>, asked: number[] = []) =>
+        ({
+          branches: {
+            log: async (_branch: string, { start = 0 }: { start?: number } = {}) => {
+              asked.push(start);
+              return { data: { commits: pages[start / 100] ?? [] } };
+            },
+          },
+        }) as unknown as Log;
+      const refusal = (pending: Promise<unknown>) => pending.then(() => undefined, (e: unknown) => e);
+
+      const kept = await fetchRemoteLog(config, paged([[entry('newer'), entry('base'), entry('older')]]), 'b', 'base');
+      expect(kept).toEqual({ head: 'base', commits: [entry('base'), entry('older')] });
+
+      // A remote, or a proxy, that ignores `start` answers the first page for every page: read twice, not forever.
+      const full = Array.from({ length: 100 }, (_, i) => entry(`c${i}`));
+      const asked: number[] = [];
+      const same = { branches: { log: async (_b: string, { start = 0 }: { start?: number } = {}) => (asked.push(start), { data: { commits: full } }) } } as unknown as Log;
+      expect(await refusal(fetchRemoteLog(config, same, 'b', 'c0'))).toMatchObject({ status: 502, code: 'remote_error', details: { reason: 'log_repeats', commit: 'c0' } });
+      expect(asked).toEqual([0, 100]);
+
+      expect(await refusal(fetchRemoteLog(config, paged([[entry('x'), entry('y')]]), 'b', 'base'))).toMatchObject({
+        status: 502,
+        code: 'remote_error',
+        details: { reason: 'log_without_base', base: 'base' },
+      });
+      expect(await refusal(fetchRemoteLog(config, paged([[{ commit: '../../etc' }]]), 'b', 'base'))).toMatchObject({ code: 'remote_error', details: { reason: 'not_a_commit' } });
+
+      // A history longer than the pages read is kept to there, and the read ends.
+      const long: number[] = [];
+      const endless = {
+        branches: { log: async (_b: string, { start = 0 }: { start?: number } = {}) => (long.push(start), { data: { commits: Array.from({ length: 100 }, (_, i) => entry(`n${start + i}`)) } }) },
+      } as unknown as Log;
+      const capped = await fetchRemoteLog(config, endless, 'b', 'n0');
+      expect(long).toHaveLength(50);
+      expect(capped.commits).toHaveLength(5000);
+    });
+
+    it("takes a commit identifier, a profile and an asOf from the remote only in their own shape (W7)", () => {
+      expect(remoteCommitOf(config, 'abc123', 'the merge')).toBe('abc123');
+      for (const bad of [undefined, '', 'abc-gzip', 'a'.repeat(98), 7, '../x']) {
+        expect(() => remoteCommitOf(config, bad, 'the merge'), String(bad)).toThrow(ApiError);
+      }
+      expect(profileOf({ name: 'An instance', api: 'https://api.example.edu', program: { releases: 'https://example.edu/releases', extra: 1 }, script: '<b>' })).toEqual({
+        name: 'An instance',
+        api: 'https://api.example.edu',
+        program: { releases: 'https://example.edu/releases' },
+      });
+      expect(profileOf({ name: 7 })).toBeUndefined();
+      expect(profileOf({ name: 'x'.repeat(5000) })).toBeUndefined();
+      expect(profileOf('a profile')).toBeUndefined();
+      // An asOf no store minted names no snapshot: the branch `at.<commit>` would be no branch name.
+      expect([...asOfCommitsOf([{ '@id': 'a', '@type': 'T', asOf: 'abc' }, { '@id': 'b', '@type': 'T', asOf: 'a'.repeat(98) }, { '@id': 'c', '@type': 'T', asOf: 'abc' }])]).toEqual([['abc', 2]]);
+    });
+
+    it("refuses a workspace's actions through another remote than the one it was cloned from, and removes it here alone (W10)", async () => {
+      await remoteBranch(ELSEWHERE);
+      expect((await create({ existing: ELSEWHERE })).status).toBe(201);
+      // The folder pointed back at after a connection made elsewhere: the same records, another remote.
+      const other = createApp(() => ({ ...config, remote: 'http://127.0.0.1:9' }));
+      for (const [path, body] of [
+        ['push', undefined],
+        ['bring-in', undefined],
+        ['deliver', { message: 'Deliver it' }],
+      ] as const) {
+        const res = await json(await on(other, 'POST', `/workspace/${ELSEWHERE}/${path}`, body));
+        expect(res.status, path).toBe(409);
+        expect(res.body, path).toMatchObject({ error: 'other_remote', workspace: ELSEWHERE, clonedFrom: remote.url, remote: 'http://127.0.0.1:9' });
+      }
+      const status = await json(await on(other, 'GET', `/workspace/${ELSEWHERE}/status`));
+      expect(status.status).toBe(200);
+      expect(status.body.remote).toEqual({ reachable: false, reason: 'other_remote' });
+
+      // The way out asks nothing of a remote that never held the branch; the first remote keeps its own.
+      const removed = await json(await on(other, 'DELETE', `/workspace/${ELSEWHERE}`));
+      expect(removed.status).toBe(200);
+      expect(removed.body.remote).toBe('untouched');
+      expect((await on(workspace, 'GET', `/workspace/${ELSEWHERE}/status`)).status).toBe(404);
+      expect((await on(app, 'GET', `/branches/${ELSEWHERE}`)).status).toBe(200);
     });
   });
 

@@ -7,7 +7,7 @@ import { mirrorMain } from './clone';
 import { localCommitsSince, mappingOf } from './commits';
 import { settleBringIn, writeMerged, type Merged } from './merged';
 import { emptyPushTable, type WorkspaceRecord, type WorkspaceRecords } from './records';
-import { fromRemote, ownerClient } from './remote';
+import { fromRemote, ownerClient, remoteCommitOf } from './remote';
 import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
 
 /**
@@ -194,7 +194,8 @@ async function bringInHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
     // Nothing new now; what an earlier bring-in merged and this one finished writing is still reported.
     return settled ? broughtIn(hub, records, record, remote, settled) : { workspace: record, remoteHead: lastRemote, upToDate: true };
   }
-  table.bringingIn.merged = merged.commit;
+  // Checked before it is recorded; a refusal here leaves the marker, which the next bring-in or push settles from the remote's log.
+  table.bringingIn.merged = remoteCommitOf(hub, merged.commit, `the merge of ${MIRROR_BRANCH} into ${branch}`);
   await records.putPush(branch, table);
   const written = await writeMerged(hub, records, record, remote, table);
   return { ...(await broughtIn(hub, records, record, remote, written)), merge: { base: merged.base, source: merged.source, target: merged.target } };
@@ -297,19 +298,26 @@ async function discardHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
   return { workspace: record, remote: 'untouched', discarded: { commits: unpushed, setAside } };
 }
 
+/** Thrown and caught within `removeHeld`: the workspace is not this hub's remote's. */
+class OtherRemote extends Error {}
+
 async function removeHeld(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<RemoveResult> {
   const { branch } = record;
   await requireNothingUnpushed(hub, records, record, 'removing it');
   let outcome: Pick<RemoveResult, 'remote' | 'reason'> = { remote: 'deleted' };
   try {
+    // A workspace cloned from another remote than this hub's (the 2026-11-09 review's W10) is removed here
+    // alone: this hub's remote never held it, and a branch of the same name there is someone else's.
+    if (record.remote !== (hub.remote ?? '')) throw new OtherRemote();
     const remote = await ownerClient(hub, record);
     await fromRemote(hub, () => remote.branches.delete(branch));
   } catch (err) {
-    if (!(err instanceof ApiError)) throw err;
+    if (!(err instanceof ApiError) && !(err instanceof OtherRemote)) throw err;
     // The remote's own refusals and silence keep its branch; a refusal of this hub's credential
     // (remote_identity, signed_out) is the person's to fix, and stops the removal.
-    const fromTheRemote = err.details?.remote === true;
-    if (err.code === 'remote_unreachable') outcome = { remote: 'kept', reason: 'unreachable' };
+    const fromTheRemote = err instanceof ApiError && err.details?.remote === true;
+    if (err instanceof OtherRemote) outcome = { remote: 'untouched' };
+    else if (err.code === 'remote_unreachable') outcome = { remote: 'kept', reason: 'unreachable' };
     else if (fromTheRemote && err.code === 'unmerged_branch') outcome = { remote: 'kept', reason: 'unmerged' };
     else if (fromTheRemote && err.code === 'forbidden') outcome = { remote: 'kept', reason: 'forbidden' };
     else if (fromTheRemote && err.status === 404) outcome = { remote: 'absent' };

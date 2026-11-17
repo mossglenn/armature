@@ -42,6 +42,8 @@ let privateKey: CryptoKey;
 let ownerId: string;
 /** What the workspace hub hands the remote on each call; a test swaps it for a stale one. */
 let currentToken: () => Promise<string>;
+/** The workspace hub's configuration, for a test that runs a second app over it. */
+let hubConfig: HubConfig;
 const kid = `key-${stamp}`;
 
 const remoteStore = (branch: string) => createOperatorStore({ branch }, { ...storeConfigFromEnv(), db: REMOTE_DB });
@@ -104,6 +106,7 @@ beforeAll(async () => {
     actionRoutes: true,
     remoteToken: () => currentToken(),
   };
+  hubConfig = config;
   workspace = createApp(() => config);
 });
 
@@ -182,6 +185,24 @@ describe('a workspace hub reaching a remote under oidc with the owner’s token'
     } finally {
       currentToken = () => token(OWNER);
     }
+  });
+
+  it("asks for a new token and sends the request once more when the remote refuses the one it carried as invalid (the 2026-11-09 review's C15)", async () => {
+    // The issuer's keys changed, or the token ended early: the host has a token source that can be asked again.
+    const ended = () => token(OWNER, Math.floor(Date.now() / 1000) - 60);
+    let forgotten = 0;
+    const renewing = createApp(() => ({ ...hubConfig, remoteToken: () => (forgotten ? token(OWNER) : ended()), forgetRemoteToken: () => void (forgotten += 1) }));
+    const status = await json(await renewing.request(`/api/v1/workspace/${BRANCH}/status`, { headers: { 'Armature-User': OWNER, 'Armature-Local-Token': TOKEN } }));
+    expect(status.status).toBe(200);
+    expect(status.body.remote.head).toBeTypeOf('string');
+    expect(forgotten).toBe(1);
+    // A source that only has the refused token to give is asked once, and the refusal stands.
+    let asked = 0;
+    const stuck = createApp(() => ({ ...hubConfig, remoteToken: ended, forgetRemoteToken: () => void (asked += 1) }));
+    const refused = await json(await stuck.request(`/api/v1/workspace/${BRANCH}/push`, { method: 'POST', headers: { 'Armature-User': OWNER, 'Armature-Local-Token': TOKEN } }));
+    expect(refused.status).toBe(401);
+    expect(refused.body).toMatchObject({ error: 'invalid_token', remote: true });
+    expect(asked).toBe(1);
   });
 
   it('answers the status without a credential to ask the remote with: what is waiting here is known offline (the 2026-11-09 review’s P1)', async () => {

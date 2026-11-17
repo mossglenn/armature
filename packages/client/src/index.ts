@@ -28,7 +28,7 @@
 import type { CheckRequirement, ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-15';
+export const CLIENT_REVISION = '2026-11-16';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -547,9 +547,10 @@ export interface WorkspaceStatus {
   unpushed: number;
   /**
    * The remote branch's head and whether it has moved since the last commit this hub pushed (the base before any push), or that the
-   * remote could not be asked: unreachable, or, with `reason` (since 2026-11-15), for want of a credential to ask with.
+   * remote could not be asked: unreachable, or, with `reason` (since 2026-11-15), for want of a credential to ask with, or
+   * (`other_remote`, since 2026-11-16) because the workspace was cloned from another remote than the hub's.
    */
-  remote: { head: string; moved: boolean } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' };
+  remote: { head: string; moved: boolean } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
   /** The snapshots of the remote this hub holds for the workspace (2026-11-02): the budget, the commits held and those declined. */
   snapshots?: { budget: number; held: string[]; declined: unknown[] };
 }
@@ -607,7 +608,7 @@ export interface DeliverResult {
 /** `DELETE /workspace/:name` (2026-11-07): the workspace removed here, and what became of its branch on the remote. */
 export interface RemoveResult {
   workspace: WorkspaceRecord;
-  /** `untouched` after a discard (2026-11-12), which asks nothing of the remote. */
+  /** `untouched` after a discard (2026-11-12), which asks nothing of the remote, and for a workspace cloned from another remote than the hub's (2026-11-16). */
   remote: 'deleted' | 'kept' | 'absent' | 'untouched';
   /** Why the remote kept it: commits no other branch holds, its refusal, or no answer. */
   reason?: 'unmerged' | 'forbidden' | 'unreachable';

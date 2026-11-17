@@ -15,6 +15,57 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-16 · A workspace hub checks what its remote supplies and refuses another remote's workspace; the pseudonymous export names a branch by its owner
+
+From the code review of 2026-11-09's lower findings
+([`armature-code-review-2026-11-09.md`](armature-code-review-2026-11-09.md), its banner). One
+revision for the day's changes a client can meet.
+
+**What changed, on a workspace hub.**
+
+- **A workspace of another remote.** A workspace is worked with through the remote it was cloned
+  from. On a hub whose remote is another address, `POST /workspace/:name/push`, `/bring-in` and
+  `/deliver` answer **409** `other_remote` with `workspace`, `clonedFrom` and `remote`;
+  `GET /workspace/:name/status` answers `remote: { reachable: false, reason: "other_remote" }`;
+  and `DELETE /workspace/:name` removes such a workspace from the hub alone, answering
+  `remote: "untouched"` without asking the hub's remote (`unpushed_commits` and the discard are
+  as before). `@armature/client`: `WorkspaceStatus.remote.reason` gains `other_remote`.
+- **New reasons under 502 `remote_error`.** `redirect`, with `location`: the remote answered a
+  redirect, which the hub no longer follows. `not_a_commit`: a merge's, a batch's or a log
+  entry's commit was no commit identifier. `log_repeats` (with `commit`) and `log_without_base`
+  (with `base`): at a clone, the remote's branch log did not page, or lacked the commit cloned at.
+  `not_a_document_of_type` (with `type`): the remote listed something else among its users or
+  check requirements.
+- **Reserved names.** `POST /workspace` with `{ existing }` refuses `main`, a name shaped
+  `at.<commit>`, `lock`, `store.json` and `checks.json`: **400** `bad_name` with `reserved: true`.
+- **`ARMATURE_REMOTE_TOKEN`** is refused at start for a remote over plain `http` on a host that
+  is not loopback, unless `ARMATURE_REHEARSAL=1`.
+
+**What changed, on every hub.**
+
+- **The pseudonymous and institutional exports** rewrite a `Grant`'s and a `CheckRequirement`'s
+  branch name by the branch's `Owner` grant, not by matching its beginning against the handles of
+  the people registered now. A workspace branch whose beginning is no handle its owner has now
+  (an email corrected since) is `<token>_<16 hexadecimal digits>`, where it used to keep the old
+  local part in the clear; with no owner on record, a beginning that is not exactly one person's
+  handle gives `branch-<16 hexadecimal digits>`. A name without a `_` is unchanged, and so is the
+  `full` profile (ADR-0031, note of this date).
+- **A write without `If-Match`** is judged against the head it arrived at as read before the
+  caller is resolved, so two replaces of one document sent together answer one 200 and one
+  **409** `document_moved` in a window where both used to answer 200.
+- **Under `oidc`**, a token's times are read with thirty seconds of clock tolerance, and
+  `GET /health/ready` keeps its answer for two seconds.
+
+**What a client does.** A client of a workspace hub that shows refusals treats `other_remote`
+as "connect to the first remote, or remove this workspace here", and may show the new `reason`
+values of `remote_error` as the hub's message has them; none needs handling of its own. A
+consumer of pseudonymous exports that grouped grants by a branch's readable name finds some
+names opaque, the same name across exports made with one key. A client that sent two
+unconditional replaces of one record at once already had to expect `document_moved`. A workspace
+hub at this revision pushes only to a remote that serves it, so an instance is updated before the
+programs that use it. **CoQui** needs nothing: it talks to a remote hub, writes with `If-Match`,
+and reads no export's grants.
+
 ## 2026-11-15 · A workspace's status answers without a credential for the remote
 
 **What changed.** `GET /workspace/:name/status` on a workspace hub whose remote signs people in
