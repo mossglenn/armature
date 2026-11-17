@@ -19,17 +19,25 @@ interface Row {
   rationale: string;
   /** A source-name prefix, which the form does not edit and keeps as the file had it. */
   fromPrefix?: string;
+  /** The row as the file had it, by `textOf`; absent on a row added here and not yet saved. */
+  inFile?: string;
 }
 
-const rowOf = (r: PersonalRequirement): Row => ({
-  check: r.check,
-  branch: r.branch ?? '',
-  level: r.level,
-  active: r.status === 'Active',
-  params: JSON.stringify(r.params ?? {}),
-  rationale: r.rationale ?? '',
-  ...(r.fromPrefix !== undefined ? { fromPrefix: r.fromPrefix } : {}),
-});
+/** What a person can change in a row, as one text, to tell a row changed from the row the file holds. */
+const textOf = (row: Row): string => JSON.stringify([row.check, row.branch, row.level, row.active, row.params, row.rationale]);
+
+const rowOf = (r: PersonalRequirement): Row => {
+  const row: Row = {
+    check: r.check,
+    branch: r.branch ?? '',
+    level: r.level,
+    active: r.status === 'Active',
+    params: JSON.stringify(r.params ?? {}),
+    rationale: r.rationale ?? '',
+    ...(r.fromPrefix !== undefined ? { fromPrefix: r.fromPrefix } : {}),
+  };
+  return { ...row, inFile: textOf(row) };
+};
 
 const EMPTY: Row = { check: '', branch: '', level: 'Required', active: true, params: '{}', rationale: '' };
 
@@ -56,6 +64,22 @@ function requirementsOf(rows: Row[]): { requirements: unknown[] } | { badParams:
   return { requirements };
 }
 
+const counted = (n: number, what: string) => `${n} check${n === 1 ? '' : 's'} ${what}`;
+
+/**
+ * What the form holds that the file does not, as a sentence, or undefined when they agree: the checks
+ * removed, added and changed since the file was read or saved. `inFile` is how many the file holds.
+ */
+function unsavedOf(rows: Row[], inFile: number): string | undefined {
+  const kept = rows.filter((row) => row.inFile !== undefined);
+  const removed = inFile - kept.length;
+  const added = rows.length - kept.length;
+  const changed = kept.filter((row) => textOf(row) !== row.inFile).length;
+  const parts = [...(removed ? [counted(removed, 'removed')] : []), ...(added ? [counted(added, 'added')] : []), ...(changed ? [counted(changed, 'changed')] : [])];
+  if (!parts.length) return undefined;
+  return `Not saved yet: ${parts.join(', ')}. The file is as it was, and your pushes are still held to it, until you save.`;
+}
+
 /**
  * The person's own required checks (ADR-0070 decision 8; docs/desktop-program-plan.md §14, step 5a):
  * `checks.json` in the workspaces folder, read and written through the core, which is the only
@@ -66,11 +90,17 @@ function requirementsOf(rows: Row[]): { requirements: unknown[] } | { badParams:
  * The file is saved whole, after the hub's own check of it, and the next push reads it: nothing
  * restarts. A file written by hand that the push gate cannot read is shown with its problems, and
  * saving replaces it.
+ *
+ * Nothing is written until **Save checks**, a removal included, so the form says what it holds that
+ * the file does not (`unsavedOf`): a check removed and not saved looked gone, and was back, still
+ * stopping pushes, when the page was next opened (Amos, 2026-11-16; the program's 0.1.4).
  */
 export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend; workspaces: string[] }) {
   const { run, busy } = useRequest(backend);
   const [file, setFile] = useState<string | undefined>();
   const [rows, setRows] = useState<Row[]>([]);
+  /** How many checks the file holds, as last read or saved. */
+  const [inFile, setInFile] = useState(0);
   const [invalid, setInvalid] = useState<PersonalChecks['invalid']>();
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
@@ -79,6 +109,7 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
   const show = (checks: PersonalChecks) => {
     setFile(checks.file);
     setRows(checks.requirements.map(rowOf));
+    setInFile(checks.requirements.length);
     setInvalid(checks.invalid);
   };
   useEffect(() => {
@@ -104,6 +135,8 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
     show(outcome.body);
     setSaved(true);
   };
+
+  const unsaved = unsavedOf(rows, inFile);
 
   return (
     <form
@@ -132,7 +165,7 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
           </ul>
         </div>
       )}
-      {rows.length === 0 && !invalid && <p className="text-sm">No checks: every push goes straight to the remote.</p>}
+      {rows.length === 0 && !invalid && inFile === 0 && <p className="text-sm">No checks: every push goes straight to the remote.</p>}
       <ul className="flex flex-col gap-3">
         {rows.map((row, i) => (
           <li key={i} className="rounded-md border p-3" aria-label={row.check.trim() || `Check ${i + 1}`}>
@@ -203,8 +236,13 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
         <Button type="submit" disabled={busy !== undefined || file === undefined}>
           Save checks
         </Button>
-        {saved && <span className="text-muted-foreground text-sm">Saved. The next push reads them.</span>}
+        {saved && !unsaved && <span className="text-muted-foreground text-sm">Saved. The next push reads them.</span>}
       </div>
+      {unsaved && (
+        <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900" role="status">
+          {unsaved}
+        </p>
+      )}
       {problem && (
         <p className="text-destructive text-sm" role="alert">
           {problem}
