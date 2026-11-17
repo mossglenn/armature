@@ -6,6 +6,39 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-17, evening (the dimensional icon merged; a handoff note for Quiver; PR #168)
+
+**Where things stood at the close.** **Phase 8, 2026-11-17 evening; `main` at `fe9696c`, client revision 2026-11-16.** PR #168 put the dimensional app icon on `main` (128 px and up; the flat symbol below), unseen in a built program and unreleased. Every branch was checked: nothing unmerged remains, and `origin/docs/ledger-plan` is merged and kept. A handoff note for Quiver, `~/Dev/quiver/docs/armature-since-the-pause.md` (untracked there), says what Armature built since Quiver's pause, what that does to Quiver's plan and modules, and what was discussed after. The installed program is still 0.1.4, without PR #167's fixes or the icon. No suite was run this session (746 tests in the app, 40 browser tests in the shell, 27 Rust tests at the last runs). **Next: Quiver resumed on the program (item 17), in its own repository; whether a 0.1.5 ships first is Amos's call.**
+
+### Done
+
+- **The branches checked** (`git fetch --prune`, then `git cherry` and a diff from the merge base for each): `brand/dimensional-app-icon` held one commit not on `main`, `9f18438`, by another session the same day, with no pull request; `origin/docs/ledger-plan` was merged as PR #140 (its three patches on `main`); three tracking refs of deleted branches were pruned.
+- **PR #168** (`feat(desktop): dimensional app icon at 128 px and up, flat symbol below`): opened from that branch without a rebase, since a trial merge was clean (`main`'s only later change in `desktop/src-tauri/icons/` was `32x32.png`, which the branch does not touch); rebase-merged as `fe9696c` on "confirm and merge" after CI and Desktop passed on its head; both, and the pages deployment, green on `main` by the REST API.
+- **The handoff note** in Quiver's repository, `docs/armature-since-the-pause.md`, untracked there as CoQui's was: the two roles and the cycle with who performs each step; what a tool needs to reach the program's hub; each of Quiver's `src/lib` modules as replaced, kept or changed; the contract changes since its pin (`71acfb3`, 2026-10-26, twelve revisions) grouped by what breaks; its eight asks and ten scenarios as they stand; moving the pin; three ways to run a workspace hub for tests; and §8, the discussion below.
+
+### Session notes
+
+- Amos asked whether to move the Claude Code context to Quiver's repository for the next work: yes, since its own CLAUDE.md, plan and branch rules govern there.
+- He asked whether the desktop hub is ready for Quiver. The answer given: ready for development (the `workspace` compose profile serves the actions as routes, so the whole cycle can be tested), not yet a complete tool on the installed program. Three gaps are the hub's or the program's: the conflict report of a bring-in reaches the program and no tool; a bring-in refuses unpushed work and a half-finished one can dead-end; tools are paired and never launched. That local commits cannot be amended is Quiver's to absorb.
+- He asked whether the desktop hub had strayed from an offline hub for local tools into a manager of remote branches. The answer given: the hub intended is built whole; the program's pages are only the cycle because "the program is not a tool". Of the limits on "change the address in the tool's settings", two are decisions (branch operations `remote_only`; push, bring in and deliver the program's) and one is an unbuilt piece (below).
+- He said the use of the desktop hub is the intended difference between CoQui and Quiver: CoQui's value is shared review, so it stays on a remote; Quiver needs no online collaboration and is the desktop hub's test. The sync moments, where a person switches between Quiver and the program, are what is under test.
+- Recommendations made, none decided: no hub feature in advance of Quiver's evidence; Quiver's plan §3 and §5 rewritten first, then the read and write path, then the conflict question brought back as an ask; a common toolkit tracked as a table in Quiver's plan and built when a second client starts; a hand-off in which a tool's sync button opens the program at that action through `armature://` for the person to confirm.
+
+### Facts from 2026-11-17 evening worth keeping
+
+- The desktop core starts its hub with an empty allow-list of web origins (`app/lib/desktop/core.ts`, `allowedOrigins: new Set()`) and the program has no setting for it, though `docs/workspace-hub-plan.md` §16 question 6 has the workspace manager editing the list. A page in a browser therefore cannot read the program's hub. No client needs it; opening it would need a per-origin confirmation, a way for a page to obtain the pairing value, and a check of how browsers treat an `https` page calling loopback over `http` (unverified).
+- A rebase merge gives each commit a new hash, so `git branch --merged` calls a landed branch unmerged; `git cherry -v origin/main <branch>` compares patches and is the check to use.
+- Quiver is pinned to Armature `71acfb3`; its client spoke revision 2026-10-22. A pin at `main`'s head is newer than the installed 0.1.4's hub, which refuses writes from a newer client (`unsupported_version`).
+- Not verified: whether a tool can learn `main`'s head from a workspace hub (it would let Quiver compute its own conflict preview from forwarded reads); whether an agent registered after a clone reaches the mirror without a new clone.
+
+### Moved from SESSION.md
+
+From "Notes for Next Session", kept here for a 0.1.5's rehearsal: A debug build is a console program on Windows, so one started at login opens a console window, and closing it ends the program: "no window" there is judged only with a release's installer, and a debug build of a version looks current to the updater, so the release's installer is run over it by hand. A rehearsal's debug bundle on the Mac shares the installed program's data folder, port, keychain and login entry: quit the installed one first. A rehearsal's Keycloak over plain http must be on loopback since PR #160 (400 `insecure_issuer` otherwise). An instance under `oidc` updated past PR #138 needs a relay's client id in `ARMATURE_OIDC_SERVICES` and `ARMATURE_REHEARSAL=1` over plain http. The release's notes are a fixed text in `desktop-release.yml`, so a note for one version is appended to the draft with `gh release edit` and is not in `latest.json`. A Windows debug installer of a branch comes from `gh workflow run desktop.yml --ref <branch>`; the icon hook can only be judged at the desktop, since an SSH session is not the desktop's.
+
+### Decisions taken
+
+- None in Armature. Amos's statement of the difference between CoQui and Quiver is in the handoff note's §8.2.
+
 ## 2026-11-16 to 17 (the code review's remaining findings and its four decisions; PRs #166 and #167)
 
 **Where things stood at the close.** **Phase 8, 2026-11-17; the code review's remaining findings are on `main` (PR #167), client revision 2026-11-16.** Nine commits (`642987f` to `0b3e8fa`) carry the 2026-11-09 review's lower findings across the hub, the workspace hub, the viewer's credential, the desktop core, the operator tools, the shell and its pages, and the four decisions Amos took on 2026-11-16 as recommended (D3, D4, Q4, C16); the review's banner says what landed and what did not. officepi serves revision 2026-11-16 at `0b3e8fa`, its `check` clean. The installed program is still 0.1.4, so the core's, the shell's and the pages' fixes reach a designer only with a 0.1.5, and none of them has been seen in the installed program. 746 tests in the app at the last full local run, 40 browser tests in the shell, 27 Rust tests. **Next: Amos's call among a 0.1.5 release with its rehearsal, Quiver resumed on the program (item 17) and Lint's first step (`docs/lint-plan.md`).**
