@@ -38,6 +38,36 @@ test.describe('connecting', () => {
     await expect(page.getByText('The hub is running')).toBeVisible();
   });
 
+  test('an identifier the remote does not know is said, where it was kept and nothing shown; it is corrected there or on Settings (0.1.4)', async ({ page }) => {
+    await open(page, 'fresh');
+    await page.getByLabel("The instance's address").fill(HEADER_REMOTE);
+    await page.getByRole('button', { name: 'Read' }).click();
+    await page.getByRole('button', { name: 'Connect to hub.example.test' }).click();
+    await page.getByLabel('Your identifier on the remote').fill('nobody@example.edu');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    // Still on the step, with the remote's answer in the person's terms and the way on.
+    await expect(page.getByRole('heading', { name: 'Who are you on this remote?' })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('The remote does not know nobody@example.edu');
+    await expect(page.getByRole('alert')).toContainText('ask the instance’s administrator to register you');
+    // Typing again takes the sentence away, since it was about the identifier before.
+    await page.getByLabel('Your identifier on the remote').fill('nobody2@example.edu');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('alert')).toContainText('The remote does not know nobody2@example.edu');
+
+    // Going on keeps it as typed: the Settings page says the same of it, and says who a known one is once saved.
+    await page.getByRole('button', { name: 'Go on with it' }).click();
+    await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+    await nav(page, 'Settings').click();
+    const machine = page.getByRole('form', { name: 'This machine' });
+    await expect(machine.getByLabel('Your identifier on the remote')).toHaveValue('nobody2@example.edu');
+    await expect(machine.getByRole('alert')).toContainText('The remote does not know nobody2@example.edu');
+    await machine.getByLabel('Your identifier on the remote').fill('demo-designer@example.edu');
+    await machine.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(machine).toContainText('The remote knows demo-designer@example.edu as Demo Designer.');
+    await expect(machine).not.toContainText('does not know');
+  });
+
   test('a remote that signs people in is shown with its issuer, then the sign-in page', async ({ page }) => {
     await open(page, 'fresh');
     await page.getByLabel("The instance's address").fill(OIDC_REMOTE);

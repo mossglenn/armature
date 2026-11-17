@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend, ShellState } from '@/lib/backend';
-import type { Profile, Refusal, SettingsReply } from '@/lib/types';
+import type { Person, Profile, Refusal, SettingsReply } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
 /**
@@ -30,6 +30,8 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
   const [user, setUser] = useState('');
   const [askUser, setAskUser] = useState(needsUser);
   const [keychain, setKeychain] = useState<string | undefined>();
+  /** The identifier just saved that the remote answered it does not know. */
+  const [unknown, setUnknown] = useState<string | undefined>();
 
   useEffect(() => {
     if (link) {
@@ -65,11 +67,18 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
     onDone(profile.identity.resolver === 'oidc' ? 'signIn' : 'workspaces', outcome.body.keychain);
   };
 
+  // The identifier is saved and the hub started whatever the remote says of it, so the program works
+  // offline and for a person registered a minute later; but a remote that answers it does not know
+  // the identifier is said here, before the first push is refused for it (found at 0.1.3's rehearsal,
+  // where the page went on and showed nothing). A remote that cannot be asked holds no one back.
   const saveUser = async () => {
     setRefusal(undefined);
+    setUnknown(undefined);
     const outcome = await run<SettingsReply>('settings', { set: { user } });
     if (!outcome.ok) return setRefusal(outcome);
     await restartHub();
+    const asked = await run<{ person: Person }>('whoAmI');
+    if (!asked.ok && asked.refusal.error === 'unknown_user') return setUnknown(user.trim());
     onDone('workspaces', keychain);
   };
 
@@ -87,10 +96,31 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
           }}
         >
           <Label htmlFor="user">Your identifier on the remote</Label>
-          <Input id="user" {...verbatim} value={user} onChange={(e) => setUser(e.target.value)} placeholder="you@example.edu" autoFocus />
+          <Input
+            id="user"
+            {...verbatim}
+            value={user}
+            onChange={(e) => {
+              setUser(e.target.value);
+              setUnknown(undefined);
+            }}
+            placeholder="you@example.edu"
+            autoFocus
+          />
           <Button type="submit" disabled={!user.trim() || busy !== undefined}>
             {busy ? 'Starting the hub…' : 'Continue'}
           </Button>
+          {unknown && (
+            <div role="alert" className="border-destructive/40 bg-destructive/5 flex flex-col gap-2 rounded-md border p-3 text-sm">
+              <p>
+                The remote does not know <span className="font-mono">{unknown}</span>. Nothing can be created, pushed or delivered as an identifier it does not know. Correct it above, or ask the instance&rsquo;s administrator to register you.
+              </p>
+              <p className="text-muted-foreground">It is kept as typed, and can be changed on the Settings page.</p>
+              <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => onDone('workspaces', keychain)}>
+                Go on with it
+              </Button>
+            </div>
+          )}
           {refusal && <RefusalNotice {...refusal} />}
         </form>
       </section>

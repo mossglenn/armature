@@ -6,7 +6,9 @@
 //! removed by hand comes back only when the setting says so. An entry that is wanted is made again
 //! at every start, not only when it is missing: on macOS it holds the executable's path as it was
 //! when it was made, so a program moved to Applications afterward kept starting the old copy (the
-//! 2026-11-09 review's R8); the log speaks only when the state changes.
+//! 2026-11-09 review's R8); the log speaks only when the state changes. "Every start" holds since
+//! the program's 0.1.4, when the core's `start` reply began to carry the settings whether or not the
+//! hub started; until then the reply of a hub that started had none, and `follow` returned at once.
 //!
 //! A program started at login starts hidden, in the tray or menu bar: the hub is what is wanted
 //! then, for the tools, not the window. A restart the person asked for, after an update, drops the

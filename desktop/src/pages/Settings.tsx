@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { PersonalChecksEditor } from '@/components/PersonalChecksEditor';
 import { RefusalNotice } from '@/components/RefusalNotice';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend, ShellState } from '@/lib/backend';
-import type { Profile, Refusal, Settings as SettingsShape, SettingsReply, WorkspaceRecord } from '@/lib/types';
+import type { Person, Profile, Refusal, Settings as SettingsShape, SettingsReply, WorkspaceRecord } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
 /** A field's text as a whole number of 0 or more, or undefined when it is not one. */
@@ -16,7 +16,8 @@ const wholeNumber = (text: string): number | undefined => (/^\d+$/.test(text.tri
 /**
  * Settings (docs/desktop-program-plan.md §4, item 6; §9): the remote (changed on the connect page,
  * and only while no workspace exists), the folder with the synced-folder warning, the port, the
- * snapshot budget, the identifier under header; a change the hub needs a restart for says so and
+ * snapshot budget, the identifier under header, with what the remote says of the one saved (who it is,
+ * or that it knows no such identifier; `whoAmI`); a change the hub needs a restart for says so and
  * offers it; starting at login, saved as it is ticked (the shell makes the system's entry follow it,
  * src-tauri/src/login.rs, and the state says what the entry then is, shown beside the box when it
  * differs from the setting; the 2026-11-09 review's R10); sign out; and the versions: the program's, the hub revision it carries,
@@ -39,6 +40,8 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   const [restarting, setRestarting] = useState(false);
   /** The workspaces a check can be bound to; none when the hub is not running, and a check can still bind every workspace. */
   const [workspaces, setWorkspaces] = useState<string[]>([]);
+  /** Under header, what the remote says of the identifier saved: the person it is, or that it knows no such one. */
+  const [known, setKnown] = useState<{ user: string; person?: Person } | undefined>();
 
   const show = (reply: SettingsReply) => {
     setSettings(reply.settings);
@@ -46,17 +49,33 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
     setForm({ folder: reply.settings.folder ?? '', port: String(reply.settings.port), snapshots: String(reply.settings.snapshots), user: reply.settings.user ?? '' });
   };
 
+  // Asked of the remote whenever the saved identifier is shown, never kept: the page used to take an
+  // identifier the remote did not know and say nothing (found at 0.1.3's rehearsal). A remote that
+  // cannot be asked leaves the line out; the Versions block says it cannot be reached.
+  const askWho = useCallback(
+    async (shown: SettingsShape) => {
+      setKnown(undefined);
+      const user = shown.user;
+      if (shown.identity?.resolver !== 'header' || !shown.remote || !user) return;
+      const asked = await run<{ person: Person }>('whoAmI');
+      if (asked.ok) setKnown({ user, person: asked.body.person });
+      else if (asked.refusal.error === 'unknown_user') setKnown({ user });
+    },
+    [run]
+  );
+
   useEffect(() => {
     void backend.version().then(setVersion);
     void run<WorkspaceRecord[]>('workspaces').then((outcome) => outcome.ok && setWorkspaces(outcome.body.map((w) => w.branch)));
     void run<SettingsReply>('settings').then((outcome) => {
       if (!outcome.ok) return setRefusal(outcome);
       show(outcome.body);
+      void askWho(outcome.body.settings);
       if (outcome.body.settings.remote) {
         void run<Profile>('profile', { remote: outcome.body.settings.remote }).then((profile) => setRemoteVersions(profile.ok ? profile.body.versions : 'unreachable'));
       }
     });
-  }, [backend, run]);
+  }, [backend, run, askWho]);
 
   const save = async () => {
     if (!settings) return;
@@ -80,6 +99,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
     show(outcome.body);
     setRestart(outcome.body.restart === true);
     setSaved(true);
+    void askWho(outcome.body.settings);
   };
 
   const startAtLogin = async (on: boolean) => {
@@ -191,6 +211,16 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
           <>
             <Label htmlFor="settings-user">Your identifier on the remote</Label>
             <Input id="settings-user" {...verbatim} {...field('user')} />
+            {known?.person && (
+              <p className="text-muted-foreground text-sm">
+                The remote knows <span className="font-mono">{known.user}</span> as {known.person.displayName ?? known.person.id}.
+              </p>
+            )}
+            {known && !known.person && (
+              <p className="text-destructive text-sm" role="alert">
+                The remote does not know <span className="font-mono">{known.user}</span>. Nothing can be created, pushed or delivered as an identifier it does not know. Correct it here, or ask the instance&rsquo;s administrator to register you.
+              </p>
+            )}
           </>
         )}
         <label className="flex items-center gap-2 text-sm">
