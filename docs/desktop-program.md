@@ -31,7 +31,7 @@ The program opens on **Connect**. The easiest way in is the link on your instanc
 
 The program shows what it found: the instance's name, the address you gave, and who signs you in. Check them before you choose **Connect**: a link can come from anywhere, and the program connects to nothing until you confirm. The address shown is always the one you typed or the link brought; if the instance says its address is a different one, the program warns you, and you should connect only if the address you gave is the one your administrator gave you. Changing the address withdraws what was shown, and the program connects only to exactly what it showed you: an instance that answers differently when you connect is refused (`profile_changed`), so read it again.
 
-An instance that says **"No sign-in: you say who you are"** is a development or rehearsal arrangement, not one for real work; the program then asks for your identifier instead of signing you in.
+An instance that says **"No sign-in: you say who you are"** is a development or rehearsal arrangement, not one for real work; the program then asks for your identifier instead of signing you in. Since version 0.1.4 it asks the instance whether it knows that identifier and tells you when it does not, there and under **Settings**, where the identifier can be corrected: nothing can be created, pushed or delivered as an identifier the instance does not know, so either correct it or ask the administrator to register you. The identifier is kept as you typed it either way.
 
 ## Signing in
 
@@ -85,7 +85,7 @@ A *check* is a tool that examines your work and reports a verdict, a design lint
 - **When it has not passed** either stops the push or lets it go on and says so.
 - **The tool's settings** are whatever that tool reads, as JSON; write `{}` for none. The program stores them and never reads them.
 
-Choose **Save checks**. Nothing restarts: the next push reads them. While a check is in force, a push waits until that tool has reported on your latest work, and is refused if the check did not pass. Since the checks are yours, you may always push past one: give a reason beside it and choose **Push anyway**. The reason travels with the push as your own statement on its first commit. To stop a check for a while, clear **In force** and save.
+Choose **Save checks**. Nothing restarts: the next push reads them. While a check is in force, a push waits until that tool has reported on your latest work, and is refused if the check did not pass. Since the checks are yours, you may always push past one: give a reason beside it and choose **Push anyway**. The reason travels with the push as your own statement on its first commit. To stop a check for a while, clear **In force** and save. To take one away, choose **Remove** on it and then **Save checks**: nothing here is written until you save, a removal included, and until then the check still stops your pushes. Since version 0.1.4 the page says what you have removed, added or changed and not yet saved; leaving the page without saving drops those changes.
 
 The checks are kept in a file named `checks.json` in the workspaces folder, which you may also edit by hand:
 
@@ -99,7 +99,7 @@ Only the program and you can change that file. No tool can change it through the
 
 Closing the window does not stop the program: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first.
 
-**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the program tries again at its next start. *Known in version 0.1.3:* if you move the program after turning this on, the entry keeps pointing at the old place and the program does not start when you sign in; turn the box off and on again to put it right. A fix is planned for 0.1.4. An update you install in such a session brings the window back when the program starts again.
+**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the program tries again at its next start. The program makes the entry again each time it starts, so it follows the program if you move it. *In versions up to 0.1.3* it did not: if you moved the program after turning this on, the entry kept pointing at the old place and the program did not start when you signed in; turning the box off and on again puts it right there, and version 0.1.4 does it itself. An update you install in such a session brings the window back when the program starts again.
 
 ## Updates
 
