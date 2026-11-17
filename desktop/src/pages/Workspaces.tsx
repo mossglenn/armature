@@ -49,6 +49,13 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
     }
   }, [run]);
   useEffect(() => void load(), [load]);
+  // Read again when the window is come back to: a tool's commits and a network that returned showed only
+  // after leaving the page and returning (the 2026-11-09 review's P11).
+  useEffect(() => {
+    const onFocus = () => void load();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
 
   const made = async (outcome: Awaited<ReturnType<typeof run<WorkspaceRecord & { warning?: WorkspaceWarning }>>>) => {
     if (!outcome.ok) return setRefusal(outcome);

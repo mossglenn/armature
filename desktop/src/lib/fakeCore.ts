@@ -46,7 +46,7 @@ const OIDC_REMOTE = 'https://api.armature.example.edu';
 const HEADER_REMOTE = 'http://hub.example.test:3100';
 const HOSTILE_REMOTE = 'https://api.armature-x.example.net';
 const HUB_URL = 'http://127.0.0.1:3101';
-const REVISION = '2026-11-15';
+const REVISION = '2026-11-16';
 const DATA_DIR = '/Users/someone/Library/Application Support/com.mossglenn.armature';
 const ISSUER = 'https://login.example.edu/realms/armature';
 const SYNCED = /(^|\/)(OneDrive[^/]*|Dropbox[^/]*|Google ?Drive|My Drive|iCloudDrive)(\/|$)|Library\/(Mobile Documents|CloudStorage)/i;
@@ -223,6 +223,8 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     if (event.event === 'log') model.log.push(event);
     listeners.forEach((listener) => listener(event));
   };
+  /** Signed in at the provider, unknown to the remote: the credential is kept and `whoAmI` is refused as the sign-in was. */
+  let unregisteredSignIn = false;
   let firstScopeTry = true;
   /** `?start=slow`: the core has not answered its `start` yet, as on a cold first launch (P5). */
   let starting = options.start === 'slow';
@@ -383,6 +385,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       return ok({ file, requirements: next });
     },
     signIn: async ({ offline }) => {
+      unregisteredSignIn = false;
       if (model.settings.identity?.resolver !== 'oidc') return refuse(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
       if (waitingSignIn) return refuse(409, 'sign_in_in_progress', 'A sign-in is already waiting for the browser');
       emit({ event: 'open', url: `${ISSUER}/protocol/openid-connect/auth?client_id=armature-desktop` });
@@ -398,7 +401,9 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         return refuse(403, 'sign_in_refused', 'The identity provider refused offline_access, which keeps you signed in; sign in without it, or ask the administrator to offer it to the desktop client', { reason: 'invalid_scope', offlineAccess: true });
       }
       if (scenario === 'oidc-unregistered') {
-        return refuse(403, 'not_registered', 'The remote refused: someone@example.edu is not registered on this instance; an administrator registers them', { remote: true });
+        // The sign-in stands: the provider signed the person in, and the remote is asked again once they are registered.
+        unregisteredSignIn = true;
+        return refuse(403, 'not_registered', 'The remote refused: someone@example.edu is not registered on this instance; an administrator registers them', { remote: true, signedIn: true, staysSignedIn: offline !== false });
       }
       model.signedIn = { id: 'User/someone', externalId: 'someone@example.edu', displayName: 'Someone at Example' };
       return ok({ signedIn: true, person: model.signedIn, staysSignedIn: offline !== false });
@@ -418,6 +423,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         if (!name) return refuse(401, 'unknown_user', `The remote refused: No User is registered for ${user}; create one with POST /api/v1/users`, { remote: true });
         return ok({ person: { id: `User/${user.split('@')[0]}`, externalId: user, displayName: name } });
       }
+      if (unregisteredSignIn) return refuse(403, 'not_registered', 'The remote refused: someone@example.edu is not registered on this instance; an administrator registers them', { remote: true });
       return model.signedIn ? ok({ signedIn: true, person: model.signedIn, staysSignedIn: true }) : refuse(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in');
     },
     // `keychain`: what the shell adds to a reply when the keychain refused what the reply implies (src-tauri/src/core.rs `after_reply`).
@@ -572,7 +578,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (stray) return refuse(400, 'bad_request', `The remote refused: ${stray} is not a required check of this merge`, { remote: true });
       const checks = verdictsFor(required.map((r) => ({ check: r.check, level: 'Required' as const, locked: r.locked, id: `CheckRequirement/${r.check}`, reporter: 'User/lint-service' })), model.remoteRuns, branch, head, overrides);
       if (fields.dryRun === true) {
-        return ok({ workspace: w.record, delivered: { base: commitId(), source: head, target: commitId(), upToDate: false }, deleted: false, dryRun: true, conflicts: [], violations: [], ...(checks.length ? { checks } : {}) });
+        return ok({ workspace: w.record, delivered: { base: commitId(), source: head, target: commitId(), upToDate: w.deliveredAt === w.commits.length }, deleted: false, dryRun: true, conflicts: [], violations: [], ...(checks.length ? { checks } : {}) });
       }
       const locked = checks.find((v) => v.overridden && v.locked);
       if (locked) {
@@ -586,9 +592,11 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         return refuse(409, 'checks_pending', `The remote refused: merging ${branch} into main waits for ${pending.join(', ')} to report on ${head}`, { remote: true, pending, checks });
       }
       const deleted = fields.deleteWorkspace === true;
+      // As the remote's merge answers when main already holds the workspace's head: nothing merged, no commit made.
+      const upToDate = w.deliveredAt === w.commits.length;
       if (deleted) model.workspaces.delete(w.record.branch);
       else w.deliveredAt = w.commits.length;
-      return ok({ workspace: w.record, delivered: { commit: commitId(), base: commitId(), source: commitId(), target: commitId(), upToDate: false }, deleted, ...(checks.length ? { checks } : {}) });
+      return ok({ workspace: w.record, delivered: { commit: upToDate ? '' : commitId(), base: commitId(), source: commitId(), target: commitId(), upToDate }, deleted, ...(checks.length ? { checks } : {}) });
     },
     remove: (fields) => {
       const refused = needsHub() ?? needsOwner();

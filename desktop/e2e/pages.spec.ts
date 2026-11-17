@@ -117,6 +117,19 @@ test.describe('connecting', () => {
     await page.getByRole('button', { name: 'Read' }).click();
     await page.getByRole('button', { name: 'Connect to Armature at Example University' }).click();
     await expect(page.getByRole('alert')).toContainText('409 workspaces_exist');
+
+    // The same link opened again is a new arrival: the page opens again, the field filled (the 2026-11-09 review's P12).
+    await nav(page, 'Workspaces').click();
+    await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+    await page.evaluate((remote) => (window as unknown as { __fakeCore: { link: (r: string) => void } }).__fakeCore.link(remote), OIDC_REMOTE);
+    await expect(page.getByRole('heading', { name: 'Connect to your instance' })).toBeVisible();
+    await expect(page.getByLabel("The instance's address")).toHaveValue(OIDC_REMOTE);
+    // And a link is for the visit it opened: left, the connect page starts from the address in use.
+    await nav(page, 'Settings').click();
+    await page.getByRole('button', { name: 'Connect elsewhere' }).click();
+    await expect(page.getByRole('heading', { name: 'Connect to your instance' })).toBeVisible();
+    await expect(page.getByLabel("The instance's address")).toHaveValue(HEADER_REMOTE);
+    await expect(page.getByText('A link asked to connect here')).toHaveCount(0);
   });
 });
 
@@ -148,6 +161,11 @@ test.describe('signing in', () => {
     await expect(page.getByRole('alert')).toContainText('403 not_registered');
     await expect(page.getByRole('alert')).toContainText('from the remote');
     await expect(page.getByText('Ask your instance’s administrator to register you')).toBeVisible();
+    // The sign-in itself is kept, and the instance can be asked again without a new one (the 2026-11-09 review's C16).
+    await expect(page.getByText('you will not need to sign in again')).toBeVisible();
+    await page.getByRole('button', { name: 'Check again' }).click();
+    await expect(page.getByRole('alert')).toContainText('403 not_registered');
+    await expect(page.getByRole('button', { name: 'Check again' })).toBeVisible();
   });
 
   test('a waiting sign-in is cancelled from its page, found again after leaving it, and a signed-in person is told who they are (the 2026-11-09 review’s P8)', async ({ page }) => {
@@ -609,6 +627,11 @@ test.describe('removing a workspace', () => {
     await page.getByLabel('Why (required)').fill('Unit 3, reviewed');
     await page.getByRole('button', { name: 'Deliver', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('Delivered into main as');
+    // Delivered again with nothing new: main already holds it, and the page says so, not "Delivered into main as" main's own head (the 2026-11-09 review's P10).
+    await page.getByLabel('Why (required)').fill('Unit 3, once more');
+    await page.getByRole('button', { name: 'Deliver', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('There was nothing to deliver');
+    await expect(page.getByRole('status')).not.toContainText('Delivered into main as');
     await page.getByLabel('Remove', { exact: true }).getByRole('button', { name: 'Remove…', exact: true }).click();
     await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('removed from this machine and from the remote');
@@ -620,9 +643,17 @@ test.describe('pairing, settings and the log', () => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await open(page, 'header');
     await nav(page, 'Pairing').click();
+    // The page's heading takes the focus when the page opens (the 2026-11-09 review's P13).
+    await expect(page.getByRole('heading', { name: 'Pairing' })).toBeFocused();
     const value = page.getByLabel('The pairing value');
     const before = await value.inputValue();
     expect(before).toMatch(/^[0-9a-f]{64}$/);
+    // Covered until asked for, and copied either way (P14).
+    await expect(value).toHaveAttribute('type', 'password');
+    await page.getByRole('button', { name: 'Show', exact: true }).click();
+    await expect(value).toHaveAttribute('type', 'text');
+    await page.getByRole('button', { name: 'Hide', exact: true }).click();
+    await expect(value).toHaveAttribute('type', 'password');
     await page.getByRole('button', { name: 'Copy', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(before);
@@ -670,6 +701,8 @@ test.describe('pairing, settings and the log', () => {
     await nav(page, 'Pairing').click();
     await expect(page.getByLabel('The pairing value')).toHaveValue(/^[0-9a-f]{64}$/);
     await expect(page.getByLabel('Your identifier for tools')).toHaveCount(0);
+    // Why it is not there is said (P14).
+    await expect(page.getByText('Sign in, and your identifier for tools is shown here.')).toBeVisible();
     await nav(page, 'Sign in').click();
     await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Signed in' })).toBeVisible();
@@ -682,12 +715,14 @@ test.describe('pairing, settings and the log', () => {
     await nav(page, 'Settings').click();
     await expect(page.getByLabel('The remote', { exact: true })).toContainText(HEADER_REMOTE);
     await expect(page.getByLabel('Versions')).toContainText('0.1.0');
-    await expect(page.getByLabel('Versions')).toContainText('2026-11-15');
+    await expect(page.getByLabel('Versions')).toContainText('2026-11-16');
 
     await page.getByLabel('Workspaces folder').fill('/Users/someone/Dropbox/Armature');
     await page.getByLabel('Port').fill('3102');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('looks like a folder a sync client keeps in sync')).toBeVisible();
+    // The workspaces do not move with the setting, and the page says so (the 2026-11-09 review's P9).
+    await expect(page.getByRole('form', { name: 'This machine' }).getByRole('alert')).toContainText('workspaces stay in the folder used until now');
     await page.getByRole('button', { name: 'Restart the hub' }).click();
     await expect(page.getByRole('button', { name: 'Restart the hub' })).toBeHidden();
     await expect(page.getByLabel('The hub')).toContainText('http://127.0.0.1:3102');
