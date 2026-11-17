@@ -154,6 +154,30 @@ describe('a write that waited its turn', () => {
     expect(document.label).toBe(answers[0].status === 200 ? 'first' : 'second');
   });
 
+  it("judges by the head the request arrived at, before its caller was resolved (the 2026-11-09 review's Q3)", async () => {
+    const id = `queue-arrived-${stamp}`;
+    expect((await replace(id, 'as made')()).status).toBe(200);
+    // A replace held at its first read of the caller, as a slow store or a first sign-in would hold it:
+    // the route has the request and has read the head it arrived at.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const query = TerminusStore.prototype.queryDocuments;
+    let waiting = 0;
+    vi.spyOn(TerminusStore.prototype, 'queryDocuments').mockImplementation(async function (this: TerminusStore, ...args: Parameters<typeof query>) {
+      if (args[0] === 'User' && (waiting += 1) === 1) await held;
+      return query.apply(this, args);
+    });
+    const slow = replace(id, 'slow')();
+    await vi.waitFor(() => expect(waiting).toBe(1));
+    // Meanwhile another replace of the same document commits.
+    expect((await replace(id, 'changed meanwhile')()).status).toBe(200);
+    release();
+    const answer = await slow;
+    expect(answer.status).toBe(409);
+    expect(await answer.json()).toMatchObject({ error: 'document_moved', documents: [`LearningNeed/${id}`] });
+    expect((await createStore({ branch: BRANCH }).getDocument(`LearningNeed/${id}`)).document.label).toBe('changed meanwhile');
+  });
+
   it('lands when what changed is another document', async () => {
     const other = `queue-other-${stamp}`;
     expect((await post(`/api/v1/documents${q}`, { message: 'Another to replace', documents: [need(other)] })).status).toBe(200);

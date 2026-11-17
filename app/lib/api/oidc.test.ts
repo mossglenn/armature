@@ -171,6 +171,25 @@ describe('the token on every request (ADR-0067 decision 1)', () => {
       expect(body.reason, label).toBe(reason);
       expect(res.headers.get('WWW-Authenticate')).toBe('Bearer realm="armature", error="invalid_token"');
     }
+    // The provider's clock and the hub's may disagree by a little (the 2026-11-09 review's A8): a token that
+    // ended ten seconds ago, or begins in ten, is read as valid (403 here, since no one admitted this person;
+    // 401 is the token's refusal); one a minute off is not.
+    const seconds = () => Math.floor(Date.now() / 1000);
+    const starting = (inSeconds: number) =>
+      new SignJWT({ sub: 'skewed', name: 'Skewed' })
+        .setProtectedHeader({ alg: 'ES256', kid })
+        .setIssuer(ISSUER)
+        .setAudience(AUDIENCE)
+        .setNotBefore(seconds() + inSeconds)
+        .setExpirationTime('5m')
+        .sign(privateKey);
+    const justEnded = await as(await token({ sub: 'skewed', name: 'Skewed' }, { expires: seconds() - 10 }), 'GET', '/users/me');
+    expect(justEnded.status).not.toBe(401);
+    expect((await as(await starting(10), 'GET', '/users/me')).status).not.toBe(401);
+    const early = await json(await as(await starting(60), 'GET', '/users/me'));
+    expect(early.status).toBe(401);
+    expect(early.body.reason).toBe('not_yet_valid');
+
     // A shared secret can never sign a token the hub takes: HS256 is not on the list, whatever key it names.
     const secret = new TextEncoder().encode('a-shared-secret-of-thirty-two-bytes!');
     const hs = await new SignJWT({ sub: 'x', name: 'X' }).setProtectedHeader({ alg: 'HS256', kid }).setIssuer(ISSUER).setAudience(AUDIENCE).setExpirationTime('5m').sign(secret);

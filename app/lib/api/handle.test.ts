@@ -45,13 +45,15 @@ describe('the pseudonymous export rewrites either handle in a grant\'s branch', 
     grant('other', 'someone-else_unit-1'),
   ];
 
-  it("replaces the email's handle and the identifier's with the person's token, and leaves a branch no handle begins", async () => {
+  it("replaces the email's handle and the identifier's with the person's token, and keeps nothing of a name that begins with neither", async () => {
     const out = (await applyProfile(documents, 'pseudonymous', 'a key')).documents;
     const token = (out.find((d) => d['@type'] === 'User')!['@id'] as string).slice('User/'.length);
     const branchOf = (id: string) => out.find((d) => d['@id'] === `Grant/${id}`)!.branch;
     expect(branchOf('new')).toBe(`${token}_unit-3`);
     expect(branchOf('old')).toBe(`${token}_unit-2`);
-    expect(branchOf('other')).toBe('someone-else_unit-1');
+    // Owned by the designer and beginning with no handle of theirs: an earlier email's, for all the export can tell.
+    expect(branchOf('other')).toMatch(new RegExp(`^${token}_[0-9a-f]{16}$`));
+    expect(JSON.stringify(out)).not.toContain('someone-else');
     expect(JSON.stringify(out)).not.toContain('designer@');
     expect(JSON.stringify(out)).not.toContain(SUB);
   });
@@ -85,5 +87,62 @@ describe('the pseudonymous export rewrites either handle in a grant\'s branch', 
     expect(rounds.fromPrefix).toBe('coqui-');
     expect(rounds.branch).toBeUndefined();
     expect(JSON.stringify(out)).not.toContain(SUB);
+  });
+});
+
+describe("whose a branch is comes from its Owner grant, not from its name (the 2026-11-09 review's E1; ADR-0031, note of 2026-11-16)", () => {
+  const owner = (id: string, user: string, branch: string): TerminusDocument => ({ '@type': 'Grant', '@id': `Grant/${id}`, user, role: 'Owner', branch, status: 'Active', rationale: 'r' });
+  const tokenOf = (out: TerminusDocument[], index: number) => (out[index]['@id'] as string).slice('User/'.length);
+  const branchOf = (out: TerminusDocument[], id: string) => out.find((d) => d['@id'] === `Grant/${id}`)!.branch as string;
+
+  it("keeps an earlier email's local part out of the export after the email was corrected", async () => {
+    const documents: TerminusDocument[] = [
+      // Registered as pat.obrien@, the branch made, then the email corrected.
+      { '@type': 'User', '@id': 'User/pat', displayName: 'Pat', externalId: SUB, email: 'pat.o-brien@example.edu' },
+      owner('before', 'User/pat', 'pat.obrien_unit-1'),
+      owner('after', 'User/pat', 'pat.o-brien_unit-2'),
+      { '@type': 'Grant', '@id': 'Grant/shared', user: 'User/pat', role: 'Maintainer', branch: 'pat.obrien_unit-1', status: 'Active', rationale: 'r' },
+    ];
+    const out = (await applyProfile(documents, 'pseudonymous', 'a key')).documents;
+    const token = tokenOf(out, 0);
+    expect(branchOf(out, 'after')).toBe(`${token}_unit-2`);
+    expect(branchOf(out, 'before')).toMatch(new RegExp(`^${token}_[0-9a-f]{16}$`));
+    // Every record naming the branch names it alike, so the grants on one branch still read as one branch's.
+    expect(branchOf(out, 'shared')).toBe(branchOf(out, 'before'));
+    expect(JSON.stringify(out)).not.toContain('obrien');
+    // The same key, the same names: a corpus compares across exports.
+    expect((await applyProfile(documents, 'pseudonymous', 'a key')).documents).toEqual(out);
+  });
+
+  it("gives each of two people whose emails share a local part their own branches", async () => {
+    const documents: TerminusDocument[] = [
+      { '@type': 'User', '@id': 'User/alice-a', displayName: 'Alice A', externalId: 'sub-a', email: 'alice@a.example.edu' },
+      { '@type': 'User', '@id': 'User/alice-b', displayName: 'Alice B', externalId: 'sub-b', email: 'alice@b.example.edu' },
+      owner('a', 'User/alice-a', 'alice_unit-1'),
+      owner('b', 'User/alice-b', 'alice_unit-2'),
+      // A requirement's fromPrefix has no owner: a handle two people share is nobody's in particular.
+      { '@type': 'CheckRequirement', '@id': 'CheckRequirement/r', check: 'lint/x', reporter: 'User/alice-a', level: 'Required', locked: false, status: 'Active', fromPrefix: 'alice_' },
+    ];
+    const out = (await applyProfile(documents, 'pseudonymous', 'a key')).documents;
+    expect(branchOf(out, 'a')).toBe(`${tokenOf(out, 0)}_unit-1`);
+    expect(branchOf(out, 'b')).toBe(`${tokenOf(out, 1)}_unit-2`);
+    expect(tokenOf(out, 0)).not.toBe(tokenOf(out, 1));
+    expect(out.find((d) => d['@type'] === 'CheckRequirement')!.fromPrefix).toMatch(/^branch-[0-9a-f]{16}$/);
+    expect(JSON.stringify(out)).not.toContain('alice');
+  });
+
+  it('leaves a name that is no workspace\'s as it is, and keeps none of an unowned one that may begin with a handle', async () => {
+    const documents: TerminusDocument[] = [
+      { '@type': 'User', '@id': 'User/pat', displayName: 'Pat', externalId: SUB, email: 'pat@example.edu' },
+      owner('plain', 'User/pat', 'spring-pilot'),
+      { '@type': 'Grant', '@id': 'Grant/unowned', user: 'User/pat', role: 'Maintainer', branch: 'former.colleague_unit-9', status: 'Active', rationale: 'r' },
+      { '@type': 'Grant', '@id': 'Grant/every', user: 'User/pat', role: 'Maintainer', status: 'Active', rationale: 'r' },
+    ];
+    const out = (await applyProfile(documents, 'pseudonymous', 'a key')).documents;
+    expect(branchOf(out, 'plain')).toBe('spring-pilot');
+    expect(branchOf(out, 'unowned')).toMatch(/^branch-[0-9a-f]{16}$/);
+    expect(out.find((d) => d['@id'] === 'Grant/every')!.branch).toBeUndefined();
+    // The full profile changes nothing.
+    expect((await applyProfile(documents, 'full', undefined)).documents).toBe(documents);
   });
 });

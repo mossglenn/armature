@@ -71,6 +71,12 @@ export interface WriteOptions {
   message: string;
   ifMatch?: string;
   /**
+   * The branch's head when the request reached the hub (`arrivedAt`), which a
+   * route reads first thing. Absent, the pipeline reads it as it starts, which
+   * is after the caller's identity and authority were resolved.
+   */
+  arrived?: { head: string | undefined };
+  /**
    * `'skip'` leaves out step 4, the hub's rules, and nothing else: shape,
    * identity, provenance and the store's own checks still apply. Only the
    * operator's `put --unchecked` passes it (ADR-0062 decision 5); no route
@@ -132,6 +138,25 @@ export function parseDocuments(inputs: unknown[], opts: { operator?: boolean } =
   return parsed;
 }
 
+/**
+ * The head a write without `If-Match` arrived at, for `WriteOptions.arrived`:
+ * read by the route before anything else it awaits (the 2026-11-09 review's
+ * Q3). The pipeline's own read comes after the caller is resolved and
+ * authorized, several reads of the store, and a replace of the same document
+ * that committed during them was read as the state this write arrived at and
+ * overwritten, both answered 200. Under `If-Match` there is nothing to read,
+ * and a branch whose head cannot be read is left for the pipeline to refuse in
+ * its own order.
+ */
+export async function arrivedAt(branch: Store, ifMatch: string | undefined): Promise<{ head: string | undefined } | undefined> {
+  if (ifMatch !== undefined) return undefined;
+  try {
+    return { head: (await branch.head())?.id };
+  } catch {
+    return undefined;
+  }
+}
+
 /** Steps 2 to 5, each run at the head it captured. */
 export async function writeDocuments(documents: TerminusDocument[], opts: WriteOptions): Promise<WriteResult> {
   const { branch } = opts;
@@ -157,7 +182,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   // The state a write without If-Match arrived at, read before the queue: after
   // its wait it would read the commit ahead of it as its own head and overwrite
   // it with no one told (ADR-0025 decision 7, note of 2026-11-06, built).
-  const arrived = ifMatch ? undefined : (await branch.head())?.id;
+  const arrived = ifMatch ? undefined : opts.arrived ? opts.arrived.head : (await branch.head())?.id;
   return branch.exclusive(async () => {
     for (let attempt = 1; ; attempt++) {
       const head = (await branch.head())?.id;

@@ -134,8 +134,16 @@ const hex = (bytes: ArrayBuffer): string =>
  * so a corpus can be compared across time; without a key a random one is
  * minted for this export and the result says so. A `Grant` names a branch,
  * and a workspace branch begins with its owner's handle (`<handle>_<name>`,
- * ADR-0065), so that prefix is rewritten to the person's token too (ADR-0068);
- * a branch name that begins with no registered handle is left as it is. A
+ * ADR-0065), so that prefix is rewritten to the person's token too (ADR-0068).
+ * Whose the branch is comes from the `Owner` grant naming it, not from the
+ * prefix (ADR-0031, note of 2026-11-16; the 2026-11-09 review's E1): until
+ * then a prefix was matched against today's handles alone, so an email
+ * corrected after the branch was made left the old one in the clear, and of
+ * two people whose emails share a local part the second one's branch took the
+ * first one's token. A name with a `_` whose beginning is no handle of its
+ * owner, or of exactly one person where no owner is on record, keeps none of
+ * itself: `<token>_<opaque>` when owned, `branch-<opaque>` otherwise. A name
+ * without a `_` is no workspace's and stays as it is. A
  * `CheckRequirement` names a branch too, and in `fromPrefix` the beginning of
  * branch names, so both are rewritten the same way (ADR-0070 decision 5);
  * its `reporter` is a reference to a `User` like any other, and its `params`
@@ -160,6 +168,9 @@ export async function applyProfile(
     return token;
   };
 
+  // A value that stands for a name nobody is known by: the same key gives the same one, as a person's token.
+  const opaque = async (value: string): Promise<string> => hex(await crypto.subtle.sign('HMAC', hmacKey, new TextEncoder().encode(`branch:${value}`))).slice(0, 16);
+
   // Handles by their owner, longest first so `ab_` is not taken for `a`'s. A person's branches
   // may begin with either handle: the email's (since 2026-11-08) or the external identifier's
   // (before, and for a record without an email), so both are rewritten.
@@ -170,9 +181,32 @@ export async function applyProfile(
       return [...new Set([handleFor(user), handleOf(user.externalId)])].map((handle) => ({ handle, userId: d['@id'] }));
     })
     .sort((a, b) => b.handle.length - a.handle.length);
+  const handleIn = (branch: string, of?: string) => handles.filter(({ handle, userId }) => (of === undefined || userId === of) && branch.startsWith(`${handle}_`));
+  // Whose a branch is, by the `Owner` grants that name it: the record of ownership (ADR-0068), where the name's
+  // beginning is only a label taken when the branch was made.
+  const owners = new Map<string, string[]>();
+  for (const d of documents) {
+    if (d['@type'] === 'Grant' && d.role === 'Owner' && typeof d.branch === 'string' && typeof d.user === 'string') {
+      owners.set(d.branch, [...(owners.get(d.branch) ?? []), d.user]);
+    }
+  }
   const rewriteBranch = async (branch: string): Promise<string> => {
-    const owner = handles.find(({ handle }) => branch.startsWith(`${handle}_`));
-    return owner ? `${await tokenFor(owner.userId)}${branch.slice(owner.handle.length)}` : branch;
+    const owned = owners.get(branch) ?? [];
+    // An owner whose handle the name begins with: the token for the handle, the rest as named.
+    for (const userId of owned) {
+      const [mine] = handleIn(branch, userId);
+      if (mine) return `${await tokenFor(userId)}${branch.slice(mine.handle.length)}`;
+    }
+    if (!branch.includes('_')) return branch;
+    // Owned, and beginning with no handle its owner has now: an email corrected since the branch was made left the
+    // old one in the name. Where that label ends cannot be told, so none of the name is kept.
+    if (owned.length) return `${await tokenFor(owned[0])}_${await opaque(branch)}`;
+    // No owner on record (a branch older than ownership, a `fromPrefix`): the handle of exactly one person is
+    // theirs; one that two people share, or that nobody has, may be a person's all the same and is not kept.
+    const users = new Set(handleIn(branch).map(({ userId }) => userId));
+    const [only] = handleIn(branch);
+    if (users.size === 1) return `${await tokenFor(only.userId)}${branch.slice(only.handle.length)}`;
+    return `branch-${await opaque(branch)}`;
   };
 
   const out: TerminusDocument[] = [];
