@@ -99,7 +99,7 @@ Only the program and you can change that file. No tool can change it through the
 
 Closing the window does not stop the program: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first.
 
-**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the program tries again at its next start. An update you install in such a session brings the window back when the program starts again.
+**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the program tries again at its next start. *Known in version 0.1.3:* if you move the program after turning this on, the entry keeps pointing at the old place and the program does not start when you sign in; turn the box off and on again to put it right. A fix is planned for 0.1.4. An update you install in such a session brings the window back when the program starts again.
 
 ## Updates
 

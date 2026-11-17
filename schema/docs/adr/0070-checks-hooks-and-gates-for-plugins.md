@@ -240,6 +240,14 @@ ADR-0066, ADR-0067 and ADR-0068 (2026-11-12). They annotate:
 > file written by hand; `locked` is not written back. Tested against the fake core in a browser
 > and, for the request, against a workspace hub (`core.test.ts`); not yet seen in the real
 > program, which waits for the next release's rehearsal.
+>
+> **Note (2026-11-16, released):** the program's side is in `desktop-v0.1.3`. Its rehearsal
+> ran decision 8 in the real program against a remote: a personal requirement written on the
+> Settings page stopped a push, and the push sent again with a reason carried
+> `Armature-Local-Check-Override: lint/mine reason="…"` on the remote's commit. One fault
+> found and fixed before the release: a requirement saved with no name was refused by the
+> hub's reader as 422 `personal_checks_invalid`, a message about the file, where the form now
+> says which row has no name and saves nothing.
 
 It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to changes ... merge-time
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in

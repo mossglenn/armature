@@ -409,7 +409,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 
 - ○ **Read any record at a commit.** Checks a branch at its head.
 - ● **Branches.** Runs on a branch before it merges.
-- ● **Reacting to changes.** Follows the event feed and posts a check run for every change it is shown; as a team's policy it is a `CheckRequirement` on `main` the merge route enforces, and as a person's own, a requirement in `checks.json` that gates their push (ADR-0070, built 2026-11-15; the desktop program's editor for `checks.json` and its override fields the same night, not yet released).
+- ● **Reacting to changes.** Follows the event feed and posts a check run for every change it is shown; as a team's policy it is a `CheckRequirement` on `main` the merge route enforces, and as a person's own, a requirement in `checks.json` that gates their push (ADR-0070, built 2026-11-15; the desktop program's editor for `checks.json` and its override fields the same night, released in the program's 0.1.3 on 2026-11-16).
 - ● **Three-way merge with conflicts.** Its verdict on a branch's head is a verdict on what will land, since a gated merge needs the target brought in first (`bring_in_first`); the hub's own rules are run over the merged state by the merge route since 2026-11-01.
 - ● **Findings and notes, by fragment.** A violation the person keeps becomes a finding.
 - ○ **Attestations that go stale.** Rule: an item attested only by its own author (independent review), about records, never a summary of a person.
