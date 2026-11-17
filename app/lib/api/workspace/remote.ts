@@ -31,16 +31,65 @@ export const REMOTE_TIMEOUT_MS = 60_000;
 export function remoteClient(hub: HubConfig, externalId?: string, agent?: string): ArmatureClient {
   if (!hub.remote) throw new Error('This hub has no remote; ARMATURE_REMOTE_URL names it when ARMATURE_ROLE=workspace');
   if (!hub.remoteToken && !externalId) throw new Error('A call to the remote needs an identity: the owner, or the token the host supplies');
+  const remote = hub.remote;
   return createClient({
-    baseUrl: hub.remote,
+    baseUrl: remote,
     ...(hub.remoteToken ? { token: hub.remoteToken } : { user: externalId }),
     ...(agent ? { agent } : {}),
     timeout: REMOTE_TIMEOUT_MS,
+    fetch: (input, init) => withFreshToken(hub, (headers) => withoutRedirect(remote, input, { ...init, headers }), init?.headers),
   });
 }
 
-/** The shape of a commit identifier from either store: TerminusDB's and the file store's are lower-case letters and digits. */
-const COMMIT_ID = /^[a-z0-9]+$/;
+/**
+ * One request, sent once more with a new token when the remote refuses the one it carried as
+ * `invalid_token` and the host can get another (`hub.forgetRemoteToken`). The issuer's keys may
+ * change under a token still in its lifetime; until 2026-11-16 the program then sent the refused
+ * token until thirty seconds before its expiry, every action failing meanwhile, where the viewer
+ * already asked again (`lib/viewerToken.ts`; the 2026-11-09 review's C15). Any other answer, and a
+ * second refusal, pass through.
+ */
+async function withFreshToken(hub: HubConfig, send: (headers: HeadersInit | undefined) => Promise<Response>, headers: HeadersInit | undefined): Promise<Response> {
+  const res = await send(headers);
+  if (res.status !== 401 || !hub.remoteToken || !hub.forgetRemoteToken) return res;
+  const body = (await res
+    .clone()
+    .json()
+    .catch(() => undefined)) as { error?: unknown } | undefined;
+  if (body?.error !== 'invalid_token') return res;
+  hub.forgetRemoteToken();
+  const again = new Headers(headers);
+  again.set('Authorization', `Bearer ${await hub.remoteToken()}`);
+  return send(again);
+}
+
+/**
+ * One request to the remote that follows no redirect (the 2026-11-09 review's
+ * W5). The runtime's default follows one: within the origin the token goes
+ * along, and to another origin the token is dropped but the body, the
+ * person's identifier and `If-Match` are sent again, to an address nobody
+ * configured. A remote that has moved is answered instead as 502
+ * `remote_error` with `reason: redirect` and where it pointed, so the person
+ * or the administrator gives the hub the address the remote lives at.
+ */
+async function withoutRedirect(remote: string, input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, { ...init, redirect: 'manual' });
+  if (res.status < 300 || res.status >= 400 || res.status === 304) return res;
+  const location = res.headers.get('location') ?? undefined;
+  await res.body?.cancel().catch(() => undefined);
+  throw new ApiError(
+    502,
+    'remote_error',
+    `The remote at ${remote} answered with a redirect${location ? ` to ${location}` : ''}, which this hub does not follow; set the remote's address to where it is served`,
+    { remote: true, reason: 'redirect', ...(location ? { location } : {}) }
+  );
+}
+
+/**
+ * The shape of a commit identifier from either store: TerminusDB's and the file store's are lower-case
+ * letters and digits. Bounded so that a snapshot's branch, `at.<commit>`, is a branch name the store takes.
+ */
+export const COMMIT_ID = /^[a-z0-9]{1,97}$/;
 
 /**
  * A commit identifier the remote gave in an `ETag`, checked to be one before
@@ -63,6 +112,21 @@ export function remoteCommit(hub: HubConfig, commit: string | undefined, what: s
     );
   }
   return commit;
+}
+
+/**
+ * A commit identifier the remote gave in a body (a merge's or a batch's commit, a log's entries),
+ * checked to be one before this hub records it: 502 `remote_error` with `reason: not_a_commit`.
+ * Until 2026-11-16 only the clone's ETag was checked among what a remote supplies (the 2026-11-09
+ * review's W7). Where it is thrown after the remote has acted, the caller's marker stays and the next
+ * push or bring-in settles from the remote's log.
+ */
+export function remoteCommitOf(hub: HubConfig, commit: unknown, what: string): string {
+  if (typeof commit === 'string' && COMMIT_ID.test(commit)) return commit;
+  throw new ApiError(502, 'remote_error', `The remote at ${hub.remote} answered ${what} with ${JSON.stringify(commit) ?? 'nothing'} where a commit identifier belongs`, {
+    remote: true,
+    reason: 'not_a_commit',
+  });
 }
 
 /** Whether this hub reaches its remote with a token rather than the owner's identifier. */

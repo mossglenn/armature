@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import type { ArmatureClient } from '@armature/client';
+import type { ArmatureClient, InstanceProfile } from '@armature/client';
 import type { Grant } from '@armature/types';
 import { refusal } from '../authorization';
 import { parseOverrides, runsOf } from '../checks';
@@ -16,11 +16,12 @@ export { handleFor, handleOf };
 /** A new workspace's name, the part after `<handle>_`: the characters a branch name allows (BRANCH_NAME checks the whole). */
 const WORKSPACE_NAME = /^[A-Za-z0-9._-]{1,99}$/;
 import { cloneBranch, mirrorMain, type Owner } from '../workspace/clone';
+import { MIRROR_BRANCH } from '../role';
 import { bringIn, deliver, removeWorkspace } from '../workspace/bringIn';
 import { localCommitsSince, pushWorkspace } from '../workspace/push';
-import type { WorkspaceRecord, WorkspaceRecords } from '../workspace/records';
+import { PERSONAL_CHECKS, type WorkspaceRecord, type WorkspaceRecords } from '../workspace/records';
 import { fromRemote, remoteClient, requireRemoteIdentity } from '../workspace/remote';
-import { ensureSnapshots, fetchRemoteLog, resolvableCommitsOf } from '../workspace/snapshots';
+import { ensureSnapshots, fetchRemoteLog, isSnapshotBranch, resolvableCommitsOf } from '../workspace/snapshots';
 
 /**
  * /api/v1/workspace, served by a workspace hub only (ADR-0065;
@@ -110,6 +111,61 @@ async function writeWarning(hub: HubConfig, remote: ArmatureClient, me: UserDocu
   };
 }
 
+/**
+ * Why a branch the remote has cannot be cloned under its name, or undefined
+ * (the 2026-11-09 review's W9): the names this hub's own folder and store use.
+ * A name this hub makes, `<handle>_<name>`, is never one of them. Until
+ * 2026-11-16 `main` was refused only by the wording of the mirror's commit
+ * messages, a branch named `at.<commit>` cloned into a workspace the list
+ * hides, and `lock` and `store.json` met the store's own files as a 500.
+ */
+function reservedName(branch: string): string | undefined {
+  if (branch === MIRROR_BRANCH) return `${MIRROR_BRANCH} is this hub's mirror of the remote's, brought in by a workspace and never one itself`;
+  if (isSnapshotBranch(branch)) return "a name of that shape holds the remote's state at a commit here";
+  if (RESERVED_FILES.has(branch.toLowerCase())) return "the hub's folder keeps a file of that name";
+  return undefined;
+}
+
+/** The files of a workspace hub's folder beside its branches, lower case since a folder may not tell case apart (`filestore/store.ts`, `lib/workspaceFolder.ts`, `workspace/records.ts`). */
+const RESERVED_FILES = new Set(['lock', 'store.json', PERSONAL_CHECKS]);
+
+/** The longest text kept from a remote's profile; an address or a name is far shorter. */
+const PROFILE_TEXT = 2048;
+
+/**
+ * The remote's connection profile as this hub keeps it: the fields the profile has, each of the type
+ * and within the length it can be, and nothing else the remote put beside them (the 2026-11-09
+ * review's W7). A profile without a name is none.
+ */
+export function profileOf(instance: unknown): InstanceProfile | undefined {
+  if (!isRecord(instance)) return undefined;
+  const text = (value: unknown): string | undefined => (typeof value === 'string' && value.length > 0 && value.length <= PROFILE_TEXT ? value : undefined);
+  const name = text(instance.name);
+  if (!name) return undefined;
+  const api = text(instance.api);
+  const releases = isRecord(instance.program) ? text(instance.program.releases) : undefined;
+  return { name, ...(api ? { api } : {}), program: { releases: releases ?? '' } };
+}
+
+/**
+ * A workspace is worked with through the remote it was cloned from. The program lets the remote change
+ * only while no workspace exists, which it can judge for the folder in use alone: a folder set aside,
+ * a connection made elsewhere and the folder pointed at again leaves a hub over another remote's
+ * workspaces (the 2026-11-09 review's W10). Its actions are refused here, 409 `other_remote`, before
+ * anything is asked of a remote that never held the branch. A removal is the way out, beside connecting
+ * to the first remote again: it removes such a workspace here alone, its remote answered `untouched`,
+ * with `discard` when it holds commits that were never pushed (`workspace/bringIn.ts`).
+ */
+function requireItsRemote(hub: HubConfig, record: WorkspaceRecord, action: string): void {
+  if (record.remote === (hub.remote ?? '')) return;
+  throw new ApiError(
+    409,
+    'other_remote',
+    `${record.branch} was cloned from ${record.remote}, and this hub's remote is ${hub.remote}; connect to ${record.remote} to ${action} it, or remove it from this machine`,
+    { workspace: record.branch, clonedFrom: record.remote, remote: hub.remote }
+  );
+}
+
 workspace.get('/', async (c) => c.json(await recordsOf(c).list()));
 
 workspace.post('/', async (c) => {
@@ -132,6 +188,8 @@ workspace.post('/', async (c) => {
     if (!BRANCH_NAME.test(branch)) {
       throw new ApiError(400, 'bad_name', `The workspace's branch, ${branch}, must match ${BRANCH_NAME.source}`);
     }
+    const reserved = reservedName(branch);
+    if (reserved) throw new ApiError(400, 'bad_name', `${branch} cannot be a workspace: ${reserved}`, { reserved: true });
     if (await records.get(branch)) throw new ApiError(409, 'workspace_exists', `This hub already holds the workspace ${branch}`);
   };
   // A new workspace's name is checked before the remote is asked, so a bad one is refused offline too;
@@ -162,7 +220,7 @@ workspace.post('/', async (c) => {
     const warning = typeof existing === 'string' ? await writeWarning(hub, remote, me.data as UserDocument & { grants?: Grant[] }, branch) : undefined;
     const { base, local, documents } = await cloneBranch(hub, remote, owner, branch);
     // The remote's profile, kept so this hub's GET /discover can name the instance offline (docs/desktop-program-plan.md §8).
-    const { instance } = (await fromRemote(hub, () => remote.discover())).data;
+    const instance = profileOf((await fromRemote(hub, () => remote.discover())).data.instance);
 
     const record: WorkspaceRecord = {
       branch,
@@ -205,8 +263,10 @@ workspace.get('/:name/status', async (c) => {
   const lastKnown = table?.commits.at(-1)?.remote ?? record.base;
   const snapshots = (await recordsOf(c).getSnapshots(record.branch))?.commits ?? [];
 
-  let remote: { head: string; moved: boolean } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' };
+  let remote: { head: string; moved: boolean } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
   try {
+    // A workspace cloned from another remote than this hub's has no remote to ask here (requireItsRemote).
+    if (record.remote !== (hub.remote ?? '')) throw new ApiError(409, 'other_remote', `${record.branch} was cloned from ${record.remote}`);
     const summary = await fromRemote(hub, () => remoteClient(hub, record.ownerExternalId).branches.head(record.branch));
     // The body's head, not the ETag: a proxy in front of the remote can alter the ETag (remoteCommit in workspace/remote.ts), the body it cannot.
     const remoteHead = summary.data.head.commit;
@@ -218,7 +278,7 @@ workspace.get('/:name/status', async (c) => {
     // has none at all (401 `signed_out`), and until 2026-11-15 either failed the whole status, so the
     // program's page had nothing to show of the commits waiting here (the 2026-11-09 review's P1).
     if (err instanceof ApiError && err.code === 'remote_unreachable') remote = { reachable: false };
-    else if (err instanceof ApiError && (err.code === 'signed_out' || err.code === 'issuer_unreachable')) remote = { reachable: false, reason: err.code };
+    else if (err instanceof ApiError && (err.code === 'signed_out' || err.code === 'issuer_unreachable' || err.code === 'other_remote')) remote = { reachable: false, reason: err.code };
     else throw err;
   }
   return c.json({
@@ -265,6 +325,7 @@ async function optionalJson(c: Context): Promise<Record<string, unknown>> {
 workspace.post('/:name/push', async (c) => {
   requireActionRoutes(c, 'push');
   const record = await ownedWorkspace(c, 'push');
+  requireItsRemote(hubOf(c), record, 'push');
   // `overrides` sets the owner's personal requirements aside for this push, each with a reason (ADR-0070 decision 8).
   const overrides = parseOverrides((await optionalJson(c)).overrides);
   return c.json(await pushWorkspace(hubOf(c), recordsOf(c), record, { runs: runsOf(c), overrides }));
@@ -273,6 +334,7 @@ workspace.post('/:name/push', async (c) => {
 workspace.post('/:name/bring-in', async (c) => {
   requireActionRoutes(c, 'bring-in');
   const record = await ownedWorkspace(c, 'bring-in');
+  requireItsRemote(hubOf(c), record, 'bring main into');
   // The body is optional: a bare POST brings main in with the default message.
   const body = await optionalJson(c);
   if (body.message !== undefined && typeof body.message !== 'string') throw new ApiError(400, 'bad_request', 'message must be a string');
@@ -282,6 +344,7 @@ workspace.post('/:name/bring-in', async (c) => {
 workspace.post('/:name/deliver', async (c) => {
   requireActionRoutes(c, 'deliver');
   const record = await ownedWorkspace(c, 'deliver');
+  requireItsRemote(hubOf(c), record, 'deliver');
   const body = await readJson(c);
   if (typeof body.message !== 'string' || !body.message.trim()) throw new ApiError(400, 'message_required', 'A delivery needs a message saying why (ADR-0025)');
   if (body.deleteWorkspace !== undefined && typeof body.deleteWorkspace !== 'boolean') throw new ApiError(400, 'bad_request', 'deleteWorkspace must be a boolean');

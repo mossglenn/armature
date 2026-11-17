@@ -19,7 +19,7 @@ import {
   withTrailer,
 } from '../trailers';
 import { emptyPushTable, type InFlight, type PushedCommit, type WorkspaceRecord, type WorkspaceRecords } from './records';
-import { fromRemote, remoteClient, requireRemoteIdentity } from './remote';
+import { fromRemote, remoteClient, remoteCommitOf, requireRemoteIdentity } from './remote';
 import { GroupTooLarge, PART_LIMITS, splitIntoParts, type PartLimits } from './split';
 
 /**
@@ -181,7 +181,7 @@ async function landedCommit(hub: HubConfig, client: ArmatureClient, branch: stri
     for (const commit of log.data.commits) {
       if (commit.commit === marker.ifMatch) return undefined;
       if (trailerValue(commit.message, WORKSPACE_COMMIT_TRAILER) !== marker.local) continue;
-      if (trailerValue(commit.message, WORKSPACE_PART_TRAILER) === expectedPart) return commit.commit;
+      if (trailerValue(commit.message, WORKSPACE_PART_TRAILER) === expectedPart) return remoteCommitOf(hub, commit.commit, `the log of ${branch}`);
     }
     if (log.data.commits.length < LOG_PAGE) return undefined;
   }
@@ -313,8 +313,9 @@ export async function pushWorkspace(hub: HubConfig, records: WorkspaceRecords, r
           }
           throw err; // the marker stays: the next push settles it from the remote's log
         }
-        landed.push(result.commit);
-        lastRemote = result.commit;
+        // Checked before it is recorded; a refusal here leaves the marker, which the next push settles from the remote's log.
+        lastRemote = remoteCommitOf(hub, result.commit, `the commit of ${branch}`);
+        landed.push(lastRemote);
       }
       const entry = { local: commit.id, remote: lastRemote, parts: parts.length, pushedAt: new Date().toISOString() };
       table.commits.push(entry);

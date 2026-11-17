@@ -2,7 +2,7 @@ import type { ArmatureClient } from '@armature/client';
 import type { HubConfig } from '../config';
 import { ApiError } from '../errors';
 import { createOperatorStore, type TerminusDocument } from '../store';
-import { fromRemote } from './remote';
+import { COMMIT_ID, fromRemote, remoteCommitOf } from './remote';
 import { emptySnapshots, type RemoteLog, type RemoteLogEntry, type SnapshotRecord, type Snapshots, type WorkspaceRecord, type WorkspaceRecords } from './records';
 
 /**
@@ -33,10 +33,12 @@ const SNAPSHOT_PREFIX = 'at.';
 export const snapshotBranch = (commit: string): string => `${SNAPSHOT_PREFIX}${commit}`;
 export const isSnapshotBranch = (name: string): boolean => /^at\.[a-z0-9]+$/.test(name);
 
-/** A bare commit id as the store mints them, which is what an `asOf` holds. */
-const COMMIT_ID = /^[a-z0-9]+$/;
-
-/** The distinct commits the documents name in `asOf`, with how many name each. */
+/**
+ * The distinct commits the documents name in `asOf`, with how many name each. A value that is no commit
+ * identifier (`COMMIT_ID`, bounded) names no snapshot: until 2026-11-16 one longer than a branch name
+ * allows reached the store as a branch to create and surfaced as its raw refusal, after the workspace's
+ * record was written (the 2026-11-09 review's W7).
+ */
 export function asOfCommitsOf(documents: readonly TerminusDocument[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const doc of documents) {
@@ -132,21 +134,54 @@ async function loadSnapshot(hub: HubConfig, store: ReturnType<typeof createOpera
 
 /** The remote log's page size, the route's maximum. */
 const LOG_PAGE = 100;
+/** The pages read at most, as the remote's own walk and push's recovery stop (`LOG_PAGES`, `RECOVERY_PAGES`). */
+const LOG_PAGES = 50;
 
 /**
- * The remote branch's whole log, read page by page, kept from the base back:
+ * The remote branch's log, read page by page, kept from the base back:
  * entries newer than the base (someone wrote the branch between the export
  * and this read) are dropped, so the log and the clone describe one state.
+ *
+ * What the remote answers is checked before it is kept (the 2026-11-09
+ * review's W6 and W7). The read ends after LOG_PAGES pages: a history longer
+ * than that is kept to there, its newest 5,000 commits, and a read past it
+ * is the remote's when online. A page that repeats a commit already read is a
+ * remote, or a proxy in front of it, that ignores `start`, which until
+ * 2026-11-16 was read forever: 502 `remote_error`, `reason: log_repeats`. A
+ * log that does not hold the base describes some other state than the clone:
+ * 502 `remote_error`, `reason: log_without_base`; until then the whole of it
+ * was kept as if it began at the base.
  */
 export async function fetchRemoteLog(hub: HubConfig, remote: ArmatureClient, branch: string, base: string): Promise<RemoteLog> {
   const commits: RemoteLogEntry[] = [];
-  for (let start = 0; ; start += LOG_PAGE) {
-    const page = (await fromRemote(hub, () => remote.branches.log(branch, { start, count: LOG_PAGE }))).data.commits;
-    for (const c of page) commits.push({ commit: c.commit, author: c.author, message: c.message, timestamp: c.timestamp });
-    if (page.length < LOG_PAGE) break;
+  const seen = new Set<string>();
+  for (let page = 0; page < LOG_PAGES; page++) {
+    const entries = (await fromRemote(hub, () => remote.branches.log(branch, { start: page * LOG_PAGE, count: LOG_PAGE }))).data.commits;
+    if (!Array.isArray(entries)) throw new ApiError(502, 'remote_error', `The remote at ${hub.remote} answered the log of ${branch} without its commits`, { remote: true });
+    for (const c of entries) {
+      const commit = remoteCommitOf(hub, c?.commit, `the log of ${branch}`);
+      if (seen.has(commit)) {
+        throw new ApiError(
+          502,
+          'remote_error',
+          `The remote at ${hub.remote} answered the log of ${branch} with commit ${commit} twice; it, or a proxy in front of it, does not page the log (start is ignored)`,
+          { remote: true, reason: 'log_repeats', commit }
+        );
+      }
+      seen.add(commit);
+      commits.push({ commit, author: String(c.author ?? ''), message: String(c.message ?? ''), timestamp: Number(c.timestamp) || 0 });
+    }
+    if (entries.length < LOG_PAGE) break;
   }
   const from = commits.findIndex((c) => c.commit === base);
-  return { head: base, commits: from >= 0 ? commits.slice(from) : commits };
+  if (from < 0) {
+    throw new ApiError(502, 'remote_error', `The remote at ${hub.remote} answered the log of ${branch} without ${base}, the commit this hub cloned it at`, {
+      remote: true,
+      reason: 'log_without_base',
+      base,
+    });
+  }
+  return { head: base, commits: commits.slice(from) };
 }
 
 /** The remote commits a workspace resolves without a snapshot: its base and every commit its push table maps. */

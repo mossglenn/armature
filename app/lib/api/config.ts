@@ -70,6 +70,13 @@ export interface HubConfig {
    */
   remoteToken?: () => Promise<string>;
   /**
+   * Drops the access token `remoteToken` last gave, so its next call asks the provider for a new one.
+   * Called when the remote refuses the token as `invalid_token` (its issuer's keys changed under a
+   * token still in its lifetime); the request is then sent once more. A host whose token is fixed
+   * (`ARMATURE_REMOTE_TOKEN`) has nothing to drop and leaves this out.
+   */
+  forgetRemoteToken?: () => void;
+  /**
    * The store, read when a route makes one, so a request that needs none (GET /discover)
    * never requires the TERMINUS_* variables. On a workspace hub the host replaces it with
    * the file-backed store opened in `workspaceDir`, the one local store (ADR-0066 decision 4).
@@ -163,6 +170,24 @@ function workspaceDir(raw: string | undefined): string {
 
 /** A token given once in the environment, handed over as it is on every call. */
 const remoteToken = (value: string) => async () => value;
+
+/**
+ * ARMATURE_REMOTE_TOKEN for the remote ARMATURE_REMOTE_URL names. A bearer
+ * token never travels in the clear except to this machine: over plain `http`
+ * the remote is a loopback host, or the instance a rehearsal
+ * (ARMATURE_REHEARSAL=1), as the issuer's rule is (`httpUrl`); the desktop
+ * program holds its own remote to the same (`insecure_remote`). Until
+ * 2026-11-16 the token went to any `http` address (the 2026-11-09 review's W5).
+ */
+function tokenForRemote(env: Readonly<Record<string, string | undefined>>): () => Promise<string> {
+  const remote = new URL(remoteUrl(env.ARMATURE_REMOTE_URL));
+  if (remote.protocol === 'http:' && !isLoopbackHost(remote.hostname) && !rehearsal(env.ARMATURE_REHEARSAL)) {
+    throw new Error(
+      `ARMATURE_REMOTE_TOKEN would be sent to ${remote.origin} over plain http; give the remote's https address, or set ARMATURE_REHEARSAL=1 for a rehearsal that is never a deployment`
+    );
+  }
+  return remoteToken((env.ARMATURE_REMOTE_TOKEN ?? '').trim());
+}
 
 /** The snapshot budget as given: a whole number of commits per workspace; 20 when unset (ADR-0066, Verification: measured on the seed). */
 export const DEFAULT_SNAPSHOT_BUDGET = 20;
@@ -274,7 +299,7 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
   return {
     role: role as HubRole,
     ...(role === 'workspace' ? { remote: remoteUrl(env.ARMATURE_REMOTE_URL), workspaceDir: workspaceDir(env.ARMATURE_WORKSPACE_DIR) } : {}),
-    ...(role === 'workspace' && env.ARMATURE_REMOTE_TOKEN?.trim() ? { remoteToken: remoteToken(env.ARMATURE_REMOTE_TOKEN.trim()) } : {}),
+    ...(role === 'workspace' && env.ARMATURE_REMOTE_TOKEN?.trim() ? { remoteToken: tokenForRemote(env) } : {}),
     store: () => storeConfigFromEnv(env),
     snapshotBudget: snapshotBudget(env.ARMATURE_SNAPSHOTS),
     ...(role === 'workspace' && env.ARMATURE_LOCAL_TOKEN?.trim() ? { localToken: env.ARMATURE_LOCAL_TOKEN.trim() } : {}),

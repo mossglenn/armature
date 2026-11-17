@@ -7,7 +7,7 @@ import { MIRROR_BRANCH } from '../role';
 import { changesOf, createOperatorStore, isRecord, type Commit, type OperatorStore, type TerminusDocument } from '../store';
 import { localCommitsSince } from './commits';
 import type { BringingIn, PushedCommit, PushTable, WorkspaceRecord, WorkspaceRecords } from './records';
-import { fromRemote } from './remote';
+import { fromRemote, remoteCommitOf } from './remote';
 
 /**
  * The remote's merge of `main` into a workspace, written here: the documents
@@ -142,7 +142,7 @@ async function commitAfter(hub: HubConfig, remote: ArmatureClient, branch: strin
     const log = (await fromRemote(hub, () => remote.branches.log(branch, { start: page * LOG_PAGE, count: LOG_PAGE }))).data.commits;
     for (const commit of log) {
       if (commit.commit === since) return newer;
-      newer = commit;
+      newer = { ...commit, commit: remoteCommitOf(hub, commit.commit, `the log of ${branch}`) };
     }
     if (log.length < LOG_PAGE) return undefined;
   }

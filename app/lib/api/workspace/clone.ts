@@ -72,6 +72,21 @@ export async function mirrorMain(hub: HubConfig, remote: ArmatureClient, owner: 
   } catch (err) {
     if (!(err instanceof ApiError) || err.code !== 'unknown_type') throw err;
   }
+  // What the remote calls a user or a requirement is written here only as one (the 2026-11-09 review's W7):
+  // the mirror's writes go through no pipeline, so a document of another class would land as it came.
+  for (const [type, documents] of [
+    ['User', users.data],
+    ['CheckRequirement', requirements],
+  ] as const) {
+    const other = (documents as Array<Record<string, unknown>>).find((d) => d?.['@type'] !== type || typeof d['@id'] !== 'string' || !d['@id'].startsWith(`${type}/`));
+    if (other) {
+      throw new ApiError(502, 'remote_error', `The remote at ${hub.remote} listed a document that is no ${type} among its ${type} documents`, {
+        remote: true,
+        reason: 'not_a_document_of_type',
+        type,
+      });
+    }
+  }
   const from = `from ${hub.remote} at ${at}`;
 
   const entries = schema.data.schema as Record<string, unknown>[];
