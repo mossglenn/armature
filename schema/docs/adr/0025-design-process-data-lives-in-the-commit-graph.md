@@ -377,6 +377,27 @@ Phase 2's routes land (ADR-0054 consequences).
    > looked at; the proof that a call is inside stays with the tests that send a write beside each
    > action (`writeQueue.test.ts`, `cycle.test.ts`). No client changes.
 
+   > **Note (2026-11-16), from the code review of 2026-11-09** (its Q3): the head a write without
+   > `If-Match` "arrived at", which the note of 2026-11-06 has it refuse to overwrite past, is read
+   > by the document routes first thing (`arrivedAt` in `write.ts`), before the caller is resolved
+   > and authorized. The pipeline read it as it started, after both, which are several reads of the
+   > store: a replace that committed during them was taken for the state the later write arrived
+   > at and overwritten, both answered 200. A hub's own writes (a grant, a registration) still read
+   > it as the pipeline starts. Authorization is still judged before the wait, as ADR-0070's note
+   > of 2026-11-13 left it. The review's Q2 (a commit that times out frees the branch's turn while
+   > the store may still land it) is not built: the grace it asks for has no measured length, and
+   > the store's fix for the race underneath (terminusdb/terminusdb#2637) is what the note of
+   > 2026-11-07 waits for. `writeQueue.test.ts` holds a request at its identity read while another
+   > replace commits, and fails without the early read.
+
+   > **Note (2026-11-16), decided** (the same review's D3 and Q1; Amos, as recommended): one hub
+   > per store is stated, not enforced. `docs/deployment.md` says it, with why and what it means
+   > for the operator tools, and checks AO1 and AO2 are verdicts: FAIL on the pinned 12.0.7 (four
+   > of four writers landed in every round on 2026-11-16), which is the defect this queue stands
+   > in for, and PASS on a release with the store's fix, which is the signal the note of 2026-11-07
+   > waits for. A lease in the store that refuses a second hub is not built; it is worth its rule
+   > for a hub that died only if a second hub becomes a planned arrangement.
+
 8. **History, changes and diff are read routes over the store's endpoints.** A document's
    history returns the commits that touched it, newest first, each with commit id, author,
    message, timestamp and the structural diff. A branch's changes since a commit are the changed

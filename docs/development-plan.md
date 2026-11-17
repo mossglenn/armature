@@ -1411,7 +1411,7 @@ pinned docs commit and release), so future checks can diff rather than re-read.
   head moved during it (`TERMINUSDB_SERVER_MAX_TRANSACTION_RETRIES`), so concurrent writers do not
   fail unless they pass a data version. *Corrected (2026-11-06, check AO):* they do not fail then
   either. A data version stale on arrival is refused (check M), but writers sent at once at one
-  version all land, every round, whether they insert different documents or replace one (AO1, AO2):
+  version all land, every round, whether they insert different documents or replace one (AO1, AO2; verdicts since 2026-11-16, FAIL on 12.0.7 by this defect):
   the retry does not check the version again, so a replace can lose an update with every writer
   told 200. The source at v12.0.7 says why: `before_write` (`src/core/api/api_document.pl`) compares
   the versions ahead of `with_transaction`, and `retry_transaction`

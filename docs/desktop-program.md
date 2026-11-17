@@ -35,7 +35,7 @@ An instance that says **"No sign-in: you say who you are"** is a development or 
 
 ## Signing in
 
-**Sign in** opens your browser at your institution's sign-in page. While the program waits for you there, **Cancel the sign-in** ends the wait, for when you closed the tab or changed your mind; if you leave the page and come back, it tells you a sign-in is still waiting. Once you are signed in, the page says who the instance knows you as. Once you have signed in there, the browser says you can return to the program, and the program shows who the instance says you are. You stay signed in across restarts: the program keeps its credential in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the program says so, since you would otherwise be signed in again at the next start. The credential is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After updating from version 0.1.2 or earlier you sign in once, for the same reason. The program signs in only at a provider reached over `https`.
+**Sign in** opens your browser at your institution's sign-in page. While the program waits for you there, **Cancel the sign-in** ends the wait, for when you closed the tab or changed your mind; if you leave the page and come back, it tells you a sign-in is still waiting. Once you are signed in, the page says who the instance knows you as. Once you have signed in there, the browser says you can return to the program, and the program shows who the instance says you are. You stay signed in across restarts: the program keeps its credential in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the program says so, since you would otherwise be signed in again at the next start. Signing out also asks your sign-in provider to end the kept sign-in, where the provider offers that (versions after 0.1.4); a provider that does not, or cannot be reached, changes nothing about the sign-out here. The credential is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After updating from version 0.1.2 or earlier you sign in once, for the same reason. The program signs in only at a provider reached over `https`.
 
 ## Your workspaces
 
@@ -54,20 +54,24 @@ Open a workspace to work with it:
 
 ## Your tools and the pairing value
 
-Your tools find the program's hub at `http://127.0.0.1:3101` while the program runs. A tool that writes needs the **pairing value**: open **Pairing**, choose **Copy**, and paste it where the tool asks for its Armature pairing value. The value stays the same across restarts. **Reset** draws a new one, after which every paired tool needs the new value; use it if the value was shared by mistake.
+Your tools find the program's hub at `http://127.0.0.1:3101` while the program runs. A tool that writes needs the **pairing value**: open **Pairing**, choose **Copy**, and paste it where the tool asks for its Armature pairing value. The value is covered on the page until you choose **Show**, and **Copy** works either way (in versions after 0.1.4; before, it was always shown). The value stays the same across restarts. **Reset** draws a new one, after which every paired tool needs the new value; use it if the value was shared by mistake.
 
-Under **Pairing** too is the identifier your tools send to say who they work for, which the instance resolves to you.
+Under **Pairing** too is the identifier your tools send to say who they work for, which the instance resolves to you; when the program cannot show it yet, the page says what is missing (a sign-in, or your identifier in the settings).
 
 ## Where things are kept
 
-Your workspaces are in the workspaces folder: by default inside the program's data folder, or wherever **Settings** names. Keep it out of a folder that Dropbox, OneDrive, iCloud Drive or Google Drive keeps in sync: two machines writing one workspace through a sync client can damage it, and the program warns when the folder looks like such a folder.
+Your workspaces are in the workspaces folder: by default inside the program's data folder, or wherever **Settings** names. Keep it out of a folder that Dropbox, OneDrive, iCloud Drive or Google Drive keeps in sync: two machines writing one workspace through a sync client can damage it, and the program warns when the folder looks like such a folder. In versions after 0.1.4 the warning also follows a link into a synced folder, and knows a Mac's Desktop and Documents folders when iCloud keeps them (the "Desktop & Documents Folders" setting).
+
+The folder you name in **Settings** must be empty, or one that already holds this program's workspaces: the program clears leftover temporary files from its folder at every start, and in a folder of other things it could remove some that are not its own, so a folder with other files in it is refused (`folder_in_use`; versions after 0.1.4). Naming another folder does not move your workspaces. They stay where they were, with any commits you have not pushed, and the program will find none in the new folder; the settings page says so when you save. Deliver or remove them first, or move the old folder's contents to the new place before the hub starts again.
 
 | | macOS | Windows | Linux |
 |---|---|---|---|
 | Data (settings, workspaces) | `~/Library/Application Support/com.mossglenn.armature` | `%LOCALAPPDATA%\com.mossglenn.armature` | `~/.local/share/com.mossglenn.armature` |
 | Logs (one file a day, seven kept) | `~/Library/Logs/com.mossglenn.armature` | `%LOCALAPPDATA%\com.mossglenn.armature\logs` | `~/.local/share/com.mossglenn.armature/logs` |
 
-**Log** shows the latest lines and opens the log folder; the files are what to send with a report of a problem.
+**Log** shows the latest lines and opens the log folder; the files are what to send with a report of a problem. A day's file stops at 16 MB and says so on its last line (versions after 0.1.4); the page goes on showing the lines that follow.
+
+If the settings file (`settings.json` in the data folder) cannot be read, the program still starts (versions after 0.1.4; before, it refused to until the file was corrected or deleted). A setting it does not know or cannot use is left out and named in the log, and the rest stand. A file that is not readable at all is moved aside, kept beside it as `settings.json.unreadable-<time>`, and the program starts as new: connect again, and name your workspaces folder again if you had chosen one. Your workspaces are untouched either way.
 
 
 ## Checks of your own
@@ -97,7 +101,7 @@ Only the program and you can change that file. No tool can change it through the
 
 ## In the background
 
-Closing the window does not stop the program: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first.
+Closing the window does not stop the program: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first. If the hub's own process ends unexpectedly, the window says so and **Start the hub** starts it again (versions after 0.1.4; before, the way back was to quit and open the program again).
 
 **Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the program tries again at its next start. The program makes the entry again each time it starts, so it follows the program if you move it. *In versions up to 0.1.3* it did not: if you moved the program after turning this on, the entry kept pointing at the old place and the program did not start when you signed in; turning the box off and on again puts it right there, and version 0.1.4 does it itself. An update you install in such a session brings the window back when the program starts again.
 
@@ -118,7 +122,7 @@ Every refusal shows the message, a code and whether your instance or this machin
 | `remote_unreachable` | The instance did not answer | Check your connection; offline, everything but push, bring in, deliver and remove still works. Behind an institution's TLS inspection the program trusts the certificate authorities your system trusts, as your browser does (since 0.1.1); if your browser reaches the instance and the program does not, ask your administrator for the authority's certificate and set `NODE_EXTRA_CA_CERTS` to its file |
 | `insecure_remote` | An instance that signs people in was given as `http://` | Use its `https://` address |
 | `profile_changed` | The instance answered differently when you connected than when you read it | Choose **Read** again and check what it shows before connecting |
-| `not_registered` | You signed in, but the instance does not know you | Ask your administrator to register you |
+| `not_registered` | You signed in, but the instance does not know you | Ask your administrator to register you. Your sign-in is kept (versions after 0.1.4): once you are registered, choose **Check again** on the sign-in page, with no need to sign in again |
 | `sign_in_refused`, `sign_in_timeout` | The sign-in did not complete in the browser | Sign in again |
 | `issuer_unreachable` | Your institution's sign-in provider did not answer, or answered that it is busy or restarting | Try again shortly. You stay signed in: nothing is removed |
 | `insecure_issuer` | The instance names a sign-in provider that is not reached over `https` | Tell your administrator; the program will not sign in there |
@@ -132,6 +136,8 @@ Every refusal shows the message, a code and whether your instance or this machin
 | `personal_checks_invalid` | The program cannot read your `checks.json` | Open **Settings**, which lists the problems, and save your checks again; or correct or remove the file by hand |
 | `discard_mismatch` | The number of unpushed commits changed after the program showed it to you, usually because a tool wrote meanwhile | Read the new number and confirm again, or push |
 | `workspaces_exist` | You asked to connect elsewhere while workspaces exist | Deliver or remove them first |
+| `other_remote` | The workspace was made from another instance than the one the program is connected to now, which can happen after the workspaces folder was changed and changed back | Connect to the instance the message names to push or deliver it; or remove it from this machine, which touches nothing on either instance |
+| `folder_in_use` | The folder named for the workspaces holds other files | Choose an empty folder, or the folder your workspaces are already in |
 | `port_in_use` | Another program holds the port | The program opens on **Settings**: choose another port, save, and choose **Start the hub** |
 | `folder_locked` | Another copy of the program, or another hub, holds the workspaces folder | Quit the other one |
 
