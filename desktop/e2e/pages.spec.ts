@@ -392,6 +392,50 @@ test.describe('required checks', () => {
     await expect(page.getByLabel('Unpushed commits')).toContainText('Everything here is on the remote');
   });
 
+  test('a check removed, added or changed and not saved is said as unsaved, and the file is as it was until Save checks (0.1.4)', async ({ page }) => {
+    await open(page, 'header');
+    await nav(page, 'Settings').click();
+    const mine = page.getByRole('form', { name: 'Checks of your own' });
+    const unsaved = mine.getByRole('status');
+    await expect(unsaved).toHaveCount(0);
+    await mine.getByRole('button', { name: 'Add a check' }).click();
+    await expect(unsaved).toContainText('Not saved yet: 1 check added.');
+    await mine.getByLabel('Check', { exact: true }).fill('lint/mine');
+    await mine.getByRole('button', { name: 'Save checks' }).click();
+    await expect(mine).toContainText('Saved. The next push reads them.');
+    await expect(unsaved).toHaveCount(0);
+
+    // Removed from the form only: said so, with what it means for a push, and no claim that nothing is required.
+    await mine.getByRole('listitem', { name: 'lint/mine' }).getByRole('button', { name: 'Remove' }).click();
+    await expect(unsaved).toContainText('Not saved yet: 1 check removed. The file is as it was, and your pushes are still held to it, until you save.');
+    await expect(mine).not.toContainText('No checks: every push goes straight to the remote.');
+    await expect(mine).not.toContainText('Saved.');
+    // Leaving drops the removal, as before: the check is back and the form agrees with the file.
+    await nav(page, 'Workspaces').click();
+    await nav(page, 'Settings').click();
+    await expect(mine.getByRole('listitem', { name: 'lint/mine' })).toBeVisible();
+    await expect(unsaved).toHaveCount(0);
+
+    // A change, then the change undone, then a removal beside an addition, each counted.
+    await mine.getByLabel('Why (optional)').fill('For now');
+    await expect(unsaved).toContainText('Not saved yet: 1 check changed.');
+    await mine.getByLabel('Why (optional)').fill('');
+    await expect(unsaved).toHaveCount(0);
+    await mine.getByRole('listitem', { name: 'lint/mine' }).getByRole('button', { name: 'Remove' }).click();
+    await mine.getByRole('button', { name: 'Add a check' }).click();
+    await expect(unsaved).toContainText('Not saved yet: 1 check removed, 1 check added.');
+    await mine.getByRole('listitem', { name: 'Check 1' }).getByRole('button', { name: 'Remove' }).click();
+    await expect(unsaved).toContainText('Not saved yet: 1 check removed.');
+
+    // Saved, the removal is the file's, and stays so.
+    await mine.getByRole('button', { name: 'Save checks' }).click();
+    await expect(mine).toContainText('Saved. The next push reads them.');
+    await expect(unsaved).toHaveCount(0);
+    await nav(page, 'Workspaces').click();
+    await nav(page, 'Settings').click();
+    await expect(mine).toContainText('No checks: every push goes straight to the remote.');
+  });
+
   test('a passing run lets a push through, an advisory check never stops one, and a check taken out of force gates nothing', async ({ page }) => {
     await open(page, 'header');
     await nav(page, 'Settings').click();
