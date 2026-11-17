@@ -6,6 +6,49 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-16, night (the desktop program's 0.1.4: three fixes, the rehearsal on both machines, the release; PRs #165 and #166)
+
+**Where things stood at the close.** **Phase 8, 2026-11-16 night; the desktop program's 0.1.4 is released (PR #165; the documents in PR #166, open at the close).** `desktop-v0.1.4` (tagged at `e74781f`, published 03:46 UTC on 2026-11-17, the channel naming it) carries three fixes: the system's login entry made again at every start (the core's `start` reply carries the settings whether or not the hub started; the review's R8, completed), an identifier the remote does not know said on the connect step and the Settings page under `header` (the core's `whoAmI` answers there; saved either way), and the checks editor saying what it holds that the file does not. Rehearsed with debug builds on the Mac and the Windows PC, then both machines took the release: the Mac's entry moved back to `/Applications` at 0.1.4's first start, the PC started hidden after a sign-out. officepi serves revision 2026-11-15 at `a5fb7df`. 720 tests in the app, 40 browser tests in the shell, 26 Rust tests. **Next: Amos's call among Quiver resumed on the program (item 17), Lint's first step (`docs/lint-plan.md`) and the review's remaining findings (item 36).**
+
+### Done
+
+- **PR #164** found merged at the start (02:33 UTC on 2026-11-17), CI green on `main` at `3b1fcf1`.
+- **PR #165** (`phase-8/desktop-0.1.4`, five commits, on `main` as `170c455`, `ded3797`, `14308f9`, `ed92476`, `e74781f`). The core (`app/lib/desktop/core.ts`): the `start` reply of a hub that started carries `settings`; `whoAmI` under `header` asks the remote's `GET /users/me` with the settings' identifier, never kept, answering `{ person }`, the remote's 401 `unknown_user`, 409 `no_user` or 409 `not_connected`. The shell: `core.rs` follows the login entry from every start reply (a comment and a test; the code was already there), `Connect.tsx` stays on the identifier step when the remote does not know it, with "Go on with it", `Settings.tsx` says who the remote knows the saved identifier as or that it knows no such one, `PersonalChecksEditor.tsx` says the checks removed, added and changed and not saved (`unsavedOf`), the fake core answers alike. Tests: one more in `core.test.ts` (720 in the app), two more browser tests (40), one Rust test extended (26). The guide, the shell's README and the review's banner; version 0.1.4.
+- **The rehearsal,** debug builds of the branch against officepi under `header`; its record is `docs/desktop-program-plan.md` §14 step 5. Amos ran each step at the machines; Claude read the plist, the settings, `checks.json`, the Run key and the log after each.
+- **The release:** `desktop-v0.1.4` tagged at `e74781f` (pushed by Claude on Amos's "add the tag"), four builds, the signing job approved and the release published by Amos at 03:46 UTC on 2026-11-17; `latest.json` names 0.1.4. Both machines then took the release, and the Mac's first start of it moved the login entry from the debug bundle back to `/Applications/Armature.app`.
+- **PR #166** (`docs/desktop-0.1.4-released`, one commit, open at the close): the plan's status line and release entry, ADR-0069's note, the review's banner, the README, CLAUDE.md, the explainer and the ADR index.
+
+### Session notes
+
+- Amos's note opened the third fix: he had taken `lint/mine` for removed on the Settings page, since the row went, and it was back after a visit to Workspaces; only **Save checks** writes. He chose saying what is unsaved over a removal that saves at once, and saving an unknown identifier and saying so over refusing the save.
+- Claude first leaned toward a removal that saves at once, then, having read the editor (one form, one save, an edit lost the same silent way), recommended the unsaved line instead and said the lean had changed.
+- Amos reported the Windows rehearsal as working before the start at login had been tried there: the settings, the Run key and the log said so, and Claude asked rather than record it. Done then, it showed a console window at sign-in, which is the debug build's (`windows_subsystem = "windows"` only in a release build).
+- `npm install --package-lock-only` in `desktop/` rewrote seventy lines of the lockfile for a version change; restored, and its two version lines edited instead.
+- The dates in notes written this session were first given as 2026-11-17, the release's UTC date; corrected to the local 2026-11-16.
+
+### Facts from 2026-11-16 night worth keeping
+
+- A debug build is a console program on Windows: started at login it opens a console window, and closing that window ends the program. Home: SESSION.md, Notes; the plan's §14 step 5.
+- A debug build of a version looks current to the updater, so the release's installer is run over it by hand (seen for 0.1.3 and 0.1.4). Home: the same.
+- A rehearsal's debug bundle on the Mac shares the installed program's data folder, port, keychain and login entry; the installed one is quit first, and the entry follows whichever started last. Home: SESSION.md, Notes.
+- On Windows the "system ended the core" line was written at one of four ends of the program that evening, and at the sign-out after the release was installed; no error at the others. Home: SESSION.md, Blockers.
+- The contract script in `core.test.ts` does not send `start` (the shell's own request), so the fake's `started` body is held to the core's only by reading. No home; noted here.
+
+### Decisions taken
+
+- An identifier the remote does not know is saved and said (Amos): `docs/desktop-program-plan.md` §14 step 5; ADR-0069, note of 2026-11-16 night.
+- The checks editor says what is unsaved; a removal does not save at once (Amos): the same.
+- Claude's, open to overrule (SESSION.md, Active Decisions): 409 `not_connected`; "Go on with it"; no line when the remote cannot be asked; the fake remote knows the seed's two people.
+- The release documents say "released" only once published; between the tag and the publication they said "tagged", as CLAUDE.md did for 0.1.0.
+
+### Moved from SESSION.md
+
+- Item 43 as it stood: **A desktop release, 0.1.4, with the two faults 0.1.3's rehearsal found** (Amos, 2026-11-16: held, said in 0.1.3's release notes): the login entry made again at every start, as the shell's README and the review's R8 say (`core.ts`'s `start` reply carries `settings` only when the hub did not start, and `core.rs` follows the entry from that reply alone; the fake core and `core.test.ts`'s contract group follow); and under `header` an identifier the remote does not know said on the Settings page (the remote answers 401 `unknown_user`, the page shows nothing). A third, Amos's on 2026-11-16 night, a matter of the page's design and not yet scoped: on the Settings page's checks editor the trash can removes a row from the page only, and the check is gone from `checks.json` only after "Save checks", so a check deleted and not saved is back on return from the Workspaces page, with nothing saying the removal was unsaved (he took `lint/mine` for removed this way; it is removed now). Its rehearsal adds a start at login on both machines. The path is item 38's as it stood (HISTORY.md, 2026-11-16, evening)
+- **Choices of 2026-11-15 night, made unattended, open to overrule** (PRs #158 to #161; HISTORY.md, 2026-11-16, Decisions taken): D8 taken as the review recommended, on "work through option 3"; the status route's 200 without a credential, riding revision 2026-11-15; the checks editor refusing duplicates and dropping `locked`; `DRAIN_MS` 10 s and `ISSUER_CALL_MS` 15 s; 400 `insecure_issuer` for an issuer over plain http off loopback; the program opening on Settings when its hub failed to start; the core's requests `checks`, `cancelSignIn` and `whoAmI` allowed from pages
+- The "First" note as it stood, every part done by this session's end: **First:** one thing left by 0.1.3, then Amos's call (Current Phase lists the candidates). PR #164 merged after the close, CI green on `main` at `3b1fcf1`; Amos removed the Mac's `lint/mine` requirement himself (item 43's third fault). The Mac's program is connected to officepi (`http://100.70.195.100:3100`, `demo-designer@example.edu`), its login entry corrected by hand. The Windows PC `tec-757` runs a debug 0.1.3 the updater takes for current: run the release's `Armature_0.1.3_x64-setup.exe` over it at its desktop (the debug installer is still in `C:\armature-rehearsal`), log off there, and read the program's log for "The system ended the core as the session ended", info. 
+
+---
+
 ## 2026-11-16, evening (the desktop program's 0.1.3: the Windows icon hook, the rehearsal, the release; PRs #163 and #164)
 
 **Where things stood at the close.** **Phase 8, 2026-11-16 evening; the desktop program's 0.1.3 is released (PR #163; the documents in PR #164, open at the close).** `desktop-v0.1.3` (tagged at `d1e20f2`, published 02:18 UTC on 2026-11-17, the channel naming it) carries everything `main` held beyond 0.1.2: the discard, the icon, client revision 2026-11-15 with the push gate, the checks pages and the code review's sign-in and pages groups, with a Windows installer that refreshes the system's icons and a checks editor that says which row has no name. Its rehearsal saw all of it in the real program on the Mac (an update from 0.1.2 signing in once, sign out, connect elsewhere, the pairing reset, a discard, a check edited, a push sent again with an override) and the icon on the Windows PC; two faults it found are held for 0.1.4 (item 43). officepi serves revision 2026-11-15 at `a5fb7df`. 719 tests in the app, 38 browser tests in the shell, 26 Rust tests. **Next: Amos's call among 0.1.4's two fixes (item 43), Quiver resumed on the program (item 17), Lint's first step (`docs/lint-plan.md`) and the review's remaining findings (item 36).**
