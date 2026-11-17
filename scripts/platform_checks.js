@@ -150,9 +150,11 @@
 //      it is stale on arrival (check M); sent together at one version, whether only one lands,
 //      for inserts of different documents and replaces of one document; and whether concurrent
 //      inserts of one @id leave one winner and refuse the rest as DocumentIdAlreadyExists.
-//      Timing decides the first two, so several rounds, and either answer is recorded as INFO.
-//      More than one landing is a store defect, terminusdb/terminusdb#2637 (2026-11-07), the fix
-//      planned for 12.1.0; on a release with it, AO1 and AO2 should land one per round
+//      Timing decides the first two, so several rounds. More than one landing is a store defect,
+//      terminusdb/terminusdb#2637 (2026-11-07), the fix planned for 12.1.0. Since 2026-11-16 AO1 and
+//      AO2 are verdicts (the code review of 2026-11-09's D3, decided): FAIL on the pinned 12.0.7 is
+//      the known defect the hub's write queue stands in for, and PASS on a later release is the
+//      signal to run writeQueue.test.ts's probes without the queue (ADR-0025 decision 7, notes)
 //
 // Hash identifiers reproduced (ADR-0066 decision 6; the workspace hub plan's step 6), added
 // 2026-11-02:
@@ -1201,8 +1203,8 @@ async function main() {
     const taken = await Promise.all(aoWriters.map((i) => aoInsert({ "@type": "Artifact", "@id": `Artifact/ao-id-${round}`, label: `writer ${i}` }, token)));
     aoSameId.push({ landed: aoLanded(taken), refused: taken.filter((a) => errType(a) === "api:DocumentIdAlreadyExists").length });
   }
-  record("AO1", "INFO", `${aoWriters.length} inserts of different documents sent at once at one data version: ${aoDifferent.join(", ")} landed per round (a version check held through the commit would land 1)`);
-  record("AO2", "INFO", `${aoWriters.length} replaces of one document sent at once at one data version: ${aoSameDoc.join(", ")} landed per round (more than 1 is a lost update: the last one holds, and every writer was told 200)`);
+  record("AO1", aoDifferent.every((n) => n === 1) ? "PASS" : "FAIL", `${aoWriters.length} inserts of different documents sent at once at one data version: ${aoDifferent.join(", ")} landed per round (a version check held through the commit would land 1)`);
+  record("AO2", aoSameDoc.every((n) => n === 1) ? "PASS" : "FAIL", `${aoWriters.length} replaces of one document sent at once at one data version: ${aoSameDoc.join(", ")} landed per round (more than 1 is a lost update: the last one holds, and every writer was told 200)`);
   record("AO3", aoSameId.every((x) => x.landed === 1 && x.refused === aoWriters.length - 1) ? "PASS" : "FAIL",
     `${aoWriters.length} inserts of one @id sent at once: ${aoSameId.map((x) => `${x.landed} landed, ${x.refused} DocumentIdAlreadyExists`).join("; ")}: the id is what the store settles among concurrent writers`);
 
