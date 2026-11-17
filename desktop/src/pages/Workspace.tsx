@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckVerdicts, type Override } from '@/components/CheckVerdicts';
 import { PageHeader } from '@/components/PageHeader';
 import { RefusalNotice } from '@/components/RefusalNotice';
@@ -48,8 +48,27 @@ export function removedSentence(branch: string, result: RemoveResult): string {
 }
 
 /** Why the remote was not asked, as the status says it: unreachable, or for want of a sign-in to ask with. */
-export const notAsked = (reason?: 'signed_out' | 'issuer_unreachable'): string =>
-  reason === 'signed_out' ? 'You are signed out, so the remote was not asked' : reason === 'issuer_unreachable' ? 'Your sign-in provider could not be reached, so the remote was not asked' : 'The remote could not be reached';
+export const notAsked = (reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote'): string =>
+  reason === 'signed_out'
+    ? 'You are signed out, so the remote was not asked'
+    : reason === 'issuer_unreachable'
+      ? 'Your sign-in provider could not be reached, so the remote was not asked'
+      : reason === 'other_remote'
+        ? 'This workspace was made from another remote than the one the program is connected to, so the remote was not asked'
+        : 'The remote could not be reached';
+
+/** The most commits the page lists; a workspace with more unpushed says how many it shows. */
+const MOST_COMMITS_SHOWN = 500;
+
+/**
+ * What a delivery did. The remote answers `upToDate` when main already held everything the workspace
+ * has, and merges nothing: until 2026-11-16 the page said "Delivered into main as" main's own head
+ * all the same, at a second delivery too (the 2026-11-09 review's P10).
+ */
+const deliveredSentence = (r: DeliverResult): string => {
+  if (r.delivered.upToDate) return r.deleted ? 'There was nothing to deliver: main already holds everything here. The workspace is deleted.' : 'There was nothing to deliver: main already holds everything here.';
+  return r.deleted ? `Delivered into main as ${shortCommit(r.delivered.commit)}; the workspace is deleted.` : `Delivered into main as ${shortCommit(r.delivered.commit)}.`;
+};
 
 /** Commit messages are stored with the hub's trailers (Armature-Workspace-Commit and the like); the page shows the person's words. */
 const firstLine = (message: string) => message.split('\n')[0] ?? message;
@@ -90,14 +109,29 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
    */
   const load = useCallback(
     async (afterRefusal = false) => {
-      const [s, c] = await Promise.all([run<WorkspaceStatus>('status', { workspace: branch }), run<{ commits: CommitEntry[] }>('commits', { workspace: branch, count: 50 })]);
+      const s = await run<WorkspaceStatus>('status', { workspace: branch });
       if (s.ok) setStatus(s.body);
       else if (!afterRefusal) setRefusal(s);
+      // As many commits as the status counts unpushed, so the list is the ones the heading names: a fixed
+      // fifty showed "50 commits" under "73 unpushed" (the 2026-11-09 review's P11). Bounded, and said when it is.
+      const count = Math.min(Math.max(s.ok ? s.body.unpushed : 0, 20), MOST_COMMITS_SHOWN);
+      const c = await run<{ commits: CommitEntry[] }>('commits', { workspace: branch, count });
       if (c.ok) setCommits(c.body.commits);
     },
     [run, branch]
   );
   useEffect(() => void load(), [load]);
+  // Read again when the window is come back to: a tool's commits, or a network that returned, showed
+  // only after leaving the page and returning (P11). Not while an action runs, whose own read follows it.
+  const busyNow = useRef(false);
+  busyNow.current = busy !== undefined;
+  useEffect(() => {
+    const onFocus = () => {
+      if (!busyNow.current) void load(true);
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
 
   /** `leaves`: the action removes the workspace when it succeeds, so nothing is read again here: the page is about to be left, and a status of a workspace that is gone is a 404 (P7). */
   const act = async <T,>(type: string, fields: Record<string, unknown>, said: (body: T) => string, leaves: (body: T) => boolean = () => false) => {
@@ -126,11 +160,11 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
       'deliver',
       // A dry run commits nothing, so it needs no reason of its own; the route still asks for a message.
       { message: deliverMessage.trim() || (extra.dryRun ? 'Asking what a delivery would find' : ''), ...(deleteAfter && !extra.dryRun ? { deleteWorkspace: true } : {}), ...extra },
-      (r) => (r.dryRun ? dryRunSentence(r) : r.deleted ? `Delivered into main as ${shortCommit(r.delivered.commit)}; the workspace is deleted.` : `Delivered into main as ${shortCommit(r.delivered.commit)}.`),
+      (r) => (r.dryRun ? dryRunSentence(r) : deliveredSentence(r)),
       (r) => r.deleted === true
     ).then((r) => {
       if (!r || r.dryRun) return;
-      if (r.deleted) back(`${branch} is delivered into main and deleted, here and on the remote.`);
+      if (r.deleted) back(r.delivered.upToDate ? `main already held everything in ${branch}; it is deleted, here and on the remote.` : `${branch} is delivered into main and deleted, here and on the remote.`);
       else setDeliverMessage('');
     });
 
@@ -142,7 +176,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
       </Button>
       <PageHeader title={branch}>{status ? <StatusBadges status={status} /> : 'Reading the workspace…'}</PageHeader>
 
-      <div className="rounded-lg border" aria-label="Unpushed commits">
+      <div className="rounded-lg border" role="region" aria-label="Unpushed commits">
         {/* Nothing is said about the remote until the status is read: with none, "everything is on the remote" was a guess, shown under an alert to a person offline with commits waiting (the 2026-11-09 review's P1). */}
         <p className="border-b px-4 py-2 text-sm font-medium">
           {status === undefined
@@ -166,6 +200,11 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
               </li>
             ))}
           </ul>
+        )}
+        {status !== undefined && status.unpushed > unpushed.length && unpushed.length > 0 && (
+          <p className="text-muted-foreground border-t px-4 py-2 text-xs">
+            The newest {unpushed.length} of {status.unpushed} are listed.
+          </p>
         )}
       </div>
 

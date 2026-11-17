@@ -2,24 +2,38 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Backend, CoreEvent, CoreReply, ShellState } from './backend';
 import { isRefusal, type Refusal } from './types';
 
-/** The shell's state, kept current by its events; the link a deep link brought, for the connect page. */
+/** A link that asked to connect: the remote it named, and which arrival this is, so the same link opened again is a new one. */
+export interface Link {
+  remote: string;
+  arrival: number;
+}
+
+/**
+ * The shell's state, kept current by its events; the link a deep link brought, for the connect page.
+ * A link is held until it is handled (`clearLink`): until 2026-11-16 it stayed for good and filled the
+ * connect page at every later visit, and the same link opened a second time changed nothing, so
+ * nothing happened (the 2026-11-09 review's P12).
+ */
 export function useShell(backend: Backend) {
   const [state, setState] = useState<ShellState | undefined>();
-  const [link, setLink] = useState<string | undefined>();
+  const [link, setLink] = useState<Link | undefined>();
   const refresh = useCallback(() => backend.state().then(setState), [backend]);
+  const clearLink = useCallback(() => setLink(undefined), []);
 
   useEffect(() => {
+    let arrivals = 0;
     void backend.state().then((current) => {
       setState(current);
-      if (current.link) setLink(current.link);
+      // The link that launched the program, which arrived before this window could hear of it.
+      if (current.link) setLink((held) => held ?? { remote: current.link as string, arrival: 0 });
     });
     return backend.onEvent((event: CoreEvent) => {
       if (event.event === 'hub' || event.event === 'shell' || event.event === 'signedOut') void backend.state().then(setState);
-      if (event.event === 'deep-link' && typeof event.remote === 'string') setLink(event.remote);
+      if (event.event === 'deep-link' && typeof event.remote === 'string') setLink({ remote: event.remote, arrival: (arrivals += 1) });
     });
   }, [backend]);
 
-  return { state, refresh, link };
+  return { state, refresh, link, clearLink };
 }
 
 /** One request's outcome as a page shows it: the body on success, the refusal with its status otherwise. */

@@ -38,6 +38,8 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   /** What the page refuses to send: a port or a count that is not a number. */
   const [problem, setProblem] = useState<string | undefined>();
   const [restarting, setRestarting] = useState(false);
+  /** The number of workspaces in the folder the hub runs over, when a save has just pointed the next start at another folder. */
+  const [folderMoved, setFolderMoved] = useState<number | undefined>();
   /** The workspaces a check can be bound to; none when the hub is not running, and a check can still bind every workspace. */
   const [workspaces, setWorkspaces] = useState<string[]>([]);
   /** Under header, what the remote says of the identifier saved: the person it is, or that it knows no such one. */
@@ -82,6 +84,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
     setRefusal(undefined);
     setProblem(undefined);
     setSaved(false);
+    setFolderMoved(undefined);
     // Checked here, not left to the core: `Number('31o1')` is NaN, which travels as null, which the
     // core reads as "restore the default", and the page then said "Saved." (the 2026-11-09 review's P2).
     const port = wholeNumber(form.port);
@@ -94,11 +97,14 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
       snapshots,
     };
     if (settings.identity?.resolver === 'header') set.user = form.user.trim() || null;
+    const before = settings.folder ?? '';
     const outcome = await run<SettingsReply>('settings', { set });
     if (!outcome.ok) return setRefusal(outcome);
     show(outcome.body);
     setRestart(outcome.body.restart === true);
     setSaved(true);
+    // The workspaces stay where they are: the hub will look in the new folder and find none (the 2026-11-09 review's P9).
+    setFolderMoved((outcome.body.settings.folder ?? '') !== before && workspaces.length > 0 ? workspaces.length : undefined);
     void askWho(outcome.body.settings);
   };
 
@@ -245,6 +251,12 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
               {hubRunning ? 'Restart the hub' : 'Start the hub'}
             </Button>
           </div>
+        )}
+        {folderMoved !== undefined && (
+          <p className="max-w-2xl rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+            {folderMoved === 1 ? 'The workspace you have stays' : `Your ${folderMoved} workspaces stay`} in the folder used until now, with any commits not yet pushed: the hub will find none in the new one. Deliver or remove{' '}
+            {folderMoved === 1 ? 'it' : 'them'} first, or move the old folder&rsquo;s contents to the new place before the hub starts again; setting the folder back undoes this.
+          </p>
         )}
         {problem && (
           <p className="text-destructive text-sm" role="alert">

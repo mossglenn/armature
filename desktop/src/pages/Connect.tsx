@@ -20,7 +20,20 @@ import { useRequest } from '@/lib/useShell';
  * for the person's identifier instead, and says it is a development arrangement. The link is
  * untrusted: it only fills the address field.
  */
-export function Connect({ backend, state, link, onDone }: { backend: Backend; state?: ShellState; link?: string; onDone: (next: 'signIn' | 'workspaces', keychain?: string) => void }) {
+export function Connect({
+  backend,
+  state,
+  link,
+  arrival,
+  onDone,
+}: {
+  backend: Backend;
+  state?: ShellState;
+  link?: string;
+  /** Which arrival of a link this is: the same link opened again fills the field again (the 2026-11-09 review's P12). */
+  arrival?: number;
+  onDone: (next: 'signIn' | 'workspaces', keychain?: string) => void;
+}) {
   const { run, busy } = useRequest(backend);
   const current = typeof state?.started?.remote === 'string' ? state.started.remote : undefined;
   const needsUser = state?.started?.needs === 'user';
@@ -38,7 +51,7 @@ export function Connect({ backend, state, link, onDone }: { backend: Backend; st
       setAddress(link);
       setProfile(undefined);
     }
-  }, [link]);
+  }, [link, arrival]);
   useEffect(() => setAskUser(needsUser), [needsUser]);
 
   const read = async () => {

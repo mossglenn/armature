@@ -38,7 +38,7 @@ function hubLine(state?: ShellState): string {
  * link opens the connect page with its address filled in.
  */
 export function App({ backend }: { backend: Backend }) {
-  const { state, refresh, link } = useShell(backend);
+  const { state, refresh, link, clearLink } = useShell(backend);
   const [page, setPage] = useState<Page | undefined>();
   /**
    * What the shell could not do about an action that otherwise went through, said on the page the
@@ -56,8 +56,17 @@ export function App({ backend }: { backend: Backend }) {
   useEffect(() => {
     if (state && !page && state.core !== 'starting') setPage(firstPage(state));
   }, [state, page]);
+  // A link opens the connect page, unless a workspace's action is running: leaving its page then would
+  // drop what it answers, so the link waits in a notice until the person opens it (the 2026-11-09 review's P12).
+  const acting = (state?.actions?.length ?? 0) > 0;
+  const [waitingLink, setWaitingLink] = useState(false);
   useEffect(() => {
-    if (link) setPage({ name: 'connect' });
+    if (!link) return setWaitingLink(false);
+    if (acting) return setWaitingLink(true);
+    setWaitingLink(false);
+    setPage({ name: 'connect' });
+    // Only a link's arrival opens the page; an action that ends later leaves the person where they are, with the notice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [link]);
 
   const running = state?.core === 'running';
@@ -72,6 +81,9 @@ export function App({ backend }: { backend: Backend }) {
     { page: { name: 'connect' }, label: 'Connect', shown: !connected },
   ];
   const go = (next: Page, said?: string) => {
+    // A link is for the visit it opened: leaving the connect page ends it, so a later visit starts from the address in use.
+    if (page?.name === 'connect' && next.name !== 'connect' && !waitingLink) clearLink();
+    if (next.name === 'connect') setWaitingLink(false);
     setPage(next);
     setWarning(said);
     void refresh();
@@ -98,7 +110,7 @@ export function App({ backend }: { backend: Backend }) {
               </li>
             ))}
         </ul>
-        <div className="mt-auto text-xs" aria-label="The hub">
+        <div className="mt-auto text-xs" role="group" aria-label="The hub">
           <p className={cn('font-medium', state?.core === 'failed' && 'text-destructive')}>{hubLine(state)}</p>
           {running && typeof state?.started?.url === 'string' && <p className="text-muted-foreground font-mono break-all">{state.started.url}</p>}
           {(state?.started?.started !== undefined || state?.core === 'failed') && (
@@ -124,16 +136,36 @@ export function App({ backend }: { backend: Backend }) {
       <main className="min-w-0 flex-1 overflow-auto p-8">
         {state?.update && <UpdateNotice backend={backend} update={state.update} blocked={state.actions?.[0]} refresh={() => void refresh()} />}
         {!page && <p className="text-muted-foreground text-sm">Starting the hub…</p>}
+        {waitingLink && link && page?.name !== 'connect' && (
+          <div className="mb-4 flex max-w-2xl flex-wrap items-center gap-3 rounded-md border p-3 text-sm" role="status">
+            <span className="min-w-0 flex-1">
+              A link asked to connect to <span className="font-mono break-all">{link.remote}</span>. It waits here while the workspace finishes what it is doing.
+            </span>
+            <Button size="sm" variant="outline" onClick={() => go({ name: 'connect' })}>
+              Open Connect
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setWaitingLink(false);
+                clearLink();
+              }}
+            >
+              Dismiss
+            </Button>
+          </div>
+        )}
         {warning && (
           <p className="mb-4 max-w-2xl rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
             {warning}
           </p>
         )}
-        {page?.name === 'connect' && <Connect backend={backend} state={state} link={link} onDone={(next, said) => go({ name: next }, said)} />}
+        {page?.name === 'connect' && <Connect backend={backend} state={state} link={link?.remote} arrival={link?.arrival} onDone={(next, said) => go({ name: next }, said)} />}
         {page?.name === 'signIn' && <SignIn backend={backend} state={state} onDone={() => go({ name: 'workspaces' })} />}
         {page?.name === 'workspaces' && <Workspaces backend={backend} notice={page.notice} open={(branch) => go({ name: 'workspace', branch })} />}
         {page?.name === 'workspace' && <Workspace key={page.branch} backend={backend} branch={page.branch} back={(notice) => go({ name: 'workspaces', notice })} />}
-        {page?.name === 'pairing' && <Pairing backend={backend} />}
+        {page?.name === 'pairing' && <Pairing backend={backend} state={state} />}
         {page?.name === 'settings' && <Settings backend={backend} state={state} connect={() => go({ name: 'connect' })} signedOut={(said) => go({ name: 'signIn' }, said)} />}
         {page?.name === 'log' && <Log backend={backend} state={state} />}
       </main>

@@ -78,6 +78,17 @@ export function SignIn({ backend, state, onDone }: { backend: Backend; state?: S
 
   const scopeRefused = refusal?.refusal.offlineAccess === true;
   const unregistered = refusal?.refusal.error === 'not_registered';
+  /** The provider signed the person in and the credential is kept; only the instance's answer about them is missing (the 2026-11-09 review's C16). */
+  const keptSignIn = refusal?.refusal.signedIn === true;
+  const checkAgain = async () => {
+    const outcome = await run<{ person: Person; staysSignedIn: boolean }>('whoAmI');
+    if (outcome.ok) {
+      setRefusal(undefined);
+      return setPerson(outcome.body);
+    }
+    // Still refused: the same sentence stands, with what the instance says now.
+    setRefusal({ ...outcome, refusal: { ...outcome.refusal, signedIn: true } });
+  };
   return (
     <section>
       <PageHeader title="Sign in">
@@ -111,7 +122,19 @@ export function SignIn({ backend, state, onDone }: { backend: Backend; state?: S
               Sign in without staying signed in
             </Button>
           )}
-          {unregistered && <p className="text-sm">Ask your instance’s administrator to register you, then sign in again.</p>}
+          {unregistered && !keptSignIn && <p className="text-sm">Ask your instance’s administrator to register you, then sign in again.</p>}
+          {keptSignIn && (
+            <div className="space-y-2 text-sm">
+              <p>
+                {unregistered
+                  ? 'Your sign-in itself went through and is kept. Ask your instance’s administrator to register you; you will not need to sign in again.'
+                  : 'Your sign-in itself went through and is kept; the instance could not say who you are just now.'}
+              </p>
+              <Button variant="outline" disabled={busy !== undefined} onClick={() => void checkAgain()}>
+                Check again
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </section>
