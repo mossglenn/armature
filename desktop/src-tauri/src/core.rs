@@ -391,6 +391,13 @@ pub async fn await_actions(app: &AppHandle) -> Result<(), &'static str> {
 /// `start`, then the keychain's refresh token for the remote it names; the shell's state follows.
 pub async fn start_hub(app: &AppHandle) {
     let core = app.state::<Core>();
+    // The core itself is gone (it ended unexpectedly): asking it to start could only fail, and until
+    // 2026-11-16 the one way back was to quit the program (the 2026-11-09 review's S10). It is
+    // launched again, and the launch starts the hub.
+    if core.child.lock().unwrap().is_none() && core.core_exited.load(SeqCst) && !core.quitting.load(SeqCst) && !core.updating.load(SeqCst) {
+        say(app, "info", "The core had ended; starting it again");
+        return relaunch(app);
+    }
     let Some(data_dir) = core.data_dir.lock().unwrap().clone() else { return };
     set_state(app, |s| {
         s.core = "starting";
@@ -620,7 +627,7 @@ fn on_terminated(app: &AppHandle, code: Option<i32>) {
     let (level, message) = if ended_by_the_system(code, cfg!(windows)) {
         ("info", "The system ended the core as the session ended (a logoff or a shutdown); open the program again to go on".to_string())
     } else {
-        ("error", format!("The core ended unexpectedly (exit code {}); quit and open the program again", code.map_or("none".to_string(), |c| c.to_string())))
+        ("error", format!("The core ended unexpectedly (exit code {}); start the hub again from the window", code.map_or("none".to_string(), |c| c.to_string())))
     };
     say(app, level, &message);
     set_state(app, |s| { s.core = "failed"; s.error = Some(message); s.actions.clear(); });

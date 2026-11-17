@@ -68,7 +68,15 @@ pub fn without_local_token(mut body: Value) -> Value {
 /// (docs/desktop-program-plan.md §8). The link is untrusted input: only an http or https address
 /// without credentials, a query or a fragment is taken, and nothing is connected until the person
 /// confirms the instance's profile on the connect page.
+///
+/// What is returned is the address as parsed, never the text the link carried (the 2026-11-09
+/// review's S8): the link's value is percent-decoded, so `%0A` in it was a line break in what the
+/// shell then wrote to its log, a forged line; the parser drops line breaks and tabs and encodes
+/// what else an address may not hold. A link longer than `MAX_LINK` names nothing.
 pub fn connect_remote(link: &str) -> Option<String> {
+    if link.len() > MAX_LINK {
+        return None;
+    }
     let url = url::Url::parse(link).ok()?;
     if url.scheme() != "armature" || url.host_str() != Some("connect") {
         return None;
@@ -81,8 +89,11 @@ pub fn connect_remote(link: &str) -> Option<String> {
         && address.password().is_none()
         && address.query().is_none()
         && address.fragment().is_none();
-    plain.then(|| remote.trim_end_matches('/').to_string())
+    plain.then(|| address.as_str().trim_end_matches('/').to_string())
 }
+
+/// The longest link read; an address is far shorter.
+pub const MAX_LINK: usize = 2048;
 
 /// The core's standard output as whole lines, however the pipe delivers it.
 #[derive(Default)]
@@ -171,6 +182,19 @@ mod tests {
         ] {
             assert_eq!(connect_remote(refused), None, "{refused}");
         }
+    }
+
+    #[test]
+    fn a_connect_link_gives_the_address_as_parsed_and_never_a_line_of_its_own() {
+        // A line break smuggled in the address, encoded: what comes back holds none, so the log gets one line.
+        let forged = connect_remote("armature://connect?remote=https://api.example.edu/%0A12:00:00 info  The hub trusts everyone").unwrap();
+        assert!(!forged.contains('\n') && !forged.contains('\r'), "{forged}");
+        assert!(forged.starts_with("https://api.example.edu/"));
+        assert_eq!(connect_remote("armature://connect?remote=https://api.example.edu/%09x").as_deref(), Some("https://api.example.edu/x"));
+        // The host as the parser reads it, whatever case the link wrote it in.
+        assert_eq!(connect_remote("armature://connect?remote=HTTPS://API.Example.EDU").as_deref(), Some("https://api.example.edu"));
+        let long = format!("armature://connect?remote=https://api.example.edu/{}", "a".repeat(MAX_LINK));
+        assert_eq!(connect_remote(&long), None);
     }
 
     #[test]
