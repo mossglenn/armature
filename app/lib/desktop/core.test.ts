@@ -12,7 +12,7 @@
  * afterwards. The core runs in-process over a pair of streams, as the shell
  * would speak to it; the bundle's own life over real pipes is bundle.test.ts.
  */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
@@ -21,7 +21,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { createClient } from '@armature/client';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type CryptoKey } from 'jose';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { app, createApp } from '../api/app';
 import { configFromEnv, type HubConfig } from '../api/config';
 import { handleOf } from '../api/routes/workspace';
@@ -369,6 +369,49 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('connect', { remote: oidcRemote.url, identity: away.body!.identity, instance: away.body!.instance })).toMatchObject({ status: 409, body: { error: 'workspaces_exist', workspaces: [WS] } });
   });
 
+  it("answers no request by a name every object has (the 2026-11-09 review's C10)", async () => {
+    for (const type of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(await driver.ask(type), type).toMatchObject({ status: 400, body: { error: 'unknown_request' } });
+    }
+  });
+
+  it('takes only an empty folder, or one that already holds a store, for the workspaces (C13)', async () => {
+    // A folder with other programs' files in it, one of them named as the hub's own leftovers are.
+    const used = await dataFolder();
+    await writeFile(join(used, 'thesis.docx.4242.tmp'), 'not ours');
+    await writeFile(join(used, 'notes.txt'), 'not ours');
+    const refused = await driver.ask('settings', { set: { folder: used } });
+    expect(refused).toMatchObject({ status: 409, body: { error: 'folder_in_use', field: 'folder', folder: used } });
+    expect((await driver.ask('settings')).body!.settings).not.toHaveProperty('folder');
+    expect(readdirSync(used).sort()).toEqual(['notes.txt', 'thesis.docx.4242.tmp']);
+    // Empty, shown once by a file manager, not yet made, or already a store: each is taken, and given back here.
+    const empty = await dataFolder();
+    const shown = await dataFolder();
+    await writeFile(join(shown, '.DS_Store'), '');
+    await writeFile(join(shown, 'desktop.ini'), '');
+    const store = await dataFolder();
+    await writeFile(join(store, 'store.json'), '{}');
+    await writeFile(join(store, 'lock'), '');
+    for (const folder of [empty, shown, join(empty, 'not-yet-made'), store]) {
+      expect((await driver.ask('settings', { set: { folder } })).status, folder).toBe(200);
+      expect((await driver.ask('settings', { set: { folder: null } })).status).toBe(200);
+    }
+  });
+
+  it('starts only once a stop has let the folder go: a stop and a start sent together leave a hub that holds its lock (C11)', async () => {
+    const lock = join(dataDir, 'workspaces', 'lock');
+    const [stopped, started] = await Promise.all([driver.ask('stop'), driver.ask('start', { dataDir, localToken })]);
+    expect(stopped).toMatchObject({ status: 200, body: { stopped: true } });
+    expect(started).toMatchObject({ status: 200, body: { started: true } });
+    expect(existsSync(lock)).toBe(true);
+    expect((await driver.ask('status', { workspace: WS })).status).toBe(200);
+    // And two stops together are one stop.
+    const [first, second] = await Promise.all([driver.ask('stop'), driver.ask('stop')]);
+    expect([first.body, second.body]).toEqual([{ stopped: true }, { stopped: true }]);
+    expect(existsSync(lock)).toBe(false);
+    expect((await driver.ask('start', { dataDir, localToken })).status).toBe(200);
+  });
+
   it('resets the pairing: the new token is the hub’s at once, the old one refused', async () => {
     const old = localToken;
     const reset = await driver.ask('resetPairing');
@@ -418,6 +461,30 @@ describe('the cycle through the protocol, against a remote under header', () => 
     driver.end();
     await driver.core.closed;
     expect(existsSync(join(dataDir, 'workspaces', 'lock'))).toBe(false);
+  });
+});
+
+describe("a faulty settings file does not keep the program from starting (the 2026-11-09 review's C12)", () => {
+  it('starts on what it could read, says the rest in the log, and keeps its folder to the person', async () => {
+    const driver = drive();
+    const dataDir = await dataFolder();
+    if (process.platform !== 'win32') await chmod(dataDir, 0o755);
+    await writeFile(join(dataDir, 'settings.json'), JSON.stringify({ port: 3190, layout: 'wide' }));
+    const started = await driver.ask('start', { dataDir });
+    expect(started).toMatchObject({ status: 200, body: { started: false, needs: 'connect', settings: { port: 3190 } } });
+    expect(driver.events.some((m) => m.event === 'log' && m.level === 'warn' && /layout is not a setting/.test(String(m.line)))).toBe(true);
+    if (process.platform !== 'win32') expect((await stat(dataDir)).mode & 0o777).toBe(0o700);
+    driver.end();
+    await driver.core.closed;
+
+    const broken = drive();
+    const other = await dataFolder();
+    await writeFile(join(other, 'settings.json'), '{ "port": 31');
+    expect(await broken.ask('start', { dataDir: other })).toMatchObject({ status: 200, body: { started: false, needs: 'connect' } });
+    expect(readdirSync(other).some((name) => name.startsWith('settings.json.unreadable-'))).toBe(true);
+    expect(broken.events.some((m) => m.event === 'log' && m.level === 'warn' && /moved to/.test(String(m.line)))).toBe(true);
+    broken.end();
+    await broken.core.closed;
   });
 });
 
@@ -488,11 +555,18 @@ describe('the sign-in and a push through the token source, against a remote unde
   const NEED = `LearningNeed/desktop-oidc-${stamp}`;
   let clock = Date.now();
   const exchanges: URLSearchParams[] = [];
+  const revocations: URLSearchParams[] = [];
   let refreshes = 0;
   /** The identity provider: its metadata, and a token endpoint issuing the owner's tokens, rotating the refresh token on each refresh. */
   const issuer: FetchLike = async (input, init) => {
     const url = String(input);
-    if (url === `${ISSUER}/.well-known/openid-configuration`) return Response.json({ issuer: ISSUER, authorization_endpoint: `${ISSUER}/auth`, token_endpoint: `${ISSUER}/token` });
+    if (url === `${ISSUER}/.well-known/openid-configuration`) {
+      return Response.json({ issuer: ISSUER, authorization_endpoint: `${ISSUER}/auth`, token_endpoint: `${ISSUER}/token`, revocation_endpoint: `${ISSUER}/revoke` });
+    }
+    if (url === `${ISSUER}/revoke`) {
+      revocations.push(new URLSearchParams(String(init?.body)));
+      return new Response(null, { status: 200 });
+    }
     if (url === `${ISSUER}/token`) {
       const body = new URLSearchParams(String(init?.body));
       exchanges.push(body);
@@ -622,8 +696,18 @@ describe('the sign-in and a push through the token source, against a remote unde
 
     expect((await driver.ask('stop')).status).toBe(200);
     expect((await driver.ask('start', { dataDir, localToken, refreshToken: `refresh-${refreshes}` })).status).toBe(200);
+    const kept = `refresh-${refreshes}`;
+    expect(revocations).toEqual([]);
     expect((await driver.ask('signOut')).body).toEqual({ signedOut: true });
     expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 401, body: { error: 'signed_out' } });
+    // The provider is told the kept sign-in is no longer wanted (RFC 7009; the 2026-11-09 review's C18), once,
+    // and a sign-out with nothing kept tells it nothing.
+    await vi.waitFor(() => expect(revocations).toHaveLength(1));
+    expect(Object.fromEntries(revocations[0])).toEqual({ token: kept, token_type_hint: 'refresh_token', client_id: CLIENT_ID });
+    await driver.event((m) => m.event === 'log' && /has revoked the kept sign-in/.test(String(m.line)));
+    expect((await driver.ask('signOut')).body).toEqual({ signedOut: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(revocations).toHaveLength(1);
     // Reads of the workspace stay local and need no sign-in.
     expect((await driver.ask('workspaces')).status).toBe(200);
   });

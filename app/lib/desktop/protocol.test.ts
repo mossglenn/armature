@@ -5,9 +5,9 @@
  * concurrency and the input's end. No store.
  */
 import { PassThrough } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/errors';
-import { answerFromResponse, answerOf, ok, openChannel, type Handler } from './protocol';
+import { answerFromResponse, answerOf, MAX_LINE, ok, openChannel, type Handler } from './protocol';
 
 function harness(handlers: Record<string, Handler>) {
   const input = new PassThrough();
@@ -81,6 +81,43 @@ describe('the control protocol', () => {
     expect(messages[4]).toMatchObject({ id: 3, status: 400, body: { error: 'bad_request' } });
     expect(messages[5]).toMatchObject({ id: 4, status: 400, body: { error: 'unknown_request' } });
     expect(messages[6]).toEqual({ id: 5, status: 200, body: {} });
+  });
+
+  it("refuses a line longer than its bound, and a request under an id that is still being answered (the 2026-11-09 review's C17)", async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const h = harness({
+      slow: async () => {
+        await held;
+        return ok({ done: true });
+      },
+      echo: async () => ok({ echoed: true }),
+    });
+    h.send({ id: 1, type: 'echo', pad: 'x'.repeat(MAX_LINE) });
+    expect((await h.received(1))[0]).toMatchObject({ id: null, status: 400, body: { error: 'bad_request' } });
+    h.send({ id: 7, type: 'slow' });
+    h.send({ id: 7, type: 'echo' });
+    expect((await h.received(2))[1]).toMatchObject({ id: null, status: 400, body: { error: 'bad_request', duplicate: 7 } });
+    release();
+    expect((await h.received(3))[2]).toEqual({ id: 7, status: 200, body: { done: true } });
+    // Answered, the id is free again.
+    h.send({ id: 7, type: 'echo' });
+    expect((await h.received(4))[3]).toEqual({ id: 7, status: 200, body: { echoed: true } });
+  });
+
+  it('reads no further request while its output is not being read, and goes on once it is (C17)', async () => {
+    const input = new PassThrough();
+    // A pipe nobody reads yet, full after its first line.
+    const output = new PassThrough({ highWaterMark: 1 });
+    const handled: unknown[] = [];
+    openChannel({ input, output, handlerFor: () => async (request) => (handled.push(request.id), ok({})) });
+    input.write(`${JSON.stringify({ id: 1, type: 'any' })}\n`);
+    await vi.waitFor(() => expect(handled).toEqual([1]));
+    input.write(`${JSON.stringify({ id: 2, type: 'any' })}\n`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(handled).toEqual([1]);
+    output.resume();
+    await vi.waitFor(() => expect(handled).toEqual([1, 2]));
   });
 
   it('runs requests concurrently and answers them as they finish', async () => {

@@ -94,6 +94,13 @@ export interface Channel {
 /** How long the channel waits for requests in flight after its input ends. */
 export const DRAIN_MS = 10_000;
 
+/**
+ * The longest line taken as a request, in characters. The largest a page sends is the checks editor's
+ * list; a megabyte is far over it, and a line beyond that is refused unread rather than parsed (the
+ * 2026-11-09 review's C17). The shell is trusted, so this is a bound on a fault, not on an attacker.
+ */
+export const MAX_LINE = 1024 * 1024;
+
 /** A successful answer. */
 export const ok = (body: unknown, status = 200): Answer => ({ status, body });
 
@@ -145,14 +152,26 @@ function parse(line: string): { request: ControlRequest } | { refused: ControlRe
 /** Opens the channel over a pair of streams and answers each request as its handler does. */
 export function openChannel({ input, output, handlerFor, onInputEnd, drainMs = DRAIN_MS }: ChannelOptions): Channel {
   // Each message is written whole, as one line, so a reply and an event never interleave.
+  const lines = createInterface({ input, crlfDelay: Infinity });
+  // A reader that falls behind is waited for: no further request is read until the output has drained,
+  // so replies never pile up in memory behind a pipe that is not being read (C17).
   const send = (message: ControlReply | ControlEvent) => {
-    output.write(`${JSON.stringify(message)}\n`);
+    if (output.write(`${JSON.stringify(message)}\n`) || waitingForDrain) return;
+    waitingForDrain = true;
+    lines.pause();
+    output.once('drain', () => {
+      waitingForDrain = false;
+      lines.resume();
+    });
   };
+  let waitingForDrain = false;
   // A shell gone mid-reply leaves a pipe with no reader, and the write fails with EPIPE as an
   // 'error' event, which unhandled would end the core before it releases the folder's lock.
   // Nothing can be told to a reader that is gone; the input's end follows, and with it the stop.
   output.on('error', () => undefined);
   const inFlight = new Set<Promise<void>>();
+  /** The ids of the requests being answered: a reply names its request by id alone, so two in flight under one id could not be told apart. */
+  const answering = new Set<RequestId>();
 
   const answer = async (request: ControlRequest): Promise<void> => {
     const handler = handlerFor(request.type);
@@ -169,18 +188,30 @@ export function openChannel({ input, output, handlerFor, onInputEnd, drainMs = D
     send({ id: request.id, ...result });
   };
 
-  const lines = createInterface({ input, crlfDelay: Infinity });
   lines.on('line', (raw) => {
     const line = raw.trim();
     if (!line) return;
+    if (line.length > MAX_LINE) {
+      send({ id: null, status: 400, body: { error: 'bad_request', message: `A request is one line of at most ${MAX_LINE} characters` } });
+      return;
+    }
     const parsed = parse(line);
     if ('refused' in parsed) {
       send(parsed.refused);
       return;
     }
+    const { id } = parsed.request;
+    if (answering.has(id)) {
+      send({ id: null, status: 400, body: { error: 'bad_request', message: `A request with the id ${JSON.stringify(id)} is still being answered; an id is used again only after its reply`, duplicate: id } });
+      return;
+    }
+    answering.add(id);
     const work = answer(parsed.request);
     inFlight.add(work);
-    void work.finally(() => inFlight.delete(work));
+    void work.finally(() => {
+      inFlight.delete(work);
+      answering.delete(id);
+    });
   });
 
   const closed = new Promise<void>((resolve) => {
