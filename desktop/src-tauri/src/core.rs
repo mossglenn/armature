@@ -438,6 +438,8 @@ pub async fn start_hub(app: &AppHandle) {
         s.error = None;
         s.started = Some(relay::without_local_token(body.clone()));
     });
+    // Every `start` reply carries the settings, a hub that started as one that did not (since the
+    // program's 0.1.4; before it only the latter did, so an ordinary start left the entry as it was).
     crate::login::follow(app, &body["settings"]);
     if body["resolver"] == "oidc" {
         if let Some(binding) = binding {
@@ -749,6 +751,11 @@ mod tests {
         let binding = binding_of(&running).unwrap();
         assert_eq!(binding, Binding { remote: "https://api.example.edu".into(), issuer: "https://login.example.edu/realms/a".into(), client_id: "armature-desktop".into() });
         assert_eq!(binding.account(), "refresh:https://api.example.edu|https://login.example.edu/realms/a|armature-desktop");
+        // A hub that started sends its settings too, which the login entry follows at every start (login.rs);
+        // the binding is still the reply's own, and the setting is there to read.
+        let with_settings = json!({ "started": true, "remote": "https://api.example.edu", "resolver": "oidc", "issuer": "https://login.example.edu/realms/a", "clientId": "armature-desktop", "settings": { "remote": "https://api.example.edu", "identity": { "resolver": "oidc", "issuer": "https://login.example.edu/realms/a", "clientId": "armature-desktop" }, "startAtLogin": true } });
+        assert_eq!(binding_of(&with_settings), Some(binding.clone()));
+        assert_eq!(crate::login::wanted(&with_settings["settings"]), Some(true));
         // The settings inside a reply name the same binding: connect's reply, and start's before the hub runs.
         let connected = json!({ "settings": { "remote": "https://api.example.edu", "identity": { "resolver": "oidc", "issuer": "https://login.example.edu/realms/a", "clientId": "armature-desktop" } } });
         assert_eq!(binding_of(&connected), Some(binding.clone()));

@@ -206,6 +206,9 @@ function modelFor(scenario: string): Model {
   return { settings: { ...base, remote: HEADER_REMOTE, instance: p.instance, identity: p.identity, user }, running: true, workspaces: seededWorkspaces(user, HEADER_REMOTE), localToken, log, ...none };
 }
 
+/** The people the fake remote under header has registered, as the seed names them. */
+const KNOWN: Record<string, string> = { 'demo-designer@example.edu': 'Demo Designer', 'demo-reviewer@example.edu': 'Demo Reviewer' };
+
 const OFFERED: UpdateState = { version: '0.2.0', current: '0.1.0', date: '2026-11-20T15:00:00Z', notes: 'Starts at login when asked.\nShows an available update.', state: 'available' };
 
 /** The requests the shell counts as actions in flight (src-tauri/src/core.rs `ACTIONS`). */
@@ -253,6 +256,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       remote: s.remote,
       resolver: s.identity.resolver,
       ...(s.identity.resolver === 'oidc' ? { signedIn: model.signedIn !== undefined, issuer: s.identity.issuer } : { user: s.user }),
+      settings: s,
     };
   };
   const state = (): ShellState => {
@@ -404,8 +408,16 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       waitingSignIn?.();
       return ok({ cancelled: waiting });
     },
+    // Under header, whom the remote takes the identifier for: the fake remote knows the seed's two people and no one else.
     whoAmI: () => {
-      if (model.settings.identity?.resolver !== 'oidc') return refuse(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
+      if (model.settings.identity?.resolver !== 'oidc') {
+        const user = model.settings.user;
+        if (!model.settings.remote || !model.settings.identity) return refuse(409, 'not_connected', 'The program is not connected to a remote; connect first');
+        if (!user) return refuse(409, 'no_user', 'The remote runs under header; set your identifier on it in the settings (user)');
+        const name = KNOWN[user];
+        if (!name) return refuse(401, 'unknown_user', `The remote refused: No User is registered for ${user}; create one with POST /api/v1/users`, { remote: true });
+        return ok({ person: { id: `User/${user.split('@')[0]}`, externalId: user, displayName: name } });
+      }
       return model.signedIn ? ok({ signedIn: true, person: model.signedIn, staysSignedIn: true }) : refuse(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in');
     },
     // `keychain`: what the shell adds to a reply when the keychain refused what the reply implies (src-tauri/src/core.rs `after_reply`).
