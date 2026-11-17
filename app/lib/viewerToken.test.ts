@@ -98,6 +98,49 @@ describe('the viewer’s token source', () => {
     expect(stub.issued()).toBe(2);
   });
 
+  it("asks for one new token when several requests are refused together, keeps a short-lived one for half its life, and bounds every request (the 2026-11-09 review's V1 and V2)", async () => {
+    const stub = issuer();
+    const source = tokenSource({ hubUrl: HUB, env: { ARMATURE_HUB_CLIENT_ID: 'viewer', ARMATURE_HUB_CLIENT_SECRET: 'x' }, fetch: stub.fetch })!;
+    const first = await source();
+    // Three pages rendered in parallel, all holding the token the hub now refuses.
+    const hub = async (_input: string | URL | Request, init?: RequestInit) =>
+      new Headers(init?.headers).get('Authorization') === `Bearer ${first}` ? json({ error: 'invalid_token', reason: 'unknown_key' }, 401) : json({ ok: true });
+    const fetchWithRetry = retryingFetch(source, hub);
+    const answers = await Promise.all([1, 2, 3].map(() => fetchWithRetry(`${HUB}/api/v1/documents/Module`, { headers: { Authorization: `Bearer ${first}` } })));
+    expect(answers.map((res) => res.status)).toEqual([200, 200, 200]);
+    expect(stub.issued()).toBe(2);
+    // A refusal that arrives after the renewal names the old token and forgets nothing.
+    source.forget(first);
+    expect(await source()).toBe('token-2');
+    expect(stub.issued()).toBe(2);
+    // Every request to the hub and the issuer carries a limit.
+    expect(stub.calls.every((call) => call.init?.signal instanceof AbortSignal)).toBe(true);
+
+    // A token of twenty seconds is held for ten, not asked for on every call.
+    let clock = 1_000_000;
+    let issued = 0;
+    const brief = tokenSource({
+      hubUrl: HUB,
+      env: { ARMATURE_HUB_CLIENT_ID: 'viewer', ARMATURE_HUB_CLIENT_SECRET: 'x', ARMATURE_HUB_TOKEN_ENDPOINT: `${ISSUER}/token` },
+      fetch: async () => json({ access_token: `brief-${(issued += 1)}`, expires_in: 20 }),
+      now: () => clock,
+    })!;
+    expect(await brief()).toBe('brief-1');
+    clock += 9_000;
+    expect(await brief()).toBe('brief-1');
+    clock += 2_000;
+    expect(await brief()).toBe('brief-2');
+  });
+
+  it("refuses metadata that describes another issuer, so the client secret goes only to the one the hub names (V1)", async () => {
+    const stub = issuer();
+    const fetch = async (input: string | URL | Request, init?: RequestInit) =>
+      String(input).endsWith('openid-configuration') ? json({ issuer: 'https://elsewhere.example.org', token_endpoint: 'https://elsewhere.example.org/token' }) : stub.fetch(input, init);
+    const source = tokenSource({ hubUrl: HUB, env: { ARMATURE_HUB_CLIENT_ID: 'viewer', ARMATURE_HUB_CLIENT_SECRET: 'x' }, fetch })!;
+    await expect(source()).rejects.toThrow(/describes issuer https:\/\/elsewhere.example.org/);
+    expect(stub.calls.some((call) => call.url.endsWith('/token'))).toBe(false);
+  });
+
   it('refuses to hold a client credential against a hub under header', async () => {
     const stub = issuer('header');
     const source = tokenSource({ hubUrl: HUB, env: { ARMATURE_HUB_CLIENT_ID: 'viewer', ARMATURE_HUB_CLIENT_SECRET: 'x' }, fetch: stub.fetch })!;

@@ -38,13 +38,26 @@ export interface TokenSourceOptions {
   now?: () => number;
 }
 
-/** Seconds before a token's expiry at which the viewer asks for a new one. */
+/** Seconds before a token's expiry at which the viewer asks for a new one; half the lifetime for a token shorter-lived than twice this. */
 const REFRESH_MARGIN_SECONDS = 30;
 
-/** The current token on each call; `forget` drops a held token so the next call asks for a new one. */
+/**
+ * Each request to the hub's discovery, the issuer's metadata and its token
+ * endpoint ends within this (the 2026-11-09 review's V1). Until 2026-11-16
+ * none had a limit, and since every page waits on the token, one stalled
+ * request stalled every page for the runtime's own five minutes.
+ */
+export const ISSUER_TIMEOUT_MS = 15_000;
+
+/**
+ * The current token on each call. `forget` drops the held token so the next
+ * call asks for a new one; given the token that was refused, it drops the
+ * held one only when it is that token, so of several requests refused together
+ * the first asks for a new token and the rest use it (the review's V2).
+ */
 export interface TokenSource {
   (): Promise<string>;
-  forget: () => void;
+  forget: (refused?: string) => void;
 }
 
 /**
@@ -73,16 +86,19 @@ export function tokenSource(options: TokenSourceOptions): TokenSource | undefine
 
   const endpoint = (): Promise<string> => {
     tokenEndpoint ??= (async () => {
-      const discover = await fetchFn(`${options.hubUrl}/api/v1/discover`, { headers: { Accept: 'application/json' } });
+      const discover = await fetchFn(`${options.hubUrl}/api/v1/discover`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(ISSUER_TIMEOUT_MS) });
       if (!discover.ok) throw new Error(`GET /discover answered ${discover.status}; the viewer cannot learn the hub's issuer`);
       const identity = ((await discover.json()) as { identity?: { resolver?: string; issuer?: string } }).identity;
       if (identity?.resolver !== 'oidc' || !identity.issuer) {
         throw new Error(`The hub runs under ${identity?.resolver ?? 'an unknown resolver'}, not oidc, yet the viewer holds a client credential (ARMATURE_HUB_CLIENT_ID)`);
       }
       const address = `${identity.issuer.replace(/\/+$/, '')}/.well-known/openid-configuration`;
-      const metadata = await fetchFn(address, { headers: { Accept: 'application/json' } });
+      const metadata = await fetchFn(address, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(ISSUER_TIMEOUT_MS) });
       if (!metadata.ok) throw new Error(`${address} answered ${metadata.status}`);
-      const { token_endpoint } = (await metadata.json()) as { token_endpoint?: unknown };
+      const { issuer, token_endpoint } = (await metadata.json()) as { issuer?: unknown; token_endpoint?: unknown };
+      // OpenID Connect Discovery §4.3, as the hub reads its keys (lib/api/oidc.ts): the metadata's issuer is the one
+      // asked for, or the document is someone else's and its token endpoint not where the client secret goes.
+      if (issuer !== identity.issuer) throw new Error(`${address} describes issuer ${String(issuer)}, not ${identity.issuer}`);
       if (typeof token_endpoint !== 'string' || !token_endpoint) throw new Error(`${address} names no token_endpoint`);
       return token_endpoint;
     })();
@@ -100,12 +116,15 @@ export function tokenSource(options: TokenSourceOptions): TokenSource | undefine
         Accept: 'application/json',
       },
       body: new URLSearchParams({ grant_type: 'client_credentials' }).toString(),
+      signal: AbortSignal.timeout(ISSUER_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`The issuer refused the viewer's client credentials: ${res.status}`);
     const body = (await res.json()) as { access_token?: unknown; expires_in?: unknown };
     if (typeof body.access_token !== 'string' || !body.access_token) throw new Error("The issuer's answer carries no access_token");
     const lifetime = typeof body.expires_in === 'number' && body.expires_in > 0 ? body.expires_in : 300;
-    held = { token: body.access_token, expiresAt: now() + (lifetime - REFRESH_MARGIN_SECONDS) * 1000 };
+    // A token that lives no longer than the margin was never kept, one request to the issuer per page read.
+    const margin = Math.min(REFRESH_MARGIN_SECONDS, lifetime / 2);
+    held = { token: body.access_token, expiresAt: now() + (lifetime - margin) * 1000 };
     return held.token;
   };
 
@@ -116,8 +135,8 @@ export function tokenSource(options: TokenSourceOptions): TokenSource | undefine
     return pending;
   };
   return Object.assign(source, {
-    forget: () => {
-      held = undefined;
+    forget: (refused?: string) => {
+      if (refused === undefined || held?.token === refused) held = undefined;
     },
   });
 }
@@ -137,7 +156,9 @@ export function retryingFetch(source: TokenSource, fetchFn: FetchLike = (input, 
       .json()
       .catch(() => undefined)) as { error?: unknown } | undefined;
     if (body?.error !== 'invalid_token') return res;
-    source.forget();
+    // Only the token this request carried: one renewed since, by a request refused a moment earlier, is kept.
+    const sent = /^Bearer\s+(\S+)$/i.exec(new Headers(init?.headers).get('Authorization') ?? '')?.[1];
+    source.forget(sent);
     const headers = new Headers(init?.headers);
     headers.set('Authorization', `Bearer ${await source()}`);
     return fetchFn(input, { ...init, headers });
