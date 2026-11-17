@@ -1,5 +1,6 @@
 import { isActive, type GrantDocument } from '../api/grants';
 import { REGISTRY_BRANCH } from '../api/identity';
+import { identityKey } from './identity';
 import { checkInvariants, createWriteContext, InvariantError, type Violation } from '../api/invariants';
 import type { DocumentReader, Store, TerminusDocument } from '../api/store';
 
@@ -23,7 +24,11 @@ import type { DocumentReader, Store, TerminusDocument } from '../api/store';
  * (`grant_without_branch`), a requirement in force binding merges into a
  * branch the store lacks (`requirement_without_branch`, ADR-0070 decision 5),
  * and a branch with no `Owner` in force (`branch_without_owner`, with no
- * document, so its index is -1). The repair for each is `put` on the record,
+ * document, so its index is -1), and, since 2026-11-16, two `User` documents
+ * under one identity, the issuer and the external identifier together
+ * (`duplicate_user`; the code review of 2026-11-09's Q4, which reopened what
+ * the deep review set aside: the operator's `put` takes `User` documents and
+ * could breach it, and now refuses to). The repair for each is `put` on the record,
  * as a commit with a reason. A requirement whose reporter is not an agent is
  * constraint 24, which the engine reports like any rule.
  */
@@ -92,6 +97,22 @@ async function checkOwnership(store: Store, documents: TerminusDocument[]): Prom
         index: documents.indexOf(requirement),
         field: 'branch',
         message: `${requirement['@id']} requires ${String(requirement.check)} of merges into branch ${branch}, which the store does not have; revoke it (ADR-0070 decision 5)`,
+      });
+    }
+  }
+  const identities = new Map<string, string>();
+  for (const user of documents) {
+    if (user['@type'] !== 'User') continue;
+    const key = identityKey(user);
+    const first = identities.get(key);
+    if (first === undefined) identities.set(key, user['@id']);
+    else {
+      out.push({
+        code: 'duplicate_user',
+        id: user['@id'],
+        index: documents.indexOf(user),
+        field: 'externalId',
+        message: `${user['@id']} and ${first} are both registered as ${String(user.externalId)}${typeof user.issuer === 'string' ? ` at ${user.issuer}` : ''}; one person is one User (ADR-0032 decision 2), and resolution finds only one of them`,
       });
     }
   }
