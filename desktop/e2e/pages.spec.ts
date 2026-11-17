@@ -319,6 +319,11 @@ test.describe('required checks', () => {
     await expect(mine).toContainText('workspaces/checks.json');
 
     await mine.getByRole('button', { name: 'Add a check' }).click();
+    // A check left without a name is said by the form, and nothing is sent (seen in the 0.1.3 rehearsal,
+    // where the field's example read as a value already typed and the core's refusal spoke of a broken file).
+    await mine.getByRole('button', { name: 'Save checks' }).click();
+    await expect(mine.getByRole('alert')).toContainText('Check 1 has no name');
+    await expect(mine).not.toContainText('personal_checks_invalid');
     await mine.getByLabel('Check', { exact: true }).fill('lint/mine');
     await mine.getByLabel('The tool’s settings (JSON)').fill('{"strict": true');
     await mine.getByRole('button', { name: 'Save checks' }).click();

@@ -93,6 +93,10 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
     setRefusal(undefined);
     setProblem(undefined);
     setSaved(false);
+    // Said here, in the form's terms: the core's refusal of a nameless check speaks of a file that cannot be
+    // read and of pushes stopped, which is true of a file on disk and not of a form nothing was saved from.
+    const unnamed = rows.findIndex((row) => !row.check.trim());
+    if (unnamed !== -1) return setProblem(`Check ${unnamed + 1} has no name. Type the name its tool reports under, such as lint/mine, or remove it. Nothing was saved.`);
     const built = requirementsOf(rows);
     if ('badParams' in built) return setProblem(`The settings of ${rows[built.badParams]?.check.trim() || `check ${built.badParams + 1}`} are not JSON; write {} for none.`);
     const outcome = await run<PersonalChecks>('checks', { set: built });
@@ -135,7 +139,7 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
                 <Label htmlFor={`check-${i}`}>Check</Label>
-                <Input id={`check-${i}`} {...verbatim} placeholder="lint/mine" value={row.check} onChange={(e) => change(i, { check: e.target.value })} />
+                <Input id={`check-${i}`} {...verbatim} placeholder="for example, lint/mine" value={row.check} onChange={(e) => change(i, { check: e.target.value })} />
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor={`check-branch-${i}`}>Workspace</Label>
