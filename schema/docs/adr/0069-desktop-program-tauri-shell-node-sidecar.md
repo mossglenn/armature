@@ -38,6 +38,16 @@ ADR-0065 decision 7 carries a dated note of the same day for the local token kep
 > keychain that refuses to remove a sign-in or keep a new pairing value is said to the person
 > on the page, as `keychain` in the reply, and a keychain that cannot be read at a start is
 > not overwritten with the value drawn meanwhile.
+>
+> **Note (2026-11-16):** released as `desktop-v0.1.3` (published 02:18 UTC on 2026-11-17), the
+> first release with the fixes of the note above, the discard, the checks pages (ADR-0070) and
+> a Windows installer that tells the shell its icons may have changed. Its rehearsal saw the
+> keychain's new naming in the real program: an update from 0.1.2 asked for one sign-in, the
+> item kept under the remote alone was removed and never read, and the new item carried the
+> remote, the issuer and the client id. It also found that the system's login entry is made
+> again only when the core's reply carries the settings, which the reply of a hub that started
+> does not, so a program moved after the entry was made keeps an entry for the old place;
+> held for 0.1.4 (`docs/desktop-program-plan.md` §14, step 5).
 
 ## Context
 
