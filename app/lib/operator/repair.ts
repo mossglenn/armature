@@ -1,6 +1,9 @@
+import { canonical } from '../api/fragments';
 import { revocablesNaming, revokeGrantsNaming } from '../api/grants';
 import { findUserByExternalId, REGISTRY_BRANCH, type ResolvedUser } from '../api/identity';
-import { createOperatorStore, createStore, type Commit, type OperatorStore } from '../api/store';
+import { mergeBase } from '../api/routes/branches';
+import { identityKey } from './identity';
+import { createOperatorStore, createStore, type Commit, type OperatorStore, type TerminusDocument } from '../api/store';
 import { parseDocuments, writeDocuments, type WriteResult } from '../api/write';
 
 /**
@@ -155,6 +158,78 @@ export async function deleteScratchBranch(name: string, opts: { as: string }): P
   return { head, revoked };
 }
 
+/** The operator's own transient branches, which hold nothing that is merged as a branch is. */
+const isTransient = (name: string): boolean => name.startsWith('operator-');
+
+/**
+ * What a `put` of `User` documents on `main` may not do (the code review of 2026-11-09's Q4,
+ * decided 2026-11-16, Amos: the refusal, not the re-carry of ADR-0032 decision 6). Checked or
+ * unchecked alike, since neither is a rule of one branch's state.
+ *
+ * A second `User` under an identity `main` already has: resolution finds one person by
+ * `(issuer, externalId)`, and two documents under one would make one person two.
+ *
+ * An edit of a `User` while a branch holds a copy of it that was carried there after the branch
+ * was cut. The write pipeline puts an author's `User` into a branch that lacks it (ADR-0032
+ * decision 4), an insert on the branch of an id `main` inserted too; the two merge while they are
+ * alike, and once `main`'s is edited they are an `InsertConflict` at every merge of that branch,
+ * in both directions (platform check W2d), which no route and no `put` can then resolve, since a
+ * `User` is written on `main` only. Such a branch is merged or deleted first. A branch cut after
+ * the person was registered holds them by ancestry, and merges an edit as any other change:
+ * those do not stand in the way.
+ */
+async function requireUsersWritable(documents: readonly TerminusDocument[]): Promise<void> {
+  const users = documents.filter((doc) => doc['@type'] === 'User');
+  if (!users.length) return;
+  const main = createOperatorStore({ branch: REGISTRY_BRANCH });
+  const held = (await main.queryDocuments('User', {})).documents;
+  const written = new Map<string, string>();
+  for (const user of users) {
+    const key = identityKey(user);
+    const other = held.find((u) => u['@id'] !== user['@id'] && identityKey(u) === key)?.['@id'] ?? (written.has(key) && written.get(key) !== user['@id'] ? written.get(key) : undefined);
+    if (other) {
+      throw new OperatorError(
+        `${other} is already registered as ${String(user.externalId)}${typeof user.issuer === 'string' ? ` at ${user.issuer}` : ''}; one person is one User on ${REGISTRY_BRANCH} (ADR-0032 decision 2), so correct that one or delete it first`
+      );
+    }
+    written.set(key, user['@id']);
+  }
+  const edited = users.filter((user) => {
+    const before = held.find((u) => u['@id'] === user['@id']);
+    return before !== undefined && canonical({ ...before, ...user }) !== canonical(before);
+  });
+  if (!edited.length) return;
+  for (const name of await main.listBranches()) {
+    if (name === REGISTRY_BRANCH || isTransient(name)) continue;
+    const branch = createOperatorStore({ branch: name });
+    const copies: string[] = [];
+    for (const user of edited) {
+      if (await holds(branch, user['@id'])) copies.push(user['@id']);
+    }
+    if (!copies.length) continue;
+    const base = await mergeBase(main, branch);
+    const carried: string[] = [];
+    for (const id of copies) {
+      if (!base || !(await holds(branch.at({ commit: base }), id))) carried.push(id);
+    }
+    if (carried.length) {
+      throw new OperatorError(
+        `Branch ${name} holds a copy of ${carried.join(', ')} that was carried there after the branch was cut; an edit on ${REGISTRY_BRANCH} would conflict at every merge of ${name}, and nothing could then resolve it (ADR-0032 decision 6). Merge or delete ${name} first, then run this again`
+      );
+    }
+  }
+}
+
+/** Whether the store, at its ref, holds a document of that id. */
+async function holds(store: { getDocument: OperatorStore['getDocument'] }, id: string): Promise<boolean> {
+  try {
+    await store.getDocument(id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** What a commit made without the hub's rules says about itself (decision 4). */
 export const UNCHECKED_NOTE = "[operator: the hub's rules were skipped]";
 
@@ -178,6 +253,7 @@ export async function putDocuments(opts: {
   if (!opts.documents.length) throw new OperatorError('Nothing to write: the input holds no documents');
   const who = await operatorIdentity(opts.as);
   const documents = parseDocuments(opts.documents, { operator: true });
+  if (opts.branch === REGISTRY_BRANCH) await requireUsersWritable(documents);
   const message = opts.unchecked ? `${reason} ${UNCHECKED_NOTE}` : reason;
   const { commit, result } = await asOperatorCommit(
     opts.branch,

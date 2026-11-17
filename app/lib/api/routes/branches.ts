@@ -133,7 +133,7 @@ async function inHistory(commit: string, start: Store): Promise<boolean> {
  * or when a source commit's merge metadata names it (the source merged the
  * target there).
  */
-async function mergeBase(target: Store, source: Store): Promise<string | undefined> {
+export async function mergeBase(target: Store, source: Store): Promise<string | undefined> {
   const sourceLog = await fullLog(source);
   const sourceIds = new Set(sourceLog.map((commit) => commit.id));
   const mergedBySource = new Set(sourceLog.map(mergeSourceOf).filter((id): id is string => !!id));

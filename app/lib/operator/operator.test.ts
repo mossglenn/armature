@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../api/app';
 import { InvariantError } from '../api/invariants';
-import { createStore, StoreError } from '../api/store';
+import { createOperatorStore, createStore, StoreError } from '../api/store';
 import { checkBranch, WRITE_ONLY_RULES } from './check';
 import { deleteDocument, deleteScratchBranch, OperatorError, operatorMetadata, putDocuments, UNCHECKED_NOTE } from './repair';
 
@@ -227,6 +227,66 @@ describe('grants on main through put (ADR-0068 decision 6)', () => {
     expect((await byRoute.json()).issues[0].message).toContain('not a writable document type');
     await deleteDocument({ id, branch: 'main', as: OPERATOR, reason: 'The test is over' });
   });
+});
+
+describe("a User on main is one person's, and is edited only where no merge would then conflict (the 2026-11-09 review's Q4, decided 2026-11-16)", () => {
+  const post = (name: string) => app.request('/api/v1/branches', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Armature-User': OPERATOR }, body: JSON.stringify({ name }) });
+  const person = (label: string) => ({ '@type': 'User', '@id': `User/q4-${label}-${stamp}`, displayName: `Q4 ${label}`, externalId: `q4-${label}-${stamp}@example.edu` });
+  const mainStore = () => createOperatorStore({ branch: 'main' });
+  const put = (document: Record<string, unknown>, reason: string) => putDocuments({ branch: 'main', documents: [document], as: OPERATOR, reason });
+
+  it('refuses a second User under an identity main already has, and check reports one that got there another way', async () => {
+    const first = person('first');
+    await put(first, 'A person registered');
+    try {
+      await expect(put({ ...first, '@id': `User/q4-twin-${stamp}` }, 'The same person again')).rejects.toThrow(/already registered/);
+      // The same external identifier at another issuer is another person (ADR-0067 decision 1).
+      const elsewhere = { ...first, '@id': `User/q4-elsewhere-${stamp}`, issuer: 'https://login.example.org' };
+      await put(elsewhere, 'The same identifier at another provider');
+      await deleteDocument({ id: elsewhere['@id'], branch: 'main', as: OPERATOR, reason: 'The test is over' });
+
+      // Past the operator's tools, straight into the store: check says which two.
+      const twin = { ...first, '@id': `User/q4-twin-${stamp}` };
+      await mainStore().insertDocuments([twin], { author: 'User/demo-designer', message: 'A duplicate, for check to find' });
+      const found = (await checkBranch(createStore({ branch: 'main' }))).violations.filter((v) => v.code === 'duplicate_user');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain(first['@id']);
+      expect(found[0].message).toContain(twin['@id']);
+      await mainStore().deleteDocument(twin['@id'], { author: 'User/demo-designer', message: 'Test cleanup' });
+      expect((await checkBranch(createStore({ branch: 'main' }))).violations.filter((v) => v.code === 'duplicate_user')).toEqual([]);
+    } finally {
+      await deleteDocument({ id: first['@id'], branch: 'main', as: OPERATOR, reason: 'The test is over' }).catch(() => undefined);
+    }
+  });
+
+  it('edits a User whom branches hold by ancestry, and refuses while a branch holds a copy carried there after it was cut', async () => {
+    const early = `test-operator-q4-early-${stamp}`;
+    const late = `test-operator-q4-late-${stamp}`;
+    const user = person('edited');
+    // A branch cut before the person was registered, then the person, then a branch cut after.
+    expect((await post(early)).status).toBe(201);
+    await put(user, 'A person registered');
+    expect((await post(late)).status).toBe(201);
+    try {
+      // The later branch holds them as main did when it was cut: an edit merges as any change does.
+      await put({ ...user, email: 'first@example.edu' }, 'An email added');
+      // The earlier branch gets its copy as the write pipeline carries an author's (ADR-0032 decision 4): an insert of its own.
+      const current = (await mainStore().getDocument(user['@id'])).document;
+      await createOperatorStore({ branch: early }).insertDocuments([current], { author: 'User/demo-designer', message: 'The author carried into the branch' });
+      await expect(put({ ...user, email: 'second@example.edu' }, 'The email corrected')).rejects.toThrow(new RegExp(`Branch ${early} holds a copy`));
+      expect((await mainStore().getDocument(user['@id'])).document.email).toBe('first@example.edu');
+      // Writing them again unchanged is no edit, and is not refused for the branch's sake.
+      await expect(put({ ...user, email: 'first@example.edu' }, 'Nothing changed')).rejects.toThrow(/changed nothing/);
+      // With that branch gone, the edit goes through.
+      await deleteScratchBranch(early, AS_OPERATOR);
+      await put({ ...user, email: 'second@example.edu' }, 'The email corrected');
+      expect((await mainStore().getDocument(user['@id'])).document.email).toBe('second@example.edu');
+    } finally {
+      await deleteScratchBranch(early, AS_OPERATOR).catch(() => undefined);
+      await deleteScratchBranch(late, AS_OPERATOR).catch(() => undefined);
+      await deleteDocument({ id: user['@id'], branch: 'main', as: OPERATOR, reason: 'The test is over' }).catch(() => undefined);
+    }
+  }, 60_000);
 });
 
 describe('the skip stays operator-only', () => {
