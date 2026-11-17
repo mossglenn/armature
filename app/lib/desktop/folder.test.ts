@@ -52,6 +52,31 @@ describe('syncClientOf', () => {
   });
 });
 
+describe("what the path alone does not say (the 2026-11-09 review's C14)", () => {
+  it('follows a link: a folder that leads into a synced one is judged where it leads', () => {
+    const linked: Machine = { ...mac, resolve: (path) => path.replace('/Users/amos/Work', '/Users/amos/Library/Mobile Documents/com~apple~CloudDocs/Work') };
+    expect(syncClientOf('/Users/amos/Work/Armature', linked)).toBe('iCloud Drive');
+    expect(syncClientOf('/Users/amos/Elsewhere/Armature', linked)).toBeUndefined();
+  });
+
+  it("knows iCloud's Desktop and Documents by the attribute the two folders carry, and nothing else by it", () => {
+    const provider = 'com.apple.CloudDocs.iCloudDriveFileProvider/52C4531D-11F5-4EB6-91A2-8D88F00D433E';
+    const asked: string[] = [];
+    const on: Machine = { ...mac, fileProvider: (path) => (asked.push(path), path === '/Users/amos/Documents' || path === '/Users/amos/Desktop' ? provider : undefined) };
+    expect(syncClientOf('/Users/amos/Documents/Armature', on)).toBe('iCloud Drive');
+    expect(syncClientOf('/Users/amos/Desktop', on)).toBe('iCloud Drive');
+    // A folder under neither is not asked about: the attribute is read for those two alone.
+    asked.length = 0;
+    expect(syncClientOf('/Users/amos/Music/Armature', on)).toBeUndefined();
+    expect(asked).toEqual([]);
+    // The setting off: the folders carry no such attribute, or another provider's.
+    expect(syncClientOf('/Users/amos/Documents/Armature', { ...mac, fileProvider: () => undefined })).toBeUndefined();
+    expect(syncClientOf('/Users/amos/Documents/Armature', { ...mac, fileProvider: () => 'com.example.other/1' })).toBeUndefined();
+    // No such rule elsewhere.
+    expect(syncClientOf('/home/amos/Documents/Armature', { ...linux, fileProvider: () => provider })).toBeUndefined();
+  });
+});
+
 describe('syncedFolderWarning', () => {
   it('names the client and both costs the rehearsal measured, or says nothing', () => {
     const warning = syncedFolderWarning('/Users/amos/Library/Mobile Documents/com~apple~CloudDocs/Armature', mac);

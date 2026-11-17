@@ -42,6 +42,8 @@ export interface IssuerMetadata {
   issuer: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
+  /** Where a token is revoked (RFC 7009), when the provider names one over https; a sign-out posts the refresh token there. */
+  revocationEndpoint?: string;
 }
 
 /** The tokens a sign-in or a refresh gives. */
@@ -126,7 +128,43 @@ export async function issuerMetadata(issuer: string, fetchFn: FetchLike = fetch)
       throw new ApiError(400, 'insecure_issuer', `${address} names the ${name} ${JSON.stringify(endpoint)}, which is not an https address, so the program will not sign in there`, { issuer: expected, endpoint: name });
     }
   }
-  return { issuer: expected, authorizationEndpoint: authorization_endpoint, tokenEndpoint: token_endpoint };
+  const revocation = body.revocation_endpoint;
+  return {
+    issuer: expected,
+    authorizationEndpoint: authorization_endpoint,
+    tokenEndpoint: token_endpoint,
+    // An endpoint the program would not post a token to is left out: revoking is a courtesy, never a reason to refuse a sign-in.
+    ...(typeof revocation === 'string' && isSecureAddress(revocation) ? { revocationEndpoint: revocation } : {}),
+  };
+}
+
+/**
+ * Tells the provider a refresh token is no longer wanted (RFC 7009), at the sign-out. Until
+ * 2026-11-16 a sign-out forgot the token here and left it valid at the provider for its whole
+ * life, so a copy taken from the keychain earlier still signed in (the 2026-11-09 review's C18).
+ * Best effort: a provider that names no endpoint, cannot be reached or refuses changes nothing
+ * about the sign-out, which has already forgotten the token; what happened is returned for the log.
+ */
+export async function revokeRefreshToken(
+  identity: { issuer: string; clientId: string },
+  refreshToken: string,
+  fetchFn: FetchLike = fetch
+): Promise<'revoked' | 'no_endpoint' | 'failed'> {
+  try {
+    const { revocationEndpoint } = await issuerMetadata(identity.issuer, fetchFn);
+    if (!revocationEndpoint) return 'no_endpoint';
+    const res = await fetchFn(revocationEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      // A public client names itself; it has no secret to authenticate with (RFC 7009 §2.1).
+      body: new URLSearchParams({ token: refreshToken, token_type_hint: 'refresh_token', client_id: identity.clientId }).toString(),
+      redirect: 'error',
+      signal: AbortSignal.timeout(ISSUER_CALL_MS),
+    });
+    return res.ok ? 'revoked' : 'failed';
+  } catch {
+    return 'failed';
+  }
 }
 
 /**

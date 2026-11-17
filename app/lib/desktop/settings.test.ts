@@ -4,13 +4,13 @@
  * cleared, the file read and written in a temporary data folder, the remote's
  * change rule. No store.
  */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_SNAPSHOT_BUDGET } from '../api/config';
 import { ApiError } from '../api/errors';
-import { changeRefusal, DEFAULT_PORT, defaultSettings, needsRestart, parseSettings, readSettings, workspacesFolder, writeSettings } from './settings';
+import { changeRefusal, DEFAULT_PORT, defaultSettings, needsRestart, parseSettings, readSettings, readSettingsForStart, workspacesFolder, writeSettings } from './settings';
 
 const absolute = process.platform === 'win32' ? 'C:\\Users\\amos\\Armature' : '/Users/amos/Armature';
 const INSTANCE = { name: 'Armature at Example University', api: 'https://api.armature.example.edu', program: { releases: 'https://github.com/mossglenn/armature/releases' } };
@@ -103,6 +103,39 @@ describe('the settings file', () => {
     await expect(readSettings(dataDir)).rejects.toMatchObject({ code: 'bad_settings', details: { path: join(dataDir, 'settings.json') } });
     await writeFile(join(dataDir, 'settings.json'), JSON.stringify({ port: 'x' }));
     await expect(readSettings(dataDir)).rejects.toMatchObject({ code: 'bad_settings', details: { field: 'port' } });
+  });
+
+  it("reads what it can for a start: a setting it does not know or cannot use is left out and named, the rest stand (the 2026-11-09 review's C12)", async () => {
+    expect(await readSettingsForStart(dataDir)).toEqual({ settings: defaultSettings(), problems: [] });
+    // A file a later version wrote, and one value gone wrong by hand.
+    await writeFile(join(dataDir, 'settings.json'), JSON.stringify({ remote: 'https://api.armature.example.edu', port: 'x', theme: 'dark', snapshots: 4 }));
+    const read = await readSettingsForStart(dataDir);
+    expect(read.settings).toEqual({ ...defaultSettings(), remote: 'https://api.armature.example.edu', snapshots: 4 });
+    expect(read.problems).toHaveLength(2);
+    expect(read.problems.join(' ')).toMatch(/port/);
+    expect(read.problems.join(' ')).toMatch(/theme is not a setting/);
+    // The file is as it was until something is saved.
+    expect(JSON.parse(await readFile(join(dataDir, 'settings.json'), 'utf8')).theme).toBe('dark');
+  });
+
+  it('moves a file that is not a JSON object aside and starts from the defaults, losing nothing (C12)', async () => {
+    for (const [index, text] of ['{ not json', '[1, 2]'].entries()) {
+      await writeFile(join(dataDir, 'settings.json'), text);
+      const read = await readSettingsForStart(dataDir, () => new Date(Date.UTC(2026, 10, 16, 12, 0, index)));
+      expect(read.settings).toEqual(defaultSettings());
+      expect(read.problems).toHaveLength(1);
+      const aside = `settings.json.unreadable-20261116T12000${index}Z`;
+      expect(read.problems[0]).toContain(aside);
+      expect(await readFile(join(dataDir, aside), 'utf8')).toBe(text);
+    }
+    expect(await readdir(dataDir)).not.toContain('settings.json');
+  });
+
+  it('writes one at a time: saves sent together all land, the last one standing (C12)', async () => {
+    const saves = [3101, 3102, 3103, 3104].map((port) => writeSettings(dataDir, parseSettings({ port })));
+    await expect(Promise.all(saves)).resolves.toBeDefined();
+    expect((await readSettings(dataDir)).port).toBe(3104);
+    expect((await readdir(dataDir)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   });
 
   it('keeps the workspaces in the data folder unless a folder is chosen', () => {

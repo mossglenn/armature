@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { posix, win32 } from 'node:path';
 
@@ -16,6 +18,17 @@ import { posix, win32 } from 'node:path';
  * `Google Drive`, `GoogleDrive`, `My Drive`, `iCloudDrive`). A synced folder
  * under another name is not recognized; the warning is a help, not a guard.
  *
+ * Since 2026-11-16 (the 2026-11-09 review's C14) two things the path alone
+ * does not say are asked of the machine. A link is followed first, so a
+ * folder that is a symbolic link into a synced one is judged where it leads.
+ * And on macOS, iCloud's "Desktop & Documents Folders" setting syncs
+ * `~/Desktop` and `~/Documents` where they are, with nothing in their paths
+ * to show it: the folder then carries the extended attribute
+ * `com.apple.file-provider-domain-id` naming iCloud's file provider (seen on
+ * a Mac with the setting on, 2026-11-16), which is read for those two
+ * folders alone. Still unrecognized: Box, Nextcloud and Google Drive's
+ * shared drives under names of their own.
+ *
  * The machine is an argument, so the rules for each system are tested on
  * any; the default is this machine.
  */
@@ -24,9 +37,39 @@ export interface Machine {
   platform: NodeJS.Platform;
   home: string;
   env: Readonly<Record<string, string | undefined>>;
+  /** Where a path leads once its links are followed; the path itself when it cannot be told (a folder not yet made). Absent, paths are taken as written. */
+  resolve?: (path: string) => string;
+  /** A folder's file-provider domain, macOS's `com.apple.file-provider-domain-id`, or undefined when it has none. Absent, none is read. */
+  fileProvider?: (path: string) => string | undefined;
 }
 
-const thisMachine = (): Machine => ({ platform: process.platform, home: homedir(), env: process.env });
+/** The nearest existing ancestor's real path with the rest appended, so a folder not yet made under a link is still judged where it will be. */
+function realPath(path: string): string {
+  const { dirname, basename, join } = process.platform === 'win32' ? win32 : posix;
+  try {
+    return realpathSync.native(path);
+  } catch {
+    const parent = dirname(path);
+    return parent === path ? path : join(realPath(parent), basename(path));
+  }
+}
+
+/** macOS's file-provider attribute on `path`, read with the system's own tool since Node reads no extended attributes. */
+function fileProviderOf(path: string): string | undefined {
+  try {
+    return execFileSync('/usr/bin/xattr', ['-p', 'com.apple.file-provider-domain-id', path], { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const thisMachine = (): Machine => ({
+  platform: process.platform,
+  home: homedir(),
+  env: process.env,
+  resolve: realPath,
+  ...(process.platform === 'darwin' ? { fileProvider: fileProviderOf } : {}),
+});
 
 /** The environment variables the OneDrive client sets on Windows, each naming a synced folder. */
 const ONEDRIVE_VARIABLES = ['OneDrive', 'OneDriveCommercial', 'OneDriveConsumer'];
@@ -48,6 +91,11 @@ function cloudStorageClient(folder: string): string {
 
 /** The sync client that keeps `folder`, or undefined when none is recognized. */
 export function syncClientOf(folder: string, machine: Machine = thisMachine()): string | undefined {
+  const resolved = machine.resolve?.(folder) ?? folder;
+  return clientOfPath(folder, machine) ?? (resolved === folder ? undefined : clientOfPath(resolved, machine));
+}
+
+function clientOfPath(folder: string, machine: Machine): string | undefined {
   const path = machine.platform === 'win32' ? win32 : posix;
   // Case decides nothing on the default file systems of macOS and Windows.
   const fold = machine.platform === 'linux' ? (s: string) => s : (s: string) => s.toLowerCase();
@@ -64,6 +112,11 @@ export function syncClientOf(folder: string, machine: Machine = thisMachine()): 
     if (within(path.join(machine.home, 'Library', 'Mobile Documents'))) return 'iCloud Drive';
     const cloud = within(path.join(machine.home, 'Library', 'CloudStorage'));
     if (cloud) return cloud.length ? cloudStorageClient(cloud[0]) : 'a sync client';
+    // "Desktop & Documents Folders": the two folders synced in place, told only by the attribute iCloud's provider sets on them.
+    for (const name of ['Desktop', 'Documents']) {
+      const synced = path.join(machine.home, name);
+      if (within(synced) && /clouddocs|icloud/i.test(machine.fileProvider?.(synced) ?? '')) return 'iCloud Drive';
+    }
   }
   if (machine.platform === 'win32') {
     for (const variable of ONEDRIVE_VARIABLES) {

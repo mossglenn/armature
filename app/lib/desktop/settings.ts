@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, rename } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { DEFAULT_SNAPSHOT_BUDGET } from '../api/config';
 import { ApiError } from '../api/errors';
@@ -175,9 +175,60 @@ export async function readSettings(dataDir: string): Promise<DesktopSettings> {
   }
 }
 
-/** Writes the settings to `dataDir` whole: a temporary name, flushed, renamed into place. */
-export async function writeSettings(dataDir: string, settings: DesktopSettings): Promise<void> {
-  await writeWhole(join(dataDir, SETTINGS_FILE), `${JSON.stringify(settings, null, 2)}\n`);
+/**
+ * The settings in `dataDir` for a start, which a faulty file must not prevent (the 2026-11-09
+ * review's C12): until 2026-11-16 a file that was not JSON, or that held a key this version does
+ * not know (written by a later version, then a downgrade), failed the start with a 400 and the
+ * person had to delete it by hand. Each setting is read on its own: one that is unknown or
+ * faulty is left out, the default taking its place, and named in `problems`; the rest stand. A
+ * file that is not JSON is moved aside, kept under the name returned, and the defaults are used.
+ * The file is rewritten only by the next save, which keeps what was read.
+ */
+export async function readSettingsForStart(dataDir: string, now: () => Date = () => new Date()): Promise<{ settings: DesktopSettings; problems: string[] }> {
+  const path = join(dataDir, SETTINGS_FILE);
+  let raw: string;
+  try {
+    raw = await readFile(path, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { settings: defaultSettings(), problems: [] };
+    throw err;
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    value = undefined;
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    const aside = `${path}.unreadable-${now().toISOString().replace(/\.\d+Z$/, 'Z').replace(/[-:]/g, '')}`;
+    try {
+      await rename(path, aside);
+      return { settings: defaultSettings(), problems: [`${path} is not a JSON object; it was moved to ${aside} and the program starts from the defaults`] };
+    } catch {
+      return { settings: defaultSettings(), problems: [`${path} is not a JSON object and could not be moved aside; the program starts from the defaults, and the next save replaces it`] };
+    }
+  }
+  let settings = defaultSettings();
+  const problems: string[] = [];
+  for (const [key, given] of Object.entries(value as Record<string, unknown>)) {
+    try {
+      settings = parseSettings({ [key]: given }, settings);
+    } catch (err) {
+      if (!(err instanceof ApiError)) throw err;
+      problems.push(`${path}: ${err.message}; the setting is left out until it is saved again`);
+    }
+  }
+  return { settings, problems };
+}
+
+/** One write of the settings at a time: two together shared one temporary name, and the second rename failed (C12). */
+let writing: Promise<void> = Promise.resolve();
+
+/** Writes the settings to `dataDir` whole: a temporary name, flushed, renamed into place; after any write already under way. */
+export function writeSettings(dataDir: string, settings: DesktopSettings): Promise<void> {
+  const write = writing.then(() => writeWhole(join(dataDir, SETTINGS_FILE), `${JSON.stringify(settings, null, 2)}\n`));
+  writing = write.catch(() => undefined);
+  return write;
 }
 
 /**

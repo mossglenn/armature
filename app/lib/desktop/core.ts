@@ -1,4 +1,5 @@
 import type { Readable, Writable } from 'node:stream';
+import { chmod, mkdir, readdir } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { createClient, HubError, type Discovery } from '@armature/client';
 import { createApp } from '../api/app';
@@ -15,8 +16,8 @@ import { readChecks, writeChecks } from './checks';
 import { credential, type Credential } from './credential';
 import { syncedFolderWarning } from './folder';
 import { answerFromResponse, ok, openChannel, type Answer, type ControlEvent, type ControlRequest, type Handler } from './protocol';
-import { changeRefusal, needsRestart, parseSettings, readSettings, workspacesFolder, writeSettings, type DesktopSettings, type RemoteIdentity } from './settings';
-import { issuerMetadata, signIn, type FetchLike } from './signIn';
+import { changeRefusal, needsRestart, parseSettings, readSettingsForStart, workspacesFolder, writeSettings, type DesktopSettings, type RemoteIdentity } from './settings';
+import { issuerMetadata, revokeRefreshToken, signIn, type FetchLike } from './signIn';
 
 /**
  * The desktop program's core (docs/desktop-program-plan.md §3 and §5;
@@ -191,6 +192,33 @@ export function runCore(options: CoreOptions): Core {
   };
   const named = (request: ControlRequest) => encodeURIComponent(text(request, 'workspace'));
 
+  /**
+   * A folder chosen for the workspaces is an empty one, or one that already holds a store (the
+   * 2026-11-09 review's C13). Every start clears the temporary files a killed write left in the
+   * folder and in its subfolders named as branches are, by a pattern another program's files can
+   * match; pointed at `~/Documents`, the hub deleted them. Refused before it is saved: 409
+   * `folder_in_use`. A folder not yet made is made at the start. Hidden entries and the two files
+   * a file manager leaves in any folder it has shown do not make a folder "in use".
+   */
+  const requireStoreFolder = async (folder: string): Promise<void> => {
+    let entries: string[];
+    try {
+      entries = await readdir(folder);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw new ApiError(400, 'bad_settings', `${folder} cannot be read as a folder: ${(err as Error).message}`, { field: 'folder' });
+    }
+    if (entries.includes('store.json')) return;
+    const others = entries.filter((name) => !name.startsWith('.') && !/^(desktop\.ini|thumbs\.db)$/i.test(name));
+    if (!others.length) return;
+    throw new ApiError(
+      409,
+      'folder_in_use',
+      `${folder} holds other files (${others.slice(0, 3).join(', ')}${others.length > 3 ? ', …' : ''}); choose an empty folder, or one that already holds this program's workspaces`,
+      { field: 'folder', folder }
+    );
+  };
+
   const workspaceNames = async (): Promise<string[]> => {
     const { dataDir: dir, settings: current } = opened();
     const records = running ? running.config.workspaces! : folderRecords(workspacesFolder(dir, current));
@@ -224,7 +252,8 @@ export function runCore(options: CoreOptions): Core {
       role: 'workspace',
       remote: current.remote,
       workspaceDir: folder,
-      ...(current.identity.resolver === 'oidc' ? { remoteToken } : {}),
+      // `held` is read at each call: the credential may be made, cleared or replaced while the hub runs (C15).
+      ...(current.identity.resolver === 'oidc' ? { remoteToken, forgetRemoteToken: () => held?.forget() } : {}),
       store: () => ({ files }),
       identity: 'header',
       snapshotBudget: current.snapshots,
@@ -275,17 +304,29 @@ export function runCore(options: CoreOptions): Core {
     });
   };
 
-  const stopHub = async (): Promise<boolean> => {
-    if (starting) await starting.catch(() => undefined);
-    signingIn?.abort();
-    const was = running;
-    if (!was) return false;
-    running = undefined;
-    await was.hub.close();
-    await was.unlock();
-    log('Armature hub stopped');
-    emit({ event: 'hub', state: 'stopped' });
-    return true;
+  /**
+   * One stop at a time, and a start waits for it (the 2026-11-09 review's C11). `running` is cleared
+   * before the listener has closed and the lock is released, so until 2026-11-16 a `start` sent
+   * meanwhile (the tray and a page together) took the folder's lock again, and the first stop's
+   * `unlock` then removed the new lock file from under the hub that held it.
+   */
+  let stopping: Promise<boolean> | undefined;
+  const stopHub = (): Promise<boolean> => {
+    stopping ??= (async () => {
+      if (starting) await starting.catch(() => undefined);
+      signingIn?.abort();
+      const was = running;
+      if (!was) return false;
+      running = undefined;
+      await was.hub.close();
+      await was.unlock();
+      log('Armature hub stopped');
+      emit({ event: 'hub', state: 'stopped' });
+      return true;
+    })().finally(() => {
+      stopping = undefined;
+    });
+    return stopping;
   };
 
   /**
@@ -349,9 +390,18 @@ export function runCore(options: CoreOptions): Core {
       const refresh = optionalText(request, 'refreshToken');
       const kept = optionalText(request, 'localToken');
       starting = (async () => {
+        // A stop still closing the listener and releasing the lock is waited for, so this start takes a lock no one else removes (C11).
+        if (stopping) await stopping.catch(() => undefined);
         if (dataDir !== dir) me = undefined;
         dataDir = dir;
-        settings = await readSettings(dir);
+        // The program's own folder, the person's alone: it holds the settings and, by default, the workspaces (C12).
+        // Windows keeps a profile's folders to their person by its own means and ignores the mode.
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        if (process.platform !== 'win32') await chmod(dir, 0o700).catch(() => undefined);
+        // A faulty settings file does not keep the program from starting: what could not be read is said in the log (C12).
+        const read = await readSettingsForStart(dir);
+        settings = read.settings;
+        for (const problem of read.problems) log(problem, 'warn');
         if (refresh !== undefined && refresh !== keptRefresh) {
           keptRefresh = refresh;
           held?.clear();
@@ -422,6 +472,7 @@ export function runCore(options: CoreOptions): Core {
       const next = parseSettings(change, current);
       const refusal = changeRefusal(current, next, await workspaceNames());
       if (refusal) throw refusal;
+      if (next.folder !== undefined && next.folder !== current.folder) await requireStoreFolder(next.folder);
       await writeSettings(dir, next);
       settings = next;
       const warning = syncedFolderWarning(workspacesFolder(dir, next));
@@ -463,9 +514,18 @@ export function runCore(options: CoreOptions): Core {
         keptRefresh = tokens.refreshToken;
         me = undefined;
         if (tokens.refreshToken) context.emit({ event: 'credential', refreshToken: tokens.refreshToken });
-        // Who the remote says the person is, the check the hub makes before any workspace work; a person it does not know sees its refusal.
-        const person = await whoAmI();
         staysSignedIn = tokens.refreshToken !== undefined;
+        // Who the remote says the person is, the check the hub makes before any workspace work; a person it does not know sees its refusal.
+        // The sign-in itself stands when that read is refused or cannot be made (decided 2026-11-16, Amos; the 2026-11-09 review's C16):
+        // the credential is kept, so a person an administrator registers afterwards need not sign in again, and the refusal says so
+        // (`signedIn: true`, `staysSignedIn`), where it used to read as a failed sign-in that the next start contradicted.
+        let person: Awaited<ReturnType<typeof whoAmI>>;
+        try {
+          person = await whoAmI();
+        } catch (err) {
+          if (err instanceof ApiError) throw new ApiError(err.status, err.code, err.message, { ...err.details, signedIn: true, staysSignedIn });
+          throw err;
+        }
         return ok({ signedIn: true, person, staysSignedIn });
       } finally {
         signingIn = undefined;
@@ -517,10 +577,20 @@ export function runCore(options: CoreOptions): Core {
 
     signOut: async () => {
       signingIn?.abort();
+      const identity = settings ? oidcOf(settings.identity) : undefined;
+      const refresh = keptRefresh;
       held?.clear();
       held = undefined;
       keptRefresh = undefined;
       me = undefined;
+      // The provider is told the token is no longer wanted, where it takes that (C18). Not waited for:
+      // the sign-out is done here either way, and an unreachable provider must not hold the page.
+      if (identity && refresh) {
+        void revokeRefreshToken(identity, refresh, fetchFn).then((outcome) => {
+          if (outcome === 'revoked') log(`Signed out: ${identity.issuer} has revoked the kept sign-in`);
+          else if (outcome === 'failed') log(`Signed out here; ${identity.issuer} could not be told to revoke the kept sign-in, which stays valid there until it expires`, 'warn');
+        });
+      }
       return ok({ signedOut: true });
     },
 
@@ -597,7 +667,8 @@ export function runCore(options: CoreOptions): Core {
   const channel = openChannel({
     input: options.input,
     output: options.output,
-    handlerFor: (type) => handlers[type],
+    // By own name only: `constructor` and `__proto__` name members every object has, and are no requests (C10).
+    handlerFor: (type) => (Object.hasOwn(handlers, type) ? handlers[type] : undefined),
     // The shell is gone: a sign-in waiting on the browser has no one to answer, and would hold the hub open for its five minutes (C3).
     onInputEnd: () => signingIn?.abort(),
   });
