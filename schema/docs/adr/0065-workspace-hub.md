@@ -167,6 +167,18 @@ Three facts constrain the answer:
    > the branch from the response and never derives it (`docs/client-changes.md`, the note on
    > 2026-11-01's entry).
 
+   > **Note (2026-11-16), decided** (the code review of 2026-11-09's D4 and E2; Amos, as
+   > recommended): the email's local part stays in the branch name, and the cost is recorded. Since
+   > 2026-11-05 the registry is a maintainer's and an administrator's read under `oidc` (ADR-0068
+   > decision 4, note), while `GET /branches` is open to any token, a service's included, so every
+   > token holder learns part of each workspace owner's address from the list of branches. That
+   > was not weighed on 2026-11-08. It is kept because a list of branches that names their owners
+   > is what a maintainer reads to do their work, and an opaque handle is what the note above
+   > turned away from. Declined: a handle the person chooses, kept on the `User` (a schema change
+   > for a label), and an opaque handle under `oidc`. An instance whose branch names must not name
+   > people is the case that reopens this. The exports do not carry the handle (ADR-0031, note of
+   > 2026-11-16).
+
    > **Later change (2026-11-07), decided (Amos) and built:** a workspace's end, which this decision
    > left to delivery alone. The desktop program's first rehearsal found it: a workspace delivered
    > without `deleteWorkspace` could not be removed, and one abandoned never could. `DELETE
@@ -353,6 +365,33 @@ Three facts constrain the answer:
    > check, tested only through the core's harness; over deleting the commits; and over one
    > exported file, a new format to keep. It rides client revision 2026-11-12. `cycle.test.ts`,
    > `workspaceFolder.test.ts`, `core.test.ts`, the shell's `pages.spec.ts`.
+
+   > **Note (2026-11-16), from the code review of 2026-11-09** (its W5 to W7, W9 and W10): what a
+   > remote supplies is checked before this hub keeps or follows it, and a workspace is worked with
+   > only through the remote it was cloned from. **Another remote.** A record names its remote, and
+   > the program lets the remote change only while no workspace exists, which it can judge for the
+   > folder in use alone; a folder set aside, a connection made elsewhere and the folder pointed at
+   > again left a hub over another remote's workspaces. Push, bring-in and deliver are then 409
+   > `other_remote`, the status says `reason: other_remote`, and a removal takes the workspace from
+   > this hub alone, the hub's remote `untouched`, since a branch of that name there is someone
+   > else's; a discard is unchanged. Refusing was chosen over rewriting the record to the new
+   > remote, which would push one instance's history into another. **Redirects.** The hub's client
+   > of its remote follows none (502 `remote_error`, `reason: redirect`, with where it pointed):
+   > the runtime's default re-sent the body, the person's identifier and `If-Match` to an address
+   > nobody configured, the token too within one origin. `ARMATURE_REMOTE_TOKEN` is refused at
+   > start for a remote over plain `http` that is not loopback, unless `ARMATURE_REHEARSAL=1`, as
+   > the desktop program already held its own remote (`insecure_remote`). **What is kept.** A
+   > merge's commit, a batch's, and a log's entries are commit identifiers or 502 `remote_error`
+   > (`not_a_commit`), thrown where the push's and the bring-in's markers stay so the next attempt
+   > settles from the remote's log; the mirror writes only `User` and `CheckRequirement` documents
+   > the remote listed as such; the connection profile is kept as its three fields, each a bounded
+   > string; an `asOf` that is no commit identifier names no snapshot. The clone's read of the
+   > remote's log ends after fifty pages, refuses a page that repeats a commit (`log_repeats`: a
+   > remote or a proxy that ignores `start`, which was read forever) and a log without the base
+   > (`log_without_base`, which was kept whole as if it began there). **Reserved names.** A branch
+   > the remote has is not cloned under `main`, a name shaped `at.<commit>`, `lock`, `store.json`
+   > or `checks.json` (400 `bad_name`, `reserved`). The new code and reasons ride client revision
+   > 2026-11-16. `workspace.test.ts`.
 
 7. **Tools reach a workspace hub on loopback, as its owner.** The `header` resolver serves, and
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the

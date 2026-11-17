@@ -243,6 +243,13 @@ registry correct meanwhile.
 > instance under `oidc`"). Now `put` admits `User` too (`isOperatorWritable` in `classes.ts`;
 > the routes still refuse it), on `main` only, as `Grant` (`operator.test.ts`).
 
+> **Note (2026-11-16):** a `put` of a `User` on `main` is refused in two cases, checked or
+> unchecked, since neither is a rule of one branch's state: a second `User` under an identity
+> `main` already has, and an edit while some branch holds a copy of that `User` carried there
+> after the branch was cut, which the edit would turn into a conflict at every merge of that
+> branch (ADR-0032 decision 6, note of this date; the code review of 2026-11-09's Q4). `check` on
+> `main` reports two `User` documents under one identity as `duplicate_user`.
+
 ## Alternatives considered
 
 - **A superuser mode on `/api/v1`** (a header or a role that skips the rules). Rejected: every

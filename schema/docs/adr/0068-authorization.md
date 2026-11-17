@@ -253,6 +253,14 @@ answers for, and not for another person, who never consented.
    > branch names arrive in its export as the copies ADR-0032 decision 5 put there. The
    > `export_full` operation of the morning is retired. Review B7's intent stands.
 
+   > **Note (2026-11-16), decided** (the code review of 2026-11-09's D4 and E2; Amos): the registry
+   > is closed to all but maintainers of `main` and administrators, and the list of branches is
+   > not. A workspace branch's name begins with its owner's email's local part (ADR-0065, notes of
+   > 2026-11-08 and 2026-11-16), so any identity that may read, a service included, learns that
+   > much of who works on the instance from `GET /branches`. Kept as it is, with this said: the
+   > branch list naming owners is the maintainer's working view, and the registry's gate keeps the
+   > rest of a person's record (the full address, the name, the institution) where it was.
+
 5. **Who may be named as an author.** Each write's author is the caller; or a registered agent
    acting for the caller (ADR-0067 decision 3), any agent whoever registered it, with the caller
    recorded in `Armature-On-Behalf-Of`; or, for a service holding an active `Relay` grant, the

@@ -176,6 +176,22 @@ What the store does, reproduced on 2026-10-08 in a scratch database (check lette
    conflicts at merge (W2d); deletion is administrative (ADR-0015 consequences, ADR-0024
    decision 5).
 
+   > **Note (2026-11-16), decided** (the code review of 2026-11-09's Q4; Amos): the edit exists
+   > since 2026-11-05 as the operator's `put` on `main` (ADR-0062, note of that day), and the
+   > re-carry this decision foresaw was never built. It is not built now either: the edit is
+   > refused instead where it would leave a conflict. Which branches that is turned out narrower
+   > than "a branch that holds the old copy": a branch cut after the person was registered holds
+   > them by ancestry and merges an edit as any other change, so only a copy the write pipeline
+   > carried into a branch after it was cut (decision 4), an insert of its own, differs from
+   > `main`'s as an `InsertConflict` (W2d). `put` finds such a branch by looking for the `User` on
+   > the branch and not at its common ancestor with `main`, names it, and refuses until it is
+   > merged or deleted. `put` also refuses a second `User` under an identity `main` already has,
+   > the issuer and the external identifier together (decision 2's "one `externalId` maps to one
+   > `User`", since ADR-0067 per issuer), and `check` reports two that got there another way
+   > (`duplicate_user`), the rule the deep review set aside until a way to breach it existed.
+   > Declined, the re-carry: writing the edited copy onto every such branch as commits the
+   > branches' owners did not make. `operator.test.ts`.
+
 7. **Agent users are ordinary `User` documents.** An agent's `externalId` begins with `agent:`,
    followed by the tool and an optional instance, `agent:coqui/item-drafter`; its `displayName`
    names the tool; it has no `email`; `institution` may name the operating organisation. Agents

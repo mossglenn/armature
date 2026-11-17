@@ -43,6 +43,21 @@ anticipated; ADR-0021 carries a dated note. Verified by `scripts/platform_checks
 > that date), so the profiles rewrite a branch that begins with either handle; a branch made
 > before, under `oidc`, begins with the identifier's.
 
+> **Note (2026-11-16), from the code review of 2026-11-09** (its E1): whose a branch is comes from
+> the `Owner` grant that names it, not from the name. The profiles matched a branch's beginning
+> against the handles of the people registered today, so an email corrected after a branch was made
+> left the old local part in a pseudonymous export, and of two people whose emails share a local
+> part the second one's branches took the first one's token, one person's work tied to another.
+> Now an owner whose handle the name begins with gives `<token>_<name>` as before; a name with a
+> `_` that begins with no handle its owner has now keeps none of itself, `<token>_<opaque>`, since
+> where the old label ends cannot be told; with no owner on record (a branch older than ownership,
+> a requirement's `fromPrefix`) the handle of exactly one person is rewritten to their token and
+> anything else with a `_` is `branch-<opaque>`; a name without a `_` is no workspace's and stays.
+> `<opaque>` is sixteen hexadecimal digits of the same HMAC, so one key gives one name across
+> exports and every record naming a branch names it alike. The cost is that a branch named with a
+> `_` by hand (`phase_2`) loses its name in these two profiles when it is not its owner's handle;
+> the `full` profile is unchanged. `handle.test.ts` holds the three cases.
+
 ## Context
 
 The position paper's §5 and §6 (plan principles P7 and P8) want learning scientists to adopt

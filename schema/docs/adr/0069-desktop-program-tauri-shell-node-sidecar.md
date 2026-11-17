@@ -58,6 +58,24 @@ ADR-0065 decision 7 carries a dated note of the same day for the local token kep
 > `not_connected`. Rehearsed on the Mac and the Windows PC first (`docs/desktop-program-plan.md`
 > §14 step 5).
 
+> **Note (2026-11-16, later):** the lower findings of the code review of 2026-11-09 on the core,
+> the shell and the pages (its banner lists each), on `main` after 0.1.4 and in no release yet.
+> Those that bear on the decisions here. Decision 4's life of the core: a `start` waits for a
+> `stop` that is still closing the listener and releasing the folder's lock (C11), and when the
+> core's process ends unexpectedly the window's **Start the hub** launches it again, where the
+> way back was to quit (S10). The core's protocol (decision 3): a request is a line of at most a
+> megabyte, an id is used again only after its reply, and no request is read while the shell is
+> not reading the replies (C17). The settings file is the core's (the plan's §9): a start no
+> longer fails on a file it cannot read whole, each setting being read on its own (C12), and a
+> folder named for the workspaces is an empty one or one that already holds a store (C13). The
+> credential (ADR-0067 decision 2): a token the remote refuses as invalid is renewed and the
+> request sent once more (C15), and a sign-out asks the provider to revoke the refresh token
+> (C18). A sign-in the provider granted stands when the remote then does not know the person, or
+> cannot be asked (C16, decided by Amos): the credential is kept, the refusal says `signedIn:
+> true`, and the page asks the remote again without a new sign-in once an administrator has
+> registered them. Left as it was, with the reason: the keychain write for a rotated token stays on the
+> shell's reader task, since moved off it the write could land after a sign-out's delete.
+
 ## Context
 
 A workspace hub is the API in a second role on a person's machine (ADR-0065). Until now its hosts

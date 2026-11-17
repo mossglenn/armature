@@ -236,6 +236,14 @@ plugin, outside the browser engine, so an origin rule does not touch it.
    > (`docs/client-changes.md`). Names chosen without a separate decision, open to overrule:
    > `ARMATURE_REHEARSAL`.
 
+   > **Note (2026-11-16), from the code review of 2026-11-09** (its A7 and A8): a token's `exp`,
+   > `nbf` and `iat` are read with thirty seconds of tolerance (`CLOCK_TOLERANCE_SECONDS`). `jose`
+   > allows none by default, so a hub a few seconds behind its provider refused a token just issued
+   > as `not_yet_valid`, and one ahead ended a token early; thirty seconds is under any access
+   > token's lifetime. And `GET /health/ready`, open without a token by decision 7's note, keeps
+   > its answer for two seconds per hub, so a caller with no credential costs the store one read
+   > per period rather than one per request. `oidc.test.ts`, `health.test.ts`.
+
 2. **A native client signs in as the person.** The workspace hub, Quiver and the Storyline bridge
    use the authorization code flow with PKCE (Proof Key for Code Exchange) and a loopback redirect,
    the standard for native applications (RFC 8252), and keep the refresh token in the operating
@@ -612,6 +620,21 @@ how an instance runs.
 > or 401 with `error`) is the provider's refusal and signs the person out; a 5xx or a 429 is
 > 503 `issuer_unreachable` and any other answer 502 `issuer_error`, and neither removes the
 > kept token.
+
+> **Note (2026-11-16), on decisions 2 and 4** (the code review of 2026-11-09, its C15, C18, V1 and
+> V2): a workspace hub whose remote refuses its token as `invalid_token` asks its host for a new
+> one and sends the request once more (`HubConfig.forgetRemoteToken`, the desktop core's
+> credential), as the viewer has since 2026-11-05; before, the program sent the refused token until
+> thirty seconds before its expiry. A sign-out posts the refresh token to the provider's
+> `revocation_endpoint` where its metadata names one over `https` (RFC 7009), best effort and not
+> waited for: the token was forgotten here and stayed valid there. The viewer's requests to the
+> hub's discovery, the issuer's metadata and its token endpoint each end within fifteen seconds;
+> it refuses metadata that describes another issuer than the one the hub names, before its client
+> secret is sent; and of several requests refused together only the first asks for a new token.
+> **Not built, V1's main fix:** the viewer still learns the issuer from the hub's `GET /discover`
+> and takes `http` for it. Giving the viewer `ARMATURE_OIDC_ISSUER` and the hub's `https` rule
+> changes `docker/docker-compose.yml` (the variable and `ARMATURE_REHEARSAL` passed to the
+> viewer), which needs its rehearsal under `oidc` before it merges.
 
 > **Note (2026-11-05):** the signing-key tests are `app/lib/api/oidc.test.ts`, over a scratch
 > database since first encounters register on `main`: a valid token registers an admitted person
