@@ -6,6 +6,54 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-16 to 17 (the code review's remaining findings and its four decisions; PRs #166 and #167)
+
+**Where things stood at the close.** **Phase 8, 2026-11-17; the code review's remaining findings are on `main` (PR #167), client revision 2026-11-16.** Nine commits (`642987f` to `0b3e8fa`) carry the 2026-11-09 review's lower findings across the hub, the workspace hub, the viewer's credential, the desktop core, the operator tools, the shell and its pages, and the four decisions Amos took on 2026-11-16 as recommended (D3, D4, Q4, C16); the review's banner says what landed and what did not. officepi serves revision 2026-11-16 at `0b3e8fa`, its `check` clean. The installed program is still 0.1.4, so the core's, the shell's and the pages' fixes reach a designer only with a 0.1.5, and none of them has been seen in the installed program. 746 tests in the app at the last full local run, 40 browser tests in the shell, 27 Rust tests. **Next: Amos's call among a 0.1.5 release with its rehearsal, Quiver resumed on the program (item 17) and Lint's first step (`docs/lint-plan.md`).**
+
+### Done
+
+- **PR #166** (the documents for 0.1.4, open at the last close) merged by rebase on Amos's word; `main` at `219c552`.
+- **PR #167** (`phase-8/review-remaining`, nine commits, on `main` as `642987f` to `0b3e8fa`; CI green on the pull request and on `main`), the 2026-11-09 review's remaining findings by its own identifiers:
+  - *The hub* (`642987f`): A7, `GET /health/ready` keeps its answer two seconds (`healthRoutes(now)`, `READY_KEPT_MS`); A8, thirty seconds of clock tolerance on a token (`CLOCK_TOLERANCE_SECONDS`); Q3, a write's head is read when the request arrives, before the caller is resolved (`arrivedAt` in `write.ts`), so a commit landing in between is 409 `document_moved`; E1 with D4, the pseudonymous export rewrites a branch's name by its `Owner` grant.
+  - *The workspace hub* (`cbcb848`): W5 to W7 and W9, what the remote supplies is checked (no redirect followed, 502 `remote_error` reason `redirect`; a commit identifier's shape, `not_a_commit`; the remote's log bounded at fifty pages, `log_repeats`, `log_without_base`; a document of the type asked for; a workspace's name no reserved file); W10, a workspace cloned from another remote is 409 `other_remote`, its removal local only; C15, a remote token the remote refuses is forgotten and asked for once more. Client revision 2026-11-16.
+  - *The viewer's credential* (`f332672`): V1 in part and V2, requests to the issuer bounded at fifteen seconds, the metadata's issuer compared, only the refused token forgotten.
+  - *The desktop core* (`32b0b47`): C10 to C14, C17, C18 (a line's length capped, an id in flight refused, the refresh token revoked at sign-out, settings writes serialized, the data folder 0700, 409 `folder_in_use`, a file provider's folder recognized); C16, a failed `whoAmI` keeps the sign-in and says so.
+  - *The operator* (`c73fc48`): Q4, `put` refuses a second `User` under one identity and an edit a carried copy would conflict with; `check` reports `duplicate_user` (`operator/identity.ts`).
+  - *The scripts* (`6895ed8`): D3, platform checks AO1 and AO2 report PASS or FAIL, failing on 12.0.7 with exit 0.
+  - *The shell and the pages* (`b1eed47`, `5811654`): S8 and S10 in part (a link's address as parsed and capped, a day's log file capped, a core that ended started again); P9 to P14 and C16's page.
+  - *The documents* (`0b3e8fa`): the reference, the revision list, the guides, `docs/deployment.md`'s "One hub per store", dated notes on ADR-0025, 0031, 0032, 0062, 0065, 0067, 0068 and 0069, the review's banner.
+- **officepi** updated on 2026-11-17 to `0b3e8fa`, revision 2026-11-16, in 51 s with no schema change; `check` clean over 81 documents.
+
+### Session notes
+
+- Amos asked for the review's remaining items, took the four decisions as recommended in one message, and gave each merge its own word. He ruled that the paragraph added to `docs/deployment.md` needed no rehearsal: it states a limit and changes no step.
+- The Q4 recommendation was narrowed after it was accepted: a copy of a `User` a branch holds by ancestry does not conflict at a merge, only one carried there by an independent insert (platform check W2d), so the operator refuses the edit only for a carried copy. Amos was told.
+- `npx prettier --write` was run once with no configuration in the repository and reformatted 18 files; they were restored with `git checkout` and the edits applied again.
+- Another session moved this checkout to `brand/dimensional-app-icon` (one icon commit, `9f18438`, untouched) before the commits were made; the work was stashed, carried to its own branch and committed there. One conflict at the rebase onto PR #166, in the review's banner, both bullets kept.
+- The full suite passed locally (746) before the four decision commits; after them only the targeted suites (175 tests in 10 files), the 40 browser tests, `tsc`, `eslint` and the bundles ran, and the pull request's CI was the first full run of the branch as pushed. Nothing was seen in the installed program.
+
+### Facts from 2026-11-16 to 17 worth keeping
+
+- The hub's `bodyLimit` reads a request's body before the route runs, so a slow body cannot hold a write between its arrival and its commit in a test; `writeQueue.test.ts` holds the identity read instead (`TerminusStore.prototype.queryDocuments('User')`). Home: that test's comment.
+- After a day of full runs `armature_test` gave seven timeouts; recreated from the seed. Home: SESSION.md, item 20 and Notes.
+- The fake core's revision is in the pages commit (`5811654`), since `fakeCore.ts` also holds page changes; between `cbcb848` and `5811654` the shell's browser test expects the older revision. No home; noted here.
+- On an instance the operator's check is `docker compose exec -T hub node operator.mjs check`; `docker compose run --rm operator check` is not a command. Home: `docs/deployment.md`; Claude's memory `officepi-raspberry-pi`.
+- No Prettier configuration exists in the repository. Home: Claude's memory `no-prettier-in-armature`; SESSION.md, Notes.
+
+### Decisions taken
+
+- **D3** (Amos, 2026-11-16): one hub per store is stated, not enforced; a lease only if a second hub becomes a planned arrangement; AO1 and AO2 are verdicts, looked at again when a TerminusDB release passes them. `docs/deployment.md`, "One hub per store"; ADR-0025, note of 2026-11-16.
+- **D4** (Amos): the pseudonymous export rewrites a branch's name by its `Owner` grant. ADR-0031, note of 2026-11-16.
+- **Q4** (Amos, narrowed as above): ADR-0032 and ADR-0062, notes of 2026-11-16.
+- **C16** (Amos): a failed `whoAmI` keeps the sign-in. ADR-0069, note of 2026-11-16.
+- **No rehearsal for a paragraph that changes no step** in `docs/deployment.md` (Amos, 2026-11-17, for PR #167).
+- Names chosen in PR #167 without a separate decision, Claude's, open to overrule: 409 `other_remote`, 409 `folder_in_use`, the `remote_error` reasons `redirect`, `not_a_commit`, `log_repeats` and `log_without_base`, `duplicate_user`. Their homes: `docs/api.md` and `docs/client-changes.md`, 2026-11-16, for the hub's; `docs/desktop-program.md` for the core's `folder_in_use`; the notes on ADR-0032 and ADR-0062 for `duplicate_user`, which `docs/deployment.md`'s account of `check` does not yet name (SESSION.md, item 36).
+- Not built, with the reason in the review's banner: V1's main fix, S10's keychain write off the reader task, Q2, S9, T5 to T8 (SESSION.md, item 36).
+
+### Moved from SESSION.md
+
+- **Choices of 2026-11-16 night, Claude's, open to overrule** (PR #165): 409 `not_connected` for the core's `whoAmI` under `header` with no remote, a code no page reaches; "Go on with it" on the connect step after an unknown identifier; no line on either page when the remote cannot be asked; the fake remote knows the seed's two people and no one else. Amos's own two choices that night are in the desktop plan's §14 step 5 and ADR-0069's note.
+
 ## 2026-11-16, night (the desktop program's 0.1.4: three fixes, the rehearsal on both machines, the release; PRs #165 and #166)
 
 **Where things stood at the close.** **Phase 8, 2026-11-16 night; the desktop program's 0.1.4 is released (PR #165; the documents in PR #166, open at the close).** `desktop-v0.1.4` (tagged at `e74781f`, published 03:46 UTC on 2026-11-17, the channel naming it) carries three fixes: the system's login entry made again at every start (the core's `start` reply carries the settings whether or not the hub started; the review's R8, completed), an identifier the remote does not know said on the connect step and the Settings page under `header` (the core's `whoAmI` answers there; saved either way), and the checks editor saying what it holds that the file does not. Rehearsed with debug builds on the Mac and the Windows PC, then both machines took the release: the Mac's entry moved back to `/Applications` at 0.1.4's first start, the PC started hidden after a sign-out. officepi serves revision 2026-11-15 at `a5fb7df`. 720 tests in the app, 40 browser tests in the shell, 26 Rust tests. **Next: Amos's call among Quiver resumed on the program (item 17), Lint's first step (`docs/lint-plan.md`) and the review's remaining findings (item 36).**
