@@ -84,6 +84,10 @@ Each of those ADRs gets a dated note pointing here when this one is accepted.
 > Decision 7's local token is unchanged; a later step of `docs/lint-plan.md` §10 may turn it into
 > scoped tokens.
 
+> **Note (2026-11-18):** decision 6 gains a later change, decided and not built: a workspace's
+> merges are with its parent, the branch it was created from, and a branch is either a workspace
+> or a shared branch, never both.
+
 ## Context
 
 Every client today is a client of one hub, over the network. Quiver, the local-first item manager
@@ -392,6 +396,35 @@ Three facts constrain the answer:
    > the remote has is not cloned under `main`, a name shaped `at.<commit>`, `lock`, `store.json`
    > or `checks.json` (400 `bad_name`, `reserved`). The new code and reasons ride client revision
    > 2026-11-16. `workspace.test.ts`.
+   >
+   > **Later change (2026-11-18, decided; not built):** a workspace's merges are with its *parent*,
+   > not with `main` as such. The parent is the branch the workspace was created from (`from` in
+   > `workspace.json`, which the hub already records), `main` when none was named. Bringing in
+   > merges the parent into the workspace, and delivery merges the workspace into the parent; with
+   > `main` as the parent, as every workspace has today, nothing changes. It follows from a rule
+   > this note makes explicit: **a branch is either a workspace, pushed to by its one writer, or a
+   > shared branch, only merged into; never both**, `main` being the top shared branch. The reason
+   > is decision 5: a push replays onto a branch that must not have moved, and a merge moves its
+   > target. So a workspace on a branch that receives merges is refused at its next push (412), and
+   > nothing takes the new commits in: bring-in reads only `main`, and every action but discard
+   > requires nothing unpushed. The same dead end meets any second writer on a branch: a person made
+   > `Maintainer` of someone else's workspace branch, a writer on an ownerless branch, or the owner
+   > pushing from a second computer. **Why now, unbuilt.** Asked by Amos on 2026-11-18 for an A/B
+   > test: two methods for one module's question bank, each a shared branch with several people's
+   > workspaces under it, the chosen one merged into `main` and the other kept as the record of the
+   > method not taken. It is recorded now so that the program's names are a parent's
+   > (`docs/naming-vocabulary.md`: "Update from <parent>", "Merge into <parent>") and nothing is
+   > renamed when it is built. **What building needs.** The bring-in's and the delivery's merges in
+   > `workspace/bringIn.ts`, and the delivery's dry run, take the record's parent; and a
+   > maintainer's actions on a shared branch, which the program does not have: creating one (the
+   > remote's `POST /branches`) and merging its own parent into it. The remote needs nothing: its
+   > merge takes any source and target, a `CheckRequirement` names its target branch, and a
+   > branch's owner makes others its maintainers (ADR-0068 decision 4). **Left open.** Where a
+   > cloned existing branch's parent comes from, since the remote keeps no record of it (`main`
+   > until then); and a way past the 412 for a second writer, a replay of the unpushed commits onto
+   > the moved head, deferred until Quiver or another client shows the case (one person on two
+   > computers is the likely first). **Trigger to build:** a client that needs a workspace under a
+   > shared branch, such as the A/B testing tool or a team working on one module.
 
 7. **Tools reach a workspace hub on loopback, as its owner.** The `header` resolver serves, and
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the
