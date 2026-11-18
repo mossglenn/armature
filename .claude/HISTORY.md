@@ -6,6 +6,49 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-18 (the naming vocabulary; ADR-0065's parent note; ADR-0072, linked workspaces and merge requests; PR #177)
+
+**Where things stood at the close.** **Phase 8, 2026-11-18; `main` at `51a4308`, client revision 2026-11-16.** PR #177 put documents only on `main`: `docs/naming-vocabulary.md`, every user-facing name with the names in use, 23 collisions and a recommended name, its **Chosen** column empty; ADR-0065 decision 6's later change, decided and not built (a workspace's merges are with its parent, and a workspace's branch is written only by the workspace hub that holds it); and ADR-0072, Proposed (a workspace linked to one computer and moved by unlinking and linking; merge requests with their health computed on read), its five open questions waiting on Amos. Nothing is built, and the installed program is still 0.1.4, without PR #167's fixes or the icon. No suite was run (documents only). **Next: Quiver resumed on the program (item 17); Amos's calls on the vocabulary and ADR-0072 (item 44); whether a 0.1.5 ships first is his.**
+
+### Done
+
+- **`docs/naming-vocabulary.md`** (new): every thing, state and action a person meets by name in the desktop program, the viewer, a tool or the guides, with the names in use now and where, 23 collisions, and a **Recommended** column; the **Chosen** column is empty. The recommendations form one vocabulary, "branch and merge, said plainly" (Figma's and Abstract's dialect for designers), with "save and send" as the alternative set and publish, check-out and sync rejected; argued by audience (designers and reviewers, learning engineers and researchers, administrators and operators, tool authors); 46 sources from vendor documentation, gathered by two research subagents, Figma's "Update from main…" checked by hand. Identifiers stay as built; only the words change.
+- **ADR-0065 decision 6, later change of 2026-11-18** (decided, not built): a workspace's merges are with its parent, the branch it was created from; a workspace's branch on the remote is written only by the workspace hub that holds it, every other branch taking direct writes and merges as now. Its Status note, the index row and the workspace hub plan's §4 line point to it. Corrected the same day before merging: the first wording had every branch but a workspace "only merged into", which `main` as built is not.
+- **ADR-0072, Proposed** (`0072-linked-workspaces-and-merge-requests.md`): a `Workspace` record on `main` linking each workspace to one installation of the desktop program and naming its parent, writes from elsewhere refused (`held_elsewhere`, `not_linked`), moving in two steps (unlink, then link from the list of unlinked workspaces; unlink from elsewhere for a lost computer); `MergeRequest` records, their health (conflicts, rules, required checks) computed on read, merged or closed by who may merge into the target, the merge commit's `Armature-Merge-Request` trailer; answers ADR-0068 open question 2; five open questions with recommendations. Index row; the range heading now 0054–0072.
+- **PR #177**, four commits (`ab57987`, `72a1843`, `e07d4a0`, `51a4308` on `main`), merged by rebase on Amos's leave once CI was green; CI green on `main`.
+
+### Session notes
+
+- Amos asked for a list of everything that needs a user-facing name, after naming trouble in Quiver's work, then for a recommended name for each, from other software's usage and the audiences, forming one product.
+- His questions on branch and workspace found the dead end of a second writer: a push is refused (412) once anyone else writes a workspace's branch, and nothing takes the new commits in (bring-in reads only `main`; bring-in and deliver require nothing unpushed), so discard is the only way on. It reaches two people on one branch and one person on two computers.
+- He raised an A/B test with branches at more than one level. The remote was found generic already (merge from any branch to any, requirements per target, an owner grants `Maintainer`, `from` recorded in `workspace.json`); only the desktop hub's bring-in and deliver are fixed to `main`. He chose to record that and build later.
+- He proposed merges into `main` working like pull requests, then distinguished branch and workspace by place (a branch on the instance, written by anyone with the right; a workspace on one computer, personal, offline). He chose a workspace linked to one installation, with his change that moving is two steps, unlinking and linking.
+- He asked whether pushing is really pulling a workspace into a branch. The answer given: no; push replays the same line from the computer to the instance; the "pull" of a pull request is the target's merge, which is why "merge request" is recommended.
+
+### Facts from 2026-11-18 worth keeping
+
+- The Workspaces page's badge "The remote moved" means the workspace's own branch on the instance moved (the status route compares the remote head with the last pushed commit, or the base), not `main`; `docs/desktop-program.md` § "Your workspaces" says `main`, which is wrong, and the status reports nothing about `main` (What's Next item 44).
+- Bring-in and deliver merge with `MIRROR_BRANCH`, `main`, always (`app/lib/api/workspace/bringIn.ts`); `POST /workspace` already records its `from` in `workspace.json` (`records.ts`).
+- Any registered person may create a branch, and a branch's owner may grant `Maintainer` on it (`authorization.ts`'s table).
+- ADR-0071 was already taken (external alignment), so the new record is ADR-0072.
+- Abstract's help site was offline on 2026-11-18; the vocabulary's Abstract labels are from a search index, marked as such in its §3.
+
+### Moved from SESSION.md
+
+From "Active Decisions", both superseded:
+
+- **Quiver, the second client, is planned and lives in its own repository** (2026-10-26, Amos; `mossglenn/quiver`, private; *built 2026-10-26 to 28, paused 2026-10-30 until the workspace hub is built, then its first real-world test*): Tauri 2; a workspace as a folder of JSON files (over SQLite: user-owned, readable, diffable, an index in memory, a derived cache only if a bank outgrows it); a branch per workspace, pull before deliver so `main` receives only clean merges; the branching test with two users in two workspaces on one machine until OIDC exists; AI drafting its own milestone after the merge works; lint a hint unless the person records it; the tool may create a `Module` when an assessment has none. Armature's files name Quiver only here and in plan §6 and §8 notes
+  *Superseded by Quiver's plan §3, rewritten 2026-11-17 for the workspace hub: the program's folder holds the documents, and Quiver keeps only its drafts.*
+- **ADR-0065, the workspace hub, is Accepted** (proposed 2026-10-28, accepted 2026-10-30; *most of §16 is decided, see the bullet above*): steps 1 and 2 and the authorization push depends on are built, push is not; the plan's §16 holds fourteen questions, most decided. Settled in discussion: replay over `/api/v1` rather than TerminusDB's clone and push; the file-backed store required for a designer release; Neo4j not recommended. Open for Amos: whether Quiver keeps one file per document (its §5.2) or derives its working state as the plan's §11 now says
+  *Outdated: push and the rest are built (item 17 and ADR-0065's Status carry the state), and the question of one file per document is answered by Quiver's plan §3 as above.*
+
+### Decisions taken
+
+- Branches at more than one level: recorded, not built (Amos's option 2; ADR-0065 decision 6, later change of 2026-11-18).
+- A workspace written only by the installation it is linked to, moved by unlinking and linking (Amos's option 1 with his two-step change), and merge requests recorded on `main` with their health computed on read (his option 1): proposed as ADR-0072, not yet accepted.
+- Not decided: every name in the vocabulary; ADR-0072's five open questions and its acceptance. A linking code or a web-page list was left out, the reason in ADR-0072's alternatives.
+- Amos gave leave to merge PR #177 once CI was green, in place of "confirm and merge", for that pull request.
+
 ## 2026-11-17, evening (the dimensional icon merged; a handoff note for Quiver; PR #168)
 
 **Where things stood at the close.** **Phase 8, 2026-11-17 evening; `main` at `fe9696c`, client revision 2026-11-16.** PR #168 put the dimensional app icon on `main` (128 px and up; the flat symbol below), unseen in a built program and unreleased. Every branch was checked: nothing unmerged remains, and `origin/docs/ledger-plan` is merged and kept. A handoff note for Quiver, `~/Dev/quiver/docs/armature-since-the-pause.md` (untracked there), says what Armature built since Quiver's pause, what that does to Quiver's plan and modules, and what was discussed after. The installed program is still 0.1.4, without PR #167's fixes or the icon. No suite was run this session (746 tests in the app, 40 browser tests in the shell, 27 Rust tests at the last runs). **Next: Quiver resumed on the program (item 17), in its own repository; whether a 0.1.5 ships first is Amos's call.**
