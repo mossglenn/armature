@@ -55,7 +55,7 @@ Tools are written against `/api/v1` and nothing else, as now. A tool learns it i
 
 A workspace hub may hold several workspaces from one remote; each is a branch locally too. The workspace routes (`/workspace`, `/workspace/:name/status`, `/push`, `/bring-in`, `/deliver`, and `DELETE /workspace/:name` since 2026-11-07) are the only routes a workspace hub adds, under the `armature/workspace` capability; the workspace manager's own UI uses them, and a tool may, to offer a Sync button.
 
-*Decided 2026-11-18, not built (ADR-0065 decision 6, later change of that day):* bring in and deliver merge with the workspace's *parent*, the branch it was created from (`from`, `main` by default), not with `main` as such; and a branch is either a workspace, pushed to by its one writer, or a shared branch, only merged into, never both. Once built, the table's `main` reads "the parent"; until then every workspace's parent is `main`.
+*Decided 2026-11-18, not built (ADR-0065 decision 6, later change of that day):* bring in and deliver merge with the workspace's *parent*, the branch it was created from (`from`, `main` by default), not with `main` as such; and a workspace's branch on the remote is written only by the workspace hub that holds it, while every other branch takes direct writes and merges as now. ADR-0072 (Proposed) is how that rule is kept: a workspace linked to one computer, unlinked and linked to move it, and merge requests for the work leaving it. Once built, the table's `main` reads "the parent"; until then every workspace's parent is `main`.
 
 ## 5. Push
 
