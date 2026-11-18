@@ -85,8 +85,9 @@ Each of those ADRs gets a dated note pointing here when this one is accepted.
 > scoped tokens.
 
 > **Note (2026-11-18):** decision 6 gains a later change, decided and not built: a workspace's
-> merges are with its parent, the branch it was created from, and a branch is either a workspace
-> or a shared branch, never both.
+> merges are with its parent, the branch it was created from, and a workspace's branch on the
+> remote is written only by the workspace hub that holds it. ADR-0072 (Proposed) is how that rule
+> is kept, and adds merge requests.
 
 ## Context
 
@@ -401,30 +402,33 @@ Three facts constrain the answer:
    > not with `main` as such. The parent is the branch the workspace was created from (`from` in
    > `workspace.json`, which the hub already records), `main` when none was named. Bringing in
    > merges the parent into the workspace, and delivery merges the workspace into the parent; with
-   > `main` as the parent, as every workspace has today, nothing changes. It follows from a rule
-   > this note makes explicit: **a branch is either a workspace, pushed to by its one writer, or a
-   > shared branch, only merged into; never both**, `main` being the top shared branch. The reason
-   > is decision 5: a push replays onto a branch that must not have moved, and a merge moves its
-   > target. So a workspace on a branch that receives merges is refused at its next push (412), and
-   > nothing takes the new commits in: bring-in reads only `main`, and every action but discard
-   > requires nothing unpushed. The same dead end meets any second writer on a branch: a person made
-   > `Maintainer` of someone else's workspace branch, a writer on an ownerless branch, or the owner
-   > pushing from a second computer. **Why now, unbuilt.** Asked by Amos on 2026-11-18 for an A/B
-   > test: two methods for one module's question bank, each a shared branch with several people's
-   > workspaces under it, the chosen one merged into `main` and the other kept as the record of the
-   > method not taken. It is recorded now so that the program's names are a parent's
-   > (`docs/naming-vocabulary.md`: "Update from <parent>", "Merge into <parent>") and nothing is
-   > renamed when it is built. **What building needs.** The bring-in's and the delivery's merges in
-   > `workspace/bringIn.ts`, and the delivery's dry run, take the record's parent; and a
-   > maintainer's actions on a shared branch, which the program does not have: creating one (the
-   > remote's `POST /branches`) and merging its own parent into it. The remote needs nothing: its
-   > merge takes any source and target, a `CheckRequirement` names its target branch, and a
-   > branch's owner makes others its maintainers (ADR-0068 decision 4). **Left open.** Where a
-   > cloned existing branch's parent comes from, since the remote keeps no record of it (`main`
-   > until then); and a way past the 412 for a second writer, a replay of the unpushed commits onto
-   > the moved head, deferred until Quiver or another client shows the case (one person on two
-   > computers is the likely first). **Trigger to build:** a client that needs a workspace under a
-   > shared branch, such as the A/B testing tool or a team working on one module.
+   > `main` as the parent, as every workspace has today, nothing changes. A parent is a branch,
+   > never another workspace. With it comes a rule: **a workspace's branch on the remote is written
+   > only by the workspace hub that holds it**, through its push and its bring-in. Every other
+   > branch, `main` included, takes direct writes from any client with the right as well as merges,
+   > as now: grants, requirements and users are written on `main`, and CoQui writes its own
+   > branches. The reason is decision 5. A push replays onto a branch that must not have moved, so
+   > any other writer on a workspace's branch (the owner through another client, or the owner's
+   > second workspace hub on another computer) leaves the push refused (412) with nothing to take
+   > the new commits in: bring-in reads only `main`, and every action but discard requires nothing
+   > unpushed. Online clients meet no such problem, since they read a branch as it is and the
+   > per-branch queue orders their writes. **How the rule is kept** is ADR-0072 (Proposed): a
+   > `Workspace` record on `main` that links each workspace to one installation of the desktop
+   > program and names its parent, writes to its branch from anywhere else refused, a workspace
+   > moved between computers by unlinking it from one and linking it from another, and merge
+   > requests for the work leaving a workspace. **Why now, unbuilt.** Asked by Amos on 2026-11-18
+   > for an A/B test: two methods for one module's question bank, each a branch with several
+   > people's workspaces under it, the chosen one merged into `main` and the other kept as the
+   > record of the method not taken. Recorded now so that the program's names are a parent's
+   > (`docs/naming-vocabulary.md`: "Update from <parent>") and nothing is renamed when it is built.
+   > **What building needs here.** The bring-in's and the delivery's merges in
+   > `workspace/bringIn.ts`, and the delivery's dry run, take the parent; the rest is ADR-0072's.
+   > The remote needs nothing for the parent: its merge takes any source and target, a
+   > `CheckRequirement` names its target branch, and a branch's owner makes others its maintainers
+   > (ADR-0068 decision 4). **Left open:** a way past a 412 the rule does not prevent, a replay of
+   > the unpushed commits onto the moved head, deferred until a client shows the case. *Corrected
+   > the same day, before merging:* the first wording had every branch but a workspace "only merged
+   > into", which `main` as built is not.
 
 7. **Tools reach a workspace hub on loopback, as its owner.** The `header` resolver serves, and
    resolves only the owner's `externalId`. The workspace hub alone holds the credential for the
