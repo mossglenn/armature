@@ -1,0 +1,401 @@
+# Naming vocabulary: what needs a user-facing name
+
+> **Status (2026-11-18): a working list with recommendations; no name decided yet.** Started when Quiver resumed on the desktop program and showed one thing going by several names across the program's pages, the guide, the plans and Quiver. The **Recommended** column is this document's proposal, argued in §2 and backed by the evidence in §3. The **Chosen** column stays empty until Amos decides. One decision already bears on the names. On 2026-11-18 Amos chose to record, but not yet build, workspaces under shared branches (ADR-0065 decision 6, later change of that day). So the workspace verbs are named for a workspace's *parent* branch, which today is always `main` (§2, "Branches at more than one level"). A decision then updates every place the row's "Names in use now" column lists (CLAUDE.md, "Documents and records").
+
+## What this list covers
+
+Every thing, state or action that a person meets by name in at least one of these places:
+
+- the desktop program's pages (`desktop/src/pages/`, `desktop/src/components/`);
+- the viewer's pages (`app/app/`);
+- a tool beside the program (Quiver, CoQui, the Model Context Protocol (MCP) server);
+- the person-facing guides (`docs/desktop-program.md`, `docs/how-armature-works.md`, `docs/deployment.md` for administrators);
+- refusal codes, which the program shows beside every refusal (`docs/desktop-program.md` § "When something is refused").
+
+The list was built from `docs/deployment.md` § "The terms", `docs/workspace-hub-plan.md` §§2 to 9, `docs/desktop-program.md`, the strings on the shell's pages, the viewer's headings and titles, the schema's classes and enumerations, ADR-0068 (authorization) and ADR-0070 (checks), and Quiver's `docs/plan.md` §3 and `docs/program-notes.md`. Terms that never reach a person are listed last (§17), so nobody names them by accident.
+
+"Pages" below means the desktop program's pages unless the row says the viewer. Bracketed references such as [S2] point to the sources in §3.
+
+---
+
+## 1. The collisions found
+
+These are the problems the list turned up. Each one points to its row below, and the arrow gives the recommended resolution.
+
+1. **Instance, remote or remote hub.** The guide says "your instance" throughout, and so does the Connect page ("Connect to your instance"). Every other page says "the remote": "Clone a branch the remote has", "Who are you on this remote?", "The remote moved", "Changed on the remote", "Everything here is on the remote". The plans say "remote hub". A person meets two words for the shared server within one sitting. (§4, *The shared installation*) → **the instance's own name in sentences, "instance" as the general word; "remote" leaves every person-facing surface.**
+2. **Workspace hub, desktop hub or "the hub".** The ADRs and plans say "workspace hub". Quiver's plan §3 heading says "desktop hub", which is also what Amos calls it. The program's pages say just "the hub" ("The hub is running", "Start the hub"). In the documents, "a hub" alone means *any* hub, remote or local. (§4, *The hub on your computer*) → **"desktop hub", matching "Armature Desktop"; tools mostly name the app instead.**
+3. **"The remote moved" means the wrong thing to readers.** The badge on the Workspaces page means the workspace's *own branch* on the instance changed since this machine last pushed or cloned (another machine, or another grant holder, wrote to it; `routes/workspace.ts`, the status route). The guide reads it as "whether `main` has moved on the instance" (`docs/desktop-program.md` § "Your workspaces"), which the status does not report (Quiver's `program-notes.md` §1). The label let the guide's author misread it. (§8, *The workspace's branch moved*) → **"Pushed from elsewhere", and the guide corrected.**
+4. **Draft.** Three meanings: the `Draft` status of an item and of an objective (`ItemStatus`, `ObjectiveState`); Quiver's *draft*, an edit not yet valid enough to commit and kept only on Quiver's side; and an AI drafter's proposal ("a kept draft", Quiver `program-notes.md` §6). Quiver can hold a draft of a `Draft` item. (§7, *Commit*; §12, *Item status*; §16) → **`Draft` stays the status, as item banks use it [S25][S26]; Quiver's becomes an "uncommitted edit"; the drafter's output is a "proposal".**
+5. **Save, commit or write.** The workspace hub turns every write into a commit. Quiver calls committing "saving to the workspace" ("not yet saved to the workspace"). The program uses "Save" and "Saved." for its settings and personal checks, which are files and not commits. The guide says "your tools commit as you work". (§6, *A commit*; §7, *Commit*) → **"commit" for the record everywhere; "save" only for things that are not commits.**
+6. **Administrator.** It means the person who runs an instance ("ask your administrator", the guide; `deployment.md` is "for the administrator"). It is also the `Administrator` grant role, which only some such people hold, and which people who never touch the server can hold. Next to it are "operator" (who runs the operator tools on the server) and "maintainer". (§9) → **"administrator" is the role holder, who manages people and roles; the person who runs the server is the "operator".**
+7. **Profile.** It means the export's profile (`full`, `pseudonymous`, `institutional`; ADR-0031). It also means the connection profile, what the program shows before connecting (`profile_changed`). And a person's own profile (`profile=full` on the users list). (§10, *What the instance shows before connecting*; §12, *Export profile*) → **"instance details" and "privacy level"; "profile" stays in identifiers only.**
+8. **Check.** A check is a tool that reports a verdict (ADR-0070). The same word is also used for "Check again" (sign-in), "Check for updates", "Checking…", the operator's `check` command, and the lettered platform checks. (§11, *Other uses of "check"*) → **"check" kept for ADR-0070's checks only; the other buttons reworded.**
+9. **Verdict.** It is a check's outcome (the `CheckVerdicts` component; "reports a verdict" in the guide; `conclusion`, with values `pass`, `fail`, `neutral` and `error`, in the API). It is also an attestation's `verdict` (`Affirmed`, `Declined`). (§11, *A check's outcome*; §12, *Attestation*) → **a check has a "result"; an attestation, shown as a "sign-off", has the verdict.**
+10. **Going past a check.** "Deliver anyway", "Push anyway" and "Go on anyway" are the buttons; "set aside" is the guide's word; `overrides` is the API's; "Why (required)" is the field. (§11, *Going past a check*) → **"override", with "Merge anyway" and "Push anyway".**
+11. **Bring in `main`, pull, sync or merge.** The program says "Bring in main" and "Brought main in". Quiver's earlier model said "pull" and "sync" and planned a "Sync button". The API says merge. The phrase is hard to use as a noun ("a bring-in") or in the past tense. (§7, *Bring in main*) → **"Update from <parent>", which reads "Update from main" today: Figma's verified label [S2], and Abstract's pair "Update from Main" and "Update from Parent" [S5].**
+12. **Deliver or merge.** The button says "Deliver into main". The reason note on the same page says it "is recorded on the merge into main". The guide's opening says you deliver "for a maintainer to see", which suggests a request for review. Its own § "Your workspaces" says only a maintainer can deliver, which describes a merge. And to an instructional designer, "delivery" means putting a course in front of learners [S23]. (§7, *Deliver*) → **"Merge into <parent>", which reads "Merge into main" today; "Request review" kept for the request, when one is built.**
+13. **Remove, discard or delete.** "Remove" a workspace, which deletes its branch on the instance or keeps it. "Discard and remove" a workspace with unpushed commits. "Remove" a row of personal checks. Quiver "discards" a draft. The API "deletes" a branch. (§7) → **"remove" acts on this computer, "delete" on the instance, and "discard" gives up work that never left this computer.**
+14. **Identifier.** "Your identifier on the remote" (Settings, under the sign-in-free mode), "Your identifier for tools" (Pairing), the `Armature-User` header, `externalId`, an email address, the provider's `sub`, and the *handle* that starts a branch name (`jdoe_` in `jdoe_unit-3`). The handle is the part of the email before the @. (§9, *Identifier*) → **"your ID on <instance>", one name for both fields.**
+15. **Log.** The program's **Log** page shows the program's diagnostic lines. A branch's log (`GET /branches/:name/log`) is its list of commits. Quiver reads the second as "the branch's log". (§6, *A branch's log*; §7, *Read the program's log*) → **"history" for commits; "Diagnostics" for the page.**
+16. **Note.** A `DesignNote` is a design record. Quiver's commit *note* is the optional sentence added to a generated message. A check's *summary* sits close to both. (§6, *Commit message*; §12, *Design note*) → **"design note" for the record; Quiver's sentence is part of the "message".**
+17. **Record, document or artifact.** The pages say "records" ("Brought main in: 12 records"). The viewer says "Artifacts", "Relationships", "Record details" and "The document on the hub". The API and the schema say document, design record and artifact. (§12, *Design record*) → **"record" for people; "document" for the API only.**
+18. **Version or revision.** The program has a version (0.1.4). A hub has a revision ("Its hub's revision", "The remote serves"; the client revision 2026-11-16). The refusal `unsupported_version` is about revisions. (§14) → **people see "version" for the app and "compatible" for the pair; "API revision" only in the details.**
+19. **Rules.** The guide and Quiver say "rules". The program says "Broken rules". The code and CLAUDE.md say "invariants" and numbered "constraints". The API says `invariant_violation`. The lint plan says "lint". (§13) → **"rules" for people.**
+20. **Tool, client or plugin.** The guide and pages say "tool" ("Every paired tool"). The documents for developers say "client" and "plugin", and "reference client". (§4, *Tools*) → **"tool" for people, "client" for developers, "plugin" retired.**
+21. **The program's own name.** It is "Armature" (the app and window name), "Armature desktop" (the release title), "the desktop program" and "the program". Inside the code it is the shell, the core and the sidecar, which a person should never see. (§4, *The desktop program*) → **"Armature Desktop", "the desktop app".**
+22. **This machine or this computer.** The pages say "This machine". Quiver's status strip says "this computer". The guide says "your machine" and "your own machine". The viewer's page is "Work from your own machine". (§4, *This computer*) → **"this computer".**
+23. **Branch or workspace.** A workspace is a branch held on a computer, so in the ordinary case the two words name one line of work. A person meets both only where the design breaks: a second writer on a branch gets a refused push, with discarding as the only way out (§8, *Two writers on one branch*). Raised 2026-11-18. (§5, *Branch*, *Workspace*, *Shared branch*) → **two kinds of branch with two names: a workspace, pushed to by its one writer, and a shared branch, only merged into. "Branch" stays the general word.**
+
+---
+
+## 2. The recommendation as a whole
+
+### Who reads these names
+
+| Audience | Where they meet the names | What they already know | What follows |
+|---|---|---|---|
+| **Designers and reviewers**: instructional designers, item writers, subject experts | Armature Desktop, Quiver, CoQui, the viewer, the desktop guide | Authoring tools (Storyline and Rise, where **Publish** means producing a course package [S21][S22]), learning management systems (where Canvas's **Sync** pushes one way and overwrites [S24]), item banks (**Draft**, **Review**, **Approved**, **Retired** [S25][S26]), Google Docs version history [S20], Slack and Notion, where a **workspace** is a team's space [S30][S31]. Some know Figma, which has the closest workflow: **Create branch**, **Update from main**, **Merge**, **Request review** [S1]–[S4] | Plain words, and Figma's dialect of version control where there is one. Avoid every word their other tools already use for something else |
+| **Learning engineers and researchers** | The viewer, history, exports, `docs/how-armature-works.md` | Version control as a research object. Armature's explainer uses "commit" 243 times and "record" 247 times | Keep "commit" and "as of a commit" visible: they are what a design history is made of (ADR-0025) |
+| **Administrators and operators** | `docs/deployment.md`, the operator tools, sign-in setup | Self-hosted servers: GitLab's **instance** and **Admin area** [S18], Moodle's **Site administration** [S32], OpenID Connect | "Instance", "hub", "operator", "sign-in provider" |
+| **Tool authors** | `docs/api.md`, `docs/schema-guide.md`, refusal codes | Git and HTTP | Identifiers stay as built; the reference maps each person-facing word to its route and code |
+
+### Principles
+
+1. **One name per concept, used by every surface a person reads.** The app, the tools, the viewer and the guides say the same word. Developer documents use it in their prose too, and add the identifier beside it.
+2. **Identifiers do not change.** Route paths (`/workspace/:name/deliver`), refusal codes (`bring_in_first`), fields (`asOf`) and enumeration values (`InReview`) stay. Renaming them would be a client revision for no gain to a person. The app already shows a refusal's words first and its code second; the words follow this list. Where an identifier and the person-facing word differ, `docs/api.md` says so once.
+3. **Stay off words the audience already uses for something else.** For designers, "publish" and "delivery" mean producing and running a course [S21][S23], and "sync" means Canvas's overwrite [S24]. For the item-bank statuses, "draft", "approved" and "retired" are taken [S25][S26]. "Verdict" and "profile" already mean two things each here.
+4. **Name places by where they are**: "this computer", the instance by its own name, and `main`. "Local" and "remote" stay in the code.
+5. **Each verb keeps one scope.** **Save** is for settings and files that are not commits. **Remove** acts on this computer, and **delete** on the instance. **Discard** gives up work that never left this computer, which covers Quiver's uncommitted edit and a workspace's unpushed commits alike.
+6. **The workspace verbs form a set**: **Push**, **Update from <parent>**, **Preview merge**, **Merge into <parent>**, and **Request review** once a non-maintainer's request exists. Each one names its direction and the branch at the other end, as Figma's labels do [S2][S3]. While every workspace's parent is `main`, they read "Update from main" and "Merge into main".
+
+### The choice of metaphor
+
+The cycle is a version-control cycle whatever it is called. The choice is which dialect to speak.
+
+| Concept | **Set A: branch and merge, said plainly** (recommended) | **Set B: save and send** | Rejected sets |
+|---|---|---|---|
+| The record of a change | commit | saved change, "save" | **Publish and draft** (content-management style): "publish" means producing a course [S21][S22] or making content live [S27][S28]; "draft" is an item status [S25] |
+| Sending it to the instance | Push [S8][S12] | Send to <instance> | **Check out and check in** (SharePoint, Perforce [S14], Gluon's "Checkin"): suggests locking, and "check" is taken by checks |
+| Taking in the parent's new work | Update from <parent> [S2][S5][S10] | Get updates from <parent> | **Sync** (Canvas [S24], VS Code's two-way "Sync Changes" [S12]): either it overwrites or it hides which way work moves |
+| Combining into the parent | Merge into <parent> [S3][S6][S8] | Add to <parent> | **Deliver**: in no comparable product (§3, "What the research did not find"), and "delivery" means teaching the course [S23] |
+| Asking for that | Request review [S4][S6] | Ask to add | |
+| Trying it first | Preview merge | Preview | |
+| The shared installation | <instance name>; "instance" | <instance name>; "server" [S29] | |
+
+**Why Set A.** It is the dialect that design tools with real branching already teach designers (Figma verified [S1]–[S4]; Abstract from its indexed help, its site being offline [S5][S6]; Onshape [S16]). It keeps "commit", which the viewer, the history, `asOf` and the research path all depend on. And it agrees with the API's own words, so a tool author and a designer describe the same step the same way. Set B is easier on first contact, but it costs three things. "Save" would have to mean a commit in the app and a file write in its settings. "Send" sounds like messaging a person. "Add to main" hides that the step can conflict and be refused. A tool may still take Set B's tone in its own help text, as long as its buttons use Set A's words.
+
+### Branches at more than one level
+
+Decided by Amos on 2026-11-18 and recorded as ADR-0065 decision 6's later change of that day. Not built.
+
+- **A branch is either a workspace or a shared branch, never both.** A workspace is pushed to by its one writer from their computer. A shared branch is only ever merged into. `main` is the top shared branch.
+- **Every workspace has a parent**: the shared branch it started from. It takes updates from its parent and merges into it. Today every parent is `main`, so the labels read "Update from main" and "Merge into main". They are named for the parent so that nothing is renamed when the build lands.
+- **Why the rule.** A push replays commits onto a branch that must not have moved, and a merge moves its target. So a workspace on a branch that receives merges is refused at its next push. Nothing takes the new commits in, and discarding is the only way out (§8, *Two writers on one branch*). The same happens to two people pushing to one branch, and to one person pushing from two computers.
+- **What the app lacks.** Taking updates from, and merging into, a parent other than `main`: both merges are fixed to `main` in `app/lib/api/workspace/bringIn.ts`. And a maintainer's actions for a shared branch: creating one, and updating it from its own parent. The instance already has the rest. It merges any branch into any branch, requires checks per target branch, and lets a branch's owner make others its maintainers (ADR-0068 decision 4).
+
+### The whole product in one pass
+
+Read this as a test: every name below is the recommended one, and none means two things.
+
+> Dana installs **Armature Desktop** and connects to **Westfield Armature**, reading the **instance details** first. They sign in through Westfield's **sign-in provider** and create a **workspace** from `main`, named `unit-3`; the instance calls the branch `dana_unit-3`. Quiver needs the **pairing key** and Dana's **ID on Westfield Armature**, both on the **Pairing** page. In Quiver, an item that still breaks a **rule** is an **uncommitted edit**; when it is valid and Dana moves on, Quiver **commits** it. Armature Desktop shows "3 to push", and Dana **pushes**. Later the workspace shows "**main has updates**", so Dana **updates from main**. One **conflict** comes up: in Quiver, beside the **starting point**, Dana chooses **Keep yours** for the stem and **Take main's** for option c. Dana **previews the merge**: a **required check** has no **result** yet. When it **passes**, Dana, a **maintainer** of `main`, **merges into main**. Dana's colleague, who is not one, would **request review**. When the unit is finished, Dana **removes** the workspace **from this computer**, and its branch is **deleted** on Westfield Armature because `main` holds all of it. A researcher later opens the item's **history** in the viewer, **as of** the commit a dataset names, and sees "proposed by Quiver drafter, for Dana" and a reviewer's **sign-off**, affirmed.
+
+> For an A/B test of two assessment methods for module 3, Amos, a maintainer of `main`, creates two **shared branches**, `bank3-a` and `bank3-b`. Amos and Lee each create a **workspace** with `bank3-a` as its **parent**. Each pushes to their own workspace and **merges into bank3-a**, so nobody pushes to `bank3-a` itself. A testing tool reads both shared branches. When method B is chosen, Amos **merges bank3-b into main**. `bank3-a` stays on the instance as the record of the method not taken.
+
+The first paragraph assumes one piece of hub work, "main has updates", which the status does not report today (§8). The second assumes the decision of 2026-11-18 above, which is not built yet.
+
+---
+
+## 3. Evidence: how other software names these things
+
+Gathered on 2026-11-17 from vendor documentation by two research passes, with Figma's "Update from main" label checked by hand the same day. **V** means the source page was read. **I** means the page would not load and the wording comes from a search engine's index of it. Anything that could not be confirmed was left out.
+
+| Ref | Product | What it shows | Source | |
+|---|---|---|---|---|
+| S1 | Figma | "Create branch…"; the primary is the "main file" | help.figma.com/hc/en-us/articles/360063144053 | V |
+| S2 | Figma | "Update from main…", then "Apply changes"; history says "Updated from main"; conflicts "Pick main file", "Pick branch", "Resolve all" | help.figma.com/hc/en-us/articles/5665728006423 | V, checked |
+| S3 | Figma | "Review and merge changes", "Merge"; history says "Branch merged"; undo is "restore a previous version" | help.figma.com/hc/en-us/articles/5691189138839 | V |
+| S4 | Figma | "Request review"; badges "In review", "Changes suggested", "Approved" | help.figma.com/hc/en-us/articles/5691414603543 | V |
+| S5 | Abstract | "Update from Main…"; the "Merge Branch" button turns into it when main has moved | help.abstract.com, article 360050381451 | I (site offline) |
+| S6 | Abstract | "Commit Changes", "Merge Branch…", "Request Review", "Approve changes" | help.abstract.com, articles 360050378391, 360049925592 | I (site offline) |
+| S7 | GitHub Desktop | "Commit to BRANCH"; "Discard Changes" | docs.github.com/en/desktop/making-changes-in-a-branch/committing-and-reviewing-changes-to-your-project-in-github-desktop | V |
+| S8 | GitHub Desktop | "Push origin", "Pull origin", "Publish branch", "Merge BRANCH into BRANCH" | docs.github.com/en/desktop/working-with-your-remote-repository-on-github-or-github-enterprise/syncing-your-branch-in-github-desktop | V |
+| S9 | GitHub Desktop | "History" tab; "Revert Changes in Commit", where the revert is itself a commit | docs.github.com/en/desktop/managing-commits/reverting-a-commit-in-github-desktop | V |
+| S10 | GitHub | "Update branch" on a pull request behind its base | docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/keeping-your-pull-request-in-sync-with-the-base-branch | V |
+| S11 | GitHub | Repository roles Read, Triage, Write, Maintain, Admin; organization owner | docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/managing-repository-roles/repository-roles-for-an-organization | V |
+| S12 | VS Code | "Sync Changes" (pull, then push), "Push", "Pull", "Publish Branch" | code.visualstudio.com/docs/sourcecontrol/repos-remotes | V |
+| S13 | VS Code | "Incoming Changes", "Outgoing Changes" in the Source Control Graph | code.visualstudio.com/docs/sourcecontrol/history | V |
+| S14 | Perforce P4V | "workspace" for the local copy; "Get Latest Revision" | help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/files.retrieve.html | V |
+| S15 | Unity Version Control (Gluon) | "Update workspace"; file status "Out of date" | docs.unity.com/en-us/unity-version-control/gluon/update-workspace | V |
+| S16 | Onshape | "Main workspace"; "Branch to create workspace"; "Create version"; "Merge into current workspace"; "Versions and history" | cad.onshape.com/help/Content/Document/versions_and_history.htm | V |
+| S17 | GitLab | Roles including Developer, Maintainer, Owner | docs.gitlab.com/user/permissions/ | V |
+| S18 | GitLab | The "Admin area" manages a self-managed "instance" | docs.gitlab.com/administration/admin_area/ | V |
+| S19 | MediaWiki | "View history", "undo" (saved as a new edit), "Revision as of…" | mediawiki.org/wiki/Help:Reverting | V |
+| S20 | Google Docs | "Version history", "Restore this version", "Name this version" | support.google.com/docs/answer/190843 | V |
+| S21 | Storyline 360 | "Publish" outputs to Review 360, Web, Video, LMS | community.articulate.com/kb/storyline-360-onboarding/preview-publish-and-review-courses-in-storyline/1210803 | I |
+| S22 | Rise 360 | "Publish > LMS" produces a package; "Publish Content to Review 360" | community.articulate.com/kb/user-guide-series/rise-360-user-guide/1193842 | I |
+| S23 | ADDIE | Implementation is when "learners actually receive the instruction", called course delivery | en.wikipedia.org/wiki/ADDIE_model | V |
+| S24 | Canvas Blueprint | "Sync" pushes one way, from the blueprint to the associated courses; locked items overwrite | usu.edu/teach/help-topics/canvas/blueprint-courses (a university's guide) | V |
+| S25 | Learnosity | "Item bank"; review workflow Draft, Review, Rework, Blocked, Approved; statuses Published, Unpublished, Archived | authorguide.learnosity.com, articles 360000443917, 4405304896669 | V |
+| S26 | TAO | Draft, Ready for review, In Review; "Retired" means no longer in use | userguide.taotesting.com/user-documentation/latest/public/item-status | V |
+| S27 | Contentful | Draft, Changed, Published, Archived | contentful.com/help/status/ | V |
+| S28 | WordPress | "Publish", "Save Draft", "Submit for Review"; revisions | wordpress.org/documentation/article/post-status/ | V |
+| S29 | Mastodon | "Servers" for people; the API keeps `/instance` and calls it the server | joinmastodon.org/servers; docs.joinmastodon.org/methods/instance/ | V |
+| S30 | Slack | A workspace is made up of a team's channels | slack.com/help/articles/212675257 | V |
+| S31 | Notion | A workspace for a team or for yourself | notion.com/help/intro-to-workspaces | V |
+| S32 | Moodle | "Site administration" | docs.moodle.org/503/en/Administration_block | I |
+| S33 | Tailscale | "auth keys", "Generate auth key" | tailscale.com/kb/1085/auth-keys | V |
+| S34 | Jupyter | "token" | jupyter-server.readthedocs.io/en/latest/operators/security.html | V |
+| S35 | Obsidian Local REST API | "API key" | github.com/coddingtonbear/obsidian-local-rest-api | V |
+| S36 | Zotero | "Zotero is running"; the "Zotero desktop app" | zotero.org/support/kb/connector_zotero_unavailable | V |
+| S37 | Dropbox | "Your files are up to date"; the "desktop app" | help.dropbox.com/sync/check-sync-status | V |
+| S38 | Microsoft style guide | Use "app" for desktop apps; "program" only for full products such as Office | learn.microsoft.com/en-us/style-guide/a-z-word-list-term-collections/a/app-application | V |
+| S39 | GitHub | "Require status checks to pass before merging"; "Required" | docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches | V |
+| S40 | GitHub | Check run conclusions: success, failure, neutral, and others | docs.github.com/en/rest/checks/runs | V |
+| S41 | GitHub | "Merge without waiting for requirements to be met (bypass branch protections)"; a "Bypass list" | docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/merging-a-pull-request-with-a-merge-queue | V |
+| S42 | GitLab | "Pipelines must succeed", "Set to auto-merge", "Merge immediately" | docs.gitlab.com/user/project/merge_requests/auto_merge/ | V |
+| S43 | GitHub | Reviews: Comment, Approve, Request changes | docs.github.com/en/pull-requests/how-tos/review-pull-requests/reviewing-proposed-changes-in-a-pull-request | V |
+| S44 | SharePoint | "Request sign-off" adds a "Sign-off status" column | microsoft.com/en-us/power-platform/blog/power-automate/request-sign-off-four-connectors/ | V |
+| S45 | Sanity | "Releases" group several document changes | sanity.io/docs/user-guides/content-releases | V |
+| S46 | Canvas | "Canvas instance" in Instructure's developer documents | developerdocs.instructure.com/services/canvas/external-tools/lti/file.lti_launch_overview | I |
+
+**What the research did not find:** "deliver" for a merge in any product, and a "dry run" label in any interface. The closest are Figma's preview of an update [S2] and GitHub Desktop's conflict warning above its merge button [S8]. No product names conflict sides "yours" and "theirs"; they name the source instead ("Pick main file", "Pick branch" [S2]; "Incoming", "Current" in VS Code). For a local secret there is no standard word: auth key [S33], token [S34], API key [S35], or none where the operating system's trust is used instead [S36].
+
+---
+
+## 4. Places and programs
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| The shared installation | A hub with its store on a server, shared by an institution or a project; where branches are created, merged and deleted and people registered | "your instance", "the instance" (guide; Connect page; `aria-label="The instance"`); "the remote", "this remote" (Workspaces, Workspace, Settings pages); "remote hub" (ADR-0065, plans, Quiver); "your institution's Armature" (guide, first line); "server" (informal) | Collision 1. In ADR-0065's model "remote" is a *role* (the counterpart of a workspace hub). A person thinks of a *place* | **The instance's own name** in every sentence that names it ("Changed on Westfield Armature"); **instance** as the general word ("your instance", Settings). "Remote" leaves every person-facing surface and stays in identifiers (`remote_only`, `remote_unreachable`) and in ADR-0065's role language. GitLab and Canvas use "instance" [S18][S46]; Mastodon moved its users to "server" [S29], which is Set B's word, but `deployment.md` uses "server" for a machine | |
+| The hub on your computer | The same API in workspace mode, run by the desktop program on loopback, port 3101; holds the workspaces | "workspace hub" (ADRs, plans, Quiver body text); "desktop hub" (Quiver plan §3 heading; spoken); "the hub" (pages: "The hub is running", "Pause the hub", "Start the hub", "Starting the hub…"); "the program's hub" (guide § "Your tools") | Collision 2. A person may not need to know it is a hub at all: tools reach "the program" at an address | **desktop hub**, matching the app's name, in the guide, Quiver and new developer documents; within the app's own window, **the hub** is enough ("Pause the hub"). Tools name the app rather than the hub: "Armature Desktop isn't running", as Zotero says "Zotero is running" [S36]. "Workspace hub" stays ADR-0065's role term and gets a dated note equating the two | |
+| A hub, in general | One host bound to one store, the address a client talks to | "hub" (`deployment.md` terms, everywhere in the documents) | Needed for administrators and tool authors; a designer may never need the general word | **hub**, for administrators and tool authors only | |
+| The desktop program | The installed app: a window over the local hub, staying in the tray | "Armature" (app name, window, Applications); "Armature desktop" (release title); "the desktop program", "the program" (guide, Quiver); "This program" (Versions panel) | Collision 21. The shell, the core and the sidecar are internal (§17) | **Armature Desktop** as the product's name, on the release and in the guide's title; **the desktop app** or **the app** in running text. "App" over "program" follows Microsoft's style guide [S38] and how Dropbox and Zotero refer to themselves [S36][S37]. The icon under the Dock may stay "Armature" | |
+| The viewer | Armature's own read-only web pages at an instance | "the viewer" (documents); "Armature" (its page title); "Armature's own pages" (`deployment.md`) | The pages carry no name for themselves. A person probably calls them by the instance's site name | **the viewer** in documents; on the pages, **the instance's name** as the title ("Westfield Armature") | |
+| Tools | Programs that read and write through a hub: Quiver, CoQui, the MCP server, a linter | "tools" (guide, pages: "Every paired tool will need the new value"); "clients", "plugins", "reference clients" (CLAUDE.md, `deployment.md`, plans); "an item editor, an AI assistant, a course builder" (guide's examples) | Collision 20 | **tool** for people; **client** for developers. Retire **plugin** in new writing: it suggests something running inside Armature | |
+| This computer | The person's own computer, as opposed to the instance | "This machine" (pages; refusals say "whether your instance or this machine gave it"); "this computer" (Quiver strip); "your machine", "your own machine" (guide; viewer page "Work from your own machine"); "local" (plans) | Collision 22 | **this computer** ("Remove from this computer"; "given by this computer"); the viewer's page becomes "Work from your own computer" | |
+| Sign-in provider | The institution's identity service (OpenID Connect issuer), such as Keycloak or an institution's single sign-on | "sign-in provider", "your institution's sign-in page", "who signs you in" (guide); "Signs you in at" (Connect page); "issuer" (codes `issuer_unreachable`, `insecure_issuer`); "identity provider" (`deployment.md`) | The codes say "issuer", but the guide never does | **sign-in provider** for people and in messages; **identity provider** and **issuer** for administrators. The codes stay | |
+| The release channel | Where the program looks for updates | "the release channel", "the channel" (guide § "Updates"); "the releases" (guide § "Installing it") | | **release channel**, for administrators and the guide's troubleshooting only | |
+
+## 5. Containers of work
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| `main` | The instance's shared, agreed design: the branch everything is delivered into | `main` (everywhere, in code type); "main" in buttons ("Bring in main", "Deliver into main"); "main's" (pages) | A raw branch name shown to people who may not know Git. Is it "main", "the shared design" or the instance's own name for it? | **main**, lowercase, as Figma's "main file" and its "Update from main" do [S1][S2]; Onshape says "Main workspace" [S16]. Explained on first use as "`main`, the instance's shared design". It is the top **shared branch** (row below). Set B: "the shared design" | |
+| Branch | A line of the design's history on the instance, with its own commits | "branch" (pages: "Clone a branch", the "Branch" field; viewer's "Branch" select; guide) | A workspace *is* a branch plus its copy on this machine. Do people need "branch" as well as "workspace"? Collision 23 | **branch**, the general word, kept in the viewer and the documents. In the app a person meets its two kinds by name, a **workspace** or a **shared branch** (rows below), and a branch is never both. Figma and Onshape both teach "branch" [S1][S16] | |
+| Workspace | A branch owned by one person, copied to their machine, where their tools work | "workspace" (pages, guide, plans, Quiver); "Your workspaces"; "New workspace" | The most settled word in the list | **workspace**: a branch with one writer, its owner, pushed to from their computer and never merged into. Perforce and Gluon use the word for the local copy [S14][S15]. The cost is that Slack and Notion use it for a team's space [S30][S31]. Mitigate by always saying "your workspace" or naming it, and never using it for the instance or for a shared branch | |
+| Shared branch | A branch people only merge into, never push to: `main`, or a branch under it for one line of work, such as one of two methods in an A/B test | — (`main` is the only one today) | Decided 2026-11-18, not built (ADR-0065 decision 6, later change). Collision 23 | **shared branch**. A maintainer creates it and keeps it up to date with its own parent. Workspaces start from it and merge into it | |
+| Parent | The shared branch a workspace started from, takes updates from and merges into | `from` (the workspace's record, `workspace.json`); always `main` in the app's labels today | Decided 2026-11-18, not built. Where a cloned existing branch's parent comes from is open, since the instance keeps no record of it | **parent** in the guide and the documents. Labels name the branch rather than saying "parent": "Update from bank3-a". Abstract's "Update from Parent" is the precedent [S5] | |
+| Workspace name, branch name, handle | The short name a person gives (`unit-3`) and the branch the instance names from it (`jdoe_unit-3`) | "Name" field (placeholder `unit-3`); placeholder `someone_unit-3` (clone field); "handle" (Quiver handoff; ADR-0065 note); `<user>_<name>` (plan §4) | Which of the two does a page show? The handle needs a name only if people see it explained | **workspace name** (`unit-3`) in lists, with the **branch name** (`jdoe_unit-3`) beside it wherever the instance is involved. **Handle** stays a developer term; the guide says "your name and the workspace's" | |
+| Base | The instance's commit a workspace was cloned at or last brought up to date with | "base" (plan §2; the API's conflict report: base, target, source); "where the workspace was taken" (Quiver) | Not shown in the program today. A conflict review shows it as the "before" state | **starting point**: in the conflict review's first column and anywhere the app explains an update. "Base" stays in the API and the plans | |
+| The copy on this machine | The workspace's state as held by the local hub | "clone" (noun; plans); "your own copy" (guide, first section); "the hub's copy" (Quiver strip) | Quiver's strip has three lines (this computer, the hub's copy, `main`), so it needs a name | **your workspace** is the copy; it needs no second name. Quiver's strip line becomes the workspace's name (§16) | |
+| Older commits kept | The instance's state at older commits that records refer to, kept so reads work offline | "Older commits kept" (Settings); "snapshots" (status reply field, `snapshots.json`, `ARMATURE_SNAPSHOTS`) | Visible only as a number setting | **Older commits kept offline** (Settings); "snapshots" stays internal | |
+| Workspaces folder | Where the program keeps workspaces on disk | "Workspaces folder" (Settings); "the workspaces folder" (guide); "In the program's data folder" (default label) | | **workspaces folder**, kept | |
+| The app's data folder | Settings and, by default, workspaces | "the program's data folder" (guide, Settings) | | **the app's data folder** | |
+| The discarded folder | Where a discarded workspace's files are set aside | `_discarded` (guide, messages) | Shown as a folder name only | **`_discarded`**, kept; messages call it "the discarded folder" | |
+| Bank (Quiver) | Quiver's view of a workspace's items | "the bank" (Quiver throughout) | Is a bank a workspace, or what Quiver shows of one? It matters once Quiver and the program describe the same thing | **item bank**, Quiver's product word for the items it shows from a workspace, as Learnosity uses it [S25]. Quiver's text says "the item bank in workspace unit-3", never a bank in place of a workspace | |
+
+## 6. History
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| A commit | One recorded change to the design, with an author, a time and a message; immutable | "commit" (pages: "Unpushed commits", "Pushed 3 commits"; guide); "save" (Quiver: "not yet saved to the workspace") | Collision 5. Does a designer see the word "commit" at all? | **commit**, noun and verb, on every surface; glossed once in the guide as "a recorded change, with who made it, when and why". GitHub Desktop and Abstract show it to their users [S6][S7]. Set B: "saved change" | |
+| Unpushed commit | A commit made on this machine, not yet on the instance | "unpushed" (badge "2 unpushed"; code `unpushed_commits`); "commits not yet pushed" (guide); "local commit" (plan §2) | | **to push**: the badge "3 to push", the list "Commits to push", paired with the Push button. "Local commit" stays in the plans | |
+| Pushed commit, the instance's identifier | A local commit after replay; gets the instance's identifier | "remote commit" (plan); "Delivered into main as `ab12cd3`" (page shows a short identifier) | Whether people ever see commit identifiers, and in what form | **commit**, shown by message and date first and a short identifier second ("Merged into main as ab12cd3"). A local identifier is never shown, since it changes on push | |
+| Head | The latest commit of a branch | "head" (API, Quiver); "your latest work" (guide: "reported on your latest work") | | **latest commit**; "head" stays in the API | |
+| Commit message | The text saying what a commit holds | "message" ("Message (optional)" on the deliver form; guide: "a message saying what it holds"); generated messages (Quiver) | | **message**, kept | |
+| Commit note (Quiver) | An optional sentence added to Quiver's generated message | "note" (Quiver plan §3) | Collision 16 with `DesignNote` | Part of the **message**: Quiver's field reads "Add to the message (optional)". "Note" is left to design notes | |
+| A branch's log | The list of a branch's commits | "log" (`GET /branches/:name/log`; Quiver) | Collision 15 with the program's Log page | **history**, a branch's or a record's, as GitHub Desktop, MediaWiki and Onshape say [S9][S19][S16]. "Log" stays the route's name | |
+| A record's history | The commits that changed one record | "history" (API; Quiver) | On a workspace hub it starts at the clone (Quiver `program-notes.md` §2) | **history**, kept | |
+| A past state | The design as it stood at a commit | "at this commit", "as it was at the commit" (viewer titles); "Since commit" (viewer); `asOf` (records); "as of" (ADRs) | `asOf` is a field name. People need "as of" or "at" | **as of**, followed by the commit's date and short identifier ("as of 12 Nov, ab12cd3"), as MediaWiki says "Revision as of…" [S19]. `asOf` stays the field | |
+| Author, acting for, relayed by | Who made a commit: a person, an agent acting for a person, or a service relaying a person | "author" ("with your name as its author", pages); "acting for", "on behalf of" (ADR-0067; trailer `Armature-On-Behalf-Of`); "relayed by" (`Armature-Relayed-By`) | Needs a name wherever a history view shows an agent's work (Quiver's drafter) | **by**, **for** and **via**: "by Quiver drafter, for Dana"; "by Dana, via CoQui". The trailers keep their names | |
+| When the work was done | The local commit's time, kept through a push | `Armature-Authored-At` (trailer); "the time the work was done" (plan §5) | Not shown yet. Needed as soon as a history view separates "made" from "arrived" | **made** and **pushed**: "made 14 Nov, pushed 15 Nov" | |
+| Correcting a mistake | History is never rewritten; a correction is a new commit | "a correction is another commit" (Quiver); no action exists | If an undo or revert is ever offered, it needs a name that does not suggest erasing | **Revert**, if built: GitHub Desktop's "Revert Changes in Commit" makes the revert itself a commit [S9], as MediaWiki's undo does [S19]. Avoid "Restore", which in Google Docs and Figma replaces the whole state [S3][S20] | |
+
+## 7. Actions
+
+### The workspace cycle
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| Make a workspace | Create a branch on the instance from `main` (or another branch) and copy it here | "Make a workspace" (guide); "New workspace" (heading); "Make the workspace" (button); "Making it…"; "create" (plan §4; `POST /workspace`); "take" (Quiver "Take or open a workspace"); "check out" (Quiver's earlier model) | | **New workspace** (heading), **Create workspace** (button), "Creating…". The form's one choice is where it starts: **from main** or **from a shared branch**, which becomes its parent (decided 2026-11-18, not built; the form offers "From" today). Figma says "Create branch…" [S1] | |
+| Clone a branch | Copy an existing branch from the instance into a new workspace | "Clone a branch", "Clone a branch the remote has" (pages); "Clone it", "Cloning…" (button) | Making a workspace also clones. "Clone" is Git's word | **Open a workspace from Westfield Armature**: your own workspace on a second computer, or a colleague's to read. Under the rule in §2 nobody pushes to a colleague's workspace; to work alongside them, both work in workspaces under a shared branch. "Clone" stays the API's and plans' word | |
+| Commit | Record a change as a commit | "commit" (guide: "Your tools commit as you work"); "save" (Quiver); "write" (API) | Collision 5. No button in the program; tools do it | **commit**. Quiver's feedback says "Committed", not "Saved". Set B: "save" | |
+| Push | Send unpushed commits to the workspace's branch on the instance, each as it was made | "Push", "Pushing…", "Pushed 3 commits", "Nothing to push: the remote has everything.", "Sends your commits to the remote, each as you made it.", "All pushed", "Everything here is on the remote" (pages); "push" (all documents, Quiver) | Git's word, used consistently. Its explanatory strings say "the remote" (collision 1) | **Push**, kept, as GitHub Desktop and VS Code show it [S8][S12]. Its strings name the instance: "Sends your commits to Westfield Armature, each as you made it." Set B: "Send" | |
+| Bring in main | Have the instance merge `main` into the workspace, then copy the result here | "Bring in main", "Bringing in…", "Brought main in: 12 records", "Already up to date with main." (pages); "bring in `main`" (plan); "pull", "sync" (Quiver's earlier model); code `bring_in_first` | Collision 11 | **Update from <parent>**, which reads "Update from main" while every parent is `main`: "Updating…", "Updated from main: 12 records", "Already up to date with main". This follows Figma's verified label [S2] and Abstract's "Update from Main" and "Update from Parent" [S5]. The noun is "an update from main". The refusal `bring_in_first` reads "Update from main first". The app's own updates then say **new version** ("Version 0.1.5 is available"), so "update" does not mean two things | |
+| Deliver | Have the instance merge the workspace into `main` | "Deliver", "Deliver into main", "Delivering…", "Delivered into main as …", "There was nothing to deliver: main already holds everything here." (pages); "delivery" (noun); "merge into main" (reason text) | Collision 12. Only a maintainer of `main` can deliver; what does anyone else do, and what is it called? | **Merge into <parent>**, which reads "Merge into main" today: "Merging…", "Merged into main as ab12cd3", "Nothing to merge: main already has everything here". Every product researched says "Merge" [S3][S6][S8][S16]. The route stays `/deliver`. For someone who is not a maintainer, **Request review** is reserved for the request when it is built, as Figma and Abstract name it [S4][S6] | |
+| Ask what a delivery would find | A dry run: says whether a delivery would go through, commits nothing | "Ask what a delivery would find", "Asking what a delivery would find", "Nothing was delivered. A delivery now would go through." (pages); `dryRun` (API) | Long as a button label | **Preview merge**; results "A merge now would go through" or "A merge now would be refused: …". No product researched labels a dry run, and "preview" is Figma's word for the same look before an update [S2] | |
+| Remove a workspace | Take the workspace off this machine; delete its branch on the instance when `main` holds it all, keep it otherwise | "Remove", "Remove this workspace", "Confirm the removal" (pages); "removal" (guide) | Collision 13. Removing can delete the branch on the instance or not, and the one label covers both | **Remove from this computer**; the result says which happened: "Its branch was deleted on Westfield Armature, since main has all of it" or "Its branch is kept on Westfield Armature" | |
+| Discard and remove | Remove a workspace with unpushed commits, giving those up; the files are set aside | "Discard and remove", "Discard", "Confirm the discard" (pages); code `discard_mismatch` | Collision 13 | **Discard 3 commits and remove**, with the number in the label, as GitHub Desktop's "Discard Changes" gives up work never committed [S7] | |
+| Merge | Combine two branches; the operation inside bring in and deliver | "merge" (API, ADRs, reason text) | Should people ever see "merge", or only bring in and deliver? | **merge**, now visible in "Merge into main" and "Preview merge". An update from main is a merge too, and the guide may say so | |
+| Resolve a conflict | Decide, per field or part, between the workspace's and `main`'s values | "conflict" (pages, guide); "keep mine", "take theirs", "edit" (Quiver's review); "says which tool to open to resolve it" (guide) | The steps run across two programs (Quiver plan §3.1); each step needs a name a person can follow | **conflict**; columns **Starting point**, **Your workspace**, **main**; choices **Keep yours**, **Take main's**, **Edit**. These name the source, as Figma's "Pick main file" and "Pick branch" do [S2], rather than "theirs" | |
+| Reset a workspace to `main` | Not built; offered in Git tools | — | Listed only so that, if added, it is named on purpose | No name until it is built. If it is, **Start over from main**, which says what is lost | |
+
+### Connecting, signing in and pairing
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| Read an instance | Fetch and show what an address says about itself, before connecting | "Read" (button); "Reading…"; "what it found" (guide) | "Read" as a button label is unusual | **Look up** (button), "Looking up…"; what it shows is the **instance details** (§10) | |
+| Connect | Bind the program to one instance | "Connect", "Connect to your instance", "Connect to <name>", "Connecting…", "Connected to …", "Connecting elsewhere is possible only while no workspace exists." (pages) | | **Connect**, kept; "Connect to Westfield Armature" | |
+| Sign in, sign out | Authenticate at the sign-in provider; end it | "Sign in", "Signed in", "Signed out", "Sign out", "Cancel the sign-in", "Continue in your browser", "Check again" (pages) | "Check again" is collision 8 | **Sign in**, **Sign out**, kept; "Check again" becomes **Try again** | |
+| Pair a tool | Give a tool the pairing value so its writes are accepted | "Pairing" (page); "paired tool"; "Copy", "Show", "Reset the pairing", "Confirm the reset" | | **Pairing**, **paired tool**, kept; "Reset the pairing" becomes **New pairing key** | |
+| Pause, resume, start, restart the hub | Control the local hub | "Pause the hub", "Resume the hub", "Start the hub", "Restart the hub", "The hub is paused" (pages, tray) | Follows from collision 2. If "the hub" is renamed, these change too | Kept, with **the hub** inside the app (row in §4): "Pause the hub" means tools cannot reach the desktop hub until it resumes | |
+| Update the app | Install a new version | "Install and restart", "Check for updates", "This is the latest version." (pages) | | **new version**: "Version 0.1.5 is available", **Install and restart**, **Look for a new version**, "You have the latest version". "Update" is left to "Update from main" | |
+| Read the app's log | See the app's diagnostic lines | "Log" (page) | Collision 15 | **Diagnostics** (page); "the diagnostic log" in the guide | |
+
+### On the instance
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| Register a person | Add a person to an instance's registry | "register", "registered" (guide); code `not_registered`; "Ask your instance's administrator to register you" (page) | | **register**, kept: "Ask an administrator of Westfield Armature to register you" | |
+| Grant, revoke | Give or withdraw a role on a branch | "grant", "revoke" (ADR-0068; `GrantStatus`: `Active`, `Revoked`) | No user interface yet; refusals name "who may" | **give a role** and **remove a role** for people ("Dana is a maintainer of main"); **grant** and **revoke** for administrators and the API | |
+| Export | The graph at a commit as one file, for research or reuse | "export" (API, `deployment.md`, research path) | Researchers and administrators meet it | **export**, kept | |
+| Create a shared branch | A maintainer makes a branch for several workspaces to merge into | — (not in the app; the instance's `POST /branches` exists) | Decided 2026-11-18, not built | **New shared branch**, from `main` or from another shared branch, its parent | |
+| Update a shared branch from its parent | A maintainer merges the parent's new work into a shared branch, so the workspaces under it can take it in | — (not in the app; the instance's merge route serves it) | Decided 2026-11-18, not built | **Update from <parent>**, the same words as a workspace's, on the shared branch's own page. Merging a shared branch into its parent is likewise **Merge into <parent>** | |
+
+## 8. States
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| Everything pushed | No unpushed commits | "All pushed" (badge); "Everything here is on the remote"; "Nothing to push" | | **All pushed**; "Nothing to push: Westfield Armature has everything here" | |
+| The workspace's branch moved | The workspace's own branch on the instance has commits this machine did not push | "The remote moved" (Workspaces badge); "Changed on the remote" (Workspace page); `moved` (status reply); "what moved" (plan §5, 412) | Collision 3. The guide reads it as `main` moving | **Pushed from elsewhere**, with the detail "Someone, or you on another computer, pushed to this branch since this computer last did". It names the only way the branch moves. The guide's sentence is corrected to match | |
+| `main` moved | `main` has new deliveries since the last bring-in | "`main` has moved since you last brought it in" (guide, `bring_in_first`) | The status does not report it (Quiver `program-notes.md` §1) | **<parent> has updates** ("main has updates" today), as Figma tells a branch that "updates are available" [S2], prompting **Update from <parent>**. Needs the status to report the parent's head, a small piece of hub work | |
+| Up to date with `main` | Bring in found nothing new | "Already up to date with main." | | **Up to date with <parent>** ("Up to date with main" today), as Dropbox's "Your files are up to date" [S37] | |
+| Two writers on one branch | A push refused because someone else pushed to, or merged into, the same branch, leaving no way to take their commits in; only discarding gets out | 412 with what moved (push); "a push keeps being refused" (guide, under discard) | Found 2026-11-18. The rule in §2 keeps people off it; a way past it waits for evidence (ADR-0065 decision 6, later change of 2026-11-18) | Message: **"This workspace's branch was changed from elsewhere, and this computer can't take those changes in. Your unpushed commits can only be discarded; then open the workspace again."** Named as a state so that the guide can explain it | |
+| Unreachable, offline | The instance did not answer | "Remote unreachable" (badge); "Cannot be reached"; "The remote could not be reached"; "offline" (guide); code `remote_unreachable`; "Not connected", "Not connected yet" | Uses "remote" (collision 1) | **Westfield Armature can't be reached** (message); **Offline** (badge); **Not connected** before the first connection | |
+| Conflict, both created | Fields changed on both sides; a record created on both sides with different contents | "conflict" (pages, guide); "Created on both sides with different content." (page, for `InsertConflict`) | | **conflict**; "Created in both places, differently" for `InsertConflict` | |
+| Refusal | A request the hub would not carry out | "refused", "refusal" (guide); the code shown beside it; "whether your instance or this machine gave it" | The codes are shown to people, so each code's words matter (guide § "When something is refused") | **refused**, with the words first and the code second, given "by Westfield Armature" or "by this computer". Each code's words in the guide's table follow this list | |
+| Compatible, not compatible | Whether this program and that hub can work together | "Compatible", "Not compatible" (Versions panel) | | **Compatible**, **Not compatible**, kept | |
+| Not yet committed (Quiver) | A Quiver edit not yet valid to commit | "not yet saved to the workspace" (Quiver) | Collisions 4 and 5 | **Not committed yet**, with the rule that holds it: "Not committed yet: mark a correct option" | |
+
+## 9. People and authority
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| Person, user | Someone registered on an instance | "you" (pages); "person" (documents); `User` (schema) | | **you** on the pages; **person** in documents; `User` only as the class | |
+| Identifier | What an instance knows a person by | "Your identifier on the remote" (Settings, sign-in-free mode; placeholder `you@example.edu`); "Your identifier for tools", "Copy your identifier" (Pairing); "identifier" (guide); `externalId`; `Armature-User`; the provider's `sub` | Collision 14 | **your ID on Westfield Armature**, the same words on Settings and Pairing, since it is one value. "ID" is the familiar short form; `externalId` and `Armature-User` stay for tool authors | |
+| Handle | The short prefix of a person's branch names | "handle" (Quiver handoff); "`<user>`" (plan §4) | Taken from the email address, before the @ | No person-facing name: pages show the whole branch name. **handle** in developer documents | |
+| Agent | A registered non-person that writes for a person (an AI drafter, a linter) | "agent" (ADR-0067; `agent:quiver/drafter`); "drafter" (Quiver); "an AI assistant" (guide) | Needs a name in history views and in the registry | **agent**, shown by its name ("Quiver drafter") with **for** the person (§6). What it writes is a **proposal** until the person accepts it | |
+| Service | A program holding its own credential on an instance, such as CoQui's server | "service" (ADR-0067 decision 4; note of 2026-11-12) | Administrators meet it | **service**, for administrators | |
+| Relay | A service writing for a named person under a grant | "relay", `Relay` grant (ADR-0067 decision 5, ADR-0068) | Administrators meet it | **relay**, for administrators; people see "via" (§6) | |
+| Owner | Whoever created a branch; may write it | `Owner` grant; "owner" (refusals: "naming the owner") | | **owner**, as GitLab and GitHub use it [S11][S17] | |
+| Maintainer | May merge into a branch; for `main`, may deliver | `Maintainer` grant; "a maintainer of main" (guide) | | **maintainer** of a shared branch, `main` included: who may merge into it, as GitLab and GitHub use the word [S11][S17]. Under the rule in §2, nobody is made a maintainer of someone else's workspace | |
+| Administrator (role) | May grant roles and register people | `Administrator` grant | Collision 6 | **administrator**: whoever holds the role, the person a designer asks to be registered or given a role. GitLab's instance-wide administrator is the parallel [S18] | |
+| Administrator (who runs the instance) | The person who stands up and keeps an instance | "your administrator", "your instance's administrator" (guide, pages); "the administrator" (`deployment.md`) | Collision 6 | **operator**, already `deployment.md`'s word for who works on the server; often the same person as an administrator. `deployment.md`'s opening line becomes "for the operator" | |
+| Operator | Runs repair and check tools on the server | "operator" (`deployment.md`, ADR-0062, `app/operator.ts`) | Usually the administrator | **operator**, as in the row above | |
+| Reader, reviewer | Someone who reads through the viewer, or reviews without grants | "readers" (`deployment.md`); "reviewer" (seed's `demo-reviewer`; CoQui) | | **reader** (viewer) and **reviewer** (someone who signs off); neither is a role in the grant sense | |
+| Grant | A role held on a branch | "grant" (ADR-0068); "who may" (refusals) | | **role** for people ("your roles"; "who can"); **grant** for administrators and the API | |
+| Your sign-in, the credential | What the program keeps in the keychain to act as you | "your sign-in", "credential" (guide) | | **your sign-in**; "credential" for administrators | |
+
+## 10. Connection and pairing
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| What the instance shows before connecting | Its name, its address and who signs people in, confirmed before connecting | "what it found" (guide); "connection profile" (CLAUDE.md, plan §8); `instance` (discover); code `profile_changed` | Collision 7 | **instance details**; `profile_changed` reads "The instance's details changed since you looked them up" | |
+| Instance name | The name an instance gives itself | "Connect to <name>" (Connect page); `ARMATURE_INSTANCE_NAME` | | **the instance's name**, used as its name everywhere (§4) | |
+| Address | Where the instance's API answers | "Address" (Connect page; placeholder `https://api.armature.example.edu`); "the address your administrator gave you" | | **address**, kept; "the address your operator gave you" | |
+| Pairing value | The secret a tool sends with every write to the local hub | "pairing value", "The pairing value", "Armature pairing value" (pages, guide, Quiver); "per-launch secret" (ADR-0065 decision 7); `Armature-Local-Token`, `ARMATURE_LOCAL_TOKEN`, "local token" (code) | "Per-launch" is no longer accurate: the value now stays the same across restarts | **pairing key**. "Key" says it is a secret to keep, as Tailscale's "auth key" and Obsidian's "API key" do [S33][S35]; "code" would suggest something short to type, and refusals already have codes. The header keeps its name | |
+| Sign-in-free mode | An instance that trusts whoever a request says it is; for development and rehearsal | "No sign-in: you say who you are" (Connect page); `header` resolver (code) | | **No sign-in (for testing only)** | |
+| Port | Where the local hub listens | "Port" (Settings); code `port_in_use` | | **port**, kept | |
+
+## 11. Checks
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| A check | A tool that examines work and reports, named by what it reports under (`lint/mine`) | "check" (pages, guide, ADR-0070); "Check" field ("the name the tool reports under"); "a design linter" (guide) | | **check**, as GitHub uses it [S39], and for nothing else (row *Other uses*) | |
+| A check run | One report from a check about one commit | "check run" (ADR-0070, API); "whether it has reported yet" (guide) | Maybe never shown by that name | **report**: "lint/mine has not reported yet". "Check run" stays the API's | |
+| A check's outcome | What a check concluded | "verdict" (component `CheckVerdicts`; guide "reports a verdict"); "conclusion" with `pass`, `fail`, `neutral`, `error` (API); "what it concluded" (guide) | Collision 9 | **result**: **Passed**, **Failed**, **Neutral** ("reported without passing or failing"), **Couldn't run** (error), following GitHub's conclusions [S40]. "Verdict" leaves checks | |
+| A check the instance requires | A requirement on `main` that gates a delivery | "Checks your instance requires" (page); "required check" (guide); `CheckRequirement` (schema); "Required", "Advisory" (`CheckLevel`); "locked" | | **required checks**, as GitHub's "Require status checks to pass before merging" [S39]; levels **Required** and **Advisory**; **locked** | |
+| Checks of your own | Requirements a person sets on their own pushes | "Checks of your own", "Checks you ask of your own pushes" (pages); "personal checks" (code `personal_checks_invalid`); "personal requirements" (CLAUDE.md); `checks.json`; "In force"; "When it has not passed": "The push is stopped" / "The push goes on, and says so" | Three names for one thing | **personal checks**, matching the code, beside **required checks**; "In force" becomes **On** | |
+| Going past a check | Proceeding despite a pending or failing check, with a reason | "Deliver anyway", "Push anyway", "Go on anyway" (buttons); "set aside" (guide); `overrides` (API); "Why (required)", "reason" | Collision 10 | **override**, matching the API; buttons **Merge anyway** and **Push anyway**; field **Reason for overriding**. GitHub says "bypass" [S41]; "override" says better that a reason is recorded | |
+| Pending, failed | A check has not reported; a check did not pass | codes `checks_pending`, `checks_failed`; "has not reported yet", "did not pass" (guide) | | **Waiting for a report** and **Failed** | |
+| Gate | Where requirements apply: a merge into `main` or a push | `gate: ["merge"]`, `["push"]` (API) | Probably never shown | No person-facing name; the page says "before a merge into main" or "before a push" | |
+| Event feed | The stream of events checks listen to | "event feed" (ADR-0070, API) | Tool authors only | **event feed**, for tool authors | |
+| Other uses of "check" | Unrelated actions sharing the word | "Check again" (sign-in); "Check for updates", "Checking…" (Settings); the operator's `check`; lettered platform checks | Collision 8 | **Try again** and **Look for a new version** (§7). The operator's `check` and the platform checks keep their names: their audiences never meet ADR-0070's checks in the same place | |
+
+## 12. Design records
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| Design record | Anything in the design graph: an artifact or a relationship | "records" (pages: "Brought main in: 12 records"; viewer: "Record details", "Search records", "Related records"); "document" (API; viewer: "The document on the hub"); `DesignRecord` (schema) | Collision 17 | **record** on every person-facing surface; **document** in the API and `docs/api.md` only | |
+| Artifact | A thing designed: objective, item, activity, module | "Artifacts" (viewer legend); "artifact" (category, ADR-0027) | | **artifact**, kept for the viewer's two kinds of record | |
+| Relationship | A link between two artifacts, kept as a record with its own rationale | "Relationships" (viewer legend); "junction" (documents) | "Junction" is for developers only | **relationship**; "junction" stays in developer documents | |
+| Objective | A learning objective | `LearningObjective`; "objective"; "Declared objectives" (viewer) | | **objective** | |
+| Objective state | `Draft`, `Active`, `Deprecated`, `Archived` | `ObjectiveState` | Collision 4 (`Draft`) | Kept: **Draft**, **Active**, **Deprecated**, **Archived** | |
+| Item | A reusable assessment question | `AssessmentItem`; "item" | | **item** | |
+| Item status | `Draft`, `InReview`, `Approved`, `Retired` | `ItemStatus` | Collision 4. `InReview` needs a spaced form | **Draft**, **In review**, **Approved**, **Retired**, the words item banks already use [S25][S26]. Because "approved" is a status, a person's own judgment is a **sign-off**, never an "approval" | |
+| Item type | `MultipleChoice`, `MultipleSelect`, `TrueFalse`, … | `ItemType` | Shown with spaces in tools | Spaced forms: **Multiple choice**, **True/false**, **Fill in the blank** | |
+| Part, option | A piece of an item: stem text, an option | `Fragment`, `TextFragment`, `ItemOption`, `fragmentId`; "part" (documents); "option", "stem" (Quiver) | "Fragment" is a schema word | **part**, or the specific name: **stem**, **option**. "Fragment" stays the schema's | |
+| Placement | An item placed in an assessment, with its own clearance | `ItemInstance`; "placement" (documents, viewer: "approved placements"); "placement clearance" (ADR-0018) | The class name and the spoken name differ | **placement**; its status is the **placement status** | |
+| Assessment, activity, lesson, module, course | The containers of instruction | `Assessment`, `LearningActivity`, `Lesson`, `Module`, `Course` | `ActivityType` values need spaced forms (`WorkedExample`) | **assessment**, **activity**, **lesson**, **module**, **course**; spaced types ("Worked example") | |
+| A module's declared objective | A module's statement that it covers an objective, with a role | `ModuleObjective`; "Declared objectives", "Assessed but not declared" (viewer); role `Primary`, `Supporting`, `Prerequisite` | | **declared objective**, kept | |
+| Formative use | An item used inside an activity, not for credit | `ActivityItemLink`; "formative use" (ADR-0061) | | **practice use**, the plainer word for designers; "formative use" for researchers | |
+| Prerequisite | One objective required before another, with a rationale | `PrerequisiteRecord`; `PrerequisiteType`: `Hard`, `Soft`, `Corequisite` | | **prerequisite**, kept | |
+| Need, evidence | A learning need and what supports it | `LearningNeed`, `LearningEvidence`, `DescriptiveEvidence`, `NeedEvidenceLink` (with `confidence`) | | **need**, **evidence**, kept | |
+| Dataset, metric | A set of learner data; one measurement from it, such as an item statistic | `LearningDataset`, `LearningMetric`; "item statistics" (documents) | | **dataset**; **measurement**, with **item statistic** for an item's | |
+| Design note | A recorded design decision with its category | `DesignNote`; categories such as `SequencingDecision` | Collision 16 | **design note**, always with "design" | |
+| Finding | A concern about a record, with a status and a resolution | `DesignFinding`; `Open`, `Addressed`, `Dismissed` | | **finding**, kept | |
+| Attestation | One person's verdict on a record as of a commit | `Attestation`; "endorsement", "claim" (ADR-0028); `Affirmed`, `Declined`; "stale" | Collision 9 | **sign-off** for people, with **Affirmed** or **Declined** and "out of date" when the record changed after it. SharePoint's "Request sign-off" is the precedent [S44]; GitHub and Figma's "Approve" [S4][S43] would collide with the `Approved` status. "Attestation" stays for researchers and the schema | |
+| External reference, attachment | An identifier elsewhere; a hashed pointer to bytes stored elsewhere | `ExternalRef`, `Attachment` | | **external reference**, **attachment** | |
+| Coverage | How well a module's placements assess its declared objectives | "Coverage", "Coverage figure", "Fully assessed at", "Over-assessed above" (viewer); the two populations "approved items, approved placements" and "Projected (everything not retired)" | | **coverage**, kept | |
+| Alignment | Which items assess which objectives | "alignment"; "items without objective" (API) | | **alignment**, kept | |
+| Export profile | How much about people an export carries: `full`, `pseudonymous`, `institutional` | "profile" (ADR-0031, API) | Collision 7 | **privacy level**: **Full**, **Pseudonymous**, **Institutional**. `profile=` stays the parameter | |
+| Slice | A named subset of the graph for an export | "slice" (ADR-0031, `slices.json`) | Researchers only | **slice**, for researchers | |
+
+## 13. Rules
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| A rule | A condition every write must meet, beyond what the store enforces | "rules" (guide, Quiver "the whole rules engine"); "invariants", numbered "constraints" (CLAUDE.md, code); "lint" (lint plan, for advisory ones) | Collision 19 | **rule** for people; "invariant" and "constraint" in developer documents. An advisory finding from a check is a check's result, not a rule | |
+| A broken rule | A write or merge that fails a rule | "Broken rules" (page); "violations" (API); `invariant_violation` (code) | | **Broken rules**, kept | |
+| Rule numbers | Constraint 0 to 24 | "rule 9", "constraint 19" (Quiver, CLAUDE.md) | Do people ever see a number? | Not shown; a broken rule is described in words ("An item needs a correct option") | |
+
+## 14. Versions
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| App version | The installed app's release (0.1.4) | "Version" (pages); "version" (guide) | | **version** | |
+| Revision | The date-named contract version a hub serves and a client speaks (2026-11-16) | "Its hub's revision", "The remote serves" (Versions panel); "client revision" (`docs/client-changes.md`); code `unsupported_version` | Collision 18 | **API revision**, shown only in the Versions panel's details. `unsupported_version` reads "Westfield Armature is too old for this version of the app" | |
+| Compatibility | Whether the two can work together | "Compatible", "Not compatible" (Versions panel) | | **Compatible**, **Not compatible** | |
+
+## 15. Viewer
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| Design Graph | The drawing of the whole design | "Design Graph" (viewer heading) | Settled | **Design Graph** | |
+| Coverage View | One module's coverage | "Coverage View" (viewer titles) | Settled | **Coverage View** | |
+| Focus page | One record's neighborhood on its own page | "Focus page" (plan); "This record's neighborhood on its own page" (title) | | **Focus page** | |
+| Walkthrough | A step-by-step walk from a record back to its evidence | "Walkthrough", "Narrative 1, step by step" (viewer); "Exit the walk" | "Narrative 1" is a document's term | **Walkthrough**; its title says "From this record back to the evidence, step by step", dropping "Narrative 1" | |
+| Lens | A way of coloring the graph; the Changes lens shows what a branch gained since a commit | "Lens" (legend heading); "the Changes lens" | | **lens**; **Changes lens** | |
+| Figure | An exportable drawing with a stamp | "Figure", "Figure stamp", "Figure legend" (viewer) | | **figure** | |
+| Work from your own computer | The viewer's page linking to the desktop app | "Work from your own machine" (viewer, `/connect`) | Links to collision 22 | **Work from your own computer** | |
+| Module content | A module's activities, lessons and assessments | "Module content", "Modules" (viewer) | | Kept | |
+| The raw record | The record as the hub returns it | "The document on the hub" (viewer title) | Collision 17 | **This record as the API returns it** | |
+
+## 16. Quiver's words that meet Armature's
+
+| Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
+|---|---|---|---|---|---|
+| Draft | An edit not yet valid enough to commit, kept by Quiver | "draft" (Quiver plan §3) | Collision 4 | **uncommitted edit**, so that `Draft` stays the item status; giving it up is **Discard** (principle 5). Alternative: "edit in progress" | |
+| Saved | Committed to the workspace | "saved to the workspace" (Quiver) | Collision 5 | **Committed** | |
+| The status strip | Quiver's three lines: this computer, the hub's copy, `main` | "the strip" (Quiver plan §3) | Each line needs the names chosen in §4 and §5 | Three lines named **This computer** (uncommitted edits), the **workspace name** (commits to push, pushed from elsewhere), and the **parent** by name, `main` today (has updates, up to date) | |
+| Changes view | Drafts and unpushed commits, by record and part | "Changes view", "Changes drawer" (Quiver) | Near the viewer's Changes lens, which shows something else | **Outgoing**: uncommitted edits and commits to push, as VS Code's "Outgoing Changes" [S13]. "Changes" is left to the viewer's lens | |
+| Sync button | A button in Quiver that opens the program at an action | "Sync button" (`docs/workspace-hub-plan.md` §4); "a Push, Bring in or Deliver button in Quiver" (Quiver plan §3) | Collision 11 | Three buttons that open Armature Desktop at the action: **Push…**, **Update from <parent>…**, **Merge into <parent>…**. No "Sync": in Canvas it overwrites one way [S24], and in VS Code it moves both ways [S12] | |
+| Drafter's output | What Quiver's AI drafter writes as an agent | "a kept draft" (Quiver `program-notes.md` §6) | Collision 4 | **proposal**; accepting it is the person's own commit | |
+
+---
+
+## 17. Terms that need no user-facing name
+
+These stay in the code and the developer documents. If one starts showing up on a page or in a refusal message, it needs a row above first.
+
+- **Store**, **host**, **server** (in the `deployment.md` sense), **schema**: administrators, operators and developers only.
+- **The shell**, **the core**, **the sidecar**, **the relay** (`relay.rs`): the desktop app's internals (ADR-0069).
+- **Capability**, **revision negotiation**, **`GET /discover`**: tool authors only (ADR-0059).
+- **Trailer** (`Armature-Workspace-Commit`, `Armature-Authored-At`, `Armature-Check`, and others): carried in commit messages. A history view shows their meaning ("made", "for", "via"), not the trailers themselves.
+- **`ETag`**, **`If-Match`**, **412**: the mechanism behind "Pushed from elsewhere".
+- **The write queue**, **the transient branch**, **`at.<commit>` branches**, **the commit table** (`push.json`), **the in-flight marker**, **the split rule** and its parts: internals of the hub and of push.
+- **Resolver** (`header`, `oidc`): operators see the setting. People see "No sign-in (for testing only)" or a sign-in provider.
+- **The mirror of `main`** on a desktop hub: an internal copy of the schema and the registry.
+- **Ownerless branches**, **migration window**: administrators only (ADR-0068).
+- **The snapshot budget** (`ARMATURE_SNAPSHOTS`): surfaced only as "Older commits kept offline".
+- **Refusal codes not in the guide's table** (`remote_only`, `workspace_only`, `program_action`, `type_conflict`, …): tool authors meet them in `docs/api.md`. If the app starts showing one to a person, it needs words in the guide's table first.
