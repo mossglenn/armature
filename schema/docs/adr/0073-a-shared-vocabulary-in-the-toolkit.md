@@ -10,22 +10,25 @@
 > concept or an audience, each with the word to use instead and why: "save" is avoided for a commit,
 > which is called a commit, while settings may still be saved. The working document keeps the
 > reasoning, and a check in CI fails when it and the file disagree. A tool that updates its Armature
-> dependency gets the current words, with no one copying anything. Proposed on 18 November 2026;
-> nothing is built.
+> dependency gets the current words, with no one copying anything. Accepted on 18 November 2026,
+> its five open questions decided as recommended; nothing is built.
 
 ## Status
 
-Proposed (2026-11-18). Drafted the same day at Amos's request, after the review of
+Accepted (2026-11-18, Amos). Proposed the same day, drafted at Amos's request after the review of
 `docs/naming-vocabulary.md` (PR #178), when he asked for the vocabulary to sit in the toolkit, with
-a way to track reserved words and words purposefully avoided. Not built.
+a way to track reserved words and words purposefully avoided. Amos decided the five open questions
+the same day, each as recommended (decisions 1, 2 and 6, and §Alternatives for question 5), before
+accepting the record. Not built.
 
 It changes no schema and no route, and the hub never reads the vocabulary, so it needs no platform
 check, no client revision and no entry in `docs/client-changes.md` (§Decision 7). It adds a third
 package to the npm workspace built in Phase 7 (`docs/development-plan.md`, Phase 7: "tools-first
 needs a toolkit").
 
-On acceptance, `docs/naming-vocabulary.md` gains a banner saying the names in force are the
-package's, and that the document is the reasoning behind them (decision 5). No ADR is annotated: the
+When the package is built, `docs/naming-vocabulary.md` gains a banner saying the names in force are
+the package's, and that the document is the reasoning behind them (decision 5); until then its
+status line names this record. No ADR is annotated: the
 vocabulary is not a capability under ADR-0059, since no hub serves it (§Alternatives).
 
 ## Context
@@ -80,7 +83,9 @@ else.
      from prose, so a string that is one carries a marker naming the entry (`vocabulary-allow: save`,
      in a comment beside it), and the function skips it.
 
-   It has no dependencies and no build, as `@armature/types` has none.
+   It has no dependencies and no build, as `@armature/types` has none. It offers no command line: a
+   tool calls the two functions from its own suite until a second tool asks for a command (open
+   question 3).
 
 2. **Terms: one entry per shared concept.**
 
@@ -97,7 +102,9 @@ else.
 
    A refusal code's words are a term whose `identifiers` name the code, so the words shown for
    `bring_in_first` are kept as any other name is. The terms cover the concepts Armature defines and
-   no others: a tool's own concepts stay out.
+   no others: a tool's own concepts stay out. The vocabulary is English; a translation would key on
+   the ids, and a map of names by language is added beside `name` when a tool is translated (open
+   question 4).
 
 3. **Reserved words: words that hold one meaning.** Each entry is `{ word, for, audience, reason }`:
    the word, the term `id` it belongs to, the audiences for which it is held, and why. Every term's
@@ -150,7 +157,8 @@ else.
    It reports and does not fail while the strings are the ones in use before any name is chosen,
    since every page would fail today. It fails for a surface once that surface has been brought to
    the vocabulary, which the check learns from a list kept with the script, filled as each page is
-   reworded; the list is Armature's, not the package's, since tools have surfaces of their own. A
+   reworded; the list is Armature's, not the package's, since tools have surfaces of their own. It
+   fails surface by surface, never all at once on a date (open question 2). A
    string that keeps an avoided word on purpose, an allowed use, carries the marker of decision 1.
 
 7. **The vocabulary has its own versions, not the hub's.** `vocabulary.json` carries a `revision`
@@ -164,8 +172,8 @@ else.
    it; the refusal codes whose words the document gives (`bring_in_first`, `profile_changed`,
    `unsupported_version` and the others it words), the rest of the guide's table of refusals
    (`docs/desktop-program.md` § "When something is refused") added as each is reworded; the
-   reserved and avoided words its collisions and principles name; and nothing from §16 (Quiver's own words) beyond the avoided entries those rows
-   create. As Amos fills a row's Chosen cell, its term becomes `chosen` in the same pull request, the
+   reserved and avoided words its collisions and principles name; and nothing from §16 (Quiver's
+   own words) beyond the avoided entries those rows create. As Amos fills a row's Chosen cell, its term becomes `chosen` in the same pull request, the
    check holding the two together. Tools may align on recommended names from the start: when a name
    is chosen differently, its `id` stays, so a tool keyed on ids changes only the word.
 
@@ -198,6 +206,10 @@ else.
   and `isReserved` over its own strings instead (open question 3).
 
 ## Open questions
+
+**Amos decided all five on 2026-11-18, each as recommended;** the decisions are in decisions 1, 2
+and 6 and, for question 5, in §Alternatives, and the options are kept here as the record of what was
+weighed.
 
 1. **The package's name and place.** *Recommendation:* `@armature/vocabulary` in `packages/`, as
    decided above. If a third package proves a burden for the install check, the subpath of
