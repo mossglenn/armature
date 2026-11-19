@@ -838,6 +838,13 @@ Work:
       AC4 fact in §9. CI bundles the tools and runs them inside the hub's image.) (The same day:
       every operator commit marked `armature.operator` in its metadata, through a transient
       branch and `apply`, check AF; and `check` over the seed as a CI step after seeding.)
+- [x] A shared vocabulary in the toolkit (added to this phase's list 2026-11-18, ADR-0073; done
+      2026-11-19): `@armature/vocabulary`, a third package with no dependencies and no build,
+      holding the names every tool shows a person, the reserved words and the avoided words as
+      `vocabulary.json` with its JSON Schema, and `findAvoided` and `isReserved` for a tool's own
+      suite. `npm run check:vocabulary` holds the file to `docs/naming-vocabulary.md` in CI's first
+      job and reports the avoided words on Armature's own pages, failing for none of them until
+      each is reworded. The install check installs the package from outside the workspace.
 - [ ] Deploy one hosted instance for the public demo so CoQui's recorded hub is a fallback
       rather than the source. What runs is settled and documented (`docs/deployment.md`,
       2026-10-21): the compose file's three containers on one server, the viewer public, the hub

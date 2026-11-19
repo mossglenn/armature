@@ -43,6 +43,8 @@ The hub published by the compose file listens on the machine's loopback interfac
 
 [`@armature/client`](../packages/client/README.md) is one typed function per route, grouped as the API reference groups them: `documents`, `branches`, `users`, `checks`, `events`, `intelligence`, `export`, plus `discover()` and `schema()` (and `workspace` on a workspace hub). Types come from [`@armature/types`](../packages/types/README.md), generated from the schema. Both ship TypeScript source, which your tool compiles. Another repository installs them by git reference, the types first, since the client takes them as a peer dependency: `pnpm add github:mossglenn/armature#path:packages/types github:mossglenn/armature#path:packages/client`. A Next.js app adds `transpilePackages: ['@armature/client', '@armature/types']` to its `next.config`; Vitest and `tsx` need nothing. The client's README has the details, including pinning a commit.
 
+A third package, [`@armature/vocabulary`](../packages/vocabulary/README.md), holds the names your tool shows a person for Armature's concepts (ADR-0073): `terms['action.push'].name` is "Push", and `terms['refusal.bring_in_first'].name` is the wording for that refusal code. It also lists the words reserved to one meaning (`Draft` is a status, so an edit in progress is not a "draft") and the words deliberately avoided, each with the word to use instead and why. `findAvoided(text, 'people')` and `isReserved(word)` check your own strings from your own suite. No hub serves the vocabulary; it comes with your Armature dependency, and the identifiers in this guide never change with a word.
+
 ```ts
 import { createClient, HubError } from '@armature/client';
 
