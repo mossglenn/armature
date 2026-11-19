@@ -1,0 +1,26 @@
+{
+  "name": "@armature/vocabulary",
+  "version": "0.1.0",
+  "description": "The names Armature's tools share: one JSON file of terms, reserved words and avoided words, its JSON Schema, and two functions a tool checks its own strings with (ADR-0073)",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./vocabulary.json": "./vocabulary.json",
+    "./vocabulary.schema.json": "./vocabulary.schema.json"
+  },
+  "files": [
+    "src",
+    "vocabulary.json",
+    "vocabulary.schema.json",
+    "CHANGES.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test test/vocabulary.test.ts test/check.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5"
+  }
+}

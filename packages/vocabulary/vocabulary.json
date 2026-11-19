@@ -1,0 +1,4518 @@
+{
+  "$schema": "./vocabulary.schema.json",
+  "revision": "2026-11-19",
+  "terms": [
+    {
+      "id": "instance",
+      "name": "instance",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A hub with its store on a server, shared by an institution or a project; the general word for it.",
+      "row": {
+        "section": 4,
+        "concept": "The shared installation"
+      }
+    },
+    {
+      "id": "instance.own-name",
+      "name": "the instance's own name",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "What a sentence says when it names the shared installation: the name the instance gives itself, written <instance> in a label.",
+      "row": {
+        "section": 4,
+        "concept": "The shared installation"
+      }
+    },
+    {
+      "id": "desktop-hub",
+      "name": "desktop hub",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "developers"
+      ],
+      "means": "The hub Armature Desktop runs on a person's computer, which holds the workspaces.",
+      "row": {
+        "section": 4,
+        "concept": "The hub on your computer"
+      }
+    },
+    {
+      "id": "desktop-hub.in-app",
+      "name": "the hub",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The desktop hub, as Armature Desktop's own window calls it.",
+      "row": {
+        "section": 4,
+        "concept": "The hub on your computer"
+      }
+    },
+    {
+      "id": "hub",
+      "name": "hub",
+      "status": "chosen",
+      "audience": [
+        "administrators",
+        "developers"
+      ],
+      "means": "One host bound to one store: the address a client talks to.",
+      "row": {
+        "section": 4,
+        "concept": "A hub, in general"
+      }
+    },
+    {
+      "id": "armature-desktop",
+      "name": "Armature Desktop",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The product's name for the installed app.",
+      "row": {
+        "section": 4,
+        "concept": "The desktop program"
+      }
+    },
+    {
+      "id": "desktop-app",
+      "name": "the desktop app",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Armature Desktop in running text; \"the app\" once it has been named.",
+      "row": {
+        "section": 4,
+        "concept": "The desktop program"
+      }
+    },
+    {
+      "id": "viewer",
+      "name": "the viewer",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Armature's own read-only web pages at an instance, as the documents call them.",
+      "row": {
+        "section": 4,
+        "concept": "The viewer"
+      }
+    },
+    {
+      "id": "tool",
+      "name": "tool",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A program that reads and writes through a hub, such as Quiver, CoQui or a linter.",
+      "row": {
+        "section": 4,
+        "concept": "Tools"
+      }
+    },
+    {
+      "id": "client",
+      "name": "client",
+      "status": "chosen",
+      "audience": [
+        "developers"
+      ],
+      "means": "A tool, in developer documents.",
+      "row": {
+        "section": 4,
+        "concept": "Tools"
+      }
+    },
+    {
+      "id": "this-computer",
+      "name": "this computer",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The person's own computer, as opposed to the instance.",
+      "row": {
+        "section": 4,
+        "concept": "This computer"
+      }
+    },
+    {
+      "id": "sign-in-provider",
+      "name": "sign-in provider",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The institution's identity service, where a person signs in.",
+      "row": {
+        "section": 4,
+        "concept": "Sign-in provider"
+      }
+    },
+    {
+      "id": "identity-provider",
+      "name": "identity provider",
+      "status": "chosen",
+      "audience": [
+        "administrators",
+        "developers"
+      ],
+      "means": "The sign-in provider, for whoever configures it.",
+      "row": {
+        "section": 4,
+        "concept": "Sign-in provider"
+      }
+    },
+    {
+      "id": "issuer",
+      "name": "issuer",
+      "status": "chosen",
+      "audience": [
+        "administrators",
+        "developers"
+      ],
+      "means": "The sign-in provider's OpenID Connect address, in settings and codes.",
+      "identifiers": [
+        "issuer_unreachable",
+        "insecure_issuer"
+      ],
+      "row": {
+        "section": 4,
+        "concept": "Sign-in provider"
+      }
+    },
+    {
+      "id": "release-channel",
+      "name": "release channel",
+      "status": "chosen",
+      "audience": [
+        "administrators"
+      ],
+      "means": "Where Armature Desktop looks for a new version.",
+      "row": {
+        "section": 4,
+        "concept": "The release channel"
+      }
+    },
+    {
+      "id": "main",
+      "name": "main",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The instance's shared, agreed design: the branch the shared work is merged into.",
+      "row": {
+        "section": 5,
+        "concept": "main"
+      },
+      "also": [
+        {
+          "section": 7,
+          "concept": "Resolve a conflict"
+        }
+      ]
+    },
+    {
+      "id": "branch",
+      "name": "branch",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A line of the design's history on the instance, written directly by anyone with the right and merged into.",
+      "row": {
+        "section": 5,
+        "concept": "Branch"
+      }
+    },
+    {
+      "id": "workspace",
+      "name": "workspace",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A branch owned by one person and held on one computer, where their tools work, online or offline.",
+      "row": {
+        "section": 5,
+        "concept": "Workspace"
+      }
+    },
+    {
+      "id": "state.linked",
+      "name": "linked",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A workspace belongs to one computer, and only the app on that computer may write it.",
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 5,
+        "concept": "Link"
+      },
+      "also": [
+        {
+          "section": 7,
+          "concept": "Clone a branch"
+        }
+      ]
+    },
+    {
+      "id": "state.unlinked",
+      "name": "unlinked",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A workspace belongs to no computer and can be linked to one.",
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 5,
+        "concept": "Link"
+      }
+    },
+    {
+      "id": "parent",
+      "name": "parent",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The branch a workspace started from, takes updates from and merges into; a label names that branch instead of saying \"parent\".",
+      "row": {
+        "section": 5,
+        "concept": "Parent"
+      }
+    },
+    {
+      "id": "workspace-name",
+      "name": "workspace name",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The short name a person gives a workspace, such as unit-3.",
+      "row": {
+        "section": 5,
+        "concept": "Workspace name, branch name, handle"
+      }
+    },
+    {
+      "id": "branch-name",
+      "name": "branch name",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The name the instance gives a workspace's branch, such as jdoe_unit-3.",
+      "row": {
+        "section": 5,
+        "concept": "Workspace name, branch name, handle"
+      }
+    },
+    {
+      "id": "starting-point",
+      "name": "starting point",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The instance's commit a workspace was created at or last updated to; the first column of a conflict review.",
+      "identifiers": [
+        "base"
+      ],
+      "row": {
+        "section": 5,
+        "concept": "Base"
+      },
+      "also": [
+        {
+          "section": 7,
+          "concept": "Resolve a conflict"
+        }
+      ]
+    },
+    {
+      "id": "your-workspace",
+      "name": "your workspace",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The workspace as this computer holds it; the copy has no second name.",
+      "row": {
+        "section": 5,
+        "concept": "The copy on this machine"
+      },
+      "also": [
+        {
+          "section": 7,
+          "concept": "Resolve a conflict"
+        }
+      ]
+    },
+    {
+      "id": "older-commits-kept-offline",
+      "name": "Older commits kept offline",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The setting for how many of the instance's older commits a workspace keeps so that reads work offline.",
+      "identifiers": [
+        "ARMATURE_SNAPSHOTS"
+      ],
+      "row": {
+        "section": 5,
+        "concept": "Older commits kept"
+      }
+    },
+    {
+      "id": "workspaces-folder",
+      "name": "workspaces folder",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Where Armature Desktop keeps workspaces on disk.",
+      "row": {
+        "section": 5,
+        "concept": "Workspaces folder"
+      }
+    },
+    {
+      "id": "app-data-folder",
+      "name": "the app's data folder",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Where Armature Desktop keeps its settings and, by default, its workspaces.",
+      "row": {
+        "section": 5,
+        "concept": "The app's data folder"
+      }
+    },
+    {
+      "id": "discarded-folder",
+      "name": "the discarded folder",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Where a discarded workspace's files are set aside.",
+      "identifiers": [
+        "_discarded"
+      ],
+      "row": {
+        "section": 5,
+        "concept": "The discarded folder"
+      }
+    },
+    {
+      "id": "item-bank",
+      "name": "item bank",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A tool's view of the items in a workspace; never a word for the workspace itself.",
+      "row": {
+        "section": 5,
+        "concept": "Bank (Quiver)"
+      }
+    },
+    {
+      "id": "commit",
+      "name": "commit",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "One recorded change to the design, with who made it, when and why; also the act of recording it.",
+      "row": {
+        "section": 6,
+        "concept": "A commit"
+      },
+      "also": [
+        {
+          "section": 6,
+          "concept": "Pushed commit, the instance's identifier"
+        },
+        {
+          "section": 7,
+          "concept": "Commit"
+        }
+      ]
+    },
+    {
+      "id": "state.to-push",
+      "name": "to push",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Commits made on this computer that are not yet on the instance: \"3 to push\", \"Commits to push\".",
+      "identifiers": [
+        "unpushed_commits"
+      ],
+      "row": {
+        "section": 6,
+        "concept": "Unpushed commit"
+      }
+    },
+    {
+      "id": "latest-commit",
+      "name": "latest commit",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The newest commit of a branch.",
+      "identifiers": [
+        "head"
+      ],
+      "row": {
+        "section": 6,
+        "concept": "Head"
+      }
+    },
+    {
+      "id": "message",
+      "name": "message",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The text saying what a commit holds, on every form that takes one.",
+      "row": {
+        "section": 6,
+        "concept": "Commit message"
+      },
+      "also": [
+        {
+          "section": 6,
+          "concept": "Commit note (Quiver)"
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "name": "history",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The list of commits that made a branch or changed one record.",
+      "identifiers": [
+        "GET /branches/:name/log"
+      ],
+      "row": {
+        "section": 6,
+        "concept": "A branch's log"
+      },
+      "also": [
+        {
+          "section": 6,
+          "concept": "A record's history"
+        }
+      ]
+    },
+    {
+      "id": "as-of",
+      "name": "as of",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The design as it stood at a commit, followed by the commit's date and short identifier.",
+      "identifiers": [
+        "asOf"
+      ],
+      "row": {
+        "section": 6,
+        "concept": "A past state"
+      }
+    },
+    {
+      "id": "author.by",
+      "name": "by",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Who made a commit: \"by Dana\".",
+      "row": {
+        "section": 6,
+        "concept": "Author, acting for, relayed by"
+      }
+    },
+    {
+      "id": "author.for",
+      "name": "for",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The person an agent acted for: \"by Quiver drafter, for Dana\".",
+      "identifiers": [
+        "Armature-On-Behalf-Of"
+      ],
+      "row": {
+        "section": 6,
+        "concept": "Author, acting for, relayed by"
+      },
+      "also": [
+        {
+          "section": 9,
+          "concept": "Agent"
+        }
+      ]
+    },
+    {
+      "id": "author.via",
+      "name": "via",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The service that relayed a person's commit: \"by Dana, via CoQui\".",
+      "identifiers": [
+        "Armature-Relayed-By"
+      ],
+      "row": {
+        "section": 6,
+        "concept": "Author, acting for, relayed by"
+      }
+    },
+    {
+      "id": "time.made",
+      "name": "made",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "When the work was done, kept through a push.",
+      "identifiers": [
+        "Armature-Authored-At"
+      ],
+      "row": {
+        "section": 6,
+        "concept": "When the work was done"
+      }
+    },
+    {
+      "id": "time.pushed",
+      "name": "pushed",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "When a commit reached the instance.",
+      "row": {
+        "section": 6,
+        "concept": "When the work was done"
+      }
+    },
+    {
+      "id": "action.revert",
+      "name": "Revert",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Undo a commit by making a new commit; held for that action if it is built.",
+      "until": {
+        "when": "an undo is built"
+      },
+      "row": {
+        "section": 6,
+        "concept": "Correcting a mistake"
+      }
+    },
+    {
+      "id": "heading.new-workspace",
+      "name": "New workspace",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The heading over the form that creates a workspace.",
+      "row": {
+        "section": 7,
+        "concept": "Make a workspace"
+      }
+    },
+    {
+      "id": "action.create-workspace",
+      "name": "Create workspace",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Create a branch on the instance and hold it on this computer as a workspace.",
+      "identifiers": [
+        "POST /workspace"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Make a workspace"
+      }
+    },
+    {
+      "id": "option.from-main",
+      "name": "from main",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A new workspace starts from main, which becomes its parent.",
+      "row": {
+        "section": 7,
+        "concept": "Make a workspace"
+      }
+    },
+    {
+      "id": "option.from-another-branch",
+      "name": "from another branch",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A new workspace starts from a branch other than main, which becomes its parent; never from a workspace.",
+      "row": {
+        "section": 7,
+        "concept": "Make a workspace"
+      }
+    },
+    {
+      "id": "action.clone-branch",
+      "name": "Clone a branch",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Copy an existing branch from the instance into a new workspace; the label stays until workspaces are linked (ADR-0072), when it goes.",
+      "row": {
+        "section": 7,
+        "concept": "Clone a branch"
+      }
+    },
+    {
+      "id": "action.push",
+      "name": "Push",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Send the commits made on this computer to the workspace's branch on the instance, each as it was made.",
+      "identifiers": [
+        "POST /workspace/:name/push"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Push"
+      }
+    },
+    {
+      "id": "action.update-from-parent",
+      "name": "Update from <parent>",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Have the instance merge the parent's new work into the workspace, then copy the result here.",
+      "identifiers": [
+        "POST /workspace/:name/bring-in"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Bring in main"
+      }
+    },
+    {
+      "id": "refusal.bring_in_first",
+      "name": "Update from <parent> first",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The words for the refusal of a merge whose parent has work the workspace has not taken in.",
+      "identifiers": [
+        "bring_in_first"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Bring in main",
+        "in": "recommended"
+      }
+    },
+    {
+      "id": "action.open-merge-request",
+      "name": "Open merge request into <branch>",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Ask for a workspace or a branch to be merged into a branch.",
+      "identifiers": [
+        "POST /workspace/:name/deliver"
+      ],
+      "until": {
+        "name": "Merge into main",
+        "adr": "0072"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Merge request"
+      },
+      "also": [
+        {
+          "section": 7,
+          "concept": "Deliver"
+        }
+      ]
+    },
+    {
+      "id": "action.merge",
+      "name": "Merge",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Combine one branch into another; on a merge request, what whoever may merge into the target does.",
+      "row": {
+        "section": 7,
+        "concept": "Merge"
+      },
+      "also": [
+        {
+          "section": 7,
+          "concept": "Deliver"
+        },
+        {
+          "section": 7,
+          "concept": "Merge request"
+        }
+      ]
+    },
+    {
+      "id": "merge-request.health",
+      "name": "the merge request's health",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Whether a merge request would merge cleanly now, worked out on every look.",
+      "identifiers": [
+        "dryRun"
+      ],
+      "until": {
+        "name": "Preview merge",
+        "adr": "0072"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Ask what a delivery would find"
+      }
+    },
+    {
+      "id": "action.remove-from-this-computer",
+      "name": "Remove from this computer",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Take a workspace off this computer; its branch on the instance is deleted when its parent has all of it, and kept otherwise.",
+      "identifiers": [
+        "DELETE /workspace/:name"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Remove a workspace"
+      }
+    },
+    {
+      "id": "action.discard-and-remove",
+      "name": "Discard <n> commits and remove",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Remove a workspace and give up its commits that were never pushed; the number is in the label.",
+      "identifiers": [
+        "discard_mismatch"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Discard and remove"
+      }
+    },
+    {
+      "id": "action.unlink-from-this-computer",
+      "name": "Unlink from this computer",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Release a workspace from this computer once everything is pushed; it stays on the instance.",
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Unlink from this computer"
+      }
+    },
+    {
+      "id": "action.link-to-this-computer",
+      "name": "Link to this computer",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Take an unlinked workspace you own onto this computer.",
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Link to this computer"
+      }
+    },
+    {
+      "id": "heading.your-unlinked-workspaces",
+      "name": "Your unlinked workspaces",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The list a workspace is linked from.",
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Link to this computer"
+      }
+    },
+    {
+      "id": "action.unlink-from-other-computer",
+      "name": "Unlink from the other computer",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Release a workspace linked to a computer that is lost or out of reach; its unpushed commits can no longer be pushed.",
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Unlink from elsewhere"
+      }
+    },
+    {
+      "id": "conflict",
+      "name": "conflict",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A field or part changed on both sides of a merge, or a record created on both sides with different contents.",
+      "row": {
+        "section": 7,
+        "concept": "Resolve a conflict"
+      },
+      "also": [
+        {
+          "section": 8,
+          "concept": "Conflict, both created"
+        }
+      ]
+    },
+    {
+      "id": "conflict.keep-yours",
+      "name": "Keep yours",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "In a conflict, keep the workspace's value.",
+      "row": {
+        "section": 7,
+        "concept": "Resolve a conflict"
+      }
+    },
+    {
+      "id": "conflict.take-parents",
+      "name": "Take <parent>'s",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "In a conflict, take the parent's value.",
+      "row": {
+        "section": 7,
+        "concept": "Resolve a conflict"
+      }
+    },
+    {
+      "id": "conflict.edit",
+      "name": "Edit",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "In a conflict, write a value that is neither side's.",
+      "row": {
+        "section": 7,
+        "concept": "Resolve a conflict"
+      }
+    },
+    {
+      "id": "action.start-over",
+      "name": "Start over from <parent>",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Give up a workspace's own work and begin again from its parent; held for that action if it is built.",
+      "until": {
+        "when": "a reset is built"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Reset a workspace to main"
+      }
+    },
+    {
+      "id": "action.look-up",
+      "name": "Look up",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Fetch and show what an address says about itself, before connecting.",
+      "row": {
+        "section": 7,
+        "concept": "Read an instance"
+      }
+    },
+    {
+      "id": "action.connect",
+      "name": "Connect",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Bind Armature Desktop to one instance.",
+      "row": {
+        "section": 7,
+        "concept": "Connect"
+      }
+    },
+    {
+      "id": "action.sign-in",
+      "name": "Sign in",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Authenticate at the sign-in provider.",
+      "row": {
+        "section": 7,
+        "concept": "Sign in, sign out"
+      }
+    },
+    {
+      "id": "action.sign-out",
+      "name": "Sign out",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "End the sign-in.",
+      "row": {
+        "section": 7,
+        "concept": "Sign in, sign out"
+      }
+    },
+    {
+      "id": "action.try-again",
+      "name": "Try again",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Repeat a step that did not go through.",
+      "row": {
+        "section": 7,
+        "concept": "Sign in, sign out"
+      },
+      "also": [
+        {
+          "section": 11,
+          "concept": "Other uses of \"check\""
+        }
+      ]
+    },
+    {
+      "id": "pairing",
+      "name": "Pairing",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Giving a tool the pairing key so the desktop hub accepts its writes; the page that does it.",
+      "row": {
+        "section": 7,
+        "concept": "Pair a tool"
+      }
+    },
+    {
+      "id": "paired-tool",
+      "name": "paired tool",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A tool that holds the pairing key.",
+      "row": {
+        "section": 7,
+        "concept": "Pair a tool"
+      }
+    },
+    {
+      "id": "action.new-pairing-key",
+      "name": "New pairing key",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Replace the pairing key; every paired tool needs the new one.",
+      "row": {
+        "section": 7,
+        "concept": "Pair a tool"
+      }
+    },
+    {
+      "id": "action.pause-hub",
+      "name": "Pause the hub",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Stop the desktop hub answering tools until it is resumed.",
+      "row": {
+        "section": 7,
+        "concept": "Pause, resume, start, restart the hub"
+      }
+    },
+    {
+      "id": "action.resume-hub",
+      "name": "Resume the hub",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Let a paused desktop hub answer tools again.",
+      "row": {
+        "section": 7,
+        "concept": "Pause, resume, start, restart the hub"
+      }
+    },
+    {
+      "id": "action.start-hub",
+      "name": "Start the hub",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Start the desktop hub.",
+      "row": {
+        "section": 7,
+        "concept": "Pause, resume, start, restart the hub"
+      }
+    },
+    {
+      "id": "action.restart-hub",
+      "name": "Restart the hub",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Stop the desktop hub and start it again.",
+      "row": {
+        "section": 7,
+        "concept": "Pause, resume, start, restart the hub"
+      }
+    },
+    {
+      "id": "new-version",
+      "name": "new version",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A release of Armature Desktop newer than the one installed; \"update\" is left to \"Update from <parent>\".",
+      "row": {
+        "section": 7,
+        "concept": "Update the app"
+      }
+    },
+    {
+      "id": "action.install-and-restart",
+      "name": "Install and restart",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Install a new version of Armature Desktop.",
+      "row": {
+        "section": 7,
+        "concept": "Update the app"
+      }
+    },
+    {
+      "id": "action.look-for-new-version",
+      "name": "Look for a new version",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Ask the release channel whether a new version exists.",
+      "row": {
+        "section": 7,
+        "concept": "Update the app"
+      },
+      "also": [
+        {
+          "section": 11,
+          "concept": "Other uses of \"check\""
+        }
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "name": "Diagnostics",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The page showing Armature Desktop's diagnostic lines.",
+      "row": {
+        "section": 7,
+        "concept": "Read the app's log"
+      }
+    },
+    {
+      "id": "action.register",
+      "name": "register",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Add a person to an instance's registry.",
+      "row": {
+        "section": 7,
+        "concept": "Register a person"
+      }
+    },
+    {
+      "id": "refusal.not_registered",
+      "name": "Ask an administrator of <instance> to register you",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The words for the refusal of a person the instance does not know.",
+      "identifiers": [
+        "not_registered"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Register a person",
+        "in": "recommended"
+      }
+    },
+    {
+      "id": "action.give-role",
+      "name": "give a role",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Give a person a role on a branch.",
+      "row": {
+        "section": 7,
+        "concept": "Grant, revoke"
+      }
+    },
+    {
+      "id": "action.remove-role",
+      "name": "remove a role",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Withdraw a role a person holds on a branch.",
+      "row": {
+        "section": 7,
+        "concept": "Grant, revoke"
+      }
+    },
+    {
+      "id": "grant",
+      "name": "grant",
+      "status": "chosen",
+      "audience": [
+        "administrators",
+        "developers"
+      ],
+      "means": "A role held on a branch, and the act of giving it, for administrators and the API.",
+      "identifiers": [
+        "Grant",
+        "GrantStatus.Active"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Grant, revoke"
+      },
+      "also": [
+        {
+          "section": 9,
+          "concept": "Grant"
+        }
+      ]
+    },
+    {
+      "id": "action.revoke",
+      "name": "revoke",
+      "status": "chosen",
+      "audience": [
+        "administrators",
+        "developers"
+      ],
+      "means": "Withdraw a grant, for administrators and the API.",
+      "identifiers": [
+        "GrantStatus.Revoked"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Grant, revoke"
+      }
+    },
+    {
+      "id": "export",
+      "name": "export",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The graph at a commit as one file, for research or reuse.",
+      "row": {
+        "section": 7,
+        "concept": "Export"
+      }
+    },
+    {
+      "id": "action.new-branch",
+      "name": "New branch",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Create a branch on the instance for others to work toward; whoever creates it owns it.",
+      "identifiers": [
+        "POST /branches"
+      ],
+      "row": {
+        "section": 7,
+        "concept": "Create a branch"
+      }
+    },
+    {
+      "id": "action.update-branch",
+      "name": "Update from <branch>",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Merge another branch's new work into a branch, in the same words as a workspace's update.",
+      "row": {
+        "section": 7,
+        "concept": "Update a branch from another"
+      }
+    },
+    {
+      "id": "merge-request",
+      "name": "merge request",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A record that someone asked for a branch or a workspace to be merged into a branch.",
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Merge request"
+      }
+    },
+    {
+      "id": "action.close-merge-request",
+      "name": "Close",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "End a merge request without merging it.",
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 7,
+        "concept": "Merge request"
+      }
+    },
+    {
+      "id": "state.all-pushed",
+      "name": "All pushed",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "No commits on this computer are waiting to be pushed.",
+      "row": {
+        "section": 8,
+        "concept": "Everything pushed"
+      }
+    },
+    {
+      "id": "state.changed-elsewhere",
+      "name": "Changed elsewhere",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The workspace's own branch on the instance has commits this computer did not push.",
+      "identifiers": [
+        "moved"
+      ],
+      "row": {
+        "section": 8,
+        "concept": "The workspace's branch moved"
+      }
+    },
+    {
+      "id": "state.parent-has-updates",
+      "name": "<parent> has updates",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The parent has work the workspace has not taken in.",
+      "row": {
+        "section": 8,
+        "concept": "main moved"
+      }
+    },
+    {
+      "id": "state.up-to-date",
+      "name": "Up to date with <parent>",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The workspace holds everything its parent has.",
+      "row": {
+        "section": 8,
+        "concept": "Up to date with main"
+      }
+    },
+    {
+      "id": "state.stranded-commits",
+      "name": "This workspace was changed elsewhere, and this computer's unpushed commits can no longer be pushed. You can discard them and link the workspace again.",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The message for unpushed commits that can never be pushed.",
+      "row": {
+        "section": 8,
+        "concept": "Stranded commits"
+      }
+    },
+    {
+      "id": "state.linked-elsewhere",
+      "name": "Linked to another computer",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A write was refused because the workspace is linked to another computer.",
+      "identifiers": [
+        "held_elsewhere"
+      ],
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 8,
+        "concept": "Linked elsewhere, not linked"
+      }
+    },
+    {
+      "id": "state.not-linked",
+      "name": "Not linked to this computer",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A write was refused because the workspace is linked to no computer.",
+      "identifiers": [
+        "not_linked"
+      ],
+      "until": {
+        "adr": "0072"
+      },
+      "row": {
+        "section": 8,
+        "concept": "Linked elsewhere, not linked"
+      }
+    },
+    {
+      "id": "state.unreachable",
+      "name": "<instance> cannot be reached",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The instance did not answer.",
+      "identifiers": [
+        "remote_unreachable"
+      ],
+      "row": {
+        "section": 8,
+        "concept": "Unreachable, offline"
+      }
+    },
+    {
+      "id": "state.offline",
+      "name": "Offline",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The badge for an instance that does not answer.",
+      "row": {
+        "section": 8,
+        "concept": "Unreachable, offline"
+      }
+    },
+    {
+      "id": "state.not-connected",
+      "name": "Not connected",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Armature Desktop has not yet been connected to an instance.",
+      "row": {
+        "section": 8,
+        "concept": "Unreachable, offline"
+      }
+    },
+    {
+      "id": "refused",
+      "name": "refused",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A hub would not carry out a request; the words come first and the code second, \"by <instance>\" or \"by this computer\".",
+      "row": {
+        "section": 8,
+        "concept": "Refusal"
+      }
+    },
+    {
+      "id": "state.compatible",
+      "name": "Compatible",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "This version of the app and that instance can work together.",
+      "row": {
+        "section": 8,
+        "concept": "Compatible, not compatible"
+      },
+      "also": [
+        {
+          "section": 14,
+          "concept": "Compatibility"
+        }
+      ]
+    },
+    {
+      "id": "state.not-compatible",
+      "name": "Not compatible",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "This version of the app and that instance cannot work together.",
+      "row": {
+        "section": 8,
+        "concept": "Compatible, not compatible"
+      },
+      "also": [
+        {
+          "section": 14,
+          "concept": "Compatibility"
+        }
+      ]
+    },
+    {
+      "id": "state.not-committed-yet",
+      "name": "Not committed yet",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "An edit a tool holds that is not yet valid enough to commit, shown with the rule that holds it.",
+      "row": {
+        "section": 8,
+        "concept": "Not yet committed (Quiver)"
+      }
+    },
+    {
+      "id": "you",
+      "name": "you",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The person, on a page.",
+      "row": {
+        "section": 9,
+        "concept": "Person, user"
+      }
+    },
+    {
+      "id": "person",
+      "name": "person",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Someone registered on an instance, in documents.",
+      "identifiers": [
+        "User"
+      ],
+      "row": {
+        "section": 9,
+        "concept": "Person, user"
+      }
+    },
+    {
+      "id": "your-id",
+      "name": "your ID on <instance>",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "What an instance knows a person by; one value wherever it is shown.",
+      "identifiers": [
+        "externalId",
+        "Armature-User"
+      ],
+      "row": {
+        "section": 9,
+        "concept": "Identifier"
+      }
+    },
+    {
+      "id": "handle",
+      "name": "handle",
+      "status": "chosen",
+      "audience": [
+        "developers"
+      ],
+      "means": "The short prefix of a person's branch names; pages show the whole branch name.",
+      "row": {
+        "section": 9,
+        "concept": "Handle"
+      }
+    },
+    {
+      "id": "agent",
+      "name": "agent",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A registered non-person that writes for a person, shown by its own name.",
+      "identifiers": [
+        "Armature-Agent"
+      ],
+      "row": {
+        "section": 9,
+        "concept": "Agent"
+      }
+    },
+    {
+      "id": "proposal",
+      "name": "proposal",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "What an agent writes, until the person accepts it.",
+      "row": {
+        "section": 9,
+        "concept": "Agent"
+      }
+    },
+    {
+      "id": "service",
+      "name": "service",
+      "status": "chosen",
+      "audience": [
+        "administrators"
+      ],
+      "means": "A program holding its own credential on an instance.",
+      "row": {
+        "section": 9,
+        "concept": "Service"
+      }
+    },
+    {
+      "id": "relay",
+      "name": "relay",
+      "status": "chosen",
+      "audience": [
+        "administrators"
+      ],
+      "means": "A service writing for a named person under a grant.",
+      "identifiers": [
+        "Relay"
+      ],
+      "row": {
+        "section": 9,
+        "concept": "Relay"
+      }
+    },
+    {
+      "id": "owner",
+      "name": "owner",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Whoever created a branch; may write it, merge into it, delete it and make others its maintainers.",
+      "identifiers": [
+        "Owner"
+      ],
+      "row": {
+        "section": 9,
+        "concept": "Owner"
+      }
+    },
+    {
+      "id": "maintainer",
+      "name": "maintainer",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "May write and merge into a branch, as its owner may; for main, the only one who may merge.",
+      "identifiers": [
+        "Maintainer"
+      ],
+      "row": {
+        "section": 9,
+        "concept": "Maintainer"
+      }
+    },
+    {
+      "id": "administrator",
+      "name": "administrator",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Whoever holds the role that registers people and gives roles.",
+      "identifiers": [
+        "Administrator"
+      ],
+      "row": {
+        "section": 9,
+        "concept": "Administrator (role)"
+      }
+    },
+    {
+      "id": "operator",
+      "name": "operator",
+      "status": "chosen",
+      "audience": [
+        "administrators",
+        "developers"
+      ],
+      "means": "The person who stands up and keeps an instance, and runs its repair and check tools on the server.",
+      "row": {
+        "section": 9,
+        "concept": "Administrator (who runs the instance)"
+      },
+      "also": [
+        {
+          "section": 9,
+          "concept": "Operator"
+        }
+      ]
+    },
+    {
+      "id": "reader",
+      "name": "reader",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Someone who reads through the viewer; not a role.",
+      "row": {
+        "section": 9,
+        "concept": "Reader, reviewer"
+      }
+    },
+    {
+      "id": "reviewer",
+      "name": "reviewer",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Someone who signs off; not a role.",
+      "row": {
+        "section": 9,
+        "concept": "Reader, reviewer"
+      }
+    },
+    {
+      "id": "role",
+      "name": "role",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "What a person may do on a branch: owner, maintainer or administrator.",
+      "row": {
+        "section": 9,
+        "concept": "Grant"
+      }
+    },
+    {
+      "id": "your-sign-in",
+      "name": "your sign-in",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "What Armature Desktop keeps in the keychain to act as the person.",
+      "row": {
+        "section": 9,
+        "concept": "Your sign-in, the credential"
+      }
+    },
+    {
+      "id": "instance-details",
+      "name": "instance details",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "An instance's name, its address and who signs people in, confirmed before connecting.",
+      "row": {
+        "section": 10,
+        "concept": "What the instance shows before connecting"
+      }
+    },
+    {
+      "id": "refusal.profile_changed",
+      "name": "The instance's details changed since you looked them up",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The words for the refusal of a connection whose instance details are no longer the ones confirmed.",
+      "identifiers": [
+        "profile_changed"
+      ],
+      "row": {
+        "section": 10,
+        "concept": "What the instance shows before connecting",
+        "in": "recommended"
+      }
+    },
+    {
+      "id": "instance-name",
+      "name": "the instance's name",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The name an instance gives itself, used as its name everywhere.",
+      "identifiers": [
+        "ARMATURE_INSTANCE_NAME"
+      ],
+      "row": {
+        "section": 10,
+        "concept": "Instance name"
+      },
+      "also": [
+        {
+          "section": 4,
+          "concept": "The viewer"
+        }
+      ]
+    },
+    {
+      "id": "address",
+      "name": "address",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Where the instance's API answers.",
+      "row": {
+        "section": 10,
+        "concept": "Address"
+      }
+    },
+    {
+      "id": "pairing-key",
+      "name": "pairing key",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The secret a tool sends with every write to the desktop hub.",
+      "identifiers": [
+        "Armature-Local-Token",
+        "ARMATURE_LOCAL_TOKEN"
+      ],
+      "row": {
+        "section": 10,
+        "concept": "Pairing value"
+      }
+    },
+    {
+      "id": "no-sign-in",
+      "name": "No sign-in (for testing only)",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "An instance that trusts whoever a request says it is, for development and rehearsal.",
+      "identifiers": [
+        "header"
+      ],
+      "row": {
+        "section": 10,
+        "concept": "Sign-in-free mode"
+      }
+    },
+    {
+      "id": "port",
+      "name": "port",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Where the desktop hub listens.",
+      "identifiers": [
+        "port_in_use"
+      ],
+      "row": {
+        "section": 10,
+        "concept": "Port"
+      }
+    },
+    {
+      "id": "check",
+      "name": "check",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A tool that examines work and reports on it; the word is used for nothing else.",
+      "row": {
+        "section": 11,
+        "concept": "A check"
+      }
+    },
+    {
+      "id": "report",
+      "name": "report",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "What one check said about one commit.",
+      "row": {
+        "section": 11,
+        "concept": "A check run"
+      }
+    },
+    {
+      "id": "check-result",
+      "name": "result",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "What a check concluded.",
+      "identifiers": [
+        "conclusion"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "A check's outcome"
+      }
+    },
+    {
+      "id": "required-checks",
+      "name": "required checks",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Checks an instance requires before a merge into a branch.",
+      "identifiers": [
+        "CheckRequirement"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "A check the instance requires"
+      }
+    },
+    {
+      "id": "personal-checks",
+      "name": "personal checks",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Checks a person requires of their own pushes.",
+      "identifiers": [
+        "personal_checks_invalid",
+        "checks.json"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "Checks of your own"
+      }
+    },
+    {
+      "id": "state.check-on",
+      "name": "On",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A personal check is applied to pushes.",
+      "row": {
+        "section": 11,
+        "concept": "Checks of your own"
+      }
+    },
+    {
+      "id": "override",
+      "name": "override",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Go on despite a check that is waiting or failed, with a reason on record.",
+      "identifiers": [
+        "overrides"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "Going past a check"
+      }
+    },
+    {
+      "id": "action.merge-anyway",
+      "name": "Merge anyway",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Merge despite a required check, with a reason.",
+      "row": {
+        "section": 11,
+        "concept": "Going past a check"
+      }
+    },
+    {
+      "id": "action.push-anyway",
+      "name": "Push anyway",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Push despite a personal check, with a reason.",
+      "row": {
+        "section": 11,
+        "concept": "Going past a check"
+      }
+    },
+    {
+      "id": "label.reason-for-overriding",
+      "name": "Reason for overriding",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The field that takes the reason for an override.",
+      "row": {
+        "section": 11,
+        "concept": "Going past a check"
+      }
+    },
+    {
+      "id": "state.overridden",
+      "name": "overridden",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A check's result was overridden: \"<result>, overridden\".",
+      "row": {
+        "section": 11,
+        "concept": "Going past a check"
+      }
+    },
+    {
+      "id": "state.waiting-for-report",
+      "name": "Waiting for a report",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A required check has not reported yet.",
+      "identifiers": [
+        "checks_pending"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "Pending, failed"
+      }
+    },
+    {
+      "id": "event-feed",
+      "name": "event feed",
+      "status": "chosen",
+      "audience": [
+        "developers"
+      ],
+      "means": "The stream of events checks listen to.",
+      "row": {
+        "section": 11,
+        "concept": "Event feed"
+      }
+    },
+    {
+      "id": "record",
+      "name": "record",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "Anything in the design graph: an artifact or a relationship.",
+      "identifiers": [
+        "DesignRecord"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Design record"
+      }
+    },
+    {
+      "id": "document",
+      "name": "document",
+      "status": "chosen",
+      "audience": [
+        "developers"
+      ],
+      "means": "A record, in the API and its reference only.",
+      "row": {
+        "section": 12,
+        "concept": "Design record"
+      }
+    },
+    {
+      "id": "artifact",
+      "name": "artifact",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A thing designed: an objective, an item, an activity, a module.",
+      "row": {
+        "section": 12,
+        "concept": "Artifact"
+      }
+    },
+    {
+      "id": "relationship",
+      "name": "relationship",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A link between two artifacts, kept as a record with its own rationale.",
+      "row": {
+        "section": 12,
+        "concept": "Relationship"
+      }
+    },
+    {
+      "id": "objective",
+      "name": "objective",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A learning objective.",
+      "identifiers": [
+        "LearningObjective"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Objective"
+      }
+    },
+    {
+      "id": "objective-state",
+      "name": "objective state",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Where an objective stands: one of the four values reserved for it.",
+      "identifiers": [
+        "ObjectiveState"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Objective state"
+      }
+    },
+    {
+      "id": "item",
+      "name": "item",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A reusable assessment question.",
+      "identifiers": [
+        "AssessmentItem"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item"
+      }
+    },
+    {
+      "id": "item-status",
+      "name": "item status",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Where an item stands: one of the four values reserved for it.",
+      "identifiers": [
+        "ItemStatus"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item status"
+      }
+    },
+    {
+      "id": "item-type",
+      "name": "item type",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "An item's kind, shown in a spaced form.",
+      "identifiers": [
+        "ItemType"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item type"
+      }
+    },
+    {
+      "id": "part",
+      "name": "part",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A piece of an item.",
+      "identifiers": [
+        "Fragment",
+        "fragmentId"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Part, option"
+      }
+    },
+    {
+      "id": "stem",
+      "name": "stem",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The part that holds an item's question text.",
+      "identifiers": [
+        "TextFragment"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Part, option"
+      }
+    },
+    {
+      "id": "option",
+      "name": "option",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The part that holds one answer a learner may choose.",
+      "identifiers": [
+        "ItemOption"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Part, option"
+      }
+    },
+    {
+      "id": "placement",
+      "name": "placement",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "An item placed in an assessment.",
+      "identifiers": [
+        "ItemInstance"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Placement"
+      }
+    },
+    {
+      "id": "placement-status",
+      "name": "placement status",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A placement's own clearance, apart from its item's status.",
+      "identifiers": [
+        "ItemInstance.status"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Placement"
+      }
+    },
+    {
+      "id": "assessment",
+      "name": "assessment",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A set of placed items.",
+      "identifiers": [
+        "Assessment"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Assessment, activity, lesson, module, course"
+      }
+    },
+    {
+      "id": "activity",
+      "name": "activity",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A learning activity.",
+      "identifiers": [
+        "LearningActivity"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Assessment, activity, lesson, module, course"
+      }
+    },
+    {
+      "id": "lesson",
+      "name": "lesson",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "An ordered set of activities.",
+      "identifiers": [
+        "Lesson"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Assessment, activity, lesson, module, course"
+      }
+    },
+    {
+      "id": "module",
+      "name": "module",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A unit of a course, holding activities, lessons and assessments.",
+      "identifiers": [
+        "Module"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Assessment, activity, lesson, module, course"
+      }
+    },
+    {
+      "id": "course",
+      "name": "course",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The whole a set of modules belongs to.",
+      "identifiers": [
+        "Course"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Assessment, activity, lesson, module, course"
+      }
+    },
+    {
+      "id": "declared-objective",
+      "name": "declared objective",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A module's statement that it covers an objective, with a role.",
+      "identifiers": [
+        "ModuleObjective"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "A module's declared objective"
+      }
+    },
+    {
+      "id": "formative-use",
+      "name": "formative use",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "An item used inside an activity, not for credit.",
+      "identifiers": [
+        "ActivityItemLink"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Formative use"
+      }
+    },
+    {
+      "id": "prerequisite",
+      "name": "prerequisite",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "One objective required before another, with a rationale.",
+      "identifiers": [
+        "PrerequisiteRecord"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Prerequisite"
+      }
+    },
+    {
+      "id": "need",
+      "name": "need",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A learning need.",
+      "identifiers": [
+        "LearningNeed"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Need, evidence"
+      }
+    },
+    {
+      "id": "evidence",
+      "name": "evidence",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "What supports a learning need.",
+      "identifiers": [
+        "LearningEvidence"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Need, evidence"
+      }
+    },
+    {
+      "id": "dataset",
+      "name": "dataset",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A set of learner data.",
+      "identifiers": [
+        "LearningDataset"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Dataset, metric"
+      }
+    },
+    {
+      "id": "measurement",
+      "name": "measurement",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "One figure taken from a dataset about a record.",
+      "identifiers": [
+        "LearningMetric"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Dataset, metric"
+      }
+    },
+    {
+      "id": "item-statistic",
+      "name": "item statistic",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A measurement about an item.",
+      "row": {
+        "section": 12,
+        "concept": "Dataset, metric"
+      }
+    },
+    {
+      "id": "design-note",
+      "name": "design note",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A recorded design decision with its category; always with \"design\".",
+      "identifiers": [
+        "DesignNote"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Design note"
+      }
+    },
+    {
+      "id": "finding",
+      "name": "finding",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A concern about a record, with a status and a resolution.",
+      "identifiers": [
+        "DesignFinding"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Finding"
+      }
+    },
+    {
+      "id": "sign-off",
+      "name": "sign-off",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "One person's judgment on a record as of a commit.",
+      "identifiers": [
+        "Attestation"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Attestation"
+      }
+    },
+    {
+      "id": "state.out-of-date",
+      "name": "out of date",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A sign-off whose record changed after it was given.",
+      "row": {
+        "section": 12,
+        "concept": "Attestation"
+      }
+    },
+    {
+      "id": "external-reference",
+      "name": "external reference",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A record's identifier in another system.",
+      "identifiers": [
+        "ExternalRef"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "External reference, attachment"
+      }
+    },
+    {
+      "id": "attachment",
+      "name": "attachment",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A hashed pointer to bytes stored elsewhere.",
+      "identifiers": [
+        "Attachment"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "External reference, attachment"
+      }
+    },
+    {
+      "id": "coverage",
+      "name": "coverage",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "How well a module's placements assess its declared objectives.",
+      "row": {
+        "section": 12,
+        "concept": "Coverage"
+      }
+    },
+    {
+      "id": "coverage-level",
+      "name": "level",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "How well one objective is covered; a module's coverage is a level.",
+      "row": {
+        "section": 12,
+        "concept": "Coverage"
+      }
+    },
+    {
+      "id": "alignment",
+      "name": "alignment",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "Which items assess which objectives.",
+      "row": {
+        "section": 12,
+        "concept": "Alignment"
+      }
+    },
+    {
+      "id": "privacy-level",
+      "name": "privacy level",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "How much about people an export carries.",
+      "identifiers": [
+        "profile="
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Export profile"
+      }
+    },
+    {
+      "id": "slice",
+      "name": "slice",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "developers"
+      ],
+      "means": "A named subset of the graph for an export.",
+      "row": {
+        "section": 12,
+        "concept": "Slice"
+      }
+    },
+    {
+      "id": "rule",
+      "name": "rule",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A condition every write must meet, beyond what the store enforces.",
+      "row": {
+        "section": 13,
+        "concept": "A rule"
+      }
+    },
+    {
+      "id": "broken-rules",
+      "name": "Broken rules",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "What a refused write or merge lists: each rule it fails, described in words.",
+      "identifiers": [
+        "invariant_violation"
+      ],
+      "row": {
+        "section": 13,
+        "concept": "A broken rule"
+      }
+    },
+    {
+      "id": "app-version",
+      "name": "version",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The installed release of Armature Desktop.",
+      "row": {
+        "section": 14,
+        "concept": "App version"
+      }
+    },
+    {
+      "id": "api-revision",
+      "name": "API revision",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The date-named version of the API a hub serves and a client speaks; shown to people only in the details.",
+      "row": {
+        "section": 14,
+        "concept": "Revision"
+      }
+    },
+    {
+      "id": "refusal.unsupported_version",
+      "name": "<instance> is too old for this version of the app",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The words for the refusal of a client whose API revision is newer than the hub serves.",
+      "identifiers": [
+        "unsupported_version"
+      ],
+      "row": {
+        "section": 14,
+        "concept": "Revision",
+        "in": "recommended"
+      }
+    },
+    {
+      "id": "design-graph",
+      "name": "Design Graph",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The drawing of the whole design.",
+      "row": {
+        "section": 15,
+        "concept": "Design Graph"
+      }
+    },
+    {
+      "id": "coverage-view",
+      "name": "Coverage View",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "One module's coverage.",
+      "row": {
+        "section": 15,
+        "concept": "Coverage View"
+      }
+    },
+    {
+      "id": "focus-page",
+      "name": "Focus page",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "One record's neighborhood on its own page.",
+      "row": {
+        "section": 15,
+        "concept": "Focus page"
+      }
+    },
+    {
+      "id": "walkthrough",
+      "name": "Walkthrough",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A step-by-step walk from a record back to its evidence.",
+      "row": {
+        "section": 15,
+        "concept": "Walkthrough"
+      }
+    },
+    {
+      "id": "lens",
+      "name": "lens",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "A way of coloring the Design Graph.",
+      "row": {
+        "section": 15,
+        "concept": "Lens"
+      }
+    },
+    {
+      "id": "changes-lens",
+      "name": "Changes lens",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "The lens showing what a branch gained since a commit.",
+      "row": {
+        "section": 15,
+        "concept": "Lens"
+      }
+    },
+    {
+      "id": "figure",
+      "name": "figure",
+      "status": "chosen",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "means": "An exportable drawing with a stamp.",
+      "row": {
+        "section": 15,
+        "concept": "Figure"
+      }
+    },
+    {
+      "id": "work-from-your-own-computer",
+      "name": "Work from your own computer",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The viewer's page that links to Armature Desktop.",
+      "row": {
+        "section": 15,
+        "concept": "Work from your own computer"
+      }
+    },
+    {
+      "id": "module-content",
+      "name": "Module content",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "A module's activities, lessons and assessments, as the viewer lists them.",
+      "row": {
+        "section": 15,
+        "concept": "Module content"
+      }
+    },
+    {
+      "id": "raw-record",
+      "name": "This record as the API returns it",
+      "status": "chosen",
+      "audience": [
+        "people"
+      ],
+      "means": "The title over a record shown as the hub returns it.",
+      "row": {
+        "section": 15,
+        "concept": "The raw record"
+      }
+    }
+  ],
+  "reserved": [
+    {
+      "word": "Draft",
+      "for": "objective-state",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "An enumeration value a person reads: it names this value and nothing else.",
+      "identifiers": [
+        "ObjectiveState.Draft"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Objective state"
+      }
+    },
+    {
+      "word": "Active",
+      "for": "objective-state",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "An enumeration value a person reads: it names this value and nothing else.",
+      "identifiers": [
+        "ObjectiveState.Active"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Objective state"
+      }
+    },
+    {
+      "word": "Deprecated",
+      "for": "objective-state",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "An enumeration value a person reads: it names this value and nothing else.",
+      "identifiers": [
+        "ObjectiveState.Deprecated"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Objective state"
+      }
+    },
+    {
+      "word": "Archived",
+      "for": "objective-state",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "An enumeration value a person reads: it names this value and nothing else.",
+      "identifiers": [
+        "ObjectiveState.Archived"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Objective state"
+      }
+    },
+    {
+      "word": "Draft",
+      "for": "item-status",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "An enumeration value a person reads: it names this value and nothing else. Item banks already use the word this way [S25][S26].",
+      "identifiers": [
+        "ItemStatus.Draft"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item status"
+      }
+    },
+    {
+      "word": "In review",
+      "for": "item-status",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "An enumeration value a person reads: it names this value and nothing else. Item banks already use the word this way [S25][S26].",
+      "identifiers": [
+        "ItemStatus.InReview"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item status"
+      }
+    },
+    {
+      "word": "Approved",
+      "for": "item-status",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "An enumeration value a person reads: it names this value and nothing else. Item banks already use the word this way [S25][S26].",
+      "identifiers": [
+        "ItemStatus.Approved"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item status"
+      }
+    },
+    {
+      "word": "Retired",
+      "for": "item-status",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "An enumeration value a person reads: it names this value and nothing else. Item banks already use the word this way [S25][S26].",
+      "identifiers": [
+        "ItemStatus.Retired"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item status"
+      }
+    },
+    {
+      "word": "Multiple choice",
+      "for": "item-type",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "The spaced form of an item type, as tools show it.",
+      "identifiers": [
+        "ItemType.MultipleChoice"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item type"
+      }
+    },
+    {
+      "word": "True/false",
+      "for": "item-type",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "The spaced form of an item type, as tools show it.",
+      "identifiers": [
+        "ItemType.TrueFalse"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item type"
+      }
+    },
+    {
+      "word": "Fill in the blank",
+      "for": "item-type",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "The spaced form of an item type, as tools show it.",
+      "identifiers": [
+        "ItemType.FillInTheBlank"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Item type"
+      }
+    },
+    {
+      "word": "Affirmed",
+      "for": "sign-off",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A sign-off's verdict.",
+      "identifiers": [
+        "AttestationVerdict.Affirmed"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Attestation"
+      }
+    },
+    {
+      "word": "Declined",
+      "for": "sign-off",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A sign-off's verdict.",
+      "identifiers": [
+        "AttestationVerdict.Declined"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Attestation"
+      }
+    },
+    {
+      "word": "Passed",
+      "for": "check-result",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A check's result, following GitHub's conclusions [S40].",
+      "identifiers": [
+        "conclusion: pass"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "A check's outcome"
+      }
+    },
+    {
+      "word": "Failed",
+      "for": "check-result",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A check's result, following GitHub's conclusions [S40].",
+      "identifiers": [
+        "conclusion: fail"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "A check's outcome"
+      }
+    },
+    {
+      "word": "Neutral",
+      "for": "check-result",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A check's result, following GitHub's conclusions [S40].",
+      "identifiers": [
+        "conclusion: neutral"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "A check's outcome"
+      }
+    },
+    {
+      "word": "Could not run",
+      "for": "check-result",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A check's result, following GitHub's conclusions [S40].",
+      "identifiers": [
+        "conclusion: error"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "A check's outcome"
+      }
+    },
+    {
+      "word": "Failed",
+      "for": "check-result",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A required check did not pass; the same word as the result it reports.",
+      "identifiers": [
+        "checks_failed"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "Pending, failed"
+      }
+    },
+    {
+      "word": "Required",
+      "for": "required-checks",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "The level of a required check [S39].",
+      "identifiers": [
+        "CheckLevel.Required"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "A check the instance requires"
+      }
+    },
+    {
+      "word": "Advisory",
+      "for": "required-checks",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "The level of a required check [S39].",
+      "identifiers": [
+        "CheckLevel.Advisory"
+      ],
+      "row": {
+        "section": 11,
+        "concept": "A check the instance requires"
+      }
+    },
+    {
+      "word": "locked",
+      "for": "required-checks",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A required check that applies to every branch and that only an administrator may override.",
+      "row": {
+        "section": 11,
+        "concept": "A check the instance requires"
+      }
+    },
+    {
+      "word": "Open",
+      "for": "merge-request",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A merge request's status (ADR-0072, not built).",
+      "row": {
+        "section": 7,
+        "concept": "Merge request"
+      }
+    },
+    {
+      "word": "Merged",
+      "for": "merge-request",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A merge request's status (ADR-0072, not built).",
+      "row": {
+        "section": 7,
+        "concept": "Merge request"
+      }
+    },
+    {
+      "word": "Closed",
+      "for": "merge-request",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A merge request's status (ADR-0072, not built).",
+      "row": {
+        "section": 7,
+        "concept": "Merge request"
+      }
+    },
+    {
+      "word": "Ready to merge",
+      "for": "merge-request.health",
+      "audience": [
+        "people"
+      ],
+      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "row": {
+        "section": 8,
+        "concept": "A merge request's health"
+      }
+    },
+    {
+      "word": "Has conflicts",
+      "for": "merge-request.health",
+      "audience": [
+        "people"
+      ],
+      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "row": {
+        "section": 8,
+        "concept": "A merge request's health"
+      }
+    },
+    {
+      "word": "Breaks rules",
+      "for": "merge-request.health",
+      "audience": [
+        "people"
+      ],
+      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "row": {
+        "section": 8,
+        "concept": "A merge request's health"
+      }
+    },
+    {
+      "word": "Waiting for checks",
+      "for": "merge-request.health",
+      "audience": [
+        "people"
+      ],
+      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "row": {
+        "section": 8,
+        "concept": "A merge request's health"
+      }
+    },
+    {
+      "word": "Checks failed",
+      "for": "merge-request.health",
+      "audience": [
+        "people"
+      ],
+      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "row": {
+        "section": 8,
+        "concept": "A merge request's health"
+      }
+    },
+    {
+      "word": "Delivered",
+      "for": "coverage",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "The coverage figure over approved items in approved placements; the one place the course-delivery sense is kept [S23].",
+      "row": {
+        "section": 12,
+        "concept": "Coverage"
+      }
+    },
+    {
+      "word": "Projected",
+      "for": "coverage",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "The coverage figure over everything not retired.",
+      "row": {
+        "section": 12,
+        "concept": "Coverage"
+      }
+    },
+    {
+      "word": "Full",
+      "for": "privacy-level",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A privacy level of an export.",
+      "identifiers": [
+        "profile=full"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Export profile"
+      }
+    },
+    {
+      "word": "Pseudonymous",
+      "for": "privacy-level",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A privacy level of an export.",
+      "identifiers": [
+        "profile=pseudonymous"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Export profile"
+      }
+    },
+    {
+      "word": "Institutional",
+      "for": "privacy-level",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "reason": "A privacy level of an export.",
+      "identifiers": [
+        "profile=institutional"
+      ],
+      "row": {
+        "section": 12,
+        "concept": "Export profile"
+      }
+    }
+  ],
+  "avoided": [
+    {
+      "word": "save",
+      "forms": [
+        "saved",
+        "saving",
+        "saves"
+      ],
+      "for": "commit",
+      "audience": [
+        "people"
+      ],
+      "use": "commit",
+      "allowed": "Settings and files that are not commits.",
+      "reason": "A desktop hub turns every write into a commit, and the app already saves its settings, which are files; one word cannot mean both.",
+      "row": "§1, collision 5"
+    },
+    {
+      "word": "deliver",
+      "forms": [
+        "delivers",
+        "delivered",
+        "delivering",
+        "delivery",
+        "deliveries"
+      ],
+      "for": "action.merge",
+      "audience": [
+        "people"
+      ],
+      "use": "merge-request",
+      "allowed": "The viewer's coverage figure \"Delivered\", which keeps the course sense.",
+      "reason": "No comparable product says \"deliver\" for a merge, and to a designer delivery means putting a course in front of learners [S23].",
+      "row": "§1, collision 12"
+    },
+    {
+      "word": "bring in",
+      "forms": [
+        "bring-in",
+        "brings in",
+        "brought in",
+        "bringing in",
+        "bring main in",
+        "brought main in"
+      ],
+      "for": "action.update-from-parent",
+      "audience": [
+        "people"
+      ],
+      "use": "action.update-from-parent",
+      "reason": "It is hard to use as a noun or in the past tense; \"Update from main\" is Figma's label [S2] and Abstract's [S5].",
+      "row": "§1, collision 11"
+    },
+    {
+      "word": "pull",
+      "forms": [
+        "pulls",
+        "pulled",
+        "pulling"
+      ],
+      "for": "action.update-from-parent",
+      "audience": [
+        "people"
+      ],
+      "use": "action.update-from-parent",
+      "reason": "Git's word, which names the direction from the wrong end for a person; the labels name the branch at the other end [S2].",
+      "row": "§1, collision 11"
+    },
+    {
+      "word": "draft",
+      "forms": [
+        "drafts"
+      ],
+      "for": "state.not-committed-yet",
+      "audience": [
+        "people"
+      ],
+      "use": "state.not-committed-yet",
+      "allowed": "The Draft status of an item or an objective.",
+      "reason": "Draft is an item status and an objective state, as item banks use it [S25][S26]; an edit a tool has not committed is an \"uncommitted edit\".",
+      "row": "§1, collision 4"
+    },
+    {
+      "word": "draft",
+      "forms": [
+        "drafts"
+      ],
+      "for": "proposal",
+      "audience": [
+        "people"
+      ],
+      "use": "proposal",
+      "allowed": "The Draft status of an item or an objective.",
+      "reason": "Draft is a status [S25][S26]; what an agent writes is a proposal until the person accepts it.",
+      "row": "§1, collision 4"
+    },
+    {
+      "word": "administrator",
+      "forms": [
+        "administrators",
+        "admin",
+        "admins"
+      ],
+      "for": "operator",
+      "audience": [
+        "administrators",
+        "developers"
+      ],
+      "use": "operator",
+      "allowed": "Whoever holds the Administrator role.",
+      "reason": "The role is held by people who never touch the server; the person who runs it is the operator.",
+      "row": "§1, collision 6"
+    },
+    {
+      "word": "profile",
+      "forms": [
+        "profiles"
+      ],
+      "for": "instance-details",
+      "audience": [
+        "people"
+      ],
+      "use": "instance-details",
+      "allowed": "Identifiers such as profile_changed.",
+      "reason": "\"Profile\" already means three things here; what an instance shows before connecting is its details.",
+      "row": "§1, collision 7"
+    },
+    {
+      "word": "profile",
+      "forms": [
+        "profiles"
+      ],
+      "for": "privacy-level",
+      "audience": [
+        "people"
+      ],
+      "use": "privacy-level",
+      "allowed": "The profile= parameter.",
+      "reason": "\"Profile\" already means three things here; how much about people an export carries is its privacy level.",
+      "row": "§1, collision 7"
+    },
+    {
+      "word": "check again",
+      "for": "action.try-again",
+      "audience": [
+        "people"
+      ],
+      "use": "action.try-again",
+      "reason": "\"Check\" is kept for the tools that report on work [S39].",
+      "row": "§1, collision 8"
+    },
+    {
+      "word": "check for updates",
+      "forms": [
+        "checking for updates",
+        "check for an update"
+      ],
+      "for": "action.look-for-new-version",
+      "audience": [
+        "people"
+      ],
+      "use": "action.look-for-new-version",
+      "reason": "\"Check\" is kept for the tools that report on work, and \"update\" for \"Update from main\".",
+      "row": "§1, collision 8"
+    },
+    {
+      "word": "verdict",
+      "forms": [
+        "verdicts"
+      ],
+      "for": "check-result",
+      "audience": [
+        "people"
+      ],
+      "use": "check-result",
+      "allowed": "A sign-off's verdict, Affirmed or Declined.",
+      "reason": "The word meant three things; a check has a result [S40].",
+      "row": "§1, collision 9"
+    },
+    {
+      "word": "verdict",
+      "forms": [
+        "verdicts"
+      ],
+      "for": "coverage-level",
+      "audience": [
+        "people"
+      ],
+      "use": "coverage-level",
+      "allowed": "A sign-off's verdict, Affirmed or Declined.",
+      "reason": "The word meant three things; a coverage level is a level.",
+      "row": "§1, collision 9"
+    },
+    {
+      "word": "set aside",
+      "forms": [
+        "sets aside",
+        "setting aside"
+      ],
+      "for": "override",
+      "audience": [
+        "people"
+      ],
+      "use": "override",
+      "reason": "The API says \"overrides\", and \"override\" says that a reason is recorded.",
+      "row": "§1, collision 10"
+    },
+    {
+      "word": "delete",
+      "forms": [
+        "deletes",
+        "deleted",
+        "deleting",
+        "deletion"
+      ],
+      "for": "action.remove-from-this-computer",
+      "audience": [
+        "people"
+      ],
+      "use": "action.remove-from-this-computer",
+      "allowed": "Anything deleted on the instance: a branch, or a record.",
+      "reason": "\"Remove\" acts on this computer and \"delete\" on the instance; one label must not cover both.",
+      "row": "§1, collision 13"
+    },
+    {
+      "word": "identifier",
+      "forms": [
+        "identifiers"
+      ],
+      "for": "your-id",
+      "audience": [
+        "people"
+      ],
+      "use": "your-id",
+      "allowed": "A commit's short identifier.",
+      "reason": "One value went by six names; a person sees \"your ID on <instance>\".",
+      "row": "§1, collision 14"
+    },
+    {
+      "word": "log",
+      "forms": [
+        "logs"
+      ],
+      "for": "history",
+      "audience": [
+        "people"
+      ],
+      "use": "history",
+      "allowed": "\"The diagnostic log\" in the guide.",
+      "reason": "A branch's list of commits is its history [S9][S19]; the route keeps its name.",
+      "row": "§1, collision 15"
+    },
+    {
+      "word": "log",
+      "forms": [
+        "logs"
+      ],
+      "for": "diagnostics",
+      "audience": [
+        "people"
+      ],
+      "use": "diagnostics",
+      "allowed": "\"The diagnostic log\" in the guide.",
+      "reason": "The page of the app's diagnostic lines is Diagnostics, so that it is not taken for a branch's history.",
+      "row": "§1, collision 15"
+    },
+    {
+      "word": "note",
+      "forms": [
+        "notes"
+      ],
+      "for": "message",
+      "audience": [
+        "people"
+      ],
+      "use": "message",
+      "allowed": "A design note, always with \"design\".",
+      "reason": "A design note is a record; a sentence added to a commit is part of its message.",
+      "row": "§1, collision 16"
+    },
+    {
+      "word": "document",
+      "forms": [
+        "documents"
+      ],
+      "for": "record",
+      "audience": [
+        "people"
+      ],
+      "use": "record",
+      "allowed": "The API and its reference; a document in the ordinary sense, such as a guide.",
+      "reason": "People read \"record\" on every surface; \"document\" is the API's word.",
+      "row": "§1, collision 17"
+    },
+    {
+      "word": "revision",
+      "forms": [
+        "revisions"
+      ],
+      "for": "app-version",
+      "audience": [
+        "people"
+      ],
+      "use": "app-version",
+      "allowed": "\"API revision\", in the details only.",
+      "reason": "People see \"version\" for the app and \"compatible\" for the pair.",
+      "row": "§1, collision 18"
+    },
+    {
+      "word": "invariant",
+      "forms": [
+        "invariants",
+        "constraint",
+        "constraints"
+      ],
+      "for": "rule",
+      "audience": [
+        "people"
+      ],
+      "use": "rule",
+      "reason": "The guide and the tools say \"rules\"; the other words are the code's.",
+      "row": "§1, collision 19"
+    },
+    {
+      "word": "violation",
+      "forms": [
+        "violations"
+      ],
+      "for": "broken-rules",
+      "audience": [
+        "people"
+      ],
+      "use": "broken-rules",
+      "reason": "The page says \"Broken rules\"; \"violations\" is the API's field.",
+      "row": "§1, collision 19"
+    },
+    {
+      "word": "client",
+      "forms": [
+        "clients"
+      ],
+      "for": "tool",
+      "audience": [
+        "people"
+      ],
+      "use": "tool",
+      "reason": "People read \"tool\"; \"client\" is for developers.",
+      "row": "§1, collision 20"
+    },
+    {
+      "word": "plugin",
+      "forms": [
+        "plugins",
+        "plug-in",
+        "plug-ins"
+      ],
+      "for": "tool",
+      "audience": [
+        "people"
+      ],
+      "use": "tool",
+      "reason": "It suggests something running inside Armature.",
+      "row": "§1, collision 20"
+    },
+    {
+      "word": "plugin",
+      "forms": [
+        "plugins",
+        "plug-in",
+        "plug-ins"
+      ],
+      "for": "client",
+      "audience": [
+        "administrators",
+        "developers"
+      ],
+      "use": "client",
+      "reason": "Retired in new writing: it suggests something running inside Armature.",
+      "row": "§1, collision 20"
+    },
+    {
+      "word": "program",
+      "forms": [
+        "programs"
+      ],
+      "for": "desktop-app",
+      "audience": [
+        "people"
+      ],
+      "use": "desktop-app",
+      "reason": "\"App\" follows Microsoft's style guide [S38] and how Dropbox and Zotero name themselves [S36][S37].",
+      "row": "§1, collision 21"
+    },
+    {
+      "word": "machine",
+      "forms": [
+        "machines"
+      ],
+      "for": "this-computer",
+      "audience": [
+        "people"
+      ],
+      "use": "this-computer",
+      "reason": "The pages, the guide and the tools used three phrases; \"this computer\" is the one.",
+      "row": "§1, collision 22"
+    },
+    {
+      "word": "workspace hub",
+      "forms": [
+        "workspace hubs"
+      ],
+      "for": "desktop-hub",
+      "audience": [
+        "people"
+      ],
+      "use": "desktop-hub",
+      "reason": "It is ADR-0065's role term; a person meets the hub of Armature Desktop.",
+      "row": "§1, collision 2"
+    },
+    {
+      "word": "restore",
+      "forms": [
+        "restores",
+        "restored",
+        "restoring"
+      ],
+      "for": "action.revert",
+      "audience": [
+        "people"
+      ],
+      "use": "action.revert",
+      "reason": "In Google Docs and Figma it replaces the whole state [S3][S20]; a revert is a new commit.",
+      "row": "§6, Correcting a mistake"
+    },
+    {
+      "word": "approval",
+      "forms": [
+        "approvals",
+        "approve",
+        "approves",
+        "approving"
+      ],
+      "for": "sign-off",
+      "audience": [
+        "people"
+      ],
+      "use": "sign-off",
+      "allowed": "The Approved status of an item or a placement.",
+      "reason": "Approved is a status, so a person's own judgment is a sign-off [S44].",
+      "row": "§12, Item status"
+    },
+    {
+      "word": "attestation",
+      "forms": [
+        "attestations"
+      ],
+      "for": "sign-off",
+      "audience": [
+        "people"
+      ],
+      "use": "sign-off",
+      "allowed": "Researchers' documents and the schema.",
+      "reason": "People read \"sign-off\"; SharePoint's \"Request sign-off\" is the precedent [S44].",
+      "row": "§12, Attestation"
+    },
+    {
+      "word": "fragment",
+      "forms": [
+        "fragments"
+      ],
+      "for": "part",
+      "audience": [
+        "people"
+      ],
+      "use": "part",
+      "reason": "It is the schema's word; a person reads \"part\", \"stem\" or \"option\".",
+      "row": "§12, Part, option"
+    },
+    {
+      "word": "junction",
+      "forms": [
+        "junctions"
+      ],
+      "for": "relationship",
+      "audience": [
+        "people"
+      ],
+      "use": "relationship",
+      "reason": "It is a developer's word for a relationship kept as a record.",
+      "row": "§12, Relationship"
+    },
+    {
+      "word": "metric",
+      "forms": [
+        "metrics"
+      ],
+      "for": "measurement",
+      "audience": [
+        "people"
+      ],
+      "use": "measurement",
+      "reason": "People read \"measurement\", and \"item statistic\" for an item's.",
+      "row": "§12, Dataset, metric"
+    },
+    {
+      "word": "identity provider",
+      "forms": [
+        "identity providers",
+        "issuer",
+        "issuers"
+      ],
+      "for": "sign-in-provider",
+      "audience": [
+        "people"
+      ],
+      "use": "sign-in-provider",
+      "reason": "The guide never says \"issuer\"; the pages used two names for one thing.",
+      "row": "§4, Sign-in provider"
+    },
+    {
+      "word": "head",
+      "for": "latest-commit",
+      "audience": [
+        "people"
+      ],
+      "use": "latest-commit",
+      "reason": "It is the API's word.",
+      "row": "§6, Head"
+    },
+    {
+      "word": "base",
+      "for": "starting-point",
+      "audience": [
+        "people"
+      ],
+      "use": "starting-point",
+      "reason": "It is the word of the API and the plans; a conflict review shows the \"starting point\".",
+      "row": "§5, Base"
+    },
+    {
+      "word": "pairing value",
+      "forms": [
+        "pairing values",
+        "local token",
+        "per-launch secret"
+      ],
+      "for": "pairing-key",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "use": "pairing-key",
+      "allowed": "The header and the variable keep their names.",
+      "reason": "\"Key\" says it is a secret to keep [S33][S35], and the value is no longer drawn at each launch.",
+      "row": "§10, Pairing value"
+    },
+    {
+      "word": "dry run",
+      "forms": [
+        "dry-run"
+      ],
+      "for": "merge-request.health",
+      "audience": [
+        "people"
+      ],
+      "use": "merge-request.health",
+      "reason": "No product researched labels a dry run; \"preview\" is Figma's word for a look before an update [S2].",
+      "row": "§7, Ask what a delivery would find"
+    },
+    {
+      "word": "grant",
+      "forms": [
+        "grants",
+        "granted",
+        "granting"
+      ],
+      "for": "role",
+      "audience": [
+        "people"
+      ],
+      "use": "role",
+      "reason": "People read \"role\" and \"give a role\"; \"grant\" is for administrators and the API.",
+      "row": "§9, Grant"
+    },
+    {
+      "word": "revoke",
+      "forms": [
+        "revokes",
+        "revoked",
+        "revoking"
+      ],
+      "for": "action.remove-role",
+      "audience": [
+        "people"
+      ],
+      "use": "action.remove-role",
+      "reason": "People read \"remove a role\"; \"revoke\" is for administrators and the API.",
+      "row": "§7, Grant, revoke"
+    },
+    {
+      "word": "credential",
+      "forms": [
+        "credentials"
+      ],
+      "for": "your-sign-in",
+      "audience": [
+        "people"
+      ],
+      "use": "your-sign-in",
+      "reason": "People read \"your sign-in\"; \"credential\" is for administrators.",
+      "row": "§9, Your sign-in, the credential"
+    },
+    {
+      "word": "handle",
+      "forms": [
+        "handles"
+      ],
+      "for": "handle",
+      "audience": [
+        "people"
+      ],
+      "use": "branch-name",
+      "reason": "Pages show the whole branch name; the prefix needs no name for a person.",
+      "row": "§9, Handle"
+    },
+    {
+      "word": "sync",
+      "forms": [
+        "syncs",
+        "synced",
+        "syncing",
+        "synchronize",
+        "synchronizes",
+        "synchronized"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "In Canvas it overwrites one way [S24], and in VS Code it moves both ways [S12]; either it overwrites or it hides which way work moves.",
+      "row": "§2, principle 3"
+    },
+    {
+      "word": "publish",
+      "forms": [
+        "publishes",
+        "published",
+        "publishing"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "To a designer it means producing a course package [S21][S22].",
+      "row": "§2, principle 3"
+    },
+    {
+      "word": "pull request",
+      "forms": [
+        "pull requests"
+      ],
+      "for": "*",
+      "audience": [
+        "people",
+        "administrators",
+        "developers"
+      ],
+      "use": "merge-request",
+      "reason": "Its \"pull\" is the merge seen from the target, and it reads as the opposite of push; GitLab's \"merge request\" is the name [S42].",
+      "row": "§7, Merge request"
+    },
+    {
+      "word": "check out",
+      "forms": [
+        "checks out",
+        "checked out",
+        "checking out",
+        "checkout",
+        "check in",
+        "checked in",
+        "checkin"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "It suggests locking [S14], and \"check\" is kept for the tools that report on work.",
+      "row": "§2"
+    },
+    {
+      "word": "remote",
+      "forms": [
+        "remotes",
+        "remote hub"
+      ],
+      "for": "instance",
+      "audience": [
+        "people"
+      ],
+      "use": "instance",
+      "allowed": "Identifiers such as remote_unreachable.",
+      "reason": "In ADR-0065 \"remote\" is a role, where a person thinks of a place; sentences name the instance.",
+      "row": "§1, collision 1"
+    },
+    {
+      "word": "local",
+      "forms": [
+        "locally"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "use": "this-computer",
+      "reason": "Places are named by where they are; \"local\" and \"remote\" stay in the code.",
+      "row": "§2, principle 4"
+    },
+    {
+      "word": "operator",
+      "forms": [
+        "operators"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "It stays off the pages a designer reads; a designer asks an administrator.",
+      "row": "§10, Address"
+    },
+    {
+      "word": "server",
+      "forms": [
+        "servers"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "use": "instance",
+      "reason": "In the deployment guide a server is a machine; a person connects to an instance.",
+      "row": "§17"
+    },
+    {
+      "word": "store",
+      "forms": [
+        "stores"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "Administrators, operators and developers only.",
+      "row": "§17"
+    },
+    {
+      "word": "host",
+      "forms": [
+        "hosts"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "Administrators, operators and developers only.",
+      "row": "§17"
+    },
+    {
+      "word": "schema",
+      "forms": [
+        "schemas"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "Administrators, operators and developers only.",
+      "row": "§17"
+    },
+    {
+      "word": "shell",
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "One of the desktop app's internals (ADR-0069).",
+      "row": "§17"
+    },
+    {
+      "word": "core",
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "One of the desktop app's internals (ADR-0069).",
+      "row": "§17"
+    },
+    {
+      "word": "sidecar",
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "One of the desktop app's internals (ADR-0069).",
+      "row": "§17"
+    },
+    {
+      "word": "capability",
+      "forms": [
+        "capabilities"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "Tool authors only (ADR-0059).",
+      "row": "§17"
+    },
+    {
+      "word": "trailer",
+      "forms": [
+        "trailers"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "A history view shows what a trailer means (\"made\", \"for\", \"via\"), never the trailer.",
+      "row": "§17"
+    },
+    {
+      "word": "etag",
+      "forms": [
+        "if-match"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "The mechanism behind \"Changed elsewhere\".",
+      "row": "§17"
+    },
+    {
+      "word": "write queue",
+      "forms": [
+        "transient branch",
+        "commit table",
+        "in-flight marker",
+        "split rule"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "Internals of the hub and of push.",
+      "row": "§17"
+    },
+    {
+      "word": "resolver",
+      "forms": [
+        "resolvers"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "Operators see the setting; people see \"No sign-in (for testing only)\" or a sign-in provider.",
+      "row": "§17"
+    },
+    {
+      "word": "ownerless",
+      "forms": [
+        "migration window"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "reason": "Administrators only (ADR-0068).",
+      "row": "§17"
+    },
+    {
+      "word": "relay",
+      "forms": [
+        "relays",
+        "relayed",
+        "relaying"
+      ],
+      "for": "relay",
+      "audience": [
+        "people"
+      ],
+      "use": "author.via",
+      "reason": "A relay is for administrators; a person sees \"via\".",
+      "row": "§9, Relay"
+    },
+    {
+      "word": "snapshot",
+      "forms": [
+        "snapshots"
+      ],
+      "for": "*",
+      "audience": [
+        "people"
+      ],
+      "use": "older-commits-kept-offline",
+      "reason": "It is internal, surfaced only as the setting \"Older commits kept offline\".",
+      "row": "§17"
+    }
+  ]
+}
