@@ -10,19 +10,20 @@
 > deliberate steps. A *merge request* records that someone asked for one branch to be merged into
 > another. Whether it would merge cleanly (conflicts, broken rules, required checks) is worked out
 > each time someone looks, never stored. Whoever may merge into the target merges it or closes it.
-> Proposed on 18 November 2026; nothing is built.
+> Accepted on 19 November 2026, its five open questions decided as recommended; nothing is built.
 
 ## Status
 
-Proposed (2026-11-18). Drafted the same day from Amos's choices in discussion: option 1 of three
+Accepted (2026-11-19, Amos). Proposed 2026-11-18, drafted that day from Amos's choices in discussion: option 1 of three
 for keeping a workspace's branch safe (a workspace linked to one computer), with his change that
 moving a workspace is two steps, unlinking from one computer and linking from another, rather than
 one move; and option 1 of three for asking for a merge (a request recorded on `main`, its health
-computed on read). The vocabulary is `docs/naming-vocabulary.md`. Not built.
+computed on read). The vocabulary is `docs/naming-vocabulary.md`. Amos decided the five open
+questions on 2026-11-19, one by one and each as recommended (decisions 2, 5 and 7), before accepting
+the record. Not built.
 
-It changes the schema, adding two classes and two enums, so on acceptance it is implemented with
-`schema.json`, the generated types and the appendix in one commit (CLAUDE.md, "After schema
-changes"). It relies on no store behavior beyond what grants already rely on, so no platform check
+It changes the schema, adding two classes and two enums, so when it is built `schema.json`, the
+generated types and the appendix go in one commit (CLAUDE.md, "After schema changes"). It relies on no store behavior beyond what grants already rely on, so no platform check
 is needed first (§Verification).
 
 It keeps the rule ADR-0065 decision 6's later change of 2026-11-18 states: a workspace's branch on
@@ -30,7 +31,7 @@ the remote is written only by the workspace hub that holds it. And it answers AD
 question 2, *a request for delivery*, whose trigger was a second client building the same request
 (§Context).
 
-On acceptance it would annotate:
+It annotates, each by a note of 2026-11-19:
 
 - **ADR-0065 decisions 2, 6 and 7**: a workspace has a record on `main` and a link; delivery becomes
   a merge request; the program gains linking and unlinking among its own actions.
@@ -119,7 +120,7 @@ checks (ADR-0070 decision 6), and the event feed tells a client when either bran
    | `parent` | `xsd:string` | The branch it was created from |
    | `link` | `Optional<xsd:string>` | The installation it is linked to; absent when unlinked |
    | `linkedAt` | `Optional<xsd:dateTime>` | When it was linked there |
-   | `linkLabel` | `Optional<xsd:string>` | A name the owner gave that computer, shown when it is linked elsewhere; nothing is sent unless the owner sets one |
+   | `linkLabel` | `Optional<xsd:string>` | A name the owner gave that computer in the program's settings, shown when it is linked elsewhere; nothing is sent unless the owner sets one, since `main` is read by everyone the instance serves and a computer's name says more about a person than the program needs (open question 5) |
    | `status` | `WorkspaceStatus` | `Active`, or `Closed` once its branch is deleted |
 
    `@key` is `Random`, since a branch name may be used again after its branch is deleted. Rules the
@@ -158,7 +159,8 @@ checks (ADR-0070 decision 6), and the event feed tells a client when either bran
      refuses with `unpushed_commits` otherwise). The record's `link` is cleared, and the local copy
      is removed, since everything in it is on the remote. The workspace stays on the remote,
      unlinked, owned, with its parent.
-   - **Unlink from elsewhere.** The owner may clear a link without the linked computer, for one that
+   - **Unlink from the other computer** (the label `docs/naming-vocabulary.md` chose; drafted here
+     as "Unlink from elsewhere"). The owner may clear a link without the linked computer, for one that
      is lost, broken or out of reach: from another signed-in desktop program, or any client
      (`POST /workspaces/:branch/unlink`). The confirmation states the cost: that computer's
      unpushed commits can no longer be pushed. Its next push is refused 409 `not_linked`, and its
@@ -195,7 +197,22 @@ checks (ADR-0070 decision 6), and the event feed tells a client when either bran
 
    `@key` is `Random`. It lives on `main`, written only by the hub through the routes below, and at
    most one `Open` request names a pair of source and target (409 `request_open`). A target is a
-   branch, never a workspace.
+   branch, never a workspace. It is infrastructure, not a design record: no note, finding or
+   sign-off can be about one, and it is in no export of the design. That is reconsidered when a
+   client wants a note or a sign-off about a request, and moving it is a schema change with its own
+   ADR (open question 2).
+
+   **Which merges need one** (open question 1). Every merge *from a workspace*, so the program has
+   one way to send work anywhere; and every merge *into `main`*, from anything, since `main` is the
+   project's official state and a request records who asked and who decided. The merge route
+   refuses either made outside a request (409 `request_required`). Whoever may merge into the
+   target opens and merges in one step. Two merges stay direct: between branches other than `main`,
+   for online clients (CoQui's rounds), and a workspace's update from its parent, which is a merge
+   into the workspace and the owner's own.
+
+   **No review is required before merging** (open question 3): whoever may merge a request may
+   merge one they opened. A required check (ADR-0070) can add a review later without a new
+   mechanism, and so could sign-offs about a request, were it a design record.
 
    **Its health is a read.** `GET /merge-requests/:id` answers the record and, computed at both
    heads as they are now, what a merge would meet: `conflicts` and `violations` from the merge
@@ -231,12 +248,18 @@ checks (ADR-0070 decision 6), and the event feed tells a client when either bran
    asks the remote (ADR-0068 decision 9).
 
 7. **The desktop program.** Its own actions (ADR-0065 decision 7) gain **Link to this computer**,
-   **Unlink from this computer** and **Unlink from elsewhere**, with the lists they need: unlinked
+   **Unlink from this computer** and **Unlink from the other computer**, with the lists they need: unlinked
    workspaces, and workspaces linked elsewhere. **Deliver** becomes **Open merge request into
    <parent>**, with the request's health shown and kept current from the event feed. A merge
    request on the remote replaces the workspace hub's dry-run action ("Ask what a delivery would
    find"), since an open request shows the same answer, continuously. The program sends
    `Armature-Workspace-Link` on every request that writes its workspace's branch.
+
+   **Workspaces made before this** (open question 4). At its first contact with the remote after
+   the upgrade, the program writes a record for each workspace it holds, linked to itself, with
+   `parent` from `workspace.json`'s `from`, or `main`. A branch with no record stays an ordinary
+   branch, so a workspace held by a program not yet upgraded keeps working, unprotected, until it
+   is.
 
 ## Alternatives considered
 
@@ -269,6 +292,26 @@ checks (ADR-0070 decision 6), and the event feed tells a client when either bran
 
 ## Open questions
 
+**Amos decided all five on 2026-11-19, one by one, each as recommended.** The decisions are in
+decision 2 (question 5), decision 5 (questions 1, 2 and 3) and decision 7 (question 4); the
+recommendations are kept here as written, and the options weighed beside each were:
+
+- *Question 1:* every merge through a request (CoQui's direct merges between its own branches would
+  break, and requests would pile up for branches nobody reviews); workspaces only (a merge into
+  `main` could still happen with no record of who asked); never required (the program keeps two
+  ways to send work).
+- *Question 2:* a design record now (workflow state in the design graph before a client asks).
+- *Question 3:* a review optional per branch (a new kind of requirement); a review always on `main`
+  (a project with one maintainer could never merge).
+- *Question 4:* an operator's migration (the server cannot know which installation holds a
+  workspace, so every record would start unlinked); the owner converting each by hand (most never
+  would).
+- *Question 5:* the computer's name by default (often a full name or an asset tag, published on
+  `main`); asking at the first link (one more question while creating the first workspace).
+
+The code `request_required` (decision 5) was named in writing question 1's decision in, without a
+separate decision, and is open to overrule.
+
 1. **Must every merge go through a request?** *Recommendation:* every merge *from a workspace*, so
    the program has one way to send work anywhere; and every merge into `main`, from anything, since
    `main` is the project's official state and a request records who asked and who decided. A
@@ -300,7 +343,9 @@ without the link refused (`held_elsewhere`, `not_linked`), with it served; unlin
 then the old computer's push refused and its discard; linking an unlinked workspace, and linking one
 linked elsewhere refused; a parent that is a workspace refused; a request's health following its
 source after a bring-in and a push; one open request per pair; merging and closing by who may, and
-refused otherwise; the trailer written, and refused from a client; the gate's refusals through a
+refused otherwise; a merge from a workspace, or into `main`, refused outside a request
+(`request_required`), and a direct merge between two other branches served; the program's records
+for the workspaces it held before the upgrade; the trailer written, and refused from a client; the gate's refusals through a
 request; `queue.test.ts` updated for the new commits on `main`.
 
 ## Consequences
@@ -319,7 +364,7 @@ request; `queue.test.ts` updated for the new commits on `main`.
   The A/B case is: a branch per method, workspaces under each, requests into each method, and one
   request from the chosen method into `main`.
 - **The design history gains who asked.** Every merge from a workspace, and every merge into `main`
-  if open question 1 is decided as recommended, has a record of who opened it, with what message,
+  (decision 5), has a record of who opened it, with what message,
   who decided, and the commit, joined to the merge by its trailer.
 - **The guide changes**: "Clone a branch" goes (a workspace is linked, not cloned, and someone
   else's workspace is read on the instance), "Deliver" becomes a merge request, and moving to
