@@ -2,7 +2,7 @@
   "name": "armature-client-install-check",
   "private": true,
   "type": "module",
-  "description": "A consumer of @armature/client outside the workspace, installed the way another repository installs it (run.sh); CoQui's stack: pnpm, Next, Vitest, tsx",
+  "description": "A consumer of @armature/client and @armature/vocabulary outside the workspace, installed the way another repository installs it (run.sh); CoQui's stack: pnpm, Next, Vitest, tsx",
   "packageManager": "pnpm@10.28.0",
   "devDependencies": {
     "@types/node": "^22.20.5",

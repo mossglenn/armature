@@ -1,5 +1,6 @@
 import { createClient, HubError } from '@armature/client';
 import type { LearningObjective } from '@armature/types';
+import { findAvoided, isReserved, terms } from '@armature/vocabulary';
 
 // A hub answered by a stub, so the check needs no server: a list read and a refused write.
 export function stubHub() {
@@ -27,4 +28,11 @@ export async function check(): Promise<string> {
     if (!(err instanceof HubError) || err.code !== 'invariant_violation') throw err;
   }
   return `ok: ${data.length} objective at ${commit}, a refused write is a HubError`;
+}
+
+// The vocabulary, as a tool checks its own strings: the JSON import, the typed terms and both functions.
+export function words(): string {
+  const [saved] = findAvoided('Saved to the workspace', 'people');
+  const draft = isReserved('Draft')?.map((held) => held.for).join(' and ');
+  return `ok: "${terms['action.push'].name}"; say "${saved.instead}", not "${saved.match}"; Draft is held for ${draft}`;
 }

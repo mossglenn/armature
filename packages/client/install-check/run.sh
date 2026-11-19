@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs @armature/client and @armature/types the way another repository does,
+# Installs @armature/client, @armature/types and @armature/vocabulary the way another repository does,
 # outside this npm workspace and with pnpm, then compiles and runs them under the
 # tools CoQui uses: tsc with a Next app's options, Vitest, tsx and a Next build.
 # The packages are packed from this checkout, so the manifests under test are the
@@ -12,10 +12,10 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 cp -R "$here/." "$work/"
 rm -f "$work/run.sh"
-(cd "$root" && npm pack --silent --workspace packages/types --workspace packages/client --pack-destination "$work" > /dev/null)
+(cd "$root" && npm pack --silent --workspace packages/types --workspace packages/client --workspace packages/vocabulary --pack-destination "$work" > /dev/null)
 cd "$work"
 pnpm install
-pnpm add ./armature-types-0.1.0.tgz ./armature-client-0.1.0.tgz
+pnpm add ./armature-types-0.1.0.tgz ./armature-client-0.1.0.tgz ./armature-vocabulary-0.1.0.tgz
 pnpm exec tsc -p .
 echo "tsc:    ok"
 pnpm exec vitest run --reporter=dot
