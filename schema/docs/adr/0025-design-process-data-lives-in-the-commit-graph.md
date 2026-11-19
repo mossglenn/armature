@@ -63,6 +63,12 @@ Decision 6's branch deletion is the owner's or a maintainer's, revokes the branc
 > (ADR-0070 decision 6). A merge no requirement applies to is unchanged. Decision 6's deletion of a
 > branch also revokes its requirements (ADR-0068 decision 3, note of this date).
 
+> **Note (2026-11-19):** ADR-0072 is accepted, not yet built. Decision 2's reserved trailers gain
+> one, `Armature-Merge-Request: <id>`, written by the hub on the merge commit of a merge request and
+> refused from clients (ADR-0072 decision 5). Decision 5's merge is refused outside a request when
+> it is from a workspace or into `main` (409 `request_required`); between other branches, and into a
+> workspace from its parent, it stays direct.
+
 ## Context
 
 The position paper's third principle (plan §1 P3) promises version control modeled on Git:

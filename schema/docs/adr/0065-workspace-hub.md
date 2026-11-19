@@ -89,6 +89,15 @@ Each of those ADRs gets a dated note pointing here when this one is accepted.
 > remote is written only by the workspace hub that holds it. ADR-0072 (Proposed) is how that rule
 > is kept, and adds merge requests.
 
+> **Note (2026-11-19):** ADR-0072 is accepted, not yet built; the note above called it Proposed.
+> Decision 2: a workspace has a `Workspace` record on `main`, naming its owner, its parent and the
+> installation it is linked to, and a workspace made before the upgrade gets its record from the
+> program that holds it. Decision 6: the remote refuses a write to a workspace's branch that does
+> not carry its link (409 `held_elsewhere`, `not_linked`), and delivery becomes a merge request into
+> the parent, which the owner who may merge opens and merges in one step. Decision 7: the program's
+> own actions gain linking a workspace to this computer and unlinking it, from this computer or
+> from another.
+
 ## Context
 
 Every client today is a client of one hub, over the network. Quiver, the local-first item manager

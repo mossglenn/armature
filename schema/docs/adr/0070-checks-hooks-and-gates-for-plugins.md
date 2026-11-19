@@ -253,6 +253,10 @@ It answers `.claude/SESSION.md` What's Next item 18's second half ("reacting to 
 checks an administrator can register") and `docs/demo-coverage.md`'s "a gate has no mechanism in
 the hub". It does not touch item 18's first half, the path read.
 
+> **Note (2026-11-19):** ADR-0072 is accepted, not yet built. Decision 6's merge gate runs when a
+> merge request is merged, as on any merge, with the same refusals and overrides; a request's
+> health reports the gate's answer on every read, storing none of it (ADR-0072 decision 5).
+
 ## Context
 
 Several clients want to stop a change from landing, or to say something about every change:
