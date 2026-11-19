@@ -21,6 +21,47 @@ a way to track reserved words and words purposefully avoided. Amos decided the f
 the same day, each as recommended (decisions 1, 2 and 6, and §Alternatives for question 5), before
 accepting the record. Not built.
 
+> **Note (2026-11-19): built**, as decided: the package, its schema, the two functions, the check in
+> CI's first job with the report over Armature's own pages, the tests of §Verification and the
+> install check. The first file holds 194 terms, 34 reserved words and 66 avoided words, every term
+> `chosen`. Building settled these points, each open to overrule:
+>
+> - **The file's shape has six fields the tables of decisions 2 to 4 do not list.** A term may have
+>   `also`, the other rows where the document chooses the same name ("commit" has three rows). A
+>   term's `row` may carry `"in": "recommended"`, for a refusal code's words, which the document gives
+>   in a Recommended cell and not as a row's chosen name. `until` may give a condition in words
+>   (`when`) where no ADR is waited on ("Revert", if an undo is built), and may lack a `name`: the
+>   concept then does not exist until the decision is built, and nothing is shown (linking a
+>   workspace). A reserved word may have a `row` and `identifiers` (`ItemStatus.InReview` for "In
+>   review"). An avoided word's forms are a list, `forms`, beside `word`.
+> - **The words held for a planned concept are terms, not reserved entries** (decision 3 named
+>   `proposal`, `Revert` and `level` as reserved). An avoided entry's `use` must name a term, and
+>   "draft", "restore" and "verdict" each point at one of them. The reserved list is the enumeration
+>   values a person reads. `operator` is a term for administrators and developers and an avoided word
+>   for people, as decision 3 says.
+> - **How a term meets its row (decision 5).** A Chosen cell may hold several names and a few
+>   connecting words ("Merge into main until requests are built"). A term's name must appear in its
+>   row's cell whole, a placeholder standing as itself or as the document's example of it (`<parent>`
+>   as "main"), and once every claimed name is taken out, only a short list of connecting words kept
+>   in the script may remain. So a name changed, added or dropped on either side alone fails. A term
+>   may instead be named for its row's Concept cell when the cell lists its values ("item status" over
+>   "Draft, In review, Approved, Retired", each value a reserved word citing the row). The document
+>   was not edited to fit: no Chosen cell changed.
+> - **`isReserved` answers a list, or null for a free word**, since a word may be held for two terms
+>   (`Draft` is an item status and an objective state) and an empty list would pass a plain test.
+> - **`findAvoided` leaves an avoided word inside a term's own name**: "design note" is not a
+>   "note", nor "API revision" a "revision".
+> - **No dependency anywhere.** The tests run under Node's own test runner, and the script and the
+>   tests import the package's TypeScript source as it is (Node 22.18 or later). The check validates
+>   the file with a validator of its own for the keywords the schema uses; a keyword it does not know
+>   is an error. The pages are parsed with the workspace's TypeScript.
+> - **The report's first run** found 264 avoided words on Armature's own pages (158 on the desktop
+>   app's, 81 in the core's messages, 25 on the viewer's), led by "remote", "program" and "deliver".
+>   The list of files held to the vocabulary (`BROUGHT`, in the script) is empty, so the report fails
+>   nothing yet.
+>
+> Left: the one line in Quiver's and CoQui's `CLAUDE.md` (Consequences), once this is on `main`.
+
 It changes no schema and no route, and the hub never reads the vocabulary, so it needs no platform
 check, no client revision and no entry in `docs/client-changes.md` (§Decision 7). It adds a third
 package to the npm workspace built in Phase 7 (`docs/development-plan.md`, Phase 7: "tools-first
