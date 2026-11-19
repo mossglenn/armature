@@ -34,6 +34,10 @@ without a token so a client can read how to sign in. Each is a dated contract re
 > event types served and the run store's bound; its routes and the merge route's new answers are one
 > client revision (ADR-0070 decision 10).
 
+> **Note (2026-11-19):** ADR-0072 is accepted, not yet built. Decision 4 gains one capability,
+> `armature/merge-requests`, and `armature/workspace` gains settings for linking; each change a
+> client acts on is a client revision when it is built (ADR-0072, Consequences).
+
 ## Context
 
 ADR-0026 made `/api/v1` the whole of the version contract: every route lives under the prefix,

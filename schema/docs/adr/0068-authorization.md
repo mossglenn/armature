@@ -111,6 +111,13 @@ annotate:
 > check*, `override_check`: whoever may perform the merge, and for a `locked` requirement an
 > administrator, as ADR-0070 decision 6 says in words (its note of this date).
 
+> **Note (2026-11-19):** ADR-0072 is accepted, not yet built. Decision 4's table gains rows with
+> no new role (ADR-0072 decision 6): *open a merge request*, whoever may write its source; *merge a
+> request*, whoever may merge into its target; *close a request*, its opener, its source's owner or
+> whoever may merge into its target; *link, unlink, list a workspace*, its owner, and an
+> administrator to list and unlink any. Open question 2, a request for delivery, is answered: the
+> request is a record on `main`, and every merge from a workspace or into `main` goes through one.
+
 ## Context
 
 ADR-0032 decision 1 has the hub resolve identity and never authenticate; ADR-0015 leaves database
