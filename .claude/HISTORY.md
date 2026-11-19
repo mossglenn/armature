@@ -6,6 +6,41 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-18, evening (the vocabulary reviewed and decided; ADR-0073, a shared vocabulary in the toolkit; PRs #178 and #179)
+
+**Where things stood at the close.** **Phase 8, 2026-11-18 evening; `main` at `f18207f`, client revision 2026-11-16.** PRs #178 and #179 put documents only on `main`: `docs/naming-vocabulary.md` reviewed against the code and the documents, eleven of its recommendations revised, and then decided by Amos, every name as recommended, its Chosen column filled; ADR-0073 accepted (a third toolkit package, `@armature/vocabulary`: terms, reserved words and avoided words in one JSON file, held to the working document by `check:vocabulary`), not built; ADR-0072 still Proposed with its five open questions. Nothing is built, and the installed program is still 0.1.4. **Next: build ADR-0073's package (item 45), then carry the chosen names to the program, the guide and Quiver (item 46); Amos's calls on ADR-0072 (item 44).**
+
+### Done
+
+- **PR #178 (four commits):** the vocabulary's citations corrected after a review, two readers over the code and the documents against one brief (about 170 strings and 125 claims confirmed, every mismatch spot-checked): about 40 rows gained strings they missed (the core's refusal messages, the tray, the update notice, `aria-label`s) or lost misattributions; the status line gave ADR-0072-dependent rows a name for now and one for after. `docs/api.md`, lines 43 and 523: the pairing value is kept in the keychain (wrong since ADR-0065 decision 7's later change of 2026-11-05). R1 to R11 applied. ADR-0072, still Proposed: "whoever may merge into the target" in its summary, decision 5 and Context.
+- **PR #179 (five commits):** ADR-0072's index row to match; ADR-0073 proposed, then accepted with its five open questions decided as recommended (folded into decisions 1, 2 and 6, ADR-0070's form; one consistency fix before the status changed: the working document's banner comes when the package is built); the vocabulary decided: the Chosen column of all 149 rows in §§4 to 16 filled with the names themselves, which ADR-0073's check compares, the status line "decided; not yet carried to the pages"; ADR-0073's dated note that the file is seeded with every term `chosen`.
+- A decision page, published as an Artifact (https://claude.ai/code/artifact/16ffbad8-d4a5-4960-bdb7-93ed4a2c35ad, private to Amos): the 23 collisions with the recommendation, alternatives and evidence, and §2's two worked-example paragraphs rewritten live with each pick.
+
+### Session notes
+
+- Asked to review the vocabulary line by line and as a whole. The parallel readers found the hand-built "Names in use now" lists missed whole surfaces, and that several rows put "a maintainer of the target" where ADR-0068 lets a branch's owner merge too, the shorthand ADR-0072 itself carried.
+- Amos asked whether the vocabulary should live in a shared repository. The answer moved from "a pointer in each tool's `CLAUDE.md` now, a glossary later" to his point that copies drift: the toolkit already exists (Phase 7), so ADR-0073 puts the names there, with reserved and avoided words at his request ("save" avoided for a commit).
+- Reviewing about 150 rows was cut to 23 decisions plus one "accept the rest": a decision page saving picks to its own database, read back with `read_db`. Amos decided 22 at once and asked about collision 8 before the last.
+- Collision 8: Amos weighed "audit" for ADR-0070's checks. Checks cover more than audits (`coqui/round-complete` is a workflow condition; builds, previews, measurements and outside confirmations also post results), GitHub keeps "check" as the container word with each tool naming itself, and "audit trail" is what Armature's commit history already is. He kept "check".
+
+### Facts from 2026-11-18 evening worth keeping
+
+- The decision page stores picks at `decisions/c01` to `decisions/c23` (`pick`: `rec`, `alt0`… or `own`, with `own` and `note`) and `decisions/rest` (`accept` or `hold`, `reopen`); its rules let only an editor write.
+- `app/server.ts` still draws a new pairing value at each start, and the shell draws one for that start only when the keychain cannot be read (`desktop/src-tauri/src/core.rs`); "per-launch secret" remains in CLAUDE.md, `docs/workspace-hub-plan.md` §§7, 9, 14 and 16 and `localToken.ts`'s header (item 46).
+- User-facing text lives in more places than the pages' visible strings: the core's refusal messages (shown word for word), `aria-label`s, the update notice, the tray. ADR-0073 decision 6's report covers the pages, the core and the viewer for that reason.
+- `docs/how-armature-works.md` uses "commit" or "commits" 236 times and "record" or "records" 196 times as whole words; the earlier 243 and 247 were substring counts.
+
+### Moved from SESSION.md
+
+- Item 44's vocabulary half (the Chosen column, the guide's wrong badge sentence): decided in PR #179; the badge sentence is item 46's.
+
+### Decisions taken
+
+- R1 to R11, revised recommendations: `docs/naming-vocabulary.md` (PR #178).
+- ADR-0073 accepted, its five open questions as recommended: `@armature/vocabulary` in `packages/`, Armature's check failing page by page, no command line until a second tool asks, English with translations keyed on term ids, generating the document revisited once settled (PR #179).
+- Every name chosen as recommended, the rest accepted, none reopened: the Chosen column (PR #179). "Check" over "audit" for ADR-0070's checks; a tool may still describe itself as an audit.
+- Amos gave leave to merge PR #179 once CI was green.
+
 ## 2026-11-18 (the naming vocabulary; ADR-0065's parent note; ADR-0072, linked workspaces and merge requests; PR #177)
 
 **Where things stood at the close.** **Phase 8, 2026-11-18; `main` at `51a4308`, client revision 2026-11-16.** PR #177 put documents only on `main`: `docs/naming-vocabulary.md`, every user-facing name with the names in use, 23 collisions and a recommended name, its **Chosen** column empty; ADR-0065 decision 6's later change, decided and not built (a workspace's merges are with its parent, and a workspace's branch is written only by the workspace hub that holds it); and ADR-0072, Proposed (a workspace linked to one computer and moved by unlinking and linking; merge requests with their health computed on read), its five open questions waiting on Amos. Nothing is built, and the installed program is still 0.1.4, without PR #167's fixes or the icon. No suite was run (documents only). **Next: Quiver resumed on the program (item 17); Amos's calls on the vocabulary and ADR-0072 (item 44); whether a 0.1.5 ships first is his.**
