@@ -52,6 +52,7 @@ As of 16 November 2026, Phases 0 to 7 of the [development plan](docs/development
 - 719 tests in the app (Vitest), the contract suite among them, run by CI in three shards, each against its own TerminusDB service container, on every push and pull request; 38 browser tests of the desktop shell, whose stand-in for the program's core is held to the core's own answers by a test
 
 - `@armature/types` and `@armature/client`, installable packages a plugin builds on: the schema as TypeScript and every route as a typed function (Phase 7, 2026-10-21)
+- `@armature/vocabulary`, a third package (ADR-0073, 2026-11-19): the names every tool uses for Armature's concepts, with the words reserved to one meaning and the words deliberately avoided, as one JSON file and two functions a tool checks its own strings with; a check in CI holds it to `docs/naming-vocabulary.md`, which keeps the reasoning
 
 - the per-request version contract (ADR-0059): `Armature-Version` and `Armature-Capabilities` headers, `GET /discover` and `GET /schema`
 
@@ -215,11 +216,12 @@ app/                          The API with its hosts (server.ts; desktop.ts, the
   lib/api/                    The Armature API (Hono): routes, write path, invariants, intelligence
 packages/types/               @armature/types: the schema as TypeScript, generated from schema.json; never edit by hand
 packages/client/              @armature/client: every /api/v1 route as a typed function (see packages/client/README.md)
+packages/vocabulary/          @armature/vocabulary: the shared names, reserved words and avoided words as vocabulary.json, with findAvoided and isReserved (see packages/vocabulary/README.md)
 desktop/                      The desktop program's shell (Tauri 2) over the core, installed on its own; see desktop/README.md
 package.json                  The npm workspace root (app and packages/*)
-scripts/                      Schema loader, seed, types and appendix generators, platform checks, docs sync (its own package)
+scripts/                      Schema loader, seed, types and appendix generators, platform checks, the context and vocabulary checks, docs sync (its own package)
 docker/                       Docker Compose for the store; --profile hub adds the hub and viewer, --profile public Caddy in front; their Dockerfiles, the Caddyfile, the operator entrypoint
-.github/workflows/ci.yml      CI, six jobs: lint, type-check, the generated-types drift check, the context files' budgets and the bundles (hub, operator tools, desktop core); the contract suite in three shards, each against its own TerminusDB service container; the viewer's browser smoke test (Playwright over the built viewer and the bundled hub); @armature/client installed as another repository installs it; the suites that need no store on Windows; both container images built and started. A change to documents alone runs only the first of these, from lint to the bundles
+.github/workflows/ci.yml      CI, six jobs: lint, type-check, the generated-types drift check, the context files' budgets, the vocabulary against its document and the bundles (hub, operator tools, desktop core); the contract suite in three shards, each against its own TerminusDB service container; the viewer's browser smoke test (Playwright over the built viewer and the bundled hub); @armature/client installed as another repository installs it; the suites that need no store on Windows; both container images built and started. A change to documents alone runs only the first of these, from lint to the bundles
 .github/workflows/desktop.yml The desktop shell, when it or the core changes: clippy, its unit tests, the pages' type-check and a debug bundle on Ubuntu; run by hand, a Windows debug installer for a rehearsal
 .claude/                      Context for AI-assisted development sessions: CLAUDE.md, PROJECT_CONTEXT.md, SESSION.md
 ```
