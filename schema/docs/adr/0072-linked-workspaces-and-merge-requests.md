@@ -9,7 +9,7 @@
 > another computer, the owner unlinks it from the first computer and links it from the second, two
 > deliberate steps. A *merge request* records that someone asked for one branch to be merged into
 > another. Whether it would merge cleanly (conflicts, broken rules, required checks) is worked out
-> each time someone looks, never stored. A maintainer of the target merges it or closes it.
+> each time someone looks, never stored. Whoever may merge into the target merges it or closes it.
 > Proposed on 18 November 2026; nothing is built.
 
 ## Status
@@ -58,7 +58,8 @@ them using it from anywhere: through another client with their credential, or fr
 program on another computer. Any such write moves the branch. The next push is refused (412), and
 nothing takes the new commits in: bring-in merges only from `main`, and bring-in and delivery both
 refuse while anything is unpushed. Discarding the unpushed commits is the only way on. The risk is
-accidental, not malicious, since only the owner may write the branch at all.
+accidental, not malicious, since only the owner and maintainers may write the branch at all
+(ADR-0068 decision 4).
 
 **Online clients have no such problem.** A client that writes a branch while connected reads it as
 it is, and the hub's per-branch write queue orders concurrent writes (ADR-0025 decision 7, notes).
@@ -205,8 +206,8 @@ checks (ADR-0070 decision 6), and the event feed tells a client when either bran
    client's work; the hub sends nothing.
 
    **Conflicts are resolved in the source.** For a workspace, its owner updates from the parent
-   (bring-in), resolves what that reports, and pushes; the request is clean on the next read. A
-   maintainer of the target only decides.
+   (bring-in), resolves what that reports, and pushes; the request is clean on the next read.
+   Whoever may merge into the target only decides.
 
    **The routes**, under the capability `armature/merge-requests`:
 
