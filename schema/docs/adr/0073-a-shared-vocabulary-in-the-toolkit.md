@@ -177,6 +177,12 @@ else.
    check holding the two together. Tools may align on recommended names from the start: when a name
    is chosen differently, its `id` stays, so a tool keyed on ids changes only the word.
 
+   > **Note (2026-11-18):** Amos chose every name the same day, after this record was accepted: all
+   > 23 collisions and every other row as recommended, recorded in the working document's Chosen
+   > column. So the file is seeded with every term `chosen`, not `recommended`; `kept` is not used
+   > at seeding, since a kept name was chosen too. The names that wait on ADR-0072 carry their
+   > `until` names.
+
 ## Alternatives considered
 
 - **A separate vocabulary repository.** Neutral ground, not tied to Armature's releases. Rejected: a
