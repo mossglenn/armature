@@ -704,7 +704,7 @@ describe('the sign-in and a push through the token source, against a remote unde
     // and a sign-out with nothing kept tells it nothing.
     await vi.waitFor(() => expect(revocations).toHaveLength(1));
     expect(Object.fromEntries(revocations[0])).toEqual({ token: kept, token_type_hint: 'refresh_token', client_id: CLIENT_ID });
-    await driver.event((m) => m.event === 'log' && /has revoked the kept sign-in/.test(String(m.line)));
+    await driver.event((m) => m.event === 'log' && /has ended the kept sign-in/.test(String(m.line)));
     expect((await driver.ask('signOut')).body).toEqual({ signedOut: true });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(revocations).toHaveLength(1);
