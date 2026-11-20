@@ -275,6 +275,27 @@ test.describe('the workspaces', () => {
     await expect(alert).toContainText('Which of these biases…');
   });
 
+  test('push is offered only with something to push, and the update only when the parent has something new, which the page hears of', async ({ page }) => {
+    await open(page, 'header');
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_glossary/ }).click();
+    const push = page.getByRole('button', { name: 'Push', exact: true });
+    const update = page.getByRole('button', { name: 'Update from main' });
+    await expect(page.getByText('Nothing to push.')).toBeVisible();
+    await expect(push).toBeDisabled();
+    await expect(page.getByText('Up to date with main.')).toBeVisible();
+    await expect(update).toBeDisabled();
+    // A tool commits: there is something to push. The window is come back to, as after working in the tool.
+    await page.evaluate(() => (window as unknown as { __fakeCore: { writeAsTool: (b: string, m: string) => void } }).__fakeCore.writeAsTool('demo-designer_glossary', 'Define "anchoring"'));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(push).toBeEnabled();
+    await push.click();
+    await expect(push).toBeDisabled();
+    // Main moves on the instance: nobody asks, and the page says so and offers the update.
+    await page.evaluate(() => (window as unknown as { __fakeCore: { conflictOn: (b: string) => void } }).__fakeCore.conflictOn('demo-designer_glossary'));
+    await expect(page.getByText('Main has 3 records this workspace does not; 1 would conflict.')).toBeVisible();
+    await expect(update).toBeEnabled();
+  });
+
   test('a refusal shows what the hub sent with it: how far a push got and what moved, the rules a merge would break, and words for the person (the 2026-11-09 review’s P6, P7)', async ({ page }) => {
     await open(page, 'header');
     const fake = (name: string) => page.evaluate((hook) => (window as unknown as { __fakeCore: Record<string, () => void> }).__fakeCore[hook]!(), name);
@@ -302,7 +323,9 @@ test.describe('the workspaces', () => {
 
     // A message written for the shell is said for the person: with the hub paused, not "send start".
     await page.getByLabel('The hub').getByRole('button', { name: 'Pause the hub' }).click();
-    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    // Everything is pushed, so Push has nothing to send and is not offered; the update still is.
+    await expect(page.getByRole('button', { name: 'Push', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Update from main' }).click();
     await expect(alert).toContainText('The hub is not running. Resume it from the sidebar, then try again.');
     await expect(alert).not.toContainText('send start');
     await expect(alert).toContainText('409 not_started');
@@ -425,19 +448,14 @@ test.describe('the workspaces', () => {
     await expect(where).toContainText('Linked to another computer: this workspace is linked to “Office iMac” since');
     // With commits that were never pushed, the message is the vocabulary's own, and names the way on.
     await expect(where).toContainText('This workspace was changed elsewhere, and this computer\'s unpushed commits can no longer be pushed. You can discard them and link the workspace again.');
-    await page.getByRole('button', { name: 'Push', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('409 held_elsewhere');
-    await expect(page.getByRole('alert')).toContainText('Linked to another computer (“Office iMac”');
-    await expect(page.getByRole('alert')).toContainText('by hub.example.test');
-    await expect(page.getByRole('alert')).toContainText('Nothing was pushed before this.');
+    // Nothing of this computer's is offered on it, with commits waiting or without (the rehearsal of 2026-11-20).
+    for (const name of ['Push', 'Update from main', 'Open merge request']) await expect(page.getByRole('button', { name, exact: true })).toBeDisabled();
 
     await page.getByRole('button', { name: '← Workspaces' }).click();
     await list.getByRole('button', { name: /demo-designer_glossary/ }).click();
     await expect(where).toContainText('Not linked to this computer: this workspace was unlinked, and is linked to no computer.');
     await expect(where).toContainText('Remove it from this computer; it can then be linked again from the Workspaces page.');
-    await page.getByRole('button', { name: 'Update from main' }).click();
-    await expect(page.getByRole('alert')).toContainText('409 not_linked');
-    await expect(page.getByRole('alert')).toContainText('Not linked to this computer.');
+    for (const name of ['Push', 'Update from main', 'Open merge request']) await expect(page.getByRole('button', { name, exact: true })).toBeDisabled();
   });
 });
 
