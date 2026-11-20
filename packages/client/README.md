@@ -46,7 +46,17 @@ await hub.checks.report({ check: 'lint/team', commit: data.events[0].commit!, br
   conclusion: 'pass', paramsHash: bound.requirements[0].paramsHash });      // the hash is copied, never computed
 ```
 
-`branches.merge` then answers a gated merge with `HubError` codes `bring_in_first`, `checks_pending` or `checks_failed`, each with `details.checks` (one `CheckVerdict` per requirement that applied), and takes `overrides: [{ check, reason }]` and `dryRun`; on a workspace hub `workspace.push` and `workspace.deliver` take `overrides` too. A client `timeout` (milliseconds; none by default) shorter than the `wait` asked for ends a held `events.since` first, so set it above the wait. The [schema guide](../../docs/schema-guide.md) §13.5 is the walk-through.
+`branches.merge` then answers a gated merge with `HubError` codes `bring_in_first`, `checks_pending` or `checks_failed`, each with `details.checks` (one `CheckVerdict` per requirement that applied), and takes `overrides: [{ check, reason }]` and `dryRun`; on a workspace hub `workspace.push` and `workspace.mergeRequest.merge` take `overrides` too. A client `timeout` (milliseconds; none by default) shorter than the `wait` asked for ends a held `events.since` first, so set it above the wait. The [schema guide](../../docs/schema-guide.md) §13.5 is the walk-through.
+
+**Merge requests and workspaces** (ADR-0072, since 2026-11-20). A merge into `main`, and a merge from a workspace, is made through a merge request; `branches.merge` answers either with `request_required` unless it is a dry run:
+
+```ts
+const { data: request } = await hub.mergeRequests.open({ source: 'round-3', target: 'main', message: 'Round 3, reviewed' });
+const { data: { health } } = await hub.mergeRequests.get(request['@id']);   // what a merge would meet now: computed on the read, never stored
+if (health?.mergeable) await hub.mergeRequests.merge(request['@id']);       // as whoever may merge into main; the gate's refusals as branches.merge gives them
+```
+
+A *workspace* is a branch linked to one installation of the desktop app, and only that installation's desktop hub writes it: a write from any other client is `held_elsewhere` (`workspaces.get(branch)` says whether a branch is one, 404 when not). A tool beside the desktop app writes to the desktop hub, as before, and reads where the work is with `workspace.mergeRequest.get(name)`. The option `workspaceLink` is the desktop hub's own; no other client sets it.
 
 **Testing a plugin without a server.** `createClient` takes a `fetch`. Hand it a Hono app's `request` and every call runs in-process; the hub's own contract test does exactly this (`app/lib/api/client.test.ts`):
 

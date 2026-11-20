@@ -20,11 +20,20 @@ For the person who installs it: a designer, a reviewer, anyone whose tools work 
 > | Diagnostics | Log |
 > | Look for a new version; Try again | Check for updates; Check again |
 
+> **Versions after 0.1.5 link each workspace to one computer and send its work by a merge request** (ADR-0072, built 2026-11-20 and in no released version yet). Where this guide says so, 0.1.5 and earlier differ:
+>
+> | In versions after 0.1.5 | In 0.1.5 and earlier |
+> |---|---|
+> | Open merge request into main; Merge; Close | Merge into main |
+> | the merge request's health, kept current | Preview merge |
+> | Link to this computer; Your unlinked workspaces | Clone a branch |
+> | Unlink from this computer; Unlink from the other computer | (nothing: a workspace could be written from two computers, and then be unable to push) |
+
 ## What it does
 
-Your instance of Armature keeps the design graph on a server. Armature Desktop, the desktop app, keeps your own copy of the part you are working on, a **workspace**, on your computer, so your tools (an item editor, an AI assistant, a course builder) read and write it quickly and keep working when you are offline. A tool records each change you make as a **commit**: a recorded change, with who made it, when and why. When you are ready, the app sends your work to the instance: you **push** your commits, **update from `main`** to take in what others have merged since, and **merge into `main`**, the instance's shared design.
+Your instance of Armature keeps the design graph on a server. Armature Desktop, the desktop app, keeps your own copy of the part you are working on, a **workspace**, on your computer, so your tools (an item editor, an AI assistant, a course builder) read and write it quickly and keep working when you are offline. A tool records each change you make as a **commit**: a recorded change, with who made it, when and why. When you are ready, the app sends your work to the instance: you **push** your commits, **update from `main`** to take in what others have merged since, and open a **merge request** into `main`, the instance's shared design, which whoever may merge into `main` then merges.
 
-Each workspace is a branch on the instance with your name on it. Nothing you do in a workspace reaches anyone else until you push.
+Each workspace is a branch on the instance with your name on it, linked to this computer: only the app here writes it. Nothing you do in a workspace reaches anyone else until you push.
 
 ## Installing it
 
@@ -57,18 +66,24 @@ An instance that says **"No sign-in (for testing only)"** is for development or 
 
 ## Your workspaces
 
-**Workspaces** lists yours, each with what is waiting: how many commits there are **to push**, and whether its branch was **changed elsewhere**. "Changed elsewhere" means the workspace's own branch on the instance has commits this computer did not push: by you on another computer, or by a tool writing to the branch directly. It does not say whether `main` has new work; **Update from main** finds that out.
+**Workspaces** lists yours, each with what is waiting: how many commits there are **to push**, and whether its branch was **changed elsewhere**. "Changed elsewhere" means the workspace's own branch on the instance has commits this computer did not push. It does not say whether `main` has new work; **Update from main** finds that out.
 
-- **New workspace** creates one from `main` (or from another branch): give it a short name, such as `unit-3`, and choose **Create workspace**. The branch on the instance is named after you and it, for example `jdoe_unit-3`.
-- **Clone a branch** the instance already has, a colleague's for instance. If you may not write to it, the app says so and creates the workspace anyway, for reading.
+- **New workspace** creates one from `main` (or from another branch, its *parent*): give it a short name, such as `unit-3`, and choose **Create workspace**. The branch on the instance is named after you and it, for example `jdoe_unit-3`. A workspace takes updates from its parent and sends its merge requests there, and the page names it: "Update from main" for a workspace made from `main`. Nothing is made from another workspace.
+
+**A workspace is linked to one computer** (versions after 0.1.5). The instance takes writes to it only from the app on that computer, so the same workspace is never written from two places, which until then could leave commits that could never be pushed. A colleague's workspace is not copied to your computer: read it on the instance, and to work alongside them, each of you works in your own workspace and opens merge requests into the same branch. To work on your own workspace from another computer, move it, in two steps:
+
+- **Unlink from this computer**, on the workspace's page, once everything is pushed. The copy here goes, since everything in it is on the instance, where the workspace stays, linked to no computer.
+- **Link to this computer**, on the other computer, under **Your unlinked workspaces** on the Workspaces page, which lists yours that are on the instance and on no computer.
+
+Linking never takes a workspace away from the computer it is on. If that computer is lost, broken or out of reach, the Workspaces page lists the workspace under **Linked to another computer**, with the name you gave that computer and the date, and offers **Unlink from the other computer**. It asks you to confirm, because commits on that computer that were not pushed can no longer be pushed: if you get it back, the workspace's page there says so, and **Discard and remove** is the way on. So that you can tell your computers apart in that list, **Settings** has **A name for this computer**; it is kept on your instance, where everyone it serves can read it, so nothing is sent unless you give one.
 
 Open a workspace to work with it:
 
 - **Push** sends your commits to the instance. Your tools commit as you work; nothing leaves your computer until you push.
 - **Update from main** merges what others have merged into `main` into your workspace, so you merge against the current design. If your work and theirs changed the same thing, the app lists each conflict, field by field, with the starting point, your workspace's value and `main`'s, and says which tool to open to resolve it.
-- **Merge into main** merges your workspace into `main`, with a message saying what it holds. Only a maintainer of `main` can merge into it; anyone else is told who can. **Preview merge** changes nothing and says whether a merge would go through now: conflicts, broken rules, and the required checks of your instance (below).
-- **Remove from this computer** takes the workspace off your computer, once everything is pushed. Its branch on the instance is deleted too when `main` already has all of it, and kept otherwise; the app says which happened.
-- **Discard and remove** is for a workspace with commits that can never be pushed: the instance is gone, your role on the branch was removed, or a push keeps being refused. It appears under the removal whenever there are commits to push, says how many you would give up, and asks you to confirm that number. It works offline and signed out, and asks nothing of the instance, which keeps whatever you had pushed. Nothing is erased outright: the workspace's files are moved to the discarded folder, `_discarded` inside your workspaces folder, first (the message says where). The app never reads that folder again, so empty it when you are sure you no longer want what is in it. If you can still push, push instead.
+- **Open merge request into main** asks for what you have pushed to be merged into `main`, with a message saying what it holds, which becomes the merge's own. Anyone may ask for their own workspace. While the request is open the page shows its **health**, what a merge would meet right now: **Ready to merge**, **Has conflicts**, **Breaks rules**, **Waiting for checks** or **Checks failed** (the required checks of your instance, below). The instance works it out each time, and the page reads it again whenever your workspace, `main` or the request changes there, so it is current without your asking. A conflict is resolved in your workspace: update from `main`, resolve it in your tool, and push. **Merge** merges it, if you may merge into `main`; if you may not, whoever may does so on the instance, and the page shows when they have. **Close** ends the request without merging. In 0.1.5 and earlier this was **Merge into main**, which only a maintainer could use, and **Preview merge**.
+- **Remove from this computer** takes the workspace off your computer, once everything is pushed. Its branch on the instance is deleted too when its parent already has all of it, as after a merge; otherwise it stays there, linked to no computer, and can be linked again. The app says which happened.
+- **Discard and remove** is for a workspace with commits that can never be pushed: the instance is gone, your role on the branch was removed, the workspace was unlinked from this computer while it was away, or a push keeps being refused. It appears under the removal whenever there are commits to push, says how many you would give up, and asks you to confirm that number. It works offline and signed out; the instance keeps whatever you had pushed, and when it can be reached the app also clears this computer's link there, so the workspace can be linked again. Nothing is erased outright: the workspace's files are moved to the discarded folder, `_discarded` inside your workspaces folder, first (the message says where). The app never reads that folder again, so empty it when you are sure you no longer want what is in it. If you can still push, push instead.
 
 ## Your tools and the pairing key
 
@@ -98,7 +113,7 @@ If the settings file (`settings.json` in the data folder) cannot be read, the ap
 
 A *check* is a tool that examines your work and reports on it, a design linter for one. The app runs no checks itself and knows no design rules; it waits for each check's report and shows its **result**: Passed, Failed, Neutral (it reported without passing or failing) or Could not run.
 
-**Required checks.** Your instance may require checks before work is merged into `main`. The instance enforces those. A merge it stops lists each check under the refusal: whether it has reported yet, its result, and its own summary and the address of its details. `checks_pending` means a check is waiting for a report on your latest commit, so wait and merge again. `checks_failed` means one failed. Whoever may merge may **override** a check by giving a reason beside it and choosing **Merge anyway**; the reason is recorded on the merge into `main`, with your name. A check marked *locked* can be overridden only by an administrator.
+**Required checks.** Your instance may require checks before work is merged into `main`. The instance enforces those. An open merge request shows each in its health (versions after 0.1.5), and a merge the instance stops lists each check under the refusal: whether it has reported yet, its result, and its own summary and the address of its details. `checks_pending` means a check is waiting for a report on your latest commit, so wait and merge again. `checks_failed` means one failed. Whoever may merge may **override** a check by giving a reason beside it and choosing **Merge anyway**; the reason is recorded on the merge into `main`, with your name. A check marked *locked* can be overridden only by an administrator.
 
 **Personal checks.** You can also require checks of your own pushes. Open **Settings**, and under **Personal checks** choose **Add a check**:
 
@@ -148,6 +163,11 @@ Every refusal shows its words first, then a code and who refused it: your instan
 | `unsupported_version` | Your instance is too old for this version of the app | Ask whoever runs your instance to bring it up to date |
 | `unpushed_commits` | There are commits to push | Push first. If the message says an earlier update from `main` was not finished and names records changed on both sides, pushing will not clear it, and the app has no way on from there yet; the work stays in the workspace's folder |
 | `bring_in_first` | Update from `main` first: `main` has work your workspace has not taken in | Choose **Update from main**, then merge |
+| `held_elsewhere` | Linked to another computer: the instance takes this workspace's commits only from the computer it is linked to (versions after 0.1.5) | Work on it there. Or unlink it from that computer, there or from the Workspaces page here, and link it to this one. Commits here that were not pushed can no longer be pushed: **Discard and remove**, then link it again |
+| `not_linked` | Not linked to this computer: the workspace was unlinked, here or from another computer, and is linked to none | **Remove from this computer** (or **Discard and remove**, with commits that were not pushed), then **Link to this computer** on the Workspaces page |
+| `request_open` | The workspace already has an open merge request into that branch | Its page shows it: merge it, close it, or leave it for whoever may merge |
+| `nothing_to_merge` | The branch already has everything pushed from this workspace | Push more work, or close the request |
+| `parent_is_workspace` | A new workspace was asked from a workspace | Create it from a branch, `main` for one |
 | `forbidden` | You may not do this on that branch; its reason says why | The message names who can |
 | `checks_pending` | A check is waiting for a report: a required check of your instance before a merge, or a personal check before a push | Wait for the check to run, then try again; or override it with a reason beside the check (see "Checks") |
 | `checks_failed` | A required check failed | Read what the check found, at the address it gives, and fix it; or override it with a reason beside the check (see "Checks") |
