@@ -219,9 +219,9 @@ This keeps ADR-0068 decision 9 intact: the desktop warns, the remote authorizes.
 
 | Step | What the program does | What it adds | Trigger |
 | --- | --- | --- | --- |
-| 0. Pairing (until L2) | Nothing; the person starts `armature-lint watch` and pairs it once with the local token | Nothing |  |
+| 0. Pairing (until L2) | Nothing; the person starts `armature-lint watch` and pairs it once with the pairing key | Nothing |  |
 | **1. Tools list (decided)** | The person adds a command; the program starts it once the hub is listening, with `ARMATURE_HUB_URL`, `ARMATURE_USER` and `ARMATURE_LOCAL_TOKEN`; restarts it with backoff on a crash; stops it before the hub stops; shows its output on the Log page | A process supervisor in the core | Lint `watch` exists |
-| 2. Plugin manifests | Discovers installed plugins from an `armature-plugin.json`, enables and disables them, knows the check names each reports | Discovery, per-plugin settings, named checks in the `checks.json` editor; **scoped local tokens** on the hub | A second local plugin (the Structure analyzer) |
+| 2. Plugin manifests | Discovers installed plugins from an `armature-plugin.json`, enables and disables them, knows the check names each reports | Discovery, per-plugin settings, named checks in the `checks.json` editor; **scoped pairing keys** on the hub | A second local plugin (the Structure analyzer) |
 | 3. Managed install | The remote's connection profile recommends the plugins behind its required checks; the program installs signed bundles and updates them, only on the person's click | A plugin store: signing, supply chain, updates, rollback | Non-technical designers installing Armature for whom a package manager is not acceptable; possibly never |
 
 ### Step 1, as decided
@@ -230,11 +230,11 @@ This keeps ADR-0068 decision 9 intact: the desktop warns, the remote authorizes.
 - **JavaScript plugins run on the bundled `armature-node`.** One runtime, signed once. Each plugin is still its own process at roughly the core's 60–84 MiB resident, which is fine for two or three plugins on a designer's laptop.
 - **Order.** Plugins start after the core reports `started` and stop before `stop` releases the folder lock. A post that fails mid-shutdown is recovered by the plugin's event cursor on the next start.
 - **Still not a tool host.** The program supervises and shows logs; a plugin's interface stays the plugin's. A plugin with a local web UI gets an "Open" link, never an embedded view.
-- **Same authority as pairing.** A launched command gets the same local token a paired tool would, so step 1 changes convenience, not trust. The person typed the command, as they would in a terminal.
+- **Same authority as pairing.** A launched command gets the same pairing key a paired tool would, so step 1 changes convenience, not trust. The person typed the command, as they would in a terminal.
 
 ### Preconditions for step 2
 
-- **Scoped local tokens.** Today the local token answers only "is this a tool I started?", so any launched tool can write documents as the owner. A manifest declares `scopes` (`read`, `report_check`, `write`) and the program issues each plugin its own token limited to them, which the hub enforces. This turns ADR-0065 decision 7's token from a yes/no into a set of permissions, so it needs a dated note there. Required before any plugin Amos didn't write runs on someone's machine.
+- **Scoped pairing keys.** Today the pairing key answers only "is this a tool I started?", so any launched tool can write documents as the owner. A manifest declares `scopes` (`read`, `report_check`, `write`) and the program issues each plugin its own token limited to them, which the hub enforces. This turns ADR-0065 decision 7's token from a yes/no into a set of permissions, so it needs a dated note there. Required before any plugin Amos didn't write runs on someone's machine.
 - **Agent identity for writes.** A plugin that writes findings writes as an agent acting for the owner (ADR-0067 decision 3). Agents are registered on the remote only, so first-run setup asks the remote to register, e.g. `agent:lint/local`.
 
 ```json
@@ -357,14 +357,14 @@ CoQui also exposes a gap in the requirement record: its check should bind merges
    - *Exit:* a test client resumes from a cursor after a restart; runs show on a commit on both roles; Quiver and the desktop program can display them.
 4. **Lint L2: `watch` and the service.** The runner against the local feed (exits when its standard input closes); the service against a remote, posting runs as `agent:lint/service`.
    - *Exit:* a commit on the desktop shows a lint status within 5 s on the seed; the service survives a hub restart without missing a head.
-5. **Program P1: the Tools list (ladder step 1).** In the core: add, remove, start and stop commands; environment from the hub and the local token; restart with backoff; start after `started`, stop before the lock is released; output on the Log page; JavaScript plugins on `armature-node`. In the shell: a Tools page. Dated note on the desktop plan's §15 question 11.
+5. **Program P1: the Tools list (ladder step 1).** In the core: add, remove, start and stop commands; environment from the hub and the pairing key; restart with backoff; start after `started`, stop before the lock is released; output on the Log page; JavaScript plugins on `armature-node`. In the shell: a Tools page. Dated note on the desktop plan's §15 question 11.
    - *Exit:* Lint `watch` added once runs at every start; killing the shell outright leaves no process; a crashing command backs off and says so on its row.
 6. **Hub H3: requirements and the merge gate.** The schema commit (`CheckRequirement`, two invariants), authority rows, revoke on branch deletion, `check`'s new rule, the gate and `dryRun`, overrides, trailers.
    - *Exit:* the contract tests in §16 pass; a merge into `main` with `lint/team` required is pending, then refused, then overridden with its trailer.
 7. **Hub H4: the desktop side.** `checks.json` and the Settings editor, the push gate, the requirement mirror with refresh before push and deliver, deliver's dry run reporting remote checks.
    - *Exit:* `cycle.test.ts` covers a push stopped by a personal requirement and overridden, and a deliver waiting on a remote check.
 8. **Lint L3: layering, findings, requirement editing.** `effective()` over requirement `params`, `keep`, suppression by Dismissed finding, `requirement set`; then a small UI for policy and triage if the CLI isn't enough.
-9. **Later, each on its own trigger:** ladder step 2 (manifests, with scoped local tokens and agent registration first) when the Structure analyzer runs locally; ladder step 3 only if designers need managed installs; the path read (SESSION.md item 18) and the prerequisite rules; CoQui's round check; a viewer lens showing check status per branch; `mode: "sync"` if a plugin proves it needs it.
+9. **Later, each on its own trigger:** ladder step 2 (manifests, with scoped pairing keys and agent registration first) when the Structure analyzer runs locally; ladder step 3 only if designers need managed installs; the path read (SESSION.md item 18) and the prerequisite rules; CoQui's round check; a viewer lens showing check status per branch; `mode: "sync"` if a plugin proves it needs it.
 
 L1 and H2 are each worth shipping alone: L1 answers "does this branch break our rules?" today, and H2 gives every tool a way to react to changes, which SESSION.md item 18 lists as missing regardless of Lint.
 
@@ -379,7 +379,7 @@ L1 and H2 are each worth shipping alone: L1 answers "does this branch break our 
 - **Desktop (H4):** push stopped by a personal requirement, then overridden; a loopback tool can't write `checks.json`; the mirror refreshes before push; deliver reports a pending remote check.
 - **Lint (L1 to L3):** fixtures per rule; `effective()` table-tested over requirement `params`; no result names a person; the seed's snapshot.
 
-* **Tools list (P1):** a command starts after the hub and stops before the lock is released; closing the shell's pipe ends every child; a crashing command backs off and its row says so; the environment carries the hub URL, the owner and the local token and nothing else the shell holds.
+* **Tools list (P1):** a command starts after the hub and stops before the lock is released; closing the shell's pipe ends every child; a crashing command backs off and its row says so; the environment carries the hub URL, the owner and the pairing key and nothing else the shell holds.
 
 ## 17. Decisions taken
 
@@ -391,7 +391,7 @@ L1 and H2 are each worth shipping alone: L1 answers "does this branch break our 
 | 2 | A service credential that posts runs | **One new operation, `report_check`**, allowed to the reporter a requirement names; advisory runs open to any reader. | Dated notes on ADR-0067 decision 4 and ADR-0068's table: posting a run is not a graph write. |
 | 3 | Who may lock a requirement onto every branch? | **Administrators only.** | Authority row for `locked: true`; a locked override needs an administrator too. |
 | 4 | `fromPrefix` on `CheckRequirement` | **Now**, in the first schema commit, part of the key. | Key: Hash over `check`, `branch`, `fromPrefix`. Lint and the Structure analyzer leave it empty; CoQui uses `coqui-`. |
-| 5 | Should the desktop program start local plugins? | **Yes, at step 1: a Tools list** that supervises commands the person adds. Steps 2 and 3 wait for their triggers; scoped local tokens come before step 2. | Built with Lint `watch` (L2), as the desktop plan's §7 option (b). Dated note on that plan's §15 question 11. |
+| 5 | Should the desktop program start local plugins? | **Yes, at step 1: a Tools list** that supervises commands the person adds. Steps 2 and 3 wait for their triggers; scoped pairing keys come before step 2. | Built with Lint `watch` (L2), as the desktop plan's §7 option (b). Dated note on that plan's §15 question 11. |
 | 6 | Require "up to date" on every gated merge? | **Yes, on merges that have requirements only.** | `bring_in_first` from the remote's merge route when requirements apply; ungated merges unchanged. |
 
 ## 18. Risks and trade-offs
@@ -405,4 +405,4 @@ L1 and H2 are each worth shipping alone: L1 answers "does this branch break our 
 | Desktop preview drifts from the remote | A different local Lint version, or stale mirrored `params`, predicts the wrong result | The remote's dry run at deliver is authoritative; local results are labeled previews; the mirror refreshes before push |
 | The feed becomes an integration API people lean on | Events, cursors and retention become a contract to keep | Small payloads that point at existing reads; documented retention; versioned under `armature/checks` |
 | Plugins break the non-aggregation line | A third-party check could post per-person summaries in `summary` | ADR-0070 states the expectation; the hub stores `summary` as text, never indexes or filters by it |
-| Launched plugins cost memory and authority | Each plugin is a Node process near the core's 60 to 84 MiB, and at step 1 every launched command holds the owner's full local token | Step 1 supervises only what the person adds, as a terminal would; scoped local tokens are a precondition of step 2; the Tools page shows each plugin's memory |
+| Launched plugins cost memory and authority | Each plugin is a Node process near the core's 60 to 84 MiB, and at step 1 every launched command holds the owner's full pairing key | Step 1 supervises only what the person adds, as a terminal would; scoped pairing keys are a precondition of step 2; the Tools page shows each plugin's memory |

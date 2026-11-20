@@ -295,7 +295,7 @@ A global hotkey (`⌥⌘D` suggested) opens a single-line panel:
 ### 7.2 Front ends, in order
 
 1. **CLI** (`ledger decide "…" --why "…" --on Module/m2 --because <url> --influence Requirements`). The reference implementation; scriptable; how tests drive capture.
-2. **Raycast extension.** Amos's daily driver; React in TypeScript like the rest of the stack; preferences hold hub URL, `ARMATURE_USER`, and the pairing value. Commands: *Decide*, *Decision Triage*, *Decisions Needing Revisit*.
+2. **Raycast extension.** Amos's daily driver; React in TypeScript like the rest of the stack; preferences hold hub URL, `ARMATURE_USER`, and the pairing key. Commands: *Decide*, *Decision Triage*, *Decisions Needing Revisit*.
 3. **Tray panel** (Tauri, small). Only when a non-Raycast user exists (Windows, Linux).
 
 **Why not in the desktop program?** Its plan rules it out explicitly: "The program is not a tool… nothing a plugin would build" (Development Principle 5). The hotkey belongs to Ledger.
