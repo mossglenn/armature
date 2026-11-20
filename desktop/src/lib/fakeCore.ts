@@ -478,7 +478,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (refused) return refused;
       const name = String(branch ?? '');
       if (model.workspaces.has(name)) return refuse(409, 'workspace_exists', `This hub already holds the workspace ${name}`);
-      if (name === 'missing') return refuse(404, 'not_found', `The remote refused: Branch ${name} has no commits`, { remote: true });
+      if (name === 'missing') return refuse(404, 'not_found', `The instance refused: Branch ${name} has no commits`, { remote: true });
       const owner = ownerOf()!;
       const record: WorkspaceRecord = { branch: name, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, base: commitId(), local: commitId(), clonedAt: new Date().toISOString(), instance: model.settings.instance };
       model.workspaces.set(name, { record, commits: [], pushed: 0, remoteMoved: false, conflict: false });
@@ -525,7 +525,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (pushMeetsAMove && unpushed.length > 1) {
         pushMeetsAMove = false;
         w.pushed += 1;
-        return refuse(412, 'precondition_failed', `The remote refused: ${w.record.branch} moved since the commit this push expected`, {
+        return refuse(412, 'precondition_failed', `The instance refused: ${w.record.branch} moved since the commit this push expected`, {
           remote: true,
           pushed: [{ local: unpushed[0]!.commit, remote: commitId(), parts: 1, pushedAt: new Date().toISOString() }],
           at: { local: unpushed[1]!.commit, part: 1, total: 1 },
@@ -541,16 +541,16 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
       const unpushed = w.commits.length - w.pushed;
-      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} local commit(s) of ${w.record.branch} are not on the remote; push before bringing in main`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
+      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before updating from main`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
       if (bringInBreaksARule) {
         bringInBreaksARule = false;
-        return refuse(422, 'invariant_violation', 'The remote refused: the merged state breaks 1 rule; nothing was merged', {
+        return refuse(422, 'invariant_violation', 'The instance refused: the merged state breaks 1 rule; nothing was merged', {
           remote: true,
           violations: [{ code: 'duplicate_sequence', id: 'ModuleActivityLink/a1b2', index: 0, field: 'sequence', message: 'Sequence 2 is taken in Module/how-ai-works' }],
         });
       }
       if (w.conflict) {
-        return refuse(409, 'merge_conflict', 'The remote refused: the merge has conflicts', {
+        return refuse(409, 'merge_conflict', 'The instance refused: the merge has conflicts', {
           remote: true,
           conflicts: [{ id: 'AssessmentItem/item-4', field: 'stem', base: 'Which bias…', target: 'Which of these biases…', source: 'Which kind of bias…' }],
         });
@@ -558,7 +558,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (!w.remoteMoved) return ok({ workspace: w.record, remoteHead: commitId(), upToDate: true });
       w.remoteMoved = false;
       const local = commitId();
-      w.commits.unshift({ commit: local, author: w.record.owner, message: String(fields.message ?? 'Bring in main'), timestamp: Date.now() / 1000 });
+      w.commits.unshift({ commit: local, author: w.record.owner, message: String(fields.message ?? 'Update from main'), timestamp: Date.now() / 1000 });
       w.pushed += 1;
       return ok({ workspace: w.record, remoteHead: commitId(), upToDate: false, merge: { base: commitId(), source: commitId(), target: commitId() }, broughtIn: { local, documents: 3 } });
     },
@@ -569,8 +569,8 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
       if (typeof fields.message !== 'string' || !fields.message.trim()) return refuse(400, 'message_required', 'A delivery needs a message saying why (ADR-0025)');
       const unpushed = w.commits.length - w.pushed;
-      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} local commit(s) of ${w.record.branch} are not on the remote; push before delivering`);
-      if (w.remoteMoved) return refuse(409, 'bring_in_first', `main has moved since ${w.record.branch} last brought it in; bring it in, resolve what it reports, then deliver`, { conflicts: [], violations: [] });
+      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before merging`);
+      if (w.remoteMoved) return refuse(409, 'bring_in_first', `main has work ${w.record.branch} has not taken in; update from main, resolve what it reports, then merge`, { conflicts: [], violations: [] });
       // The remote's merge gate (ADR-0070 decision 6), its refusals as the remote gave them; a dry run answers with the verdicts and changes nothing.
       const overrides = overridesOf(fields.overrides);
       if (!(overrides instanceof Map)) return overrides;
@@ -578,21 +578,21 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const head = w.commits[0]?.commit ?? w.record.local;
       const required = model.remoteRequirements;
       const stray = [...overrides.keys()].find((check) => !required.some((r) => r.check === check));
-      if (stray) return refuse(400, 'bad_request', `The remote refused: ${stray} is not a required check of this merge`, { remote: true });
+      if (stray) return refuse(400, 'bad_request', `The instance refused: ${stray} is not a required check of this merge`, { remote: true });
       const checks = verdictsFor(required.map((r) => ({ check: r.check, level: 'Required' as const, locked: r.locked, id: `CheckRequirement/${r.check}`, reporter: 'User/lint-service' })), model.remoteRuns, branch, head, overrides);
       if (fields.dryRun === true) {
         return ok({ workspace: w.record, delivered: { base: commitId(), source: head, target: commitId(), upToDate: w.deliveredAt === w.commits.length }, deleted: false, dryRun: true, conflicts: [], violations: [], ...(checks.length ? { checks } : {}) });
       }
       const locked = checks.find((v) => v.overridden && v.locked);
       if (locked) {
-        return refuse(403, 'forbidden', `The remote refused: ${ownerOf()} may not: override the locked check ${locked.check} on main`, { remote: true, permission: 'override_check', branch: 'main', check: locked.check, locked: true });
+        return refuse(403, 'forbidden', `The instance refused: ${ownerOf()} may not: override the locked check ${locked.check} on main`, { remote: true, permission: 'override_check', branch: 'main', check: locked.check, locked: true });
       }
       const stopped = stopping(checks);
       const failed = stopped.filter((v) => v.conclusion !== 'pending').map((v) => v.check);
-      if (failed.length) return refuse(422, 'checks_failed', `The remote refused: merging ${branch} into main needs ${failed.join(', ')} to pass at ${head}; nothing was merged`, { remote: true, failed, checks });
+      if (failed.length) return refuse(422, 'checks_failed', `The instance refused: merging ${branch} into main needs ${failed.join(', ')} to pass at ${head}; nothing was merged`, { remote: true, failed, checks });
       if (stopped.length) {
         const pending = stopped.map((v) => v.check);
-        return refuse(409, 'checks_pending', `The remote refused: merging ${branch} into main waits for ${pending.join(', ')} to report on ${head}`, { remote: true, pending, checks });
+        return refuse(409, 'checks_pending', `The instance refused: merging ${branch} into main waits for ${pending.join(', ')} to report on ${head}`, { remote: true, pending, checks });
       }
       const deleted = fields.deleteWorkspace === true;
       // As the remote's merge answers when main already holds the workspace's head: nothing merged, no commit made.
@@ -613,12 +613,12 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         if (typeof discard !== 'number' || !Number.isInteger(discard) || discard < 1) return refuse(400, 'bad_request', 'discard must be the whole number of commits to give up', { field: 'discard' });
         const given = w.commits.slice(0, unpushed).map((c) => c.commit);
         if (discard !== unpushed) {
-          return refuse(409, 'discard_mismatch', `${w.record.branch} holds ${unpushed} local commit(s) that are not on the remote, not the ${discard} this discard names; nothing was removed`, { unpushed: given, stated: discard });
+          return refuse(409, 'discard_mismatch', `${w.record.branch} holds ${unpushed} commit(s) that are not pushed, not the ${discard} this discard names; nothing was removed`, { unpushed: given, stated: discard });
         }
         model.workspaces.delete(w.record.branch);
         return ok({ workspace: w.record, remote: 'untouched', discarded: { commits: given, setAside: `_discarded/${w.record.branch}.20261112T203000Z` } });
       }
-      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} local commit(s) of ${w.record.branch} are not on the remote; push before removing it`);
+      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before removing it`);
       model.workspaces.delete(w.record.branch);
       const inMain = w.deliveredAt !== undefined && w.deliveredAt === w.commits.length;
       return ok({ workspace: w.record, ...(inMain ? { remote: 'deleted' } : { remote: 'kept', reason: 'unmerged' }) });

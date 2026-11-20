@@ -36,8 +36,8 @@ const SAID: Record<string, string> = {
 /**
  * The refusal codes whose words the vocabulary holds (`@armature/vocabulary`, ADR-0073): the term
  * whose identifiers name the code. Taken from the package, so the page is not a second copy of the
- * words; a hub's own message for these codes still says them its older way. `profile_changed` is
- * the core's own, which already says the term's words and adds what to do.
+ * words, and so they name the instance by its own name, which a hub's message cannot. Every other
+ * refusal keeps the hub's or the core's own message, which use the same names since 2026-11-19.
  */
 const WORDED: Record<string, string> = {
   bring_in_first: 'refusal.bring_in_first',
