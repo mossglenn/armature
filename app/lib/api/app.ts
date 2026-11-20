@@ -46,8 +46,10 @@ import { events } from './routes/events';
 import { exportRoutes } from './routes/export';
 import { healthRoutes } from './routes/health';
 import { intelligence } from './routes/intelligence';
+import { mergeRequests } from './routes/mergeRequests';
 import { users } from './routes/users';
 import { workspace } from './routes/workspace';
+import { workspaces } from './routes/workspaces';
 import { isUnknownRef, StoreError } from './store';
 import { CURRENT_REVISION, negotiate } from './version';
 
@@ -109,6 +111,9 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
   app.route('/intelligence', intelligence);
   app.route('/export', exportRoutes);
   app.route('/workspace', workspace);
+  // The remote's records of workspaces and of merge requests (ADR-0072); a workspace hub answers both `remote_only`.
+  app.route('/workspaces', workspaces);
+  app.route('/merge-requests', mergeRequests);
   app.route('/health', healthRoutes());
   app.route('/', discover);
 

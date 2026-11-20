@@ -24,7 +24,7 @@ import type { InstanceProfile } from './workspace/records';
  * list against that file's headings. Revisions under /api/v1 are additive, so
  * a hub at the newest serves every earlier one.
  */
-export const REVISIONS = ['2026-11-16', '2026-11-15', '2026-11-13', '2026-11-12', '2026-11-07', '2026-11-06', '2026-11-05', '2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
+export const REVISIONS = ['2026-11-20', '2026-11-16', '2026-11-15', '2026-11-13', '2026-11-12', '2026-11-07', '2026-11-06', '2026-11-05', '2026-11-03', '2026-11-02', '2026-11-01', '2026-10-31', '2026-10-30', '2026-10-22', '2026-10-21', '2026-10-20', '2026-10-18', '2026-10-08', '2026-10-07'] as const;
 
 export const CURRENT_REVISION = REVISIONS[0];
 const OLDEST_REVISION = REVISIONS[REVISIONS.length - 1];
@@ -50,7 +50,16 @@ export const CAPABILITIES: Record<string, Capability> = {
     routes: ['/api/v1/documents'],
     settings: { batchLimit: 500, historyCount: 20 },
   },
-  'armature/branches': { fallback: 'reject', routes: ['/api/v1/branches'], settings: { logCount: 20, logPage: 100 } },
+  /**
+   * Branches, and since 2026-11-20 the records that make one a workspace (ADR-0072 decisions 2 to 4;
+   * routes/workspaces.ts): `workspaces: 'linked'` says a workspace's branch is written only with its link.
+   */
+  'armature/branches': { fallback: 'reject', routes: ['/api/v1/branches', '/api/v1/workspaces'], settings: { logCount: 20, logPage: 100, workspaces: 'linked' } },
+  /**
+   * Merge requests (ADR-0072 decision 5; routes/mergeRequests.ts), on a remote hub. `required` names the merges
+   * the merge route refuses outside one: any from a workspace, any into `main`.
+   */
+  'armature/merge-requests': { fallback: 'reject', routes: ['/api/v1/merge-requests'], settings: { required: ['from a workspace', 'into main'] }, roles: ['remote'] },
   'armature/users': { fallback: 'reject', routes: ['/api/v1/users'], settings: {} },
   'armature/intelligence.coverage': {
     fallback: 'reject',
@@ -78,7 +87,8 @@ export const CAPABILITIES: Record<string, Capability> = {
   /** What a tool asks a hub about itself, and since 2026-11-05 the two health probes (routes/health.ts). */
   'armature/discover': { fallback: 'reject', routes: ['/api/v1/discover', '/api/v1/schema', '/api/v1/health'], settings: {} },
   /** `localToken` and `actions` are set by `discovery` from the hub's configuration (./localToken.ts). */
-  'armature/workspace': { fallback: 'reject', routes: ['/api/v1/workspace'], settings: { profile: 'full', localToken: 'required' }, roles: ['workspace'] },
+  /** Since 2026-11-20 `link`: a workspace is linked to this hub's installation (ADR-0072 decision 2), and `delivery`: its work leaves by a merge request. */
+  'armature/workspace': { fallback: 'reject', routes: ['/api/v1/workspace'], settings: { profile: 'full', localToken: 'required', link: 'installation', delivery: 'merge-request' }, roles: ['workspace'] },
   /** The hub authorizes (ADR-0068 decision 7): a 403 `forbidden` is possible, and `GET /users/me` carries the caller's grants. No route of its own. */
   'armature/authorization': { fallback: 'reject', routes: [], settings: AUTHORIZATION_SETTINGS, roles: ['remote'] },
 };

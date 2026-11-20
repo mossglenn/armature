@@ -20,6 +20,18 @@ export const REMOTE_ONLY = [
   { method: 'POST', path: '/branches/:name/merge', capability: 'armature/branches', what: 'A merge happens on the remote' },
   { method: 'DELETE', path: '/branches/:name', capability: 'armature/branches', what: 'A branch is deleted on the remote' },
   { method: 'POST', path: '/users', capability: 'armature/users', what: 'A User is registered on the remote' },
+  // The records that make a branch a workspace, and merge requests, are the remote's (ADR-0072): a workspace hub
+  // asks its remote, as the desktop app's own actions (routes/workspace.ts).
+  { method: 'GET', path: '/workspaces', capability: 'armature/branches', what: 'Workspace records are kept on the remote' },
+  { method: 'POST', path: '/workspaces', capability: 'armature/branches', what: 'A workspace is recorded on the remote' },
+  { method: 'GET', path: '/workspaces/:branch', capability: 'armature/branches', what: 'Workspace records are kept on the remote' },
+  { method: 'POST', path: '/workspaces/:branch/link', capability: 'armature/branches', what: 'A workspace is linked on the remote' },
+  { method: 'POST', path: '/workspaces/:branch/unlink', capability: 'armature/branches', what: 'A workspace is unlinked on the remote' },
+  { method: 'POST', path: '/merge-requests', capability: 'armature/merge-requests', what: 'A merge request is opened on the remote' },
+  { method: 'GET', path: '/merge-requests', capability: 'armature/merge-requests', what: 'Merge requests are kept on the remote' },
+  { method: 'GET', path: '/merge-requests/:id', capability: 'armature/merge-requests', what: 'Merge requests are kept on the remote' },
+  { method: 'POST', path: '/merge-requests/:id/merge', capability: 'armature/merge-requests', what: 'A merge request is merged on the remote' },
+  { method: 'POST', path: '/merge-requests/:id/close', capability: 'armature/merge-requests', what: 'A merge request is closed on the remote' },
 ] as const;
 
 /** The branch a workspace hub serves only for reading: the remote's `main`, mirrored. */

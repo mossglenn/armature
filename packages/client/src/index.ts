@@ -25,10 +25,10 @@
  * lacks one. `discover()` asks a hub about itself first, when a caller wants
  * to know before its first write.
  */
-import type { CheckRequirement, ClassMap, ClassName, Grant, TerminusDocument, User } from '@armature/types';
+import type { CheckRequirement, ClassMap, ClassName, Grant, MergeRequest, TerminusDocument, User, Workspace } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-16';
+export const CLIENT_REVISION = '2026-11-20';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -62,6 +62,13 @@ export interface ClientOptions {
    * local_token`); a remote hub ignores it (ADR-0065 decision 7, since 2026-11-03).
    */
   localToken?: string;
+  /**
+   * An installation's identifier, sent as `Armature-Workspace-Link` on every request (ADR-0072
+   * decision 3, since 2026-11-20): what a desktop hub sends to its remote, so that its writes to
+   * the workspaces linked to it are taken. A write to a linked workspace's branch without it, or
+   * with another, is 409 `held_elsewhere`. A client that is not a desktop hub leaves it unset.
+   */
+  workspaceLink?: string;
   /** Replaces the global fetch: for a test, `(input, init) => app.request(input, init)`. */
   fetch?: FetchLike;
   /** Extra headers on every request. */
@@ -198,6 +205,50 @@ export interface DiffResult {
 export interface BranchSummary {
   name: string;
   head: Commit;
+}
+
+/** A workspace's link as a request names it (ADR-0072 decision 2): the installation, and the name its owner gave that computer, if any. */
+export interface WorkspaceLink {
+  link: string;
+  linkLabel?: string;
+}
+
+/**
+ * What a merge of an Open request would meet, computed at both heads on every read and never
+ * stored (ADR-0072 decision 5; since 2026-11-20).
+ */
+export interface RequestHealth {
+  /** True when there is something to merge and nothing stands in its way. */
+  mergeable: boolean;
+  /** The target already holds the source's head: nothing to merge. */
+  upToDate: boolean;
+  /** A branch the request names is gone; nothing else is then known. */
+  missing?: 'source' | 'target';
+  base?: string;
+  source?: string;
+  target?: string;
+  conflicts: MergeConflict[];
+  violations: Violation[];
+  /** The merge gate's verdicts, when required checks apply (ADR-0070 decision 6). */
+  checks: CheckVerdict[];
+  /** The target has commits the source lacks and required checks apply: the source updates from the target first. */
+  bringInFirst: boolean;
+}
+
+/** `GET /merge-requests/:id`: the record, and its health while it is Open. */
+export interface MergeRequestResult {
+  request: MergeRequest;
+  health?: RequestHealth;
+}
+
+/** `POST /merge-requests/:id/merge`: the merge's answer with the request as recorded, `Merged`. */
+export type RequestMergeResult = MergeResult & { commit: string; request: MergeRequest };
+
+/** `POST /workspaces/:branch/unlink`: the record, whether a link was cleared, and where it had been linked. */
+export interface UnlinkResult {
+  workspace: Workspace;
+  unlinked: boolean;
+  was?: { linkLabel?: string; linkedAt?: string };
 }
 
 export interface MergeResult {
@@ -699,6 +750,7 @@ export function createClient(options: ClientOptions) {
     if (options.user) headers['Armature-User'] = options.user;
     if (options.agent) headers['Armature-Agent'] = options.agent;
     if (options.localToken) headers['Armature-Local-Token'] = options.localToken;
+    if (options.workspaceLink) headers['Armature-Workspace-Link'] = options.workspaceLink;
     const version = options.version === undefined ? CLIENT_REVISION : options.version;
     if (version) headers['Armature-Version'] = version;
     if (options.capabilities?.length) headers['Armature-Capabilities'] = options.capabilities.join(', ');
@@ -794,9 +846,13 @@ export function createClient(options: ClientOptions) {
       list() {
         return call<BranchSummary[]>('/branches');
       },
-      /** `POST /branches`: a branch from a branch head (`main` by default) or a commit. Not a commit itself. */
-      create(name: string, from?: { branch: string } | { commit: string }) {
-        return call<BranchSummary>('/branches', { method: 'POST', body: { name, from } });
+      /**
+       * `POST /branches`: a branch from a branch head (`main` by default) or a commit. Not a commit itself.
+       * With `workspace` (since 2026-11-20; ADR-0072 decision 2) the branch is a workspace linked to that
+       * installation, its parent the branch it is created from: 409 `parent_is_workspace` when that is one.
+       */
+      create(name: string, from?: { branch: string } | { commit: string }, opts: { workspace?: WorkspaceLink } = {}) {
+        return call<BranchSummary & { workspace?: { parent: string; linked: boolean } }>('/branches', { method: 'POST', body: { name, from, ...(opts.workspace ? { workspace: opts.workspace } : {}) } });
       },
       /** `GET /branches/:name`: the head. */
       head(name: string) {
@@ -810,6 +866,9 @@ export function createClient(options: ClientOptions) {
        * `bring_in_first` when the source lacks the target's head, 409 `checks_pending` (wait on the feed and
        * ask again), 422 `checks_failed`, each with `checks`. `overrides` takes a requirement on the caller,
        * with a reason the merge commit records; a locked one needs an administrator (403).
+       * Since 2026-11-20 a merge from a workspace, or into `main`, is 409 `request_required` unless it is a
+       * dry run: open a merge request (`mergeRequests.open`) and merge that. A merge into a workspace carries
+       * its link (409 `held_elsewhere`, `not_linked`).
        */
       merge(name: string, opts: { message: string; from: string; dryRun?: boolean; overrides?: Array<{ check: string; reason: string }>; ifMatch?: string }) {
         const { ifMatch, ...body } = opts;
@@ -826,6 +885,55 @@ export function createClient(options: ClientOptions) {
       /** `DELETE /branches/:name`: only when another branch holds its head (409 `unmerged_branch` otherwise). */
       delete(name: string) {
         return call<void>(`/branches/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      },
+    },
+
+    /** The records that make a branch a workspace, on a remote hub (ADR-0072 decisions 2 to 4; since 2026-11-20). A workspace is created by `branches.create` with `workspace`. */
+    workspaces: {
+      /** `GET /workspaces?owner=&linked=&status=`: one person's (`owner: 'me'`, or a `User` id), or with no `owner` everyone's, an administrator's read; `Active` unless `status` says otherwise. */
+      list(opts: { owner?: string; linked?: boolean; status?: 'Active' | 'Closed' } = {}) {
+        return call<Workspace[]>('/workspaces', { query: opts });
+      },
+      /** `GET /workspaces/:branch`: the `Active` record naming the branch; 404 when it is not a workspace. */
+      get(branch: string) {
+        return call<Workspace>(`/workspaces/${encodeURIComponent(branch)}`);
+      },
+      /** `POST /workspaces`: records a branch that exists as a workspace linked to an installation, by its Owner (decision 7); 201, or 200 when that record stands. */
+      adopt(opts: { branch: string; parent?: string } & WorkspaceLink) {
+        return call<Workspace>('/workspaces', { method: 'POST', body: opts });
+      },
+      /** `POST /workspaces/:branch/link`: links an unlinked workspace to an installation, as its owner; 409 `held_elsewhere` when it is linked to another. */
+      link(branch: string, link: WorkspaceLink) {
+        return call<Workspace>(`/workspaces/${encodeURIComponent(branch)}/link`, { method: 'POST', body: link });
+      },
+      /** `POST /workspaces/:branch/unlink`: clears the link, from the linked computer or from anywhere, as its owner or an administrator. The linked computer's commits not yet pushed can then no longer be pushed. */
+      unlink(branch: string) {
+        return call<UnlinkResult>(`/workspaces/${encodeURIComponent(branch)}/unlink`, { method: 'POST' });
+      },
+    },
+
+    /** Merge requests, on a remote hub (ADR-0072 decision 5; since 2026-11-20): how a merge from a workspace, or into `main`, is asked for and made. */
+    mergeRequests: {
+      /** `POST /merge-requests`: opens one, as whoever may write the source (a workspace's owner); 409 `request_open` when the pair has one, 409 `target_is_workspace`. `message` becomes the merge commit's. */
+      open(opts: { source: string; target: string; message: string }) {
+        return call<MergeRequest>('/merge-requests', { method: 'POST', body: opts });
+      },
+      /** `GET /merge-requests?source=&target=&status=`. */
+      list(opts: { source?: string; target?: string; status?: 'Open' | 'Merged' | 'Closed' } = {}) {
+        return call<MergeRequest[]>('/merge-requests', { query: opts });
+      },
+      /** `GET /merge-requests/:id`: the record and, while Open, its health, computed now. Ask again when the event feed reports a commit on its source, its target or `main`. */
+      get(id: string) {
+        return call<MergeRequestResult>(`/merge-requests/${encodeURIComponent(localPart('MergeRequest', id))}`);
+      },
+      /** `POST /merge-requests/:id/merge`: merges it, as whoever may merge into the target; the merge route's refusals as given (409 `merge_conflict`, 422 `invariant_violation`, the gate's), 409 `request_decided`, 409 `nothing_to_merge`. */
+      merge(id: string, opts: { overrides?: Array<{ check: string; reason: string }>; ifMatch?: string } = {}) {
+        const { ifMatch, ...body } = opts;
+        return call<RequestMergeResult>(`/merge-requests/${encodeURIComponent(localPart('MergeRequest', id))}/merge`, { method: 'POST', body, ifMatch });
+      },
+      /** `POST /merge-requests/:id/close`: closes it unmerged, as its opener, its source's owner, or whoever may merge into its target. */
+      close(id: string) {
+        return call<{ request: MergeRequest }>(`/merge-requests/${encodeURIComponent(localPart('MergeRequest', id))}/close`, { method: 'POST' });
       },
     },
 

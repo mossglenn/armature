@@ -40,6 +40,15 @@ import { findExisting } from './write';
  *                            right to unlock a requirement is the right to lock one
  *   override a required check   whoever may perform the merge; a `locked` requirement, an
  *                            Administrator (ADR-0070 decision 6)
+ *   open a merge request     whoever may write its source; for a workspace, its owner
+ *                            (ADR-0072 decision 6)
+ *   merge a request          whoever may merge into its target: the `merge` row above
+ *   close a request          its opener, its source's owner, or whoever may merge into its
+ *                            target
+ *   link a workspace         its owner
+ *   unlink, list workspaces  its owner; an Administrator may list and unlink any
+ *   make a branch a workspace   the branch's Owner (decision 7: the desktop app's record for a
+ *                            workspace it held before this)
  *
  * A branch with no Owner in force is writable, mergeable and deletable by any
  * registered User, as before this decision: the migration window of decision
@@ -71,7 +80,15 @@ export type Operation =
   /** A check run about a commit on `branch` (ADR-0070 decision 4). */
   | { permission: 'report_check'; branch: string }
   /** Overriding a required check on a merge into `branch` (ADR-0070 decision 6); `locked` when a requirement it overrides is. */
-  | { permission: 'override_check'; branch: string; check: string; locked: boolean };
+  | { permission: 'override_check'; branch: string; check: string; locked: boolean }
+  /** Opening a merge request from `branch` (ADR-0072 decision 6); `owner` is the workspace's owner when the source is a workspace. */
+  | { permission: 'open_request'; branch: string; owner?: string }
+  /** Closing a request unmerged: `branch` is its target, `source` its source, `openedBy` whoever opened it, `owner` the source workspace's owner when it is one. */
+  | { permission: 'close_request'; branch: string; source: string; openedBy: string; owner?: string }
+  /** Linking a workspace, unlinking it, or listing one person's; `owner` is whose it is, absent when everyone's are listed. */
+  | { permission: 'link_workspace' | 'unlink_workspace' | 'list_workspaces'; workspace?: string; owner?: string }
+  /** Recording an existing branch as a workspace (decision 7). */
+  | { permission: 'adopt_workspace'; branch: string };
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -140,6 +157,29 @@ export function refusal(who: ResolvedUser, op: Operation, grants: GrantDocument[
       }
       return owns(op.branch) || maintains(op.branch) ? undefined : `requiring a check of merges into branch ${op.branch} needs its Owner, or Maintainer of it or of every branch`;
     }
+    case 'open_request': {
+      // A workspace is personal: only its owner writes it, so only its owner sends its work on (ADR-0072 decisions 1 and 6).
+      if (op.owner !== undefined) return who.id === op.owner ? undefined : `opening a merge request from the workspace ${op.branch} needs its owner`;
+      if (op.branch === REGISTRY_BRANCH) {
+        return maintains(REGISTRY_BRANCH) ? undefined : `opening a merge request from ${REGISTRY_BRANCH} needs Maintainer of ${REGISTRY_BRANCH} or of every branch`;
+      }
+      return owns(op.branch) || maintains(op.branch) || ownerless(op.branch)
+        ? undefined
+        : `opening a merge request from branch ${op.branch} needs the right to write it: its Owner, or Maintainer of it or of every branch`;
+    }
+    case 'close_request': {
+      if (who.id === op.openedBy || who.id === op.owner || owns(op.source)) return undefined;
+      const mayMerge = op.branch === REGISTRY_BRANCH ? maintains(REGISTRY_BRANCH) : owns(op.branch) || maintains(op.branch) || ownerless(op.branch);
+      return mayMerge ? undefined : `closing this merge request needs its opener, the owner of ${op.source}, or whoever may merge into ${op.branch}`;
+    }
+    case 'link_workspace':
+      return who.id === op.owner ? undefined : `linking the workspace ${op.workspace} needs its owner`;
+    case 'unlink_workspace':
+      return who.id === op.owner || admin ? undefined : `unlinking the workspace ${op.workspace} needs its owner or an Administrator`;
+    case 'list_workspaces':
+      return (op.owner !== undefined && who.id === op.owner) || admin ? undefined : "listing workspaces other than one's own needs an Administrator";
+    case 'adopt_workspace':
+      return owns(op.branch) ? undefined : `recording branch ${op.branch} as a workspace needs its Owner`;
   }
 }
 
