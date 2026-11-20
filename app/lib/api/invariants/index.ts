@@ -12,6 +12,8 @@ import { checkFragmentRef } from './fragmentRef';
 import { validateItemInstance } from './itemInstance';
 import { validateLessonActivityLink, validateActivityItemLink, validateModuleContentLink } from './moduleContent';
 import { validateLearningDataset, validateLearningMetric } from './observations';
+import { validateMergeRequest } from './mergeRequest';
+import { validateWorkspace } from './workspace';
 import { checkReferences } from './references';
 
 /**
@@ -59,6 +61,17 @@ import { checkReferences } from './references';
  *  23  requirements live on main the write pipeline, 400 requirements_live_on_main before anything is
  *                                read (ADR-0070 decision 5)
  *  24  a reporter is an agent    checkRequirement.ts (a CheckRequirement's reporter; ADR-0070 decision 5)
+ *  25, 26                        held for ADR-0071 (external alignment), proposed
+ *  27  the hub's records live on main  the write pipeline, 400 workspaces_live_on_main and
+ *                                merge_requests_live_on_main before anything is read (ADR-0072
+ *                                decisions 2 and 5)
+ *  28  one workspace per branch  workspace.ts (at most one Active Workspace record names a branch)
+ *  29  a parent is a branch      workspace.ts (parent names no Active workspace, nor the record's own branch)
+ *  30  a link comes whole        workspace.ts (link and linkedAt together; linkLabel only with them; none on a
+ *                                Closed record)
+ *  31  one open request per pair mergeRequest.ts (at most one Open MergeRequest names a source and a target)
+ *  32  a target is a branch      mergeRequest.ts (an Open request's target is no workspace, nor its own source)
+ *  33  a decision comes whole    mergeRequest.ts (decidedBy, decidedAt and mergeCommit suit the status)
  *
  * A validator sees the whole batch and the branch being written, never main
  * by default. Every violation is collected and reported at once as a 422.
@@ -126,6 +139,8 @@ const VALIDATORS: Record<string, Validator> = {
   Attestation: validateAttestation,
   Grant: validateGrant,
   CheckRequirement: validateCheckRequirement,
+  Workspace: validateWorkspace,
+  MergeRequest: validateMergeRequest,
   LearningDataset: validateLearningDataset,
   LearningMetric: validateLearningMetric,
 };
