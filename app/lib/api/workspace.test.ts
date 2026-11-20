@@ -38,6 +38,12 @@ describe('over the file-backed store in memory', () => {
   /** The hub's pairing key, which every write carries (ADR-0065 decision 7; ../localToken.ts). */
   const TOKEN = `ws-token-${stamp}`;
   const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': USER, 'Armature-Local-Token': TOKEN };
+  /** This hub's installation, as its host would have drawn it (ADR-0072 decision 2). */
+  const INSTALLATION = `e3e3e3e3e3e3e3e3${stamp.padStart(16, '0')}`;
+  /** A request to the remote as this installation would send it: what stands for another process holding a copied identifier. */
+  const LINKED = { ...HEADERS, 'Armature-Workspace-Link': INSTALLATION };
+  const onLinked = (hub: { request: typeof app.request }, method: string, path: string, body?: unknown) =>
+    hub.request(`/api/v1${path}`, { method, headers: LINKED, body: body === undefined ? undefined : JSON.stringify(body) });
 
   const NAME = `test-ws-${stamp}`;
   const BRANCH = `${handleOf(USER)}_${NAME}`;
@@ -45,6 +51,8 @@ describe('over the file-backed store in memory', () => {
   const UNFINISHED = `test-ws-unfinished-${stamp}`;
   const WORKED = `test-ws-worked-${stamp}`;
   const FORBIDDEN = `test-ws-forbidden-${stamp}`;
+  /** The reviewer's own workspace, made in the group that tests whose a workspace is. */
+  let THEIRS = '';
   const ELSEWHERE = `test-ws-elsewhere-${stamp}`;
   const REMOTE_BRANCHES = [BRANCH, EXISTING, UNFINISHED, WORKED, FORBIDDEN, ELSEWHERE];
   const REVIEWER = 'demo-reviewer@example.edu';
@@ -62,8 +70,11 @@ describe('over the file-backed store in memory', () => {
   const create = (body: unknown) => on(workspace, 'POST', '/workspace', body);
   const json = async (res: Response) => ({ status: res.status, body: await res.json() });
 
-  /** A branch on the remote, made directly, for the cases that clone an existing one. */
-  const remoteBranch = async (name: string) => expect((await on(app, 'POST', '/branches', { name })).status).toBe(201);
+  /** A workspace of the designer's on the remote, linked to no computer, for the cases that link one: made as another computer would, then unlinked. */
+  const remoteBranch = async (name: string) => {
+    expect((await on(app, 'POST', '/branches', { name, workspace: { link: 'ffffffffffffffffffffffffffffffff' } })).status).toBe(201);
+    expect((await on(app, 'POST', `/workspaces/${name}/unlink`)).status).toBe(200);
+  };
 
   beforeAll(async () => {
     remote = await startHub({ port: 0 });
@@ -79,6 +90,7 @@ describe('over the file-backed store in memory', () => {
       store: () => localConfig,
       localToken: TOKEN,
       actionRoutes: true,
+      installation: { id: INSTALLATION },
     };
     workspace = createApp(() => config);
   });
@@ -151,7 +163,7 @@ describe('over the file-backed store in memory', () => {
       expect(status.body.workspace.branch).toBe(BRANCH);
       expect(status.body.head).toBe(write.headers.get('etag')?.replace(/"/g, ''));
       expect(status.body.localCommits).toBe(1);
-      expect(status.body.remote).toEqual({ head: record.base, moved: false });
+      expect(status.body.remote).toEqual({ head: record.base, moved: false, link: 'here' });
     });
 
     it('@armature/client reads the same status through its workspace functions', async () => {
@@ -171,21 +183,50 @@ describe('over the file-backed store in memory', () => {
     });
   });
 
-  describe('cloning a branch the remote already has', () => {
-    it('clones it as it is, with no from, and mirrors nothing that has not changed', async () => {
+  describe('linking a workspace the remote already has (ADR-0072 decision 4)', () => {
+    it('links it to this installation and clones it as it is, with its parent, and mirrors nothing that has not changed', async () => {
       await remoteBranch(EXISTING);
       const mirrorBefore = (await localStore('main').head())?.id;
-      const res = await json(await create({ existing: EXISTING }));
+      const res = await json(await create({ link: EXISTING }));
       expect(res.status).toBe(201);
-      expect(res.body.branch).toBe(EXISTING);
-      expect(res.body.from).toBeUndefined();
+      expect(res.body).toMatchObject({ branch: EXISTING, from: 'main', link: INSTALLATION });
+      expect((await json(await on(app, 'GET', `/workspaces/${EXISTING}`))).body.link).toBe(INSTALLATION);
       expect((await localStore('main').head())?.id).toBe(mirrorBefore);
     });
 
     it('passes the remote\'s refusal through with its own status and code', async () => {
-      const res = await json(await create({ existing: `ws-no-such-${stamp}` }));
+      const res = await json(await create({ link: `ws-no-such-${stamp}` }));
       expect(res.status).toBe(404);
-      expect(res.body).toMatchObject({ error: 'unknown_ref', remote: true });
+      expect(res.body).toMatchObject({ error: 'not_found', remote: true });
+      // A branch that is no workspace is not linked either, and neither is one linked to another computer.
+      const plain = `test-ws-plain-${stamp}`;
+      REMOTE_BRANCHES.push(plain);
+      expect((await on(app, 'POST', '/branches', { name: plain })).status).toBe(201);
+      expect((await json(await create({ link: plain }))).body).toMatchObject({ error: 'not_found', remote: true });
+      const held = `test-ws-held-${stamp}`;
+      REMOTE_BRANCHES.push(held);
+      expect((await on(app, 'POST', '/branches', { name: held, workspace: { link: 'ffffffffffffffffffffffffffffffff', linkLabel: 'Laptop' } })).status).toBe(201);
+      const taken = await json(await create({ link: held }));
+      expect(taken.status).toBe(409);
+      expect(taken.body).toMatchObject({ error: 'held_elsewhere', remote: true, linkLabel: 'Laptop' });
+      expect((await json(await on(workspace, 'GET', '/workspace/elsewhere'))).body.linkedElsewhere).toContainEqual({ branch: held, parent: 'main', linkLabel: 'Laptop', linkedAt: expect.any(String) });
+      // Its owner unlinks it from the other computer through this hub, saying which of the two they mean, and links it here.
+      expect((await json(await on(workspace, 'POST', `/workspace/${held}/unlink`))).status).toBe(404);
+      const unlinked = await json(await on(workspace, 'POST', `/workspace/${held}/unlink`, { elsewhere: true }));
+      expect(unlinked.status).toBe(200);
+      expect(unlinked.body).toMatchObject({ workspace: held, unlinked: true, elsewhere: true, was: { linkLabel: 'Laptop' } });
+      expect((await json(await on(workspace, 'GET', '/workspace/elsewhere'))).body.unlinked).toContainEqual({ branch: held, parent: 'main' });
+      expect((await create({ link: held })).status).toBe(201);
+      // Held here, it is unlinked from this computer: the remote's link cleared, the copy gone, the workspace kept there.
+      expect((await json(await on(workspace, 'POST', `/workspace/${held}/unlink`, { elsewhere: true }))).body.error).toBe('workspace_here');
+      const left = await json(await on(workspace, 'POST', `/workspace/${held}/unlink`));
+      expect(left.status).toBe(200);
+      expect(left.body).toMatchObject({ workspace: { branch: held }, link: 'cleared' });
+      expect((await on(workspace, 'GET', `/workspace/${held}/status`)).status).toBe(404);
+      expect(await localStore('main').listBranches()).not.toContain(held);
+      const there = (await json(await on(app, 'GET', `/workspaces/${held}`))).body;
+      expect(there.status).toBe('Active');
+      expect(there).not.toHaveProperty('link');
     });
 
     it('replaces a clone that did not finish, and refuses a local branch with work in it', async () => {
@@ -193,13 +234,13 @@ describe('over the file-backed store in memory', () => {
       const unfinished = localStore(UNFINISHED);
       await unfinished.createEmptyBranch(UNFINISHED);
       await unfinished.replaceSchema(normalizeSchema((await localStore('main').getSchema()).entries), { author: 'User/demo-designer', message: `Schema of ${UNFINISHED} from ${remote.url} at x` });
-      expect((await create({ existing: UNFINISHED })).status).toBe(201);
+      expect((await create({ link: UNFINISHED })).status).toBe(201);
 
       await remoteBranch(WORKED);
       const worked = localStore(WORKED);
       await worked.createEmptyBranch(WORKED);
       await worked.replaceSchema(normalizeSchema((await localStore('main').getSchema()).entries), { author: 'User/demo-designer', message: 'Someone\'s work' });
-      const refused = await json(await create({ existing: WORKED }));
+      const refused = await json(await create({ link: WORKED }));
       expect(refused.status).toBe(409);
       expect(refused.body.error).toBe('branch_exists');
     });
@@ -207,7 +248,7 @@ describe('over the file-backed store in memory', () => {
 
   describe('what a workspace hub refuses and reports', () => {
     it('refuses a malformed request and an identity the remote does not know', async () => {
-      for (const body of [{}, { name: 'a', existing: 'b' }, { existing: 'b', from: 'main' }, { name: 3 }]) {
+      for (const body of [{}, { name: 'a', link: 'b' }, { link: 'b', from: 'main' }, { name: 3 }, { existing: 'b' }]) {
         expect((await create(body)).status, JSON.stringify(body)).toBe(400);
       }
       expect((await json(await create({ name: 'bad/name' }))).body.error).toBe('bad_name');
@@ -237,7 +278,7 @@ describe('over the file-backed store in memory', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('workspace_only');
       expect((await json(await on(app, 'GET', '/discover'))).body.capabilities['armature/workspace']).toBeUndefined();
-      expect((await json(await on(workspace, 'GET', '/discover'))).body.capabilities['armature/workspace']).toEqual({ fallback: 'reject', profile: 'full', localToken: 'required', actions: 'routes' });
+      expect((await json(await on(workspace, 'GET', '/discover'))).body.capabilities['armature/workspace']).toEqual({ fallback: 'reject', profile: 'full', localToken: 'required', link: 'installation', delivery: 'merge-request', actions: 'routes' });
     });
   });
 
@@ -245,7 +286,7 @@ describe('over the file-backed store in memory', () => {
     it("refuses to clone a branch under a name the hub's own folder and store use, before the remote is asked (W9)", async () => {
       const nowhere = createApp(() => ({ ...config, remote: 'http://127.0.0.1:9' }));
       for (const existing of ['main', 'at.abc123', 'lock', 'store.json', 'Checks.json']) {
-        const res = await json(await on(nowhere, 'POST', '/workspace', { existing }));
+        const res = await json(await on(nowhere, 'POST', '/workspace', { link: existing }));
         expect(res.status, existing).toBe(400);
         expect(res.body, existing).toMatchObject({ error: 'bad_name', reserved: true });
       }
@@ -353,13 +394,16 @@ describe('over the file-backed store in memory', () => {
 
     it("refuses a workspace's actions through another remote than the one it was cloned from, and removes it here alone (W10)", async () => {
       await remoteBranch(ELSEWHERE);
-      expect((await create({ existing: ELSEWHERE })).status).toBe(201);
+      expect((await create({ link: ELSEWHERE })).status).toBe(201);
       // The folder pointed back at after a connection made elsewhere: the same records, another remote.
       const other = createApp(() => ({ ...config, remote: 'http://127.0.0.1:9' }));
       for (const [path, body] of [
         ['push', undefined],
         ['bring-in', undefined],
-        ['deliver', { message: 'Deliver it' }],
+        ['merge-request', { message: 'Merge it' }],
+        ['merge-request/merge', undefined],
+        ['merge-request/close', undefined],
+        ['unlink', undefined],
       ] as const) {
         const res = await json(await on(other, 'POST', `/workspace/${ELSEWHERE}/${path}`, body));
         expect(res.status, path).toBe(409);
@@ -507,7 +551,10 @@ describe('over the file-backed store in memory', () => {
 
     it('stops with the remote\'s 412 when the branch moved there, saying what moved, and records nothing', async () => {
       const theirs = `LearningNeed/ws-remote-${stamp}`;
-      expect((await on(app, 'PUT', `/documents/${theirs}?branch=${BRANCH}`, need('theirs'))).status).toBe(200);
+      // Since 2026-11-20 only this installation writes the branch there (ADR-0072 decision 3): the owner's own write
+      // from elsewhere is refused, and what moves the branch here is a write carrying this installation's identifier.
+      expect((await json(await on(app, 'PUT', `/documents/${theirs}?branch=${BRANCH}`, need('theirs')))).body.error).toBe('held_elsewhere');
+      expect((await onLinked(app, 'PUT', `/documents/${theirs}?branch=${BRANCH}`, need('theirs'))).status).toBe(200);
       expect((await on(workspace, 'PUT', `/documents/LearningNeed/ws-after-${stamp}?branch=${BRANCH}`, need('after'))).status).toBe(200);
       const local = (await localStore(BRANCH).log({ count: 1 }))[0];
 
@@ -527,26 +574,45 @@ describe('over the file-backed store in memory', () => {
     const reviewer = (method: string, path: string, body?: unknown) =>
       workspace.request(`/api/v1${path}`, { method, headers: asReviewer, body: body === undefined ? undefined : JSON.stringify(body) });
 
-    it("warns at creation when the remote would refuse the owner's push, and makes the workspace anyway", async () => {
+    it("links no one else's workspace: the remote refuses, and nothing is made here", async () => {
       await remoteBranch(FORBIDDEN);
-      const res = await json(await reviewer('POST', '/workspace', { existing: FORBIDDEN }));
-      expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({ branch: FORBIDDEN, ownerExternalId: REVIEWER, warning: { code: 'forbidden', holders: ['User/demo-designer'] } });
-      expect(res.body.warning.message).toMatch(/may not: write to branch/);
+      const res = await json(await reviewer('POST', '/workspace', { link: FORBIDDEN }));
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({ error: 'forbidden', remote: true, permission: 'link_workspace' });
+      expect((await reviewer('GET', `/workspace/${FORBIDDEN}/status`)).status).toBe(404);
+      expect(await localStore('main').listBranches()).not.toContain(FORBIDDEN);
+    });
+
+    it("a workspace whose owner has lost the right to write it on the remote still takes local work; its push is the remote's 403", async () => {
+      // The reviewer's own workspace, whose Owner grant an administrator then revokes.
+      // A scratch name, so the suite's cleanup may delete its branch on the remote (`isScratchName`).
+      const made = await json(await reviewer('POST', '/workspace', { name: `test-forbidden-${stamp}` }));
+      expect(made.status).toBe(201);
+      REMOTE_BRANCHES.push(made.body.branch);
+      THEIRS = made.body.branch;
+      // Given to someone else, not only withdrawn: a branch with no owner at all is writable by anyone (ADR-0068 decision 3, note).
+      const moved = await on(app, 'POST', '/documents?branch=main', {
+        message: 'Ownership moved, for the test',
+        documents: [
+          { '@type': 'Grant', user: made.body.owner, role: 'Owner', branch: THEIRS, status: 'Revoked', rationale: 'Moved for the test' },
+          { '@type': 'Grant', user: 'User/demo-designer', role: 'Owner', branch: THEIRS, status: 'Active' },
+        ],
+      });
+      expect(moved.status).toBe(200);
     });
 
     it("the owner writes locally; the push is the remote's 403 before any commit; anyone else is refused here", async () => {
       const id = `LearningNeed/ws-forbidden-${stamp}`;
-      expect((await reviewer('PUT', `/documents/${id}?branch=${FORBIDDEN}`, { message: 'Work while asking for a grant', document: { label: 'x', rationale: 'r' } })).status).toBe(200);
-      const pushed = await json(await reviewer('POST', `/workspace/${FORBIDDEN}/push`));
+      expect((await reviewer('PUT', `/documents/${id}?branch=${THEIRS}`, { message: 'Work while asking for a grant', document: { label: 'x', rationale: 'r' } })).status).toBe(200);
+      const pushed = await json(await reviewer('POST', `/workspace/${THEIRS}/push`));
       expect(pushed.status).toBe(403);
-      expect(pushed.body).toMatchObject({ error: 'forbidden', remote: true, permission: 'write', branch: FORBIDDEN, pushed: [], at: { part: 1, total: 1 } });
-      expect((await on(app, 'GET', `/documents/${id}?branch=${FORBIDDEN}`)).status).toBe(404);
+      expect(pushed.body).toMatchObject({ error: 'forbidden', remote: true, permission: 'write', branch: THEIRS, pushed: [], at: { part: 1, total: 1 } });
+      expect((await on(app, 'GET', `/documents/${id}?branch=${THEIRS}`)).status).toBe(404);
 
-      const designerWrites = await json(await on(workspace, 'PUT', `/documents/LearningNeed/ws-not-mine-${stamp}?branch=${FORBIDDEN}`, { message: 'x', document: { label: 'x', rationale: 'r' } }));
+      const designerWrites = await json(await on(workspace, 'PUT', `/documents/LearningNeed/ws-not-mine-${stamp}?branch=${THEIRS}`, { message: 'x', document: { label: 'x', rationale: 'r' } }));
       expect(designerWrites.status).toBe(403);
-      expect(designerWrites.body).toMatchObject({ error: 'forbidden', permission: 'write', branch: FORBIDDEN, owner: REVIEWER });
-      const designerPushes = await json(await on(workspace, 'POST', `/workspace/${FORBIDDEN}/push`));
+      expect(designerWrites.body).toMatchObject({ error: 'forbidden', permission: 'write', branch: THEIRS, owner: REVIEWER });
+      const designerPushes = await json(await on(workspace, 'POST', `/workspace/${THEIRS}/push`));
       expect(designerPushes.status).toBe(403);
       expect(designerPushes.body).toMatchObject({ error: 'forbidden', permission: 'push', owner: REVIEWER });
     });
@@ -624,11 +690,11 @@ describe('over the file-backed store in memory', () => {
 
     it('forwards a read at a commit it does not hold to the remote when online, as the caller, and answers 404 remote_needed offline', async () => {
       if (!(await records().get(EXISTING))) {
-        await on(app, 'POST', '/branches', { name: EXISTING });
-        expect((await create({ existing: EXISTING })).status).toBe(201);
+        await remoteBranch(EXISTING);
+        expect((await create({ link: EXISTING })).status).toBe(201);
       }
       const id = `LearningNeed/ws-forwarded-${stamp}`;
-      const theirs = await on(app, 'PUT', `/documents/${id}?branch=${EXISTING}`, { message: 'Written on the remote after the clone', document: { label: 'Forwarded', rationale: 'r' } });
+      const theirs = await onLinked(app, 'PUT', `/documents/${id}?branch=${EXISTING}`, { message: 'Written on the remote after the clone', document: { label: 'Forwarded', rationale: 'r' } });
       expect(theirs.status).toBe(200);
       const later = etag(theirs)!.replace(/"/g, '');
 

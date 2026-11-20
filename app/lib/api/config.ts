@@ -109,6 +109,14 @@ export interface HubConfig {
    */
   localToken?: string;
   /**
+   * This installation, on a workspace hub (ADR-0072 decision 2): the identifier its host drew once and keeps,
+   * which the hub sends to its remote as `Armature-Workspace-Link` and links its workspaces to, and the name
+   * the owner gave this computer, if any, sent as a link's label. The desktop app keeps both in its settings;
+   * `app/server.ts` takes ARMATURE_INSTALLATION and ARMATURE_INSTALLATION_NAME, or keeps a drawn identifier in
+   * the hub's folder. Not a secret. Never read on a remote hub.
+   */
+  installation?: { id: string; label?: string };
+  /**
    * Whether a workspace hub serves push, bring in and deliver as routes, ARMATURE_WORKSPACE_ACTIONS=routes
    * (./localToken.ts): the desktop program's own actions, offered as routes to the compose profile and the
    * suites until the program exists; false by default, and never read on a remote hub.
@@ -265,6 +273,19 @@ function oidcConfig(env: Readonly<Record<string, string | undefined>>): OidcConf
   };
 }
 
+/** ARMATURE_INSTALLATION and ARMATURE_INSTALLATION_NAME as given: an identifier of the shape a link takes, and one line for the label. */
+function installation(env: Readonly<Record<string, string | undefined>>): { id: string; label?: string } | undefined {
+  const id = env.ARMATURE_INSTALLATION?.trim();
+  const label = env.ARMATURE_INSTALLATION_NAME?.trim();
+  if (!id) {
+    if (label) throw new Error('ARMATURE_INSTALLATION_NAME names this computer for the installation ARMATURE_INSTALLATION identifies; set that too, or neither');
+    return undefined;
+  }
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(id)) throw new Error('ARMATURE_INSTALLATION must be 16 to 128 letters, digits, hyphens or underscores');
+  if (label && (label.length > 100 || /[\r\n]/.test(label))) throw new Error('ARMATURE_INSTALLATION_NAME must be one line of at most 100 characters');
+  return { id, ...(label ? { label } : {}) };
+}
+
 /** Whether the host asked for the program's actions as routes: `routes`, or unset; anything else is refused. */
 function actionRoutes(raw: string | undefined): boolean {
   const value = raw?.trim();
@@ -304,6 +325,7 @@ export function configFromEnv(env: Readonly<Record<string, string | undefined>> 
     snapshotBudget: snapshotBudget(env.ARMATURE_SNAPSHOTS),
     ...(role === 'workspace' && env.ARMATURE_LOCAL_TOKEN?.trim() ? { localToken: env.ARMATURE_LOCAL_TOKEN.trim() } : {}),
     actionRoutes: role === 'workspace' && actionRoutes(env.ARMATURE_WORKSPACE_ACTIONS),
+    ...(role === 'workspace' && installation(env) ? { installation: installation(env) } : {}),
     identity,
     ...(identity === 'oidc' ? { oidc: oidcConfig(env), publicUrl: publicUrl(env.ARMATURE_PUBLIC_URL, rehearsal(env.ARMATURE_REHEARSAL)) } : {}),
     ...(role === 'remote' && env.ARMATURE_INSTANCE_NAME?.trim() ? { instanceName: env.ARMATURE_INSTANCE_NAME.trim() } : {}),

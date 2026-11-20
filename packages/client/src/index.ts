@@ -578,7 +578,7 @@ export interface WorkspaceRecord {
   /** The owner's `User` id on the remote, and external identifier. */
   owner: string;
   ownerExternalId: string;
-  /** The remote branch it started from, when the workspace hub created it; absent for a clone of an existing branch. */
+  /** The workspace's parent: the remote branch it was created from, takes updates from and sends its merge requests to; absent on a clone older than 2026-11-20 of a branch someone else made, where it is `main`. */
   from?: string;
   base: string;
   /** The local commit holding the clone. */
@@ -586,6 +586,40 @@ export interface WorkspaceRecord {
   clonedAt: string;
   /** The remote's connection profile as the newest clone kept it (2026-11-06). */
   instance?: InstanceProfile;
+  /** The installation the remote links this workspace to, as the hub last knew: its own (2026-11-20); absent on a workspace made before then and not yet recorded on the remote. */
+  link?: string;
+}
+
+/** Where the remote says a workspace is linked, from the desktop hub's point of view (2026-11-20); `none` when the branch is no workspace there yet. */
+export type LinkState = 'here' | 'elsewhere' | 'unlinked' | 'none';
+
+/** A workspace of the owner's on the remote that the desktop hub does not hold (2026-11-20): never the identifier it is linked to. */
+export interface RemoteWorkspace {
+  branch: string;
+  parent: string;
+  /** Where it is linked, when it is: the name its owner gave that computer, if any, and since when. */
+  linkLabel?: string;
+  linkedAt?: string;
+}
+
+/** `GET /workspace/:name/merge-request` (2026-11-20): the workspace's parent, the request open into it with its health, and whether the owner may merge it themselves. */
+export interface RequestState {
+  workspace: string;
+  parent: string;
+  request?: MergeRequest;
+  health?: RequestHealth;
+  mayMerge: boolean;
+}
+
+/** `POST /workspace/:name/merge-request/merge` (2026-11-20): the remote's merge of the workspace's request into its parent. */
+export interface RequestMerged {
+  workspace: WorkspaceRecord;
+  request: MergeRequest;
+  merged: { commit: string; base: string; source: string; target: string; upToDate: boolean };
+  /** The remote's verdicts on its required checks for the merge; absent when none applied. */
+  checks?: CheckVerdict[];
+  /** True when the workspace was deleted on the remote and here. */
+  deleted: boolean;
 }
 
 export interface WorkspaceStatus {
@@ -600,18 +634,12 @@ export interface WorkspaceStatus {
    * The remote branch's head and whether it has moved since the last commit this hub pushed (the base before any push), or that the
    * remote could not be asked: unreachable, or, with `reason` (since 2026-11-15), for want of a credential to ask with, or
    * (`other_remote`, since 2026-11-16) because the workspace was cloned from another remote than the hub's.
+   * Since 2026-11-20 `link` says where the remote links the workspace: `elsewhere` (with that computer's
+   * `linkLabel` and `linkedAt`) or `unlinked` means this computer's push will be refused.
    */
-  remote: { head: string; moved: boolean } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
+  remote: { head: string; moved: boolean; link: LinkState; linkLabel?: string; linkedAt?: string } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
   /** The snapshots of the remote this hub holds for the workspace (2026-11-02): the budget, the commits held and those declined. */
   snapshots?: { budget: number; held: string[]; declined: unknown[] };
-}
-
-/** What `POST /workspace` adds to the record when the remote says the owner may not write the branch (ADR-0068 decision 9; 2026-11-01). */
-export interface WorkspaceWarning {
-  code: 'forbidden';
-  message: string;
-  /** The `User` ids holding `Owner` or `Maintainer` of the branch on the remote. */
-  holders: string[];
 }
 
 /** One local commit replayed on the remote by a push (ADR-0065 decision 5; 2026-11-01). */
@@ -634,26 +662,13 @@ export interface PushResult {
   checks?: CheckVerdict[];
 }
 
-/** `POST /workspace/:name/bring-in` (2026-11-01): the remote's merge of `main` into the workspace, read back as one local commit. */
+/** `POST /workspace/:name/bring-in` (2026-11-01): the remote's merge of the workspace's parent into it, read back as one local commit. */
 export interface BringInResult {
   workspace: WorkspaceRecord;
   remoteHead: string;
   upToDate: boolean;
   merge?: { base: string; source: string; target: string };
   broughtIn?: { local: string; documents: number };
-}
-
-/** `POST /workspace/:name/deliver` (2026-11-01): the remote's merge of the workspace into `main`. */
-export interface DeliverResult {
-  workspace: WorkspaceRecord;
-  delivered: { commit: string; base: string; source: string; target: string; upToDate: boolean };
-  deleted: boolean;
-  /** The remote's verdicts on its required checks for the merge (since 2026-11-15); absent when none applied. */
-  checks?: CheckVerdict[];
-  /** On a dry run: what the remote's merge would find, nothing merged. */
-  dryRun?: true;
-  conflicts?: MergeConflict[];
-  violations?: Violation[];
 }
 
 /** `DELETE /workspace/:name` (2026-11-07): the workspace removed here, and what became of its branch on the remote. */
@@ -663,6 +678,8 @@ export interface RemoveResult {
   remote: 'deleted' | 'kept' | 'absent' | 'untouched';
   /** Why the remote kept it: commits no other branch holds, its refusal, or no answer. */
   reason?: 'unmerged' | 'forbidden' | 'unreachable';
+  /** Where the branch stays (2026-11-20): whether the remote's link to this computer was cleared, kept (the remote could not be asked), or was never this installation's. */
+  link?: 'cleared' | 'kept' | 'not_ours';
   /** After a discard: the local commits given up, newest first, and where the workspace's files were set aside in the hub's folder. */
   discarded?: { commits: string[]; setAside?: string };
 }
@@ -1045,23 +1062,59 @@ export function createClient(options: ClientOptions) {
       list() {
         return call<WorkspaceRecord[]>('/workspace');
       },
-      /** `POST /workspace`: `{ name, from? }` creates `<handle>_<name>` on the remote and clones it; `{ existing }` clones a branch the remote has, with a `warning` when its owner may not write it there. */
-      create(opts: { name: string; from?: string } | { existing: string }) {
-        return call<WorkspaceRecord & { warning?: WorkspaceWarning }>('/workspace', { method: 'POST', body: opts });
+      /**
+       * `POST /workspace`: `{ name, from? }` creates `<handle>_<name>` on the remote from `from` (`main` by
+       * default), its parent, as a workspace linked to the hub's installation, and clones it; `{ link }` links
+       * one of the owner's workspaces that is linked to no computer and clones it (409 `held_elsewhere` when it
+       * is linked to another). Until 2026-11-20 `{ existing }` cloned any branch.
+       */
+      create(opts: { name: string; from?: string } | { link: string }) {
+        return call<WorkspaceRecord>('/workspace', { method: 'POST', body: opts });
+      },
+      /** `GET /workspace/elsewhere` (2026-11-20): the owner's workspaces on the remote that the hub does not hold, those linked nowhere and those linked to another computer. */
+      elsewhere() {
+        return call<{ unlinked: RemoteWorkspace[]; linkedElsewhere: RemoteWorkspace[] }>('/workspace/elsewhere');
       },
       /** `POST /workspace/:name/push`: replays the unpushed local commits on the remote, as the owner (2026-11-01); 403, 412 or 422 as the remote gave it, with `pushed` and `at`. Gated first by the owner's personal requirements (since 2026-11-15): 409 `checks_pending` or 422 `checks_failed` with `checks`, nothing replayed; `overrides` sets them aside, each with a reason. */
       push(name: string, opts: { overrides?: Array<{ check: string; reason: string }> } = {}) {
         return call<PushResult>(`/workspace/${encodeURIComponent(name)}/push`, { method: 'POST', ...(opts.overrides ? { body: opts } : {}) });
       },
-      /** `POST /workspace/:name/bring-in`: the remote merges `main` into the workspace and the result is read back here; 409 `unpushed_commits` first, the remote's 409 `merge_conflict` or 422 as given. */
+      /** `POST /workspace/:name/bring-in`: the remote merges the workspace's parent into it and the result is read back here; 409 `unpushed_commits` first, the remote's 409 `merge_conflict` or 422 as given. */
       bringIn(name: string, opts: { message?: string } = {}) {
         return call<BringInResult>(`/workspace/${encodeURIComponent(name)}/bring-in`, { method: 'POST', body: opts });
       },
-      /** `POST /workspace/:name/deliver`: the remote merges the workspace into `main` after `main` was brought in cleanly (409 `bring_in_first`); `deleteWorkspace` removes it there and here. The remote's required checks gate it (its 409 `checks_pending` and 422 `checks_failed`, as given); `overrides` are the remote merge's, and `dryRun` returns what it would find, its `checks` among it (since 2026-11-15). */
-      deliver(name: string, opts: { message: string; deleteWorkspace?: boolean; overrides?: Array<{ check: string; reason: string }>; dryRun?: boolean }) {
-        return call<DeliverResult>(`/workspace/${encodeURIComponent(name)}/deliver`, { method: 'POST', body: opts });
+      /** The workspace's merge request into its parent (2026-11-20; ADR-0072 decisions 5 and 7), which replaced `deliver`: the record, its health and every refusal are the remote's. */
+      mergeRequest: {
+        /** `GET /workspace/:name/merge-request`: the parent, the open request with its health as the remote computes it now, and whether the owner may merge it themselves. */
+        get(name: string) {
+          return call<RequestState>(`/workspace/${encodeURIComponent(name)}/merge-request`);
+        },
+        /** `POST /workspace/:name/merge-request`: opens it with the owner's message, the merge commit's; 409 `unpushed_commits` first, the remote's 409 `request_open`. */
+        open(name: string, opts: { message: string }) {
+          return call<RequestState>(`/workspace/${encodeURIComponent(name)}/merge-request`, { method: 'POST', body: opts });
+        },
+        /** `POST /workspace/:name/merge-request/merge`: merges it where the owner may (the remote's 403 otherwise, and its merge refusals as given); `deleteWorkspace` then removes the workspace there and here. 409 `no_request` when none is open. */
+        merge(name: string, opts: { overrides?: Array<{ check: string; reason: string }>; deleteWorkspace?: boolean } = {}) {
+          return call<RequestMerged>(`/workspace/${encodeURIComponent(name)}/merge-request/merge`, { method: 'POST', body: opts });
+        },
+        /** `POST /workspace/:name/merge-request/close`: closes it unmerged. */
+        close(name: string) {
+          return call<{ workspace: string; request: MergeRequest }>(`/workspace/${encodeURIComponent(name)}/merge-request/close`, { method: 'POST' });
+        },
       },
-      /** `DELETE /workspace/:name`: removes the workspace here with nothing left to push (409 `unpushed_commits`), and its branch on the remote when the remote's rule allows (2026-11-07). */
+      /**
+       * `POST /workspace/:name/unlink` (2026-11-20; ADR-0072 decision 4). For a workspace the hub holds: unlinks it
+       * from this computer, the remote's link cleared and the local copy removed, 409 `unpushed_commits` first.
+       * With `elsewhere`, for one it does not hold: unlinks it from the other computer, whose commits not yet
+       * pushed can then no longer be pushed.
+       */
+      unlink(name: string, opts: { elsewhere?: boolean } = {}) {
+        return call<{ workspace: WorkspaceRecord; link: 'cleared' | 'not_ours' } | { workspace: string; unlinked: boolean; elsewhere: true; was?: { linkLabel?: string; linkedAt?: string } }>(
+          `/workspace/${encodeURIComponent(name)}/unlink`,
+          { method: 'POST', ...(opts.elsewhere ? { body: { elsewhere: true } } : {}) }
+        );
+      },
+      /** `DELETE /workspace/:name`: removes the workspace here with nothing left to push (409 `unpushed_commits`), and its branch on the remote when the remote's rule allows (2026-11-07); where the branch stays, it stays as an unlinked workspace (`link`, 2026-11-20). */
       /**
        * With `discard`, the number of unpushed local commits given up (2026-11-12): the workspace leaves this machine with
        * them, its files set aside in the hub's folder, and the remote is not asked; 409 `discard_mismatch` when the number is not what is there.

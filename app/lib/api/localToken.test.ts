@@ -87,16 +87,26 @@ describe('every write to a workspace hub carries the token', () => {
   });
 });
 
-describe("push, bring in, deliver and remove are the program's own actions", () => {
+describe("push, bring in, the merge request's actions, unlink and remove are the desktop app's own actions", () => {
   const WITH = { ...USER, 'Armature-Local-Token': TOKEN };
 
   it('are refused as routes unless the host asked for them, before the workspace is looked up', async () => {
-    for (const action of ['push', 'bring-in', 'deliver'] as const) {
-      const res = await refusal(await send(workspace, 'POST', `/workspace/no-such-ws/${action}`, WITH, JSON.stringify({ message: 'm' })));
-      expect(res, action).toMatchObject({ status: 403, error: 'forbidden', reason: 'program_action', permission: action });
+    // Each route with the action it is refused as: a merge request's three are one action, since 2026-11-20 (ADR-0072 decision 7).
+    for (const [path, action] of [
+      ['push', 'push'],
+      ['bring-in', 'bring-in'],
+      ['merge-request', 'merge-request'],
+      ['merge-request/merge', 'merge-request'],
+      ['merge-request/close', 'merge-request'],
+      ['unlink', 'unlink'],
+    ] as const) {
+      const res = await refusal(await send(workspace, 'POST', `/workspace/no-such-ws/${path}`, WITH, JSON.stringify({ message: 'm' })));
+      expect(res, path).toMatchObject({ status: 403, error: 'forbidden', reason: 'program_action', permission: action });
       // Asked for, the route runs and finds no such workspace.
-      expect((await send(withRoutes, 'POST', `/workspace/no-such-ws/${action}`, WITH, JSON.stringify({ message: 'm' }))).status, action).toBe(404);
+      expect((await send(withRoutes, 'POST', `/workspace/no-such-ws/${path}`, WITH, JSON.stringify({ message: 'm' }))).status, path).toBe(404);
     }
+    // The reads of the remote that a tool may make are not actions: the merge request's state, and the workspaces elsewhere.
+    expect((await send(workspace, 'GET', '/workspace/no-such-ws/merge-request', WITH)).status).toBe(404);
     // Remove (2026-11-07), the same way, as DELETE on the workspace itself.
     expect(await refusal(await send(workspace, 'DELETE', '/workspace/no-such-ws', WITH))).toMatchObject({ status: 403, reason: 'program_action', permission: 'remove' });
     expect((await send(withRoutes, 'DELETE', '/workspace/no-such-ws', WITH)).status).toBe(404);
@@ -104,8 +114,8 @@ describe("push, bring in, deliver and remove are the program's own actions", () 
 
   it('GET /discover says which, with the token required either way', async () => {
     const settings = async (hub: typeof app) => (await (await send(hub, 'GET', '/discover')).json()).capabilities['armature/workspace'];
-    expect(await settings(workspace)).toEqual({ fallback: 'reject', profile: 'full', localToken: 'required', actions: 'program' });
-    expect(await settings(withRoutes)).toEqual({ fallback: 'reject', profile: 'full', localToken: 'required', actions: 'routes' });
+    expect(await settings(workspace)).toEqual({ fallback: 'reject', profile: 'full', localToken: 'required', link: 'installation', delivery: 'merge-request', actions: 'program' });
+    expect(await settings(withRoutes)).toEqual({ fallback: 'reject', profile: 'full', localToken: 'required', link: 'installation', delivery: 'merge-request', actions: 'routes' });
     expect((await (await send(app, 'GET', '/discover')).json()).capabilities['armature/workspace']).toBeUndefined();
   });
 });

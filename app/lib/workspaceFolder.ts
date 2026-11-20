@@ -19,6 +19,7 @@
  * seconds before it is reported (`unwritable`). All from the rehearsal on a
  * Windows PC (ADR-0066 Verification, 2026-11-03).
  */
+import { randomBytes } from 'node:crypto';
 import { cp, mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
@@ -276,6 +277,30 @@ export async function lockFolder(dir: string): Promise<() => Promise<void>> {
     await rm(path, { force: true });
   }
   throw new Error(`${dir} could not be locked`);
+}
+
+/** The file a hub run without the desktop app keeps its installation's identifier in, at the root of its folder. */
+export const INSTALLATION_FILE = 'installation.json';
+
+/**
+ * This folder's installation identifier (ADR-0072 decision 2), for a hub `app/server.ts` runs: read from
+ * `installation.json`, or drawn, 128 random bits as hexadecimal, and kept there, so the workspaces a folder
+ * holds stay linked to it across starts. The desktop app keeps its own in its settings instead. A file that
+ * cannot be used is refused, not replaced: a new identifier would strand every workspace linked to the old.
+ */
+export async function folderInstallation(dir: string): Promise<string> {
+  const target = join(dir, INSTALLATION_FILE);
+  try {
+    const kept = JSON.parse(await readFile(target, 'utf8')) as { id?: unknown };
+    if (typeof kept.id === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(kept.id)) return kept.id;
+    throw new Error(`${target} holds no installation identifier; restore it, or remove it to draw a new one, after which the workspaces in this folder must be unlinked and linked again`);
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+  }
+  const id = randomBytes(16).toString('hex');
+  await mkdir(dir, { recursive: true });
+  await writeWhole(target, `${JSON.stringify({ id }, null, 2)}\n`);
+  return id;
 }
 
 export function folderRecords(dir: string): WorkspaceRecords {

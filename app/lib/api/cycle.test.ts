@@ -1,7 +1,9 @@
 /**
  * The workspace cycle (docs/workspace-hub-plan.md §13, "The cycle"; ADR-0065
- * decisions 5 and 6): create, write, push, bring in main, resolve a conflict,
- * deliver, with the remote checking its merges before they commit. Delivery
+ * decisions 5 and 6; ADR-0072): create a workspace linked to this
+ * installation, write, push, update from its parent, resolve a conflict, open
+ * a merge request and merge it, unlink and link, with the remote checking its
+ * merges before they commit. A merged request
  * writes to the remote's main, which the contract suite never does on the
  * seeded store, so the remote here runs over a scratch database of its own
  * (the seed's export, loaded as authorization.test.ts loads it) on an
@@ -9,7 +11,7 @@
  * database; both are deleted afterwards.
  */
 import { createClient } from '@armature/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startHub, type RunningHub } from '../hub';
 import { app, createApp } from './app';
 import { paramsHash } from './checks';
@@ -19,6 +21,9 @@ import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from '
 import { memoryRecords, type PushTable, type WorkspaceRecords } from './workspace/records';
 import { memoryFiles, type StoreFiles } from './filestore/files';
 import { openFileStore } from './filestore/store';
+
+// A merge request's health is a merge check on the remote each time it is read, and several tests read it more than once.
+vi.setConfig({ testTimeout: 60_000 });
 
 // The suite runs over the one local store, a file store in memory (ADR-0066 decision 4); the two-store contract test holds it to the remote's store.
 describe('over the file-backed store in memory', () => {
@@ -39,6 +44,9 @@ describe('over the file-backed store in memory', () => {
   let onMain: ReturnType<typeof createClient>;
   /** The workspace hub's pairing key, which every write to it carries (ADR-0065 decision 7). */
   const TOKEN = `cycle-token-${stamp}`;
+  /** This hub's installation, as its host would have drawn it (ADR-0072 decision 2), and a second computer's. */
+  const INSTALLATION = `c1c1c1c1c1c1c1c1${stamp.padStart(16, '0')}`;
+  const OTHER_COMPUTER = `d2d2d2d2d2d2d2d2${stamp.padStart(16, '0')}`;
   const headers = (user: string) => ({ 'Content-Type': 'application/json', 'Armature-User': user, 'Armature-Local-Token': TOKEN });
   const on = (method: string, path: string, body?: unknown, user = DESIGNER) =>
     workspace.request(`/api/v1${path}`, { method, headers: headers(user), body: body === undefined ? undefined : JSON.stringify(body) });
@@ -98,7 +106,7 @@ describe('over the file-backed store in memory', () => {
       { author: 'User/demo-designer', message: 'The seed\'s dated records, for the cycle suite' }
     );
     remote = await startHub({ port: 0, config: { ...configFromEnv(), store: () => ({ ...storeConfigFromEnv(), db: REMOTE_DB }) } });
-    config = { ...configFromEnv(), role: 'workspace', remote: remote.url, workspaces: records, store: () => localConfig, localToken: TOKEN, actionRoutes: true };
+    config = { ...configFromEnv(), role: 'workspace', remote: remote.url, workspaces: records, store: () => localConfig, localToken: TOKEN, actionRoutes: true, installation: { id: INSTALLATION, label: 'Cycle test' } };
     workspace = createApp(() => config);
     onMain = createClient({ baseUrl: remote.url, user: DESIGNER });
   });
@@ -109,15 +117,26 @@ describe('over the file-backed store in memory', () => {
     await localStore('main').deleteDatabase().catch(() => undefined);
   });
 
-  describe('the cycle: create, write, push, bring in, resolve, deliver', () => {
+  describe('the cycle: create, write, push, update, resolve, open a merge request, merge', () => {
     let mergeCommit: string;
 
     it('creates the workspace and pushes a local commit', async () => {
-      expect((await on('POST', '/workspace', { name: NAME })).status).toBe(201);
+      const made = await json(await on('POST', '/workspace', { name: NAME }));
+      expect(made.status).toBe(201);
+      expect(made.body).toMatchObject({ branch: WS, from: 'main', link: INSTALLATION });
+      // On the remote it is a workspace, linked to this installation under the name its owner gave the computer.
+      expect((await onMain.workspaces.get(WS)).data).toMatchObject({ branch: WS, parent: 'main', owner: 'User/demo-designer', link: INSTALLATION, linkLabel: 'Cycle test', status: 'Active' });
       expect((await on('PUT', `/documents/${MINE}?branch=${WS}`, need('mine'))).status).toBe(200);
       const pushed = await json(await on('POST', `/workspace/${WS}/push`));
       expect(pushed.status).toBe(200);
       expect(pushed.body.pushed).toHaveLength(1);
+      expect((await json(await on('GET', `/workspace/${WS}/status`))).body.remote).toMatchObject({ link: 'here' });
+      // The remote takes the push from this installation and from nowhere else: the owner's own write from a browser is refused.
+      await expect(onMain.documents.put('LearningNeed', `cycle-elsewhere-${stamp}`, { branch: WS, message: 'From a browser', document: { label: 'x', rationale: 'r' } })).rejects.toMatchObject({
+        status: 409,
+        code: 'held_elsewhere',
+        details: { linkLabel: 'Cycle test' },
+      });
     });
 
     it("brings in main after it moved: the remote's merge, read back as one local commit the table maps", async () => {
@@ -170,37 +189,84 @@ describe('over the file-backed store in memory', () => {
       expect((await on('POST', `/workspace/${WS}/push`)).status).toBe(200);
     });
 
-    it('delivery needs main brought in first, then merges into main and deletes the workspace', async () => {
+    it('a merge request sends the work on: opened with nothing unpushed, its health the remote\'s, merged by an owner who may, the workspace deleted', async () => {
+      // main moves again, on other records: no update is needed first, since nothing conflicts and no check is required.
       expect((await onMain.documents.put('LearningNeed', LATER, { message: 'Later on main', document: { label: 'later', rationale: 'r' } })).data.commit).toBeTruthy();
-      const early = await json(await on('POST', `/workspace/${WS}/deliver`, { message: 'Deliver the cycle' }));
+      expect((await json(await on('GET', `/workspace/${WS}/merge-request`))).body).toEqual({ workspace: WS, parent: 'main', mayMerge: true });
+      // A request is about what the remote holds, so nothing may be unpushed.
+      expect((await on('PUT', `/documents/${MINE}?branch=${WS}`, need('mine', 'edited again'))).status).toBe(200);
+      const early = await json(await on('POST', `/workspace/${WS}/merge-request`, { message: 'Deliver the cycle' }));
       expect(early.status).toBe(409);
-      expect(early.body).toMatchObject({ error: 'bring_in_first', conflicts: [], violations: [] });
-      expect((await on('POST', `/workspace/${WS}/bring-in`)).status).toBe(200);
+      expect(early.body.error).toBe('unpushed_commits');
+      expect((await on('POST', `/workspace/${WS}/push`)).status).toBe(200);
+      expect((await json(await on('POST', `/workspace/${WS}/merge-request`, { message: '' }))).body.error).toBe('message_required');
 
-      const delivered = await json(await on('POST', `/workspace/${WS}/deliver`, { message: 'Deliver the cycle', deleteWorkspace: true }));
-      expect(delivered.status).toBe(200);
-      expect(delivered.body.delivered.upToDate).toBe(false);
-      expect(delivered.body.deleted).toBe(true);
+      const opened = await json(await on('POST', `/workspace/${WS}/merge-request`, { message: 'Deliver the cycle' }));
+      expect(opened.status).toBe(201);
+      expect(opened.body).toMatchObject({
+        workspace: WS,
+        parent: 'main',
+        mayMerge: true,
+        request: { source: WS, target: 'main', status: 'Open', message: 'Deliver the cycle', openedBy: 'User/demo-designer' },
+        health: { mergeable: true, upToDate: false, conflicts: [], violations: [] },
+      });
+      const again = await json(await on('POST', `/workspace/${WS}/merge-request`, { message: 'Once more' }));
+      expect(again.status).toBe(409);
+      expect(again.body).toMatchObject({ error: 'request_open', remote: true, request: opened.body.request['@id'] });
+      expect((await json(await on('GET', `/workspace/${WS}/merge-request`))).body.request['@id']).toBe(opened.body.request['@id']);
+      // The work leaves a workspace only this way: the remote refuses the direct merge delivery used to make.
+      await expect(onMain.branches.merge('main', { from: WS, message: 'Direct' })).rejects.toMatchObject({ status: 409, code: 'request_required' });
+
+      const merged = await json(await on('POST', `/workspace/${WS}/merge-request/merge`, { deleteWorkspace: true }));
+      expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+      expect(merged.body).toMatchObject({ deleted: true, merged: { upToDate: false }, request: { status: 'Merged', mergeCommit: merged.body.merged.commit } });
       const main = await onMain.documents.get('LearningNeed', THEIRS);
       expect(main.data.rationale).toBe('resolved');
-      expect((await onMain.documents.get('LearningNeed', MINE)).data.rationale).toBe('edited');
+      expect((await onMain.documents.get('LearningNeed', MINE)).data.rationale).toBe('edited again');
+      // Three commits on main: the merge, with the request's message and the hub's trailer; the record, Merged; and the
+      // deletion, which revoked the branch's grant and closed its workspace record.
+      const log = (await onMain.branches.log('main', { count: 3 })).data.commits;
+      expect(log[2]).toMatchObject({ commit: merged.body.merged.commit, message: `Deliver the cycle\n\nArmature-Merge-Request: ${opened.body.request['@id']}` });
+      expect(log[1].message).toContain('Merge request merged by demo-designer@example.edu');
+      expect(log[0].message).toContain('its workspace record closed');
       await expect(onMain.branches.head(WS)).rejects.toMatchObject({ status: 404 });
+      await expect(onMain.workspaces.get(WS)).rejects.toMatchObject({ status: 404 });
+      expect((await onMain.workspaces.list({ status: 'Closed' })).data.map((w) => w.branch)).toContain(WS);
       expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).not.toContain(WS);
       expect(await localStore('main').listBranches()).not.toContain(WS);
+      expect((await json(await on('POST', `/workspace/${WS}/merge-request/merge`))).status).toBe(404);
     });
 
-    it("the reviewer, who may not merge into main, brings in but is refused delivery with the remote's 403", async () => {
+    it("the reviewer, who may not merge into main, opens the request and is refused the merge with the remote's 403; a maintainer merges it there", async () => {
       const R = `${handleOf(REVIEWER)}_${NAME}`;
       expect((await on('POST', '/workspace', { name: NAME }, REVIEWER)).status).toBe(201);
       expect((await on('PUT', `/documents/LearningNeed/cycle-reviewer-${stamp}?branch=${R}`, need('reviewer'), REVIEWER)).status).toBe(200);
       expect((await on('POST', `/workspace/${R}/push`, undefined, REVIEWER)).status).toBe(200);
       expect((await json(await on('POST', `/workspace/${R}/bring-in`, undefined, REVIEWER))).body.upToDate).toBe(true);
-      const refused = await json(await on('POST', `/workspace/${R}/deliver`, { message: 'Deliver' }, REVIEWER));
+      const opened = await json(await on('POST', `/workspace/${R}/merge-request`, { message: 'A need from the reviewer' }, REVIEWER));
+      expect(opened.status).toBe(201);
+      expect(opened.body).toMatchObject({ mayMerge: false, request: { status: 'Open', openedBy: 'User/demo-reviewer' }, health: { mergeable: true } });
+      const refused = await json(await on('POST', `/workspace/${R}/merge-request/merge`, undefined, REVIEWER));
       expect(refused.status).toBe(403);
       expect(refused.body).toMatchObject({ error: 'forbidden', remote: true, permission: 'merge', branch: 'main' });
-      const notTheirs = await json(await on('POST', `/workspace/${R}/deliver`, { message: 'Deliver' }));
-      expect(notTheirs.status).toBe(403);
-      expect(notTheirs.body).toMatchObject({ error: 'forbidden', permission: 'deliver', owner: REVIEWER });
+      // No one else acts on a workspace through this hub.
+      for (const action of ['merge-request', 'merge-request/merge', 'merge-request/close']) {
+        const notTheirs = await json(await on('POST', `/workspace/${R}/${action}`, { message: 'x' }));
+        expect(notTheirs.status).toBe(403);
+        expect(notTheirs.body).toMatchObject({ error: 'forbidden', permission: 'merge-request', owner: REVIEWER });
+      }
+      // Whoever may merge into the target decides, on the remote; the reviewer's hub then shows no open request.
+      const decided = (await onMain.mergeRequests.merge(opened.body.request['@id'])).data;
+      expect(decided.request).toMatchObject({ status: 'Merged', decidedBy: 'User/demo-designer' });
+      expect((await json(await on('GET', `/workspace/${R}/merge-request`, undefined, REVIEWER))).body).toEqual({ workspace: R, parent: 'main', mayMerge: false });
+      // And a request the opener thinks better of is closed from the hub.
+      expect((await on('PUT', `/documents/LearningNeed/cycle-reviewer-2-${stamp}?branch=${R}`, need('second thoughts'), REVIEWER)).status).toBe(200);
+      expect((await on('POST', `/workspace/${R}/push`, undefined, REVIEWER)).status).toBe(200);
+      expect((await on('POST', `/workspace/${R}/merge-request`, { message: 'Another' }, REVIEWER)).status).toBe(201);
+      const closed = await json(await on('POST', `/workspace/${R}/merge-request/close`, undefined, REVIEWER));
+      expect(closed.status).toBe(200);
+      expect(closed.body.request).toMatchObject({ status: 'Closed', decidedBy: 'User/demo-reviewer' });
+      expect((await json(await on('POST', `/workspace/${R}/merge-request/close`, undefined, REVIEWER))).body.error).toBe('no_request');
     });
   });
 
@@ -229,7 +295,7 @@ describe('over the file-backed store in memory', () => {
       }
     });
 
-    it('is never answered 200 and then deleted with the workspace by a delivery that deletes it', async () => {
+    it('is never answered 200 and then deleted with the workspace by a merge that deletes it', async () => {
       const name = `${NAME}-race-deliver`;
       const branch = `${handleOf(DESIGNER)}_${name}`;
       const id = `LearningNeed/race-deliver-${stamp}`;
@@ -237,8 +303,9 @@ describe('over the file-backed store in memory', () => {
       expect((await on('PUT', `/documents/LearningNeed/race-deliver-first-${stamp}?branch=${branch}`, need('first'))).status).toBe(200);
       expect((await on('POST', `/workspace/${branch}/push`)).status).toBe(200);
       expect((await on('POST', `/workspace/${branch}/bring-in`)).status).toBe(200);
+      expect((await on('POST', `/workspace/${branch}/merge-request`, { message: 'Merge, with a write beside it' })).status).toBe(201);
       const [delivered, written] = await Promise.all([
-        on('POST', `/workspace/${branch}/deliver`, { message: 'Deliver, with a write beside it', deleteWorkspace: true }),
+        on('POST', `/workspace/${branch}/merge-request/merge`, { deleteWorkspace: true }),
         on('PUT', `/documents/${id}?branch=${branch}`, need('late')),
       ]);
       if (written.status === 200) {
@@ -341,11 +408,12 @@ describe('over the file-backed store in memory', () => {
       // The way out (the review's D6): the one commit given up, the unfinished bring-in's marker with it.
       const discarded = await json(await on('DELETE', `/workspace/${branch}?discard=1`));
       expect(discarded.status, JSON.stringify(discarded.body)).toBe(200);
-      expect(discarded.body).toMatchObject({ remote: 'untouched', discarded: { commits: [expect.any(String)] } });
+      // The discard clears this computer's link too, since the remote answers (ADR-0072 decision 4).
+      expect(discarded.body).toMatchObject({ remote: 'untouched', link: 'cleared', discarded: { commits: [expect.any(String)] } });
       expect(await records.get(branch)).toBeUndefined();
       expect(await records.getPush(branch)).toBeUndefined();
-      // The remote's branch, with its merge, is as it was, and is cloned again as it stands.
-      expect((await on('POST', '/workspace', { existing: branch })).status).toBe(201);
+      // The remote's branch, with its merge, is as it was, an unlinked workspace, and is linked again as it stands.
+      expect((await on('POST', '/workspace', { link: branch })).status).toBe(201);
       expect(await local(branch, id)).toBe('their edit');
     });
 
@@ -369,8 +437,10 @@ describe('over the file-backed store in memory', () => {
       expect((await json(await on('POST', `/workspace/${branch}/bring-in`))).body).toMatchObject({ upToDate: true });
       expect((await records.getPush(branch))?.bringingIn).toBeUndefined();
 
-      // Someone with a grant writes the branch on the remote: not a merge, so not this hub's bring-in.
-      await onMain.documents.put('LearningNeed', `settle-none-${stamp}`, { branch, message: 'Written on the remote', document: { label: 'elsewhere', rationale: 'r' } });
+      // Something writes the branch on the remote with this installation's link, which only a copied identifier
+      // could now (ADR-0072 decision 2): not a merge, so not this hub's bring-in.
+      const copied = createClient({ baseUrl: remote.url, user: DESIGNER, workspaceLink: INSTALLATION });
+      await copied.documents.put('LearningNeed', `settle-none-${stamp}`, { branch, message: 'Written on the remote', document: { label: 'elsewhere', rationale: 'r' } });
       await records.putPush(branch, { commits: [], bringingIn: marker });
       const moved = await json(await on('POST', `/workspace/${branch}/bring-in`));
       expect(moved.status).toBe(412);
@@ -395,27 +465,38 @@ describe('over the file-backed store in memory', () => {
 
       const removed = await json(await on('DELETE', `/workspace/${KEPT}`));
       expect(removed.status).toBe(200);
-      expect(removed.body).toMatchObject({ workspace: { branch: KEPT }, remote: 'kept', reason: 'unmerged' });
-      // Gone here; the remote keeps the branch as the record of that work, and it can be cloned again.
+      expect(removed.body).toMatchObject({ workspace: { branch: KEPT }, remote: 'kept', reason: 'unmerged', link: 'cleared' });
+      // Gone here; the remote keeps the branch, now as an unlinked workspace, which can be linked again (ADR-0072 decision 4).
       expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).not.toContain(KEPT);
       expect(await localStore('main').listBranches()).not.toContain(KEPT);
       expect((await onMain.branches.head(KEPT)).data.head.commit).toBeTruthy();
-      expect((await on('POST', '/workspace', { existing: KEPT })).status).toBe(201);
+      const there = (await onMain.workspaces.get(KEPT)).data;
+      expect(there.status).toBe('Active');
+      expect(there).not.toHaveProperty('link');
+      expect((await json(await on('GET', '/workspace/elsewhere'))).body.unlinked).toContainEqual({ branch: KEPT, parent: 'main' });
+      expect((await json(await on('POST', '/workspace', { existing: KEPT }))).status).toBe(400);
+      const linked = await json(await on('POST', '/workspace', { link: KEPT }));
+      expect(linked.status).toBe(201);
+      expect(linked.body).toMatchObject({ branch: KEPT, from: 'main', link: INSTALLATION });
+      expect((await on('GET', `/documents/LearningNeed/remove-kept-${stamp}?branch=${KEPT}`)).status).toBe(200);
     });
 
-    it('removes the branch from the remote too once main holds its head, as after a delivery without deleting', async () => {
+    it('removes the branch from the remote too once main holds its head, as after a merge that kept the workspace', async () => {
       expect((await on('POST', '/workspace', { name: `${NAME}-gone` })).status).toBe(201);
       expect((await write(GONE, `remove-gone-${stamp}`)).status).toBe(200);
       expect((await on('POST', `/workspace/${GONE}/push`)).status).toBe(200);
       expect((await on('POST', `/workspace/${GONE}/bring-in`)).status).toBe(200);
-      const delivered = await json(await on('POST', `/workspace/${GONE}/deliver`, { message: 'Delivered, kept' }));
+      expect((await on('POST', `/workspace/${GONE}/merge-request`, { message: 'Merged, kept' })).status).toBe(201);
+      const delivered = await json(await on('POST', `/workspace/${GONE}/merge-request/merge`));
       expect(delivered.status, JSON.stringify(delivered.body)).toBe(200);
       expect(delivered.body.deleted).toBe(false);
 
       const removed = await json(await on('DELETE', `/workspace/${GONE}`));
       expect(removed.status, JSON.stringify(removed.body)).toBe(200);
       expect(removed.body).toMatchObject({ remote: 'deleted' });
+      expect(removed.body).not.toHaveProperty('link');
       await expect(onMain.branches.head(GONE)).rejects.toMatchObject({ status: 404 });
+      await expect(onMain.workspaces.get(GONE)).rejects.toMatchObject({ status: 404 });
       expect(await localStore('main').listBranches()).not.toContain(GONE);
       // A second removal finds nothing here to remove.
       expect((await on('DELETE', `/workspace/${GONE}`)).status).toBe(404);
@@ -435,6 +516,8 @@ describe('over the file-backed store in memory', () => {
       const again = await json(await on('DELETE', `/workspace/${TWICE}`));
       expect(again.status, JSON.stringify(again.body)).toBe(200);
       expect(again.body).toMatchObject({ remote: 'kept', reason: 'unmerged' });
+      // The first try had cleared the link before it failed, so the second finds none of this installation's to clear.
+      expect(['cleared', 'not_ours']).toContain(again.body.link);
       expect((await json(await on('GET', '/workspace'))).body.map((r: { branch: string }) => r.branch)).not.toContain(TWICE);
       expect(await localStore('main').listBranches()).not.toContain(TWICE);
     });
@@ -515,7 +598,115 @@ describe('over the file-backed store in memory', () => {
   });
 
 
-  describe("checks on a person's machine: the push gate, the mirror and delivery's wait (ADR-0070 decision 8)", () => {
+  describe('links and parents (ADR-0072 decisions 1, 4 and 7)', () => {
+    const made = async (name: string, from?: string) => {
+      const res = await json(await on('POST', '/workspace', { name, ...(from ? { from } : {}) }));
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      return res.body.branch as string;
+    };
+    const write = (branch: string, id: string, rationale = 'r') => on('PUT', `/documents/LearningNeed/${id}?branch=${branch}`, need(id, rationale));
+
+    it("unlinked from the other computer, this one's push is refused not_linked, the status says so, and the discard is the way on", async () => {
+      const branch = await made(`${NAME}-unlinked`);
+      expect((await write(branch, `lost-pushed-${stamp}`)).status).toBe(200);
+      expect((await on('POST', `/workspace/${branch}/push`)).status).toBe(200);
+      // The owner, at another computer or in any client, takes this one for lost.
+      expect((await onMain.workspaces.unlink(branch)).data.unlinked).toBe(true);
+      expect((await write(branch, `lost-unpushed-${stamp}`)).status).toBe(200);
+      const refused = await json(await on('POST', `/workspace/${branch}/push`));
+      expect(refused.status).toBe(409);
+      expect(refused.body).toMatchObject({ error: 'not_linked', remote: true, workspace: branch, pushed: [] });
+      expect((await json(await on('GET', `/workspace/${branch}/status`))).body).toMatchObject({ unpushed: 1, remote: { link: 'unlinked' } });
+      // Linked to another computer since, it says where; and nothing here takes it back.
+      await createClient({ baseUrl: remote.url, user: DESIGNER }).workspaces.link(branch, { link: OTHER_COMPUTER, linkLabel: 'Laptop' });
+      expect((await json(await on('GET', `/workspace/${branch}/status`))).body.remote).toMatchObject({ link: 'elsewhere', linkLabel: 'Laptop', linkedAt: expect.any(String) });
+      expect((await json(await on('POST', `/workspace/${branch}/push`))).body).toMatchObject({ error: 'held_elsewhere', remote: true, linkLabel: 'Laptop' });
+      for (const action of ['bring-in', 'unlink']) {
+        expect((await json(await on('POST', `/workspace/${branch}/${action}`))).body.error, action).toBe('unpushed_commits');
+      }
+      // The discard gives up the one commit and leaves the other computer's link alone.
+      const discarded = await json(await on('DELETE', `/workspace/${branch}?discard=1`));
+      expect(discarded.status, JSON.stringify(discarded.body)).toBe(200);
+      expect(discarded.body).toMatchObject({ remote: 'untouched', link: 'not_ours', discarded: { commits: [expect.any(String)] } });
+      expect((await onMain.workspaces.get(branch)).data).toMatchObject({ link: OTHER_COMPUTER, linkLabel: 'Laptop' });
+      expect((await json(await on('GET', '/workspace/elsewhere'))).body.linkedElsewhere.map((w: { branch: string }) => w.branch)).toContain(branch);
+    });
+
+    it('a workspace made from another branch updates from it and sends its request into it: the parent, never main', async () => {
+      const method = `cycle-method-${stamp}`;
+      await onMain.branches.create(method);
+      const branch = await made(`${NAME}-under`, method);
+      expect((await records.get(branch))!.from).toBe(method);
+      expect((await onMain.workspaces.get(branch)).data.parent).toBe(method);
+      // Its own work, pushed; the method moves on another record; main moves too, which is none of its business.
+      expect((await write(branch, `under-mine-${stamp}`)).status).toBe(200);
+      expect((await on('POST', `/workspace/${branch}/push`)).status).toBe(200);
+      await onMain.documents.put('LearningNeed', `under-method-${stamp}`, { branch: method, message: 'On the method', document: { label: 'method', rationale: 'r' } });
+      await onMain.documents.put('LearningNeed', `under-main-${stamp}`, { message: 'On main', document: { label: 'main', rationale: 'r' } });
+      const updated = await json(await on('POST', `/workspace/${branch}/bring-in`));
+      expect(updated.status, JSON.stringify(updated.body)).toBe(200);
+      expect(updated.body).toMatchObject({ upToDate: false, broughtIn: { documents: 1 } });
+      expect((await on('GET', `/documents/LearningNeed/under-method-${stamp}?branch=${branch}`)).status).toBe(200);
+      expect((await on('GET', `/documents/LearningNeed/under-main-${stamp}?branch=${branch}`)).status).toBe(404);
+      expect((await localStore(branch).log({ count: 1 }))[0].message).toContain(`Update from ${method} at `);
+      // The request goes to the method's branch, which the designer owns and so may merge into.
+      const opened = await json(await on('POST', `/workspace/${branch}/merge-request`, { message: 'For the method' }));
+      expect(opened.body).toMatchObject({ parent: method, mayMerge: true, request: { source: branch, target: method }, health: { mergeable: true } });
+      const merged = await json(await on('POST', `/workspace/${branch}/merge-request/merge`));
+      expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+      expect((await onMain.documents.get('LearningNeed', `under-mine-${stamp}`, { branch: method })).data.label).toBe(`under-mine-${stamp}`);
+      await expect(onMain.documents.get('LearningNeed', `under-mine-${stamp}`)).rejects.toMatchObject({ status: 404 });
+      // A workspace is no one's parent: nothing is made from one.
+      const child = await json(await on('POST', '/workspace', { name: `${NAME}-child`, from: branch }));
+      expect(child.status).toBe(409);
+      expect(child.body).toMatchObject({ error: 'parent_is_workspace', remote: true });
+    });
+
+    it("a request's health follows the workspace: a conflict once its parent moves against it, clean again after the update, the resolution and the push", async () => {
+      const branch = await made(`${NAME}-health`);
+      const id = `health-${stamp}`;
+      expect((await write(branch, id, 'mine')).status).toBe(200);
+      expect((await on('POST', `/workspace/${branch}/push`)).status).toBe(200);
+      expect((await json(await on('POST', `/workspace/${branch}/merge-request`, { message: 'A need' }))).body.health.mergeable).toBe(true);
+      await onMain.documents.put('LearningNeed', id, { message: 'The same record, on main', document: { label: id, rationale: 'theirs' } });
+      const conflicted = (await json(await on('GET', `/workspace/${branch}/merge-request`))).body.health;
+      expect(conflicted.mergeable).toBe(false);
+      expect(conflicted.conflicts).toEqual([{ id: `LearningNeed/${id}`, op: 'InsertConflict' }]);
+      expect((await json(await on('POST', `/workspace/${branch}/merge-request/merge`))).body).toMatchObject({ error: 'merge_conflict', remote: true });
+      // Resolved in the source (decision 5): the update reports the same conflict; its owner removes theirs by matching main's record, pushes and updates.
+      expect((await json(await on('POST', `/workspace/${branch}/bring-in`))).body.error).toBe('merge_conflict');
+      expect((await write(branch, id, 'theirs')).status).toBe(200);
+      expect((await on('POST', `/workspace/${branch}/push`)).status).toBe(200);
+      const after = (await json(await on('GET', `/workspace/${branch}/merge-request`))).body.health;
+      expect(after).toMatchObject({ conflicts: [], violations: [] });
+    });
+
+    it('records on the remote, at its first contact, a workspace this hub held before workspaces were linked (decision 7)', async () => {
+      const branch = await made(`${NAME}-before`);
+      // As it was before the upgrade: no record on the remote, and none of the link here.
+      const there = (await onMain.workspaces.get(branch)).data as unknown as TerminusDocument;
+      const older: Record<string, unknown> = { ...there, status: 'Closed' };
+      for (const field of ['link', 'linkedAt', 'linkLabel']) delete older[field];
+      await remoteStore('main').putDocuments([older as unknown as TerminusDocument], { author: 'User/demo-designer', message: 'As before workspaces were linked', create: true });
+      const held = (await records.get(branch))!;
+      delete held.link;
+      await records.put(held);
+      await expect(onMain.workspaces.get(branch)).rejects.toMatchObject({ status: 404 });
+      // Unprotected until then: the owner's write from anywhere lands, as on any branch. This hub's next push would
+      // meet it as a moved branch, which is the dead end the record prevents from here on.
+      expect((await json(await on('GET', `/workspace/${branch}/status`))).body.remote).toMatchObject({ link: 'none' });
+
+      expect((await write(branch, `before-${stamp}`)).status).toBe(200);
+      const pushed = await json(await on('POST', `/workspace/${branch}/push`));
+      expect(pushed.status, JSON.stringify(pushed.body)).toBe(200);
+      expect((await onMain.workspaces.get(branch)).data).toMatchObject({ branch, parent: 'main', owner: 'User/demo-designer', link: INSTALLATION, linkLabel: 'Cycle test', status: 'Active' });
+      expect((await records.get(branch))!.link).toBe(INSTALLATION);
+      expect((await json(await on('GET', `/workspace/${branch}/status`))).body.remote).toMatchObject({ link: 'here' });
+      await expect(onMain.documents.put('LearningNeed', `before-elsewhere-${stamp}`, { branch, message: 'x', document: { label: 'x', rationale: 'r' } })).rejects.toMatchObject({ code: 'held_elsewhere' });
+    });
+  });
+
+  describe("checks on a person's machine: the push gate, the mirror and a merge request's wait (ADR-0070 decision 8)", () => {
     const G = `${handleOf(DESIGNER)}_gate-${stamp}`;
     const LINT = `lint/mine-${stamp}`;
     const TEAM = `lint/team-${stamp}`;
@@ -614,34 +805,37 @@ describe('over the file-backed store in memory', () => {
       expect(await remoteMessage()).not.toContain('Armature-Local-Check-Override');
     });
 
-    it("the remote's requirements are mirrored for the tools here to read, and a delivery waits on the remote's check: its dry run and its refusal carry the remote's verdicts", async () => {
+    it("the remote's requirements are mirrored for the tools here to read, and a merge request waits on the remote's check: its health and its refusal carry the remote's verdicts", async () => {
       personalChecks = undefined;
       const agent = (await onMain.users.register({ message: 'A lint service for the cycle', user: { displayName: 'Lint (cycle)', externalId: SERVICE } })).data.id;
       const required = { '@type': 'CheckRequirement', check: TEAM, reporter: agent, level: 'Required', locked: false, params: { severity: 'error' }, status: 'Active' };
       const written = await onMain.documents.batch({ message: 'Lint before anything reaches main', documents: [required as never] });
       try {
-        // main moved (the agent, the requirement): brought in first, a merge from main, which no gate stops.
+        // main moved (the agent, the requirement): the workspace updates first, a merge from its parent, which no gate stops.
         expect((await on('POST', `/workspace/${G}/bring-in`)).status).toBe(200);
-        const dry = await json(await on('POST', `/workspace/${G}/deliver`, { message: 'Deliver the gate', dryRun: true }));
-        expect(dry.status).toBe(200);
-        expect(dry.body).toMatchObject({ dryRun: true, deleted: false, conflicts: [], violations: [] });
-        expect(dry.body.checks).toEqual([expect.objectContaining({ check: TEAM, reporter: agent, conclusion: 'pending', satisfied: false })]);
-        // The delivery refreshed the mirror: the requirement is read here, with the hash a preview runs under.
+        const opened = await json(await on('POST', `/workspace/${G}/merge-request`, { message: 'Merge the gate' }));
+        expect(opened.status).toBe(201);
+        expect(opened.body.health).toMatchObject({ mergeable: false, conflicts: [], violations: [] });
+        expect(opened.body.health.checks).toEqual([expect.objectContaining({ check: TEAM, reporter: agent, conclusion: 'pending', satisfied: false })]);
+        // Opening refreshed the mirror: the requirement is read here, with the hash a preview runs under.
         const mirrored = (await json(await on('GET', '/checks/requirements?target=main'))).body;
         expect(mirrored.requirements.map((r: { check: string; paramsHash: string }) => [r.check, r.paramsHash])).toContainEqual([TEAM, paramsHash({ severity: 'error' })]);
         expect(mirrored.personal).toEqual([]);
 
-        const waiting = await json(await on('POST', `/workspace/${G}/deliver`, { message: 'Deliver the gate' }));
+        const waiting = await json(await on('POST', `/workspace/${G}/merge-request/merge`));
         expect(waiting.status).toBe(409);
         expect(waiting.body).toMatchObject({ error: 'checks_pending', remote: true, pending: [TEAM] });
-        // The service reports on the remote, about the remote's head of the branch; then the delivery lands.
+        // The service reports on the remote, about the remote's head of the branch; then the health clears and the merge lands.
         const head = (await onMain.branches.head(G)).data.head.commit;
         const service = createClient({ baseUrl: remote.url, user: SERVICE });
         await service.checks.report({ check: TEAM, branch: G, commit: head, conclusion: 'pass', paramsHash: paramsHash({ severity: 'error' }) });
-        const delivered = await json(await on('POST', `/workspace/${G}/deliver`, { message: 'Deliver the gate' }));
+        expect((await json(await on('GET', `/workspace/${G}/merge-request`))).body.health).toMatchObject({ mergeable: true, checks: [expect.objectContaining({ conclusion: 'pass', satisfied: true })] });
+        const delivered = await json(await on('POST', `/workspace/${G}/merge-request/merge`));
         expect(delivered.status).toBe(200);
         expect(delivered.body.checks).toEqual([expect.objectContaining({ check: TEAM, conclusion: 'pass', satisfied: true })]);
-        expect((await onMain.branches.log('main', { count: 1 })).data.commits[0].message).toContain(`Armature-Check: ${TEAM} pass run=`);
+        const message = (await onMain.branches.log('main', { count: 2 })).data.commits[1].message;
+        expect(message).toContain(`Armature-Check: ${TEAM} pass run=`);
+        expect(message).toContain('Armature-Merge-Request: MergeRequest/');
       } finally {
         // Withdrawn, so nothing after this group is gated.
         await onMain.documents.batch({ message: 'Withdraw', documents: [{ ...required, status: 'Revoked', rationale: 'The test is over' } as never] });

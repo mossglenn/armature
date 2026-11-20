@@ -1,41 +1,41 @@
 import type { MergeResult } from '@armature/client';
 import { storeOf, type HubConfig } from '../config';
 import { ApiError } from '../errors';
-import { MIRROR_BRANCH } from '../role';
 import { createOperatorStore, isUnknownRef, type OperatorStore } from '../store';
-import { mirrorMain } from './clone';
+import { clearOwnLink, linkState } from './links';
 import { localCommitsSince, mappingOf } from './commits';
 import { settleBringIn, writeMerged, type Merged } from './merged';
-import { emptyPushTable, type WorkspaceRecord, type WorkspaceRecords } from './records';
+import { emptyPushTable, parentOf, type WorkspaceRecord, type WorkspaceRecords } from './records';
 import { fromRemote, ownerClient, remoteCommitOf } from './remote';
 import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
 
 /**
- * Bring in `main` and deliver (ADR-0065 decision 6 with its notes;
- * docs/workspace-hub-plan.md §4 and §6): the two merges of the cycle, both
- * the remote's, driven from here as the owner.
+ * Updating a workspace from its parent, unlinking it and removing it
+ * (ADR-0065 decision 6 with its notes; ADR-0072 decisions 4 and 7;
+ * docs/workspace-hub-plan.md §4 and §6). A workspace's work leaves it by a
+ * merge request, `./requests.ts`, which replaced delivery on 2026-11-20.
  *
- * Bringing in asks the remote to merge `main` into the workspace, with
- * nothing left to push and `If-Match` naming the last commit this hub
- * pushed, so a branch someone else moved is the remote's 412 as it is for a
+ * Updating (in the code and the routes, *bring in*) asks the remote to merge
+ * the workspace's parent into it, `main` unless it was made from another
+ * branch, with nothing left to push and `If-Match` naming the last commit
+ * this hub pushed, so a branch that moved is the remote's 412 as it is for a
  * push. The remote checks the merged state before it commits (ADR-0025
  * decision 5, note) and reports a conflict per field, which comes back as
- * the remote gave it; the review is the program's, the resolution ordinary
+ * the remote gave it; the review is the app's, the resolution ordinary
  * local writes pushed like any other (§6). A clean merge is then read back,
  * the documents it changed at the merge commit, and written into the local
  * branch as one commit the push table maps to the merge commit, so the next
- * push continues from it (`./merged.ts`, which also settles a bring-in the
- * remote merged and this hub did not finish). This is the second route-side use of the
- * operator-side methods (ADR-0062, note of 2026-11-01), bounded like the
- * clone's: the remote already checked these documents, and the local
+ * push continues from it (`./merged.ts`, which also settles an update the
+ * remote merged and this hub did not finish). This is the second route-side
+ * use of the operator-side methods (ADR-0062, note of 2026-11-01), bounded
+ * like the clone's: the remote already checked these documents, and the local
  * pipeline would refill what the remote decided.
  *
- * Delivering asks the remote to merge the workspace into `main` with the
- * person's message, after `main` has been brought in cleanly, which a dry
- * run of that merge confirms; a maintainer of `main` is needed there (ADR-0068
- * decision 4), and the remote's refusal comes back as given. The workspace
- * may then be deleted, on the remote (allowed, since `main` holds its head)
- * and here, or kept.
+ * Unlinking from this computer (ADR-0072 decision 4) clears the remote
+ * record's link and removes the local copy, with nothing left to push, since
+ * everything in it is then on the remote. The workspace stays there,
+ * unlinked, owned, with its parent, to be linked from this computer or
+ * another.
  *
  * Removing a workspace (since 2026-11-07, which the first rehearsal of the
  * desktop program found missing: a workspace delivered without deleting it
@@ -45,10 +45,12 @@ import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
  * branch another branch holds the head of, as `main` does after a delivery,
  * and keeps one with commits no other branch holds (409 `unmerged_branch`),
  * and its authorization refuses a branch the owner may not delete (403). Kept,
- * the branch stays on the remote as the record of that work, cloned again if
- * wanted; the answer says what became of it. A remote that cannot be reached
- * keeps it too, and the local copy goes all the same, since nothing on it is
- * unpushed.
+ * the branch stays on the remote, now as an unlinked workspace that can be
+ * linked again (ADR-0072 decision 4): the link is cleared when it is this
+ * installation's. The answer says what became of the branch and of the link.
+ * A remote that cannot be reached keeps both, and the local copy goes all the
+ * same, since nothing on it is unpushed; the owner then unlinks it from
+ * another computer's list.
  *
  * Each of the three holds the workspace's write queue (`Store.exclusive`;
  * ADR-0025 decision 7, note of 2026-11-11) from its check that nothing is
@@ -70,7 +72,9 @@ import { ensureSnapshots, resolvableCommitsOf } from './snapshots';
  * that states how many local commits it gives up, and it is this machine's
  * alone: nothing is asked of the remote, so it needs no network and no
  * sign-in, which the cases it is for often lack. The count is the
- * confirmation: one that differs from what is there is refused (409
+ * confirmation, since 2026-11-20 the link is cleared on the remote when it
+ * can be asked and the link is this installation's (ADR-0072 decision 4), and
+ * the discard goes on without that when it cannot: one that differs from what is there is refused (409
  * `discard_mismatch`) and nothing changes. Everything the workspace holds here,
  * its records and its branch's own commit files, is first copied aside
  * (`WorkspaceRecords.setAside`), since these are commits no other branch holds
@@ -105,33 +109,24 @@ export interface RemoveResult {
   workspace: WorkspaceRecord;
   /** What became of the branch on the remote: deleted, kept, already absent, or, after a discard, not asked about. */
   remote: 'deleted' | 'kept' | 'absent' | 'untouched';
+  /**
+   * What became of the remote's link to this computer where the branch stays (ADR-0072 decision 4): cleared, so
+   * the workspace can be linked again; kept, when the remote could not be asked or refused, for its owner to
+   * unlink from another computer; or never this installation's. Absent when the branch was deleted or is not
+   * this hub's remote's.
+   */
+  link?: 'cleared' | 'kept' | 'not_ours';
   /** Why it was kept: commits no other branch holds, the remote's refusal, or no answer. */
   reason?: 'unmerged' | 'forbidden' | 'unreachable';
   /** After a discard: the local commits given up, newest first, and where the workspace's files were set aside in the hub's folder. */
   discarded?: { commits: string[]; setAside?: string };
 }
 
-export interface DeliverResult {
+/** `POST /workspace/:name/unlink` for a workspace this hub holds: it left this computer, and stays on the remote. */
+export interface UnlinkedHere {
   workspace: WorkspaceRecord;
-  /** The remote's merge into `main`. */
-  delivered: { commit: string; base: string; source: string; target: string; upToDate: boolean };
-  /** True when the workspace was deleted on the remote and here. */
-  deleted: boolean;
-  /** The remote's verdicts on its required checks for this merge (ADR-0070 decision 6); absent when none applied. */
-  checks?: MergeResult['checks'];
-  /** On a dry run: what the remote's merge would find, nothing merged. */
-  dryRun?: true;
-  conflicts?: MergeResult['conflicts'];
-  violations?: MergeResult['violations'];
-}
-
-export interface DeliverOptions {
-  message: string;
-  deleteWorkspace?: boolean;
-  /** The remote merge's `overrides`: its required checks the caller takes on themselves, where they may. */
-  overrides?: Array<{ check: string; reason: string }>;
-  /** Asks the remote what the merge would find, its checks' verdicts among it, and merges nothing. */
-  dryRun?: boolean;
+  /** What became of the remote's link: cleared, or never this installation's (unlinked from elsewhere already). */
+  link: 'cleared' | 'not_ours';
 }
 
 /** The local commits the push table does not hold, and whether the local branch is still there; one already gone has none. */
@@ -169,7 +164,8 @@ async function bringInHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
   // A bring-in that did not finish is settled first (./merged.ts): what the remote merged then is written
   // here before anything is counted as unpushed or asked of the remote again.
   const settled = await settleBringIn(hub, records, record, remote);
-  const { lastRemote } = await requireNothingUnpushed(hub, records, record, `updating from ${MIRROR_BRANCH}`);
+  const parent = parentOf(record);
+  const { lastRemote } = await requireNothingUnpushed(hub, records, record, `updating from ${parent}`);
   const local = localOf(hub, branch);
   const table = (await records.getPush(branch)) ?? emptyPushTable();
   // The marker, before the request: the remote may merge and its answer, or the read-back, not arrive.
@@ -178,7 +174,7 @@ async function bringInHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
   let merged: MergeResult;
   try {
     merged = (
-      await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: message ?? `Update from ${MIRROR_BRANCH}`, ifMatch: lastRemote }))
+      await fromRemote(hub, () => remote.branches.merge(branch, { from: parent, message: message ?? `Update from ${parent}`, ifMatch: lastRemote }))
     ).data;
   } catch (err) {
     if (err instanceof ApiError && err.code !== 'remote_unreachable') {
@@ -195,7 +191,7 @@ async function bringInHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
     return settled ? broughtIn(hub, records, record, remote, settled) : { workspace: record, remoteHead: lastRemote, upToDate: true };
   }
   // Checked before it is recorded; a refusal here leaves the marker, which the next bring-in or push settles from the remote's log.
-  table.bringingIn.merged = remoteCommitOf(hub, merged.commit, `the merge of ${MIRROR_BRANCH} into ${branch}`);
+  table.bringingIn.merged = remoteCommitOf(hub, merged.commit, `the merge of ${parent} into ${branch}`);
   await records.putPush(branch, table);
   const written = await writeMerged(hub, records, record, remote, table);
   return { ...(await broughtIn(hub, records, record, remote, written)), merge: { base: merged.base, source: merged.source, target: merged.target } };
@@ -210,52 +206,22 @@ async function broughtIn(hub: HubConfig, records: WorkspaceRecords, record: Work
   return { workspace: record, remoteHead: written.remote, upToDate: false, broughtIn: { local: written.local, documents: written.documents.length } };
 }
 
-export function deliver(
-  hub: HubConfig,
-  records: WorkspaceRecords,
-  record: WorkspaceRecord,
-  opts: DeliverOptions
-): Promise<DeliverResult> {
-  return localOf(hub, record.branch).exclusive(() => deliverHeld(hub, records, record, opts));
-}
-
-async function deliverHeld(
-  hub: HubConfig,
-  records: WorkspaceRecords,
-  record: WorkspaceRecord,
-  opts: DeliverOptions
-): Promise<DeliverResult> {
-  const { branch } = record;
-  await requireNothingUnpushed(hub, records, record, 'merging');
-  const remote = await ownerClient(hub, record);
-  // The remote's requirements, mirrored again for the tools here to read (ADR-0070 decision 8). The remote enforces
-  // them on the merge below, and its refusals, `checks_pending` and `checks_failed` with their verdicts, come back as given.
-  await mirrorMain(hub, remote, { id: record.owner, externalId: record.ownerExternalId });
-  // main brought in cleanly: the merge of main into the workspace has nothing left to do.
-  const preview: MergeResult = (await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: 'preview', dryRun: true }))).data;
-  if (!preview.upToDate) {
-    throw new ApiError(409, 'bring_in_first', `${MIRROR_BRANCH} has work ${branch} has not taken in; update from ${MIRROR_BRANCH}, resolve what it reports, then merge`, {
-      conflicts: preview.conflicts ?? [],
-      violations: preview.violations ?? [],
-    });
-  }
-  const overrides = opts.overrides?.length ? { overrides: opts.overrides } : {};
-  const delivered: MergeResult = (
-    await fromRemote(hub, () => remote.branches.merge(MIRROR_BRANCH, { from: branch, message: opts.message, ...overrides, ...(opts.dryRun ? { dryRun: true } : {}) }))
-  ).data;
-  const result: DeliverResult = {
-    workspace: record,
-    delivered: { commit: delivered.commit ?? '', base: delivered.base, source: delivered.source, target: delivered.target, upToDate: delivered.upToDate },
-    deleted: false,
-    ...(delivered.checks ? { checks: delivered.checks } : {}),
-  };
-  // A dry run is the remote's: what its merge would find, its checks' verdicts among it, and nothing changed anywhere.
-  if (opts.dryRun) return { ...result, dryRun: true, conflicts: delivered.conflicts ?? [], violations: delivered.violations ?? [] };
-  if (!opts.deleteWorkspace) return result;
-  await fromRemote(hub, () => remote.branches.delete(branch));
-  await deleteLocal(hub, branch);
-  await records.remove(branch);
-  return { ...result, deleted: true };
+/**
+ * Unlinks the workspace from this computer: the remote's link is cleared and the local copy removed, with
+ * nothing left to push. The remote is asked first, so a workspace that cannot be unlinked there stays here.
+ */
+export function unlinkHere(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord): Promise<UnlinkedHere> {
+  return localOf(hub, record.branch).exclusive(async () => {
+    const { branch } = record;
+    await requireNothingUnpushed(hub, records, record, 'unlinking it from this computer');
+    const remote = await ownerClient(hub, record);
+    const { state } = await linkState(hub, remote, branch);
+    // Linked to this installation: cleared. Unlinked already, or linked to another computer since: nothing of this one's to clear.
+    if (state === 'here') await fromRemote(hub, () => remote.workspaces.unlink(branch));
+    await deleteLocal(hub, branch);
+    await records.remove(branch);
+    return { workspace: record, link: state === 'here' ? 'cleared' : 'not_ours' };
+  });
 }
 
 /**
@@ -291,11 +257,25 @@ async function discardHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
       { unpushed, stated }
     );
   }
-  // An unfinished bring-in's marker goes with the push table, set aside like the rest; nothing is asked of the remote.
+  // An unfinished bring-in's marker goes with the push table, set aside like the rest. The remote's branch is not
+  // asked about; its link to this computer is cleared when the remote answers (ADR-0072 decision 4: "Discard and
+  // remove clears the link as well"), and the discard goes on when it does not, since the cases it is for often
+  // have no remote to ask.
   const setAside = await records.setAside(branch, stampOf(new Date()));
   await deleteLocal(hub, branch);
   await records.remove(branch);
-  return { workspace: record, remote: 'untouched', discarded: { commits: unpushed, setAside } };
+  const link = record.remote === (hub.remote ?? '') ? await clearLinkQuietly(hub, record) : undefined;
+  return { workspace: record, remote: 'untouched', ...(link ? { link } : {}), discarded: { commits: unpushed, setAside } };
+}
+
+/** The remote's link cleared when it is this installation's; `kept` whatever stops the asking, a credential's refusal included. */
+async function clearLinkQuietly(hub: HubConfig, record: WorkspaceRecord): Promise<'cleared' | 'kept' | 'not_ours'> {
+  try {
+    return await clearOwnLink(hub, await ownerClient(hub, record), record.branch);
+  } catch (err) {
+    if (err instanceof ApiError) return 'kept';
+    throw err;
+  }
 }
 
 /** Thrown and caught within `removeHeld`: the workspace is not this hub's remote's. */
@@ -323,7 +303,9 @@ async function removeHeld(hub: HubConfig, records: WorkspaceRecords, record: Wor
     else if (fromTheRemote && err.status === 404) outcome = { remote: 'absent' };
     else throw err;
   }
+  // Where the branch stays on the remote, it stays as an unlinked workspace that can be linked again (ADR-0072 decision 4).
+  const link = outcome.remote === 'kept' ? await clearLinkQuietly(hub, record) : undefined;
   await deleteLocal(hub, branch);
   await records.remove(branch);
-  return { workspace: record, ...outcome };
+  return { workspace: record, ...outcome, ...(link ? { link } : {}) };
 }

@@ -18,6 +18,12 @@ import { ApiError } from '../errors';
  * pushed, bring in or delivered, `GET /users/me` on the remote must resolve to
  * the workspace's owner, else 403 `forbidden` with `reason: remote_identity`,
  * so a token left over from someone else's sign-in never pushes as them.
+ *
+ * Every call carries this installation's identifier as
+ * `Armature-Workspace-Link` (ADR-0072 decision 3, since 2026-11-20), which
+ * the remote compares on a write to a workspace's branch: the push, the
+ * update from the parent and the removal are taken from the computer the
+ * workspace is linked to and from no other.
  */
 
 /** Each call to the remote ends within this; a full export of a large bank is the slowest, so longer than the store's 30 seconds. */
@@ -36,6 +42,7 @@ export function remoteClient(hub: HubConfig, externalId?: string, agent?: string
     baseUrl: remote,
     ...(hub.remoteToken ? { token: hub.remoteToken } : { user: externalId }),
     ...(agent ? { agent } : {}),
+    ...(hub.installation ? { workspaceLink: hub.installation.id } : {}),
     timeout: REMOTE_TIMEOUT_MS,
     fetch: (input, init) => withFreshToken(hub, (headers) => withoutRedirect(remote, input, { ...init, headers }), init?.headers),
   });
