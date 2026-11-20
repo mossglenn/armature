@@ -17,6 +17,8 @@ test('offers the link to the program, from the hub\'s profile', async ({ page })
   await page.getByRole('link', { name: 'Your own computer' }).click();
   await expect(page.getByRole('heading', { name: 'Work from your own computer' })).toBeVisible();
   await expect(page.getByText('localhost', { exact: true })).toBeVisible();
+  // Every page's title is the instance's own name, here the hub's host name.
+  await expect(page).toHaveTitle('localhost');
   await expect(page.getByRole('link', { name: 'Open in Armature Desktop' })).toHaveAttribute('href', 'armature://connect?remote=http%3A%2F%2Flocalhost%3A3100');
   await expect(page.getByRole('link', { name: 'Get the app' })).toHaveAttribute('href', /\/releases$/);
   expect(errors).toEqual([]);
