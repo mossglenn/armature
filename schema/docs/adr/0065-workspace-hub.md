@@ -97,6 +97,13 @@ Each of those ADRs gets a dated note pointing here when this one is accepted.
 > the parent, which the owner who may merge opens and merges in one step. Decision 7: the program's
 > own actions gain linking a workspace to this computer and unlinking it, from this computer or
 > from another.
+>
+> **Note (2026-11-20):** ADR-0072 is built. A workspace hub has an installation, sends it to its
+> remote as `Armature-Workspace-Link`, creates its workspaces linked to it, and records on the remote
+> the ones it held before. Decision 6's delivery and its dry run are replaced by the workspace's merge
+> request into its parent (`workspace/requests.ts`), and bring-in merges that parent. Decision 2's
+> clone of any branch (`{ existing }`) is replaced by linking one of the owner's own workspaces.
+> Decision 7's actions gain link, unlink and the merge request's three.
 
 ## Context
 

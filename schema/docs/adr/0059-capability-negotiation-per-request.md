@@ -37,6 +37,12 @@ without a token so a client can read how to sign in. Each is a dated contract re
 > **Note (2026-11-19):** ADR-0072 is accepted, not yet built. Decision 4 gains one capability,
 > `armature/merge-requests`, and `armature/workspace` gains settings for linking; each change a
 > client acts on is a client revision when it is built (ADR-0072, Consequences).
+>
+> **Note (2026-11-20):** built. `armature/merge-requests` is a remote hub's capability, its setting
+> `required` naming the merges the merge route refuses outside a request; the routes under
+> `/workspaces` sit under `armature/branches`, which gains `workspaces: "linked"`; a desktop hub's
+> `armature/workspace` gains `link` and `delivery`. Client revision 2026-11-20, under which
+> something a client did before is refused: a direct merge into `main`.
 
 ## Context
 

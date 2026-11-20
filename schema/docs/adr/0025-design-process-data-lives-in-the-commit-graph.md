@@ -68,6 +68,12 @@ Decision 6's branch deletion is the owner's or a maintainer's, revokes the branc
 > refused from clients (ADR-0072 decision 5). Decision 5's merge is refused outside a request when
 > it is from a workspace or into `main` (409 `request_required`); between other branches, and into a
 > workspace from its parent, it stays direct.
+>
+> **Note (2026-11-20):** built. `Armature-Merge-Request: <MergeRequest id>` is written on a merge
+> made through a request and refused from clients. Decision 5's merge route refuses a merge into
+> `main`, or from a workspace, made directly (409 `request_required`), a dry run excepted; the same
+> merge runs for a request (`mergeBranches`). Decision 6: deleting a branch also closes its workspace
+> record and the open requests naming it.
 
 ## Context
 

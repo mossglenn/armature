@@ -117,6 +117,11 @@ annotate:
 > whoever may merge into its target; *link, unlink, list a workspace*, its owner, and an
 > administrator to list and unlink any. Open question 2, a request for delivery, is answered: the
 > request is a record on `main`, and every merge from a workspace or into `main` goes through one.
+>
+> **Note (2026-11-20):** built (`authorization.ts`): the rows above, and one more that ADR-0072's
+> upgrade needs, *record a branch as a workspace*, the branch's Owner. A workspace's request is opened
+> by its owner alone, a maintainer of every branch included. An administrator may unlink any
+> workspace and may not link one. The link check is not authority and comes after it: 403 before 409.
 
 ## Context
 

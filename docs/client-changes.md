@@ -17,7 +17,119 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ## 2026-11-20 · Workspaces linked to one computer, and merge requests
 
-ADR-0072, built. (This entry is completed with the build.)
+[ADR-0072](../schema/docs/adr/0072-linked-workspaces-and-merge-requests.md), built. Two records on
+`main` that the hub alone writes: `Workspace`, which makes a branch a workspace linked to one
+installation of the desktop app, and `MergeRequest`, which records that someone asked for one
+branch to be merged into another and who decided. This revision refuses something a client did
+before: **a merge into `main`, and a merge from a workspace, is now made through a merge
+request.** The reference is [`api.md`](api.md), §§ "Workspaces",
+"Merge requests" and "Workspace".
+
+**What a client of a remote hub does differently.**
+
+- **A merge into `main` goes through a merge request.** `POST /branches/main/merge`, and
+  `POST /branches/:name/merge` whose `from` is a workspace, answer **409** `request_required`
+  (`source`, `target`, `reason`: `into_main` or `from_workspace`) unless `dryRun` is true. Open
+  one, then merge it: `POST /merge-requests` `{ source, target, message }`, then
+  `POST /merge-requests/:id/merge` `{ overrides? }`. Whoever may merge into the target does both,
+  one after the other; the request is the record of who asked and who decided, and its `message`
+  is the merge commit's. Merges between two branches other than `main` are as before, and so is a
+  dry run of any merge.
+- **A request's health is a read.** `GET /merge-requests/:id` answers `{ request, health }`:
+  `mergeable`, `upToDate`, `conflicts`, `violations`, `checks`, `bringInFirst`, the three commits,
+  or `missing` when a branch it names is gone. Nothing of it is stored. Read it again when
+  `GET /events` reports a commit on the source, the target or `main`.
+- **The other request routes.** `GET /merge-requests?source=&target=&status=`;
+  `POST /merge-requests/:id/close`, for its opener, the source's owner or whoever may merge into
+  the target. New refusals: **409** `request_open` (the pair has an open one; `request` names it),
+  **409** `target_is_workspace`, **409** `request_decided`, **409** `nothing_to_merge`, **409**
+  `branch_gone`. The merge's own refusals come through unchanged: `merge_conflict`,
+  `invariant_violation`, `bring_in_first`, `checks_pending`, `checks_failed`.
+- **The merge commit carries `Armature-Merge-Request: <id>`**, a trailer the hub writes and
+  refuses from a client (400 `reserved_trailer`), as it refuses the others.
+- **A workspace's branch is written only from the computer it is linked to.** A document write, a
+  merge into the branch, or its deletion, on a branch an `Active` linked `Workspace` record
+  names, must carry `Armature-Workspace-Link: <installation>`: **409** `held_elsewhere`
+  (`workspace`, `linkLabel?`, `linkedAt`) otherwise, and **409** `not_linked` when the workspace is
+  linked to no computer. Judged after identity and authority, so a client that may not write the
+  branch is still 403. A client that is not a desktop hub never sends the header, and so never
+  writes a workspace: it reads one, and writes branches. `GET /workspaces/:branch` says whether a
+  branch is a workspace (404 when not).
+- **`POST /branches` takes `workspace: { link, linkLabel? }`**, which makes the branch a workspace
+  linked to that installation, its parent the branch it is created from (**409**
+  `parent_is_workspace` when that is a workspace; 400 when `from` is a commit). Without it a
+  branch is a branch, as before.
+- **`/workspaces`**: `GET /workspaces?owner=me|<User id>&linked=&status=`, one's own or, for an
+  administrator, anyone's; `POST /workspaces/:branch/link` `{ link, linkLabel? }`, for its owner,
+  409 `held_elsewhere` when it is linked to another installation; `POST /workspaces/:branch/unlink`,
+  for its owner or an administrator, from anywhere; `POST /workspaces` `{ branch, parent?, link }`,
+  which records a branch that exists as a workspace, for its Owner.
+- **Deleting a branch** closes its workspace record and every open request naming it, in the
+  commit that revokes its grants. A linked workspace's branch is deleted from its own computer.
+- **The merge gate's first step** (ADR-0070 decision 6) no longer counts commits on the target that
+  changed only records kept on `main` alone, so a gated request into `main` is not refused
+  `bring_in_first` for its own opening.
+- **Discovery.** `armature/merge-requests` (a remote hub; `required`: the merges that need one);
+  `armature/branches` gains `workspaces: "linked"` and covers `/workspaces`; on a desktop hub
+  `armature/workspace` gains `link: "installation"` and `delivery: "merge-request"`.
+- **Schema.** `Workspace`, `MergeRequest`, `WorkspaceStatus`, `MergeRequestStatus`; constraints 27
+  to 33. Neither class is written through the document routes (400), and both are read there like
+  any document on `main`. Neither is in an export slice. An operator loads the schema before the
+  hub is updated (`load_schema.js`), as for any schema change.
+
+**What a client of a desktop hub does differently.**
+
+- **`POST /workspace/:name/deliver` is gone**, with its dry run. In its place, the workspace's
+  merge request into its parent: `GET /workspace/:name/merge-request` (`parent`, `request?`,
+  `health?`, `mayMerge`), which a tool may read to show where the work is; and, as the app's own
+  actions, `POST /workspace/:name/merge-request` `{ message }`, `…/merge-request/merge`
+  `{ overrides?, deleteWorkspace? }` and `…/merge-request/close`. **409** `no_request` when none
+  is open.
+- **`POST /workspace` with `{ existing }` is gone**: 400. `{ link: <branch> }` links one of the
+  owner's workspaces that is linked to no computer and clones it. Someone else's branch is read
+  on the instance and no longer copied.
+- **`GET /workspace/elsewhere`** lists the owner's workspaces that are not on this computer:
+  `unlinked`, and `linkedElsewhere` with each link's label and time. **`POST /workspace/:name/unlink`**
+  unlinks a workspace from this computer (its copy removed, 409 `unpushed_commits` first), or with
+  `{ elsewhere: true }` unlinks one this hub does not hold from the other computer.
+- **`bring-in` merges the workspace's parent**, which is `main` unless it was created from another
+  branch; the record's `from` is that parent, and is now always present on a new or linked one.
+- **`GET /workspace/:name/status`**: `remote` gains `link` (`here`, `elsewhere`, `unlinked`, or
+  `none` for a workspace not yet recorded), with `linkLabel` and `linkedAt` when it is elsewhere. A
+  push from a computer the workspace is not linked to is the remote's 409, with `pushed` and `at`.
+- **`DELETE /workspace/:name`** answers `link` (`cleared`, `kept`, `not_ours`) where the branch
+  stays on the remote, which keeps it as an unlinked workspace; a discard clears the link when the
+  remote answers.
+- **A workspace held before this** is recorded on the remote, linked to this installation, at the
+  hub's first contact after the update. Until then it works as it did, unprotected.
+- **A hub needs an installation identifier**: the desktop app keeps one in its settings;
+  `app/server.ts` takes `ARMATURE_INSTALLATION` (and `ARMATURE_INSTALLATION_NAME`), or keeps one it
+  draws in the hub's folder as `installation.json`.
+
+**`@armature/client`** (revision 2026-11-20): `workspaceLink` in the options; `branches.create`'s
+third argument `{ workspace }`; `workspaces.list`, `get`, `adopt`, `link`, `unlink`;
+`mergeRequests.open`, `list`, `get`, `merge`, `close`; and on a desktop hub `workspace.elsewhere`,
+`workspace.unlink`, `workspace.mergeRequest.get`, `open`, `merge`, `close`, with
+`workspace.create` taking `{ link }`. `workspace.deliver` and the types `DeliverResult` and
+`WorkspaceWarning` are removed.
+
+**`@armature/vocabulary`** (revision 2026-11-20): the twelve names that waited on this are shown
+as named, "clone" is avoided for people, and `action.clone-branch` is removed
+(`packages/vocabulary/CHANGES.md`).
+
+**CoQui.** A round merged into `main` now needs a request: where CoQui called
+`branches.merge('main', { from: round, message })`, it calls `mergeRequests.open({ source: round,
+target: 'main', message })` and then `mergeRequests.merge(id)`, as the same person, who must still
+be a maintainer of `main` to merge; a reviewer who is not can open the request and leave the merge
+to one who is, which is ADR-0068's open question 2 answered. CoQui's rounds are branches, not
+workspaces, so nothing else changes: its writes need no link, and its merges between rounds stay
+direct. A dry run before a merge into `main` is as before; an open request's health is the same
+answer without asking twice.
+
+**Quiver.** Its buttons open the desktop app at an action, and the action that was "Merge into
+main" is now a merge request into the workspace's parent. `GET /workspace/:name/merge-request` is
+the read for its "where the work is" strip: the parent's line can show the open request's health.
+A workspace is created with a parent (`from`), and "Update from <parent>" names it.
 
 ---
 
