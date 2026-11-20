@@ -15,6 +15,12 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-20 · Workspaces linked to one computer, and merge requests
+
+ADR-0072, built. (This entry is completed with the build.)
+
+---
+
 ## 2026-11-16 · A workspace hub checks what its remote supplies and refuses another remote's workspace; the pseudonymous export names a branch by its owner
 
 From the code review of 2026-11-09's lower findings

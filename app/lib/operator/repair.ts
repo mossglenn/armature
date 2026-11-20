@@ -1,5 +1,5 @@
 import { canonical } from '../api/fragments';
-import { revocablesNaming, revokeGrantsNaming } from '../api/grants';
+import { recordsName, revokeGrantsNaming } from '../api/grants';
 import { findUserByExternalId, REGISTRY_BRANCH, type ResolvedUser } from '../api/identity';
 import { mergeBase } from '../api/routes/branches';
 import { identityKey } from './identity';
@@ -133,7 +133,8 @@ export const isScratchName = (name: string): boolean => {
 /**
  * A scratch branch deleted (decision 7): only a name with a scratch prefix,
  * never a branch holding design work, which is process data to name rather
- * than delete. The grants naming the branch are revoked first, as a marked
+ * than delete. The grants naming the branch are revoked first, and its
+ * workspace record and open merge requests closed (ADR-0072), as a marked
  * commit on `main` by the operator (ADR-0068 decision 3: revoke, then
  * delete), when there are any. The deletion itself makes no commit; the
  * branch's commits stay readable by id (check T2), so the head is returned
@@ -146,7 +147,7 @@ export async function deleteScratchBranch(name: string, opts: { as: string }): P
   const who = await operatorIdentity(opts.as);
   const main = createOperatorStore({ branch: REGISTRY_BRANCH });
   let revoked: string[] = [];
-  if ((await revocablesNaming(main, name)).length) {
+  if (await recordsName(main, name)) {
     const message = 'Scratch branch deleted';
     ({ result: { revoked } } = await asOperatorCommit(REGISTRY_BRANCH, who, message, { tool: 'delete', rulesSkipped: false }, (transient) =>
       revokeGrantsNaming(who, name, message, { main, write: transient })

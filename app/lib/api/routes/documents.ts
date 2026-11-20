@@ -17,6 +17,7 @@ import {
 } from '../http';
 import { resolveUser } from '../identity';
 import { refuseMirrorWrite } from '../role';
+import { requireLink } from '../workspaces';
 import { isRecord, type HistoryEntry, type Ref, type TerminusDocument } from '../store';
 import { CommitMemo } from '../memo';
 import { arrivedAt, parseDocuments, writeDocuments } from '../write';
@@ -34,7 +35,10 @@ import { arrivedAt, parseDocuments, writeDocuments } from '../write';
  *
  * Both writes run the same pipeline (../write.ts): generated Zod shape,
  * 409 on an id held by another type, createdBy from the resolved identity,
- * the invariants engine, one commit, If-Match honored. A batch may use
+ * the invariants engine, one commit, If-Match honored. A write to a
+ * workspace's branch carries its link, `Armature-Workspace-Link` (ADR-0072
+ * decision 3; ../workspaces.ts): 409 `held_elsewhere` or `not_linked`
+ * otherwise, judged after identity and authority. A batch may use
  * @capture and { "@ref" } to reference a document it creates, which is how
  * a note attaches to a Hash-keyed junction written in the same request.
  */
@@ -164,6 +168,8 @@ documents.put('/:type/:id', async (c) => {
 
   const who = await resolveUser(c);
   await requireWrite(c, who, ref.branch, [document]);
+  // After identity and authority: the owner has the right, and may be writing from the wrong place (ADR-0072 decision 3).
+  await requireLink(c, ref.branch, 'writes it');
   const { commit } = await writeDocuments([document], {
     branch: storeFor(c, ref),
     who,
@@ -188,6 +194,7 @@ documents.post('/', async (c) => {
 
   const who = await resolveUser(c);
   await requireWrite(c, who, ref.branch, parsed);
+  await requireLink(c, ref.branch, 'writes it');
   const { commit, ids } = await writeDocuments(parsed, {
     branch: storeFor(c, ref),
     who,
