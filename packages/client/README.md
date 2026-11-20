@@ -16,7 +16,7 @@ import { createClient, HubError } from '@armature/client';
 
 const hub = createClient({ baseUrl: 'http://localhost:3100', user: 'demo-designer@example.edu' });
 // An AI agent drafting for that person: add agent: 'agent:<tool>/<name>'; the agent is the author, the person's authority applies (ADR-0067 decision 3).
-// A workspace hub on this machine: add localToken: process.env.ARMATURE_LOCAL_TOKEN, its per-launch secret, which every write carries (ADR-0065 decision 7).
+// A workspace hub on this machine: add localToken: process.env.ARMATURE_LOCAL_TOKEN, its pairing key, which every write carries (ADR-0065 decision 7).
 // A hub under oidc: token: () => session.accessToken() instead of user; (await hub.discover()).data.identity says which a hub wants (ADR-0067 decisions 1 and 9).
 
 const { data: objectives, commit } = await hub.documents.list('LearningObjective', { branch: 'main' });
