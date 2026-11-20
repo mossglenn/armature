@@ -78,6 +78,7 @@ export function LensRail({
       {lens === 'coverage' && (
         <div className="mt-2 space-y-1.5 border-t border-zinc-200 pt-2 text-[12.5px] dark:border-zinc-800">
           <div className="flex items-center gap-3" role="radiogroup" aria-label="Coverage figure">
+            {/* The coverage figure's name, in the course-delivery sense: vocabulary-allow: deliver */}
             <label className="flex cursor-pointer items-center gap-1.5"><input type="radio" name="figure" checked={!projected} onChange={() => onProjected(false)} className="h-3.5 w-3.5 accent-zinc-700 dark:accent-zinc-300" />Delivered</label>
             <label className="flex cursor-pointer items-center gap-1.5"><input type="radio" name="figure" checked={projected} onChange={() => onProjected(true)} className="h-3.5 w-3.5 accent-zinc-700 dark:accent-zinc-300" />Projected</label>
           </div>

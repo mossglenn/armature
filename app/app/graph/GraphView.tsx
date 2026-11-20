@@ -480,7 +480,7 @@ function GraphBody({ docs, ghostIds, initial, reads: readsProp, lensReads, lensE
                 {walk && !walking && (
                   <>
                     {' · '}
-                    <button type="button" onClick={() => stepTo(1)} className="text-blue-700 hover:underline dark:text-blue-300" title="Narrative 1, step by step: from this record back to the evidence">
+                    <button type="button" onClick={() => stepTo(1)} className="text-blue-700 hover:underline dark:text-blue-300" title="From this record back to the evidence, step by step">
                       Walk it step by step →
                     </button>
                   </>

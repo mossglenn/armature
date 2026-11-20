@@ -134,7 +134,7 @@ function coverageLens(graph: DerivedGraph, report: CourseCoverageReport, project
     lens: 'coverage', marks, edgeMarks: new Map(), legend,
     notes: [
       `${plural(declared, 'declaration')} across ${plural(report.modules.length, 'module')}, the ${projected ? 'projected figure (every item and placement not retired)' : 'delivered figure (approved items in approved placements)'}; fully assessed at ${t.fullyAssessedAt} distinct items, over-assessed above ${t.overAssessedAbove}.`,
-      'An objective declared by two modules wears the weaker verdict.',
+      'An objective declared by two modules takes the weaker level.',
     ],
   };
 }

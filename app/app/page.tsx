@@ -50,7 +50,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ b
       </section>
 
       <footer className="mt-10 border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        This page is a client of the hub&apos;s API{publicHub && (
+        This page reads from the hub&apos;s API{publicHub && (
           <>: raw data at <a className="font-mono hover:underline" href={`${publicHub}/api/v1/documents/Module${query}`}>{publicHub}/api/v1</a></>
         )}.
       </footer>

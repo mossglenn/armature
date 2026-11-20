@@ -1,8 +1,8 @@
 import { connectLink, hubPublicUrl, viewerHub } from '@/lib/viewer';
 
 /**
- * "Work from your own machine" (docs/desktop-program-plan.md §8): the link that
- * opens the desktop program at this instance. The address comes from the hub's
+ * "Work from your own computer" (docs/desktop-program-plan.md §8): the link that
+ * opens Armature Desktop at this instance. The address comes from the hub's
  * own profile, so the link is right wherever the viewer runs; a hub under
  * `header` publishes none, and the viewer then offers the address a browser
  * could reach it at, when it has one. The page only reads, like every other.
@@ -16,9 +16,9 @@ export default async function Connect() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 font-sans">
-      <h1 className="text-2xl font-semibold tracking-tight">Work from your own machine</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Work from your own computer</h1>
       <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-        The Armature desktop program keeps a workspace of this instance on your computer. You work there, online or off, and
+        Armature Desktop, the desktop app, keeps a workspace of this instance on your computer. You work there, online or offline, and
         push your commits here when they are ready.
       </p>
 
@@ -43,23 +43,23 @@ export default async function Connect() {
             href={connectLink(remote)}
             className="inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
           >
-            Open in the desktop program
+            Open in Armature Desktop
           </a>
         </p>
       ) : (
         <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-          This instance publishes no address for the program. Ask its administrator for the address of its hub.
+          This instance gives no address for the app. Ask an administrator of it for its address.
         </p>
       )}
 
       <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-        The link does nothing until the program is installed, and the program connects only after you confirm the instance it
+        The link does nothing until the app is installed, and the app connects only after you confirm the instance details it
         shows you.
         {releases && (
           <>
             {' '}
             <a className="underline hover:text-zinc-900 dark:hover:text-zinc-100" href={releases}>
-              Get the program
+              Get the app
             </a>
             .
           </>

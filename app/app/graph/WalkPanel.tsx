@@ -62,6 +62,7 @@ export function WalkPanel({
           <p key={i} className={i === 0 ? '' : 'text-zinc-600 dark:text-zinc-400'}>{t}</p>
         ))}
         {current.kind === 'changes' && current.gone && current.gone.length > 0 && (
+          // Records deleted on the instance: vocabulary-allow: delete
           <p className="text-zinc-600 dark:text-zinc-400">Deleted since, not drawn: {current.gone.map(localPart).join(', ')}.</p>
         )}
       </div>

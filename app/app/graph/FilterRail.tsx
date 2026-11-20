@@ -70,7 +70,7 @@ export function FilterRail({
         </section>
       )}
       <p className="text-[12px] leading-snug text-zinc-500 dark:text-zinc-400">
-        Edges come from the schema&apos;s reference fields. A relationship document is a labeled edge; an attestation is a chip on its
+        Edges come from the reference fields of each kind of record. A relationship is a labeled edge; a sign-off is a chip on its
         subject. People are not drawn.
       </p>
     </div>
