@@ -75,6 +75,14 @@ ADR-0065 decision 7 carries a dated note of the same day for the local token kep
 > true`, and the page asks the remote again without a new sign-in once an administrator has
 > registered them. Left as it was, with the reason: the keychain write for a rotated token stays on the
 > shell's reader task, since moved off it the write could land after a sign-out's delete.
+>
+> **Note (2026-11-19):** released as `desktop-v0.1.5` (published 01:59 UTC on 2026-11-20; PR #184),
+> with the fixes of the note above and the names of `@armature/vocabulary` (ADR-0073) on the pages,
+> the tray, the core's messages and the shell's lines; the shell depends on that package. The
+> window's title and the release's are "Armature Desktop"; the bundle keeps `Armature.app` and its
+> identifier, so the install path, the keychain items, the login entry and the updater's channel
+> are unchanged. Rehearsed with a debug build on the Mac only; the Mac then updated from 0.1.4
+> through the channel (`docs/desktop-program-plan.md` §14 step 5).
 
 ## Context
 

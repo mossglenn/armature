@@ -2,9 +2,9 @@
 
 For the person who installs it: a designer, a reviewer, anyone whose tools work on their own computer against their institution's Armature. How it is built is in [the plan](desktop-program-plan.md) and ADR-0069; the side of whoever runs the instance is in [`deployment.md`](deployment.md) § "An instance under `oidc`".
 
-> **The names here are the ones the app uses in versions after 0.1.4** (`@armature/vocabulary`; the reasoning is [`naming-vocabulary.md`](naming-vocabulary.md)). Version 0.1.4 and earlier show older labels for the same things:
+> **The names here are the ones the app uses since 0.1.5** (`@armature/vocabulary`; the reasoning is [`naming-vocabulary.md`](naming-vocabulary.md)). Version 0.1.4 and earlier show older labels for the same things:
 >
-> | In versions after 0.1.4 | In 0.1.4 and earlier |
+> | Since 0.1.5 | In 0.1.4 and earlier |
 > |---|---|
 > | Update from main | Bring in main |
 > | Merge into main; Preview merge | Deliver; Ask what a delivery would find |
@@ -53,7 +53,7 @@ An instance that says **"No sign-in (for testing only)"** is for development or 
 
 ## Signing in
 
-**Sign in** opens your browser at your institution's sign-in page. While the app waits for you there, **Cancel the sign-in** ends the wait, for when you closed the tab or changed your mind; if you leave the page and come back, it tells you a sign-in is still waiting. Once you have signed in there, the browser says you can return to the app, and the app shows who the instance knows you as. You stay signed in across restarts: the app keeps your sign-in in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the app says so, since you would otherwise be signed in again at the next start. Signing out also asks your sign-in provider to end the kept sign-in, where the provider offers that (versions after 0.1.4); a provider that does not, or cannot be reached, changes nothing about the sign-out here. Your sign-in is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After moving up from version 0.1.2 or earlier you sign in once, for the same reason. The app signs in only at a provider reached over `https`.
+**Sign in** opens your browser at your institution's sign-in page. While the app waits for you there, **Cancel the sign-in** ends the wait, for when you closed the tab or changed your mind; if you leave the page and come back, it tells you a sign-in is still waiting. Once you have signed in there, the browser says you can return to the app, and the app shows who the instance knows you as. You stay signed in across restarts: the app keeps your sign-in in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the app says so, since you would otherwise be signed in again at the next start. Signing out also asks your sign-in provider to end the kept sign-in, where the provider offers that (since 0.1.5); a provider that does not, or cannot be reached, changes nothing about the sign-out here. Your sign-in is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After moving up from version 0.1.2 or earlier you sign in once, for the same reason. The app signs in only at a provider reached over `https`.
 
 ## Your workspaces
 
@@ -72,24 +72,24 @@ Open a workspace to work with it:
 
 ## Your tools and the pairing key
 
-Your tools find the app's hub, the desktop hub, at `http://127.0.0.1:3101` while the app runs. A tool that writes needs the **pairing key**: open **Pairing**, choose **Copy**, and paste it where the tool asks for its Armature pairing key. The key is covered on the page until you choose **Show**, and **Copy** works either way (in versions after 0.1.4; before, it was always shown). The key stays the same across restarts. **New pairing key** makes a new one, after which every paired tool needs it; use it if the key was shared by mistake.
+Your tools find the app's hub, the desktop hub, at `http://127.0.0.1:3101` while the app runs. A tool that writes needs the **pairing key**: open **Pairing**, choose **Copy**, and paste it where the tool asks for its Armature pairing key. The key is covered on the page until you choose **Show**, and **Copy** works either way (since 0.1.5; before, it was always shown). The key stays the same across restarts. **New pairing key** makes a new one, after which every paired tool needs it; use it if the key was shared by mistake.
 
 Under **Pairing** too is your ID on the instance, which your tools send to say who they work for and the instance resolves to you; when the app cannot show it yet, the page says what is missing (a sign-in, or your ID in the settings).
 
 ## Where things are kept
 
-Your workspaces are in the workspaces folder: by default inside the app's data folder, or wherever **Settings** names. Keep it out of a folder that Dropbox, OneDrive, iCloud Drive or Google Drive copies to the cloud: two computers writing one workspace through such a service can damage it, and the app warns when the folder looks like one of theirs. In versions after 0.1.4 the warning also follows a link into such a folder, and knows a Mac's Desktop and Documents folders when iCloud keeps them (the "Desktop & Documents Folders" setting).
+Your workspaces are in the workspaces folder: by default inside the app's data folder, or wherever **Settings** names. Keep it out of a folder that Dropbox, OneDrive, iCloud Drive or Google Drive copies to the cloud: two computers writing one workspace through such a service can damage it, and the app warns when the folder looks like one of theirs. Since 0.1.5 the warning also follows a link into such a folder, and knows a Mac's Desktop and Documents folders when iCloud keeps them (the "Desktop & Documents Folders" setting).
 
-The folder you name in **Settings** must be empty, or one that already holds this app's workspaces: the app clears leftover temporary files from its folder at every start, and in a folder of other things it could remove some that are not its own, so a folder with other files in it is refused (`folder_in_use`; versions after 0.1.4). Naming another folder does not move your workspaces. They stay where they were, with any commits to push, and the app will find none in the new folder; the settings page says so when you save. Merge or remove them first, or move the old folder's contents to the new place before the hub starts again.
+The folder you name in **Settings** must be empty, or one that already holds this app's workspaces: the app clears leftover temporary files from its folder at every start, and in a folder of other things it could remove some that are not its own, so a folder with other files in it is refused (`folder_in_use`; since 0.1.5). Naming another folder does not move your workspaces. They stay where they were, with any commits to push, and the app will find none in the new folder; the settings page says so when you save. Merge or remove them first, or move the old folder's contents to the new place before the hub starts again.
 
 | | macOS | Windows | Linux |
 |---|---|---|---|
 | Data (settings, workspaces) | `~/Library/Application Support/com.mossglenn.armature` | `%LOCALAPPDATA%\com.mossglenn.armature` | `~/.local/share/com.mossglenn.armature` |
 | The diagnostic log (one file a day, seven kept) | `~/Library/Logs/com.mossglenn.armature` | `%LOCALAPPDATA%\com.mossglenn.armature\logs` | `~/.local/share/com.mossglenn.armature/logs` |
 
-**Diagnostics** shows the latest lines of the diagnostic log and opens its folder; the files are what to send with a report of a problem. A day's file stops at 16 MB and says so on its last line (versions after 0.1.4); the page goes on showing the lines that follow.
+**Diagnostics** shows the latest lines of the diagnostic log and opens its folder; the files are what to send with a report of a problem. A day's file stops at 16 MB and says so on its last line (since 0.1.5); the page goes on showing the lines that follow.
 
-If the settings file (`settings.json` in the data folder) cannot be read, the app still starts (versions after 0.1.4; before, it refused to until the file was corrected or removed). A setting it does not know or cannot use is left out and named in the diagnostic log, and the rest stand. A file that is not readable at all is moved aside, kept beside it as `settings.json.unreadable-<time>`, and the app starts as new: connect again, and name your workspaces folder again if you had chosen one. Your workspaces are untouched either way.
+If the settings file (`settings.json` in the data folder) cannot be read, the app still starts (since 0.1.5; before, it refused to until the file was corrected or removed). A setting it does not know or cannot use is left out and named in the diagnostic log, and the rest stand. A file that is not readable at all is moved aside, kept beside it as `settings.json.unreadable-<time>`, and the app starts as new: connect again, and name your workspaces folder again if you had chosen one. Your workspaces are untouched either way.
 
 
 ## Checks
@@ -119,7 +119,7 @@ Only the app and you can change that file. No tool can change it through the hub
 
 ## In the background
 
-Closing the window does not stop the app: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first. If the hub's own process ends unexpectedly, the window says so and **Start the hub** starts it again (versions after 0.1.4; before, the way back was to quit and open the app again).
+Closing the window does not stop the app: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first. If the hub's own process ends unexpectedly, the window says so and **Start the hub** starts it again (since 0.1.5; before, the way back was to quit and open the app again).
 
 **Settings → Start at login** starts the app when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the app tries again at its next start. The app makes the entry again each time it starts, so it follows the app if you move it. *In versions up to 0.1.3* it did not: if you moved the app after turning this on, the entry kept pointing at the old place and the app did not start when you signed in; turning the box off and on again puts it right there, and version 0.1.4 does it itself. A new version you install in such a session brings the window back when the app starts again.
 
@@ -140,7 +140,7 @@ Every refusal shows its words first, then a code and who refused it: your instan
 | `remote_unreachable` | Your instance cannot be reached | Look at your connection; offline, everything but pushing, updating from `main`, merging and removing still works. Behind an institution's TLS inspection the app trusts the certificate authorities your system trusts, as your browser does (since 0.1.1); if your browser reaches the instance and the app does not, ask whoever runs your instance for the authority's certificate and set `NODE_EXTRA_CA_CERTS` to its file |
 | `insecure_remote` | An instance that signs people in was given as `http://` | Use its `https://` address |
 | `profile_changed` | The instance's details changed since you looked them up | Choose **Look up** again and read what it shows before connecting |
-| `not_registered` | You signed in, but the instance does not know you | Ask an administrator of your instance to register you. Your sign-in is kept (versions after 0.1.4): once you are registered, choose **Try again** on the sign-in page, with no need to sign in again |
+| `not_registered` | You signed in, but the instance does not know you | Ask an administrator of your instance to register you. Your sign-in is kept (since 0.1.5): once you are registered, choose **Try again** on the sign-in page, with no need to sign in again |
 | `sign_in_refused`, `sign_in_timeout` | The sign-in did not complete in the browser | Sign in again |
 | `issuer_unreachable` | Your institution's sign-in provider did not answer, or answered that it is busy or restarting | Try again shortly. You stay signed in: nothing is removed |
 | `insecure_issuer` | The instance names a sign-in provider that is not reached over `https` | Tell whoever runs your instance; the app will not sign in there |
