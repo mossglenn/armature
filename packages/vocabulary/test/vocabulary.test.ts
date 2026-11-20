@@ -64,6 +64,7 @@ test('findAvoided matches whole words, in any case, and phrases across white spa
   assert.deepEqual(findAvoided('The remotely held savings', 'people'), []);
   assert.deepEqual(findAvoided('remote_unreachable', 'people'), [], 'an identifier is one word');
   assert.deepEqual(findAvoided('BRING\n  IN main', 'people').map((finding) => finding.word), ['bring in']);
+  assert.deepEqual(findAvoided('Set these aside', 'people').map((finding) => finding.word), ['set aside'], 'a form with a word inside it, as Quiver had it');
   assert.deepEqual(findAvoided('Open a pull request', 'developers').map((finding) => [finding.word, finding.instead]), [['pull request', 'merge request']]);
 });
 
