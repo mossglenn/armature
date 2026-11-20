@@ -439,7 +439,7 @@
       "audience": [
         "people"
       ],
-      "means": "Where a discarded workspace's files are set aside.",
+      "means": "Where a discarded workspace's files are copied before its branch is deleted.",
       "identifiers": [
         "_discarded"
       ],
@@ -3802,7 +3802,10 @@
       "word": "set aside",
       "forms": [
         "sets aside",
-        "setting aside"
+        "setting aside",
+        "set it aside",
+        "set them aside",
+        "set these aside"
       ],
       "for": "override",
       "audience": [

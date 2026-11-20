@@ -13,3 +13,8 @@ The first file, seeded from `docs/naming-vocabulary.md` as Amos decided it on 20
 - **Reserved words:** 34, the enumeration values a person reads, each for the term of its kind: objective states, item statuses, three item types, a sign-off's verdicts, a check's results and levels, a merge request's statuses and health, the two coverage figures and the three privacy levels.
 - **Avoided words:** 66, from the document's collisions, its principles and its §17.
 - Nothing from the document's §16 (Quiver's own words) beyond the avoided entries its rows create.
+
+Later the same day, from Quiver's request for a §16 row (`docs/vocabulary-handoff-from-quiver.md`); no name or status changed, so the revision stands:
+
+- **`set aside`** gains the forms "set it aside", "set them aside" and "set these aside", so that a label with a word inside the phrase, as Quiver's "Set these aside" was, is found. Quiver now says **Shelve** and **Put back** for that step (the document's §16); neither is a term, since no Armature surface names the step.
+- **`discarded-folder`**'s `means` no longer uses "set aside" itself: "Where a discarded workspace's files are copied before its branch is deleted."
