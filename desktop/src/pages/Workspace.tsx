@@ -161,13 +161,17 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   );
   useEffect(() => void load(), [load]);
 
-  // While a request is open, its health is read again when something on the instance may have changed it: a
-  // commit on the workspace's branch, on its parent or on main, where the request's own changes are commits
-  // (ADR-0072 decision 5). The core holds the wait on the instance's event feed; a refused or stopped wait
-  // ends the watch until the page next reads the request. Not through `run`: a wait is no action the page is busy with.
-  const openRequest = request?.request?.['@id'];
+  const busyNow = useRef(false);
+  busyNow.current = busy !== undefined;
+  // The page is read again when something on the instance may have changed it: a commit on the workspace's
+  // branch, on its parent or on main, where a merge request's own changes are commits (ADR-0072 decision 5).
+  // That keeps an open request's health current, and, since 2026-11-20, whether the parent has anything to
+  // update from, which decides whether that action is offered: a page that waited to be asked would never
+  // offer it. The core holds the wait on the instance's event feed; a refused or stopped wait ends the watch
+  // until the instance is next reached. Not through `run`: a wait is no action the page is busy with.
+  const reachable = status !== undefined && !('reachable' in status.remote);
   useEffect(() => {
-    if (!openRequest) return;
+    if (!reachable) return;
     let watching = true;
     void (async () => {
       let cursor: string | undefined;
@@ -179,22 +183,16 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
         );
         if (!watching || !waited.ok || waited.body.stopped || !waited.body.cursor) return;
         cursor = waited.body.cursor;
-        if (!waited.body.changed) continue;
-        const read = outcomeOf<RequestState>(await backend.request('mergeRequest', { workspace: branch }));
-        if (!watching) return;
-        if (read.ok) setRequest(read.body);
-        // Merged or closed on the instance meanwhile: the watch ends with the request, and the status is read for what it changed.
-        if (read.ok && !read.body.request) return void load(true);
+        // Not while an action runs: its own read follows it.
+        if (waited.body.changed && !busyNow.current) await load(true);
       }
     })();
     return () => {
       watching = false;
     };
-  }, [backend, branch, openRequest, load]);
+  }, [backend, branch, reachable, load]);
   // Read again when the window is come back to: a tool's commits, or a network that returned, showed
   // only after leaving the page and returning (P11). Not while an action runs, whose own read follows it.
-  const busyNow = useRef(false);
-  busyNow.current = busy !== undefined;
   /** The action whose refusal is on the page: a merge's conflict is told from an update's by it, since the two name the sides the other way round. */
   const lastAction = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -239,6 +237,14 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   const health = request?.health ? healthWord(request.health, parent) : undefined;
 
   const unpushed = status ? commits.slice(0, status.unpushed) : [];
+  // What this computer may still do (decided 2026-11-20, from the rehearsal): a workspace linked elsewhere or to no
+  // computer takes none of the page's actions from here, whatever is or is not waiting; the hub refuses them too.
+  const notHere = linked !== undefined;
+  // Push has something to send only when a commit waits; until the status is read, nothing is known to wait.
+  const nothingToPush = status === undefined || status.unpushed === 0;
+  // Where the workspace stands against its parent, when the instance said: absent offline or from an older instance, and the update then stays open.
+  const parentState = status && !('reachable' in status.remote) ? status.remote.parent : undefined;
+  const upToDate = parentState?.behind === false;
   return (
     <section>
       <Button variant="link" className="mb-2 px-0" onClick={() => back()}>
@@ -321,9 +327,10 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
         <div className="flex flex-col gap-2 rounded-lg border p-4">
           <p className="font-medium">Push</p>
           <p className="text-muted-foreground text-sm">Sends your commits to {instance}, each as you made it.</p>
+          {status !== undefined && status.unpushed === 0 && <p className="text-muted-foreground text-sm">Nothing to push.</p>}
           <Button
             className="mt-auto"
-            disabled={busy !== undefined}
+            disabled={busy !== undefined || notHere || nothingToPush}
             onClick={() => void act<PushResult>('push', {}, pushedSentence)}
           >
             {busy === 'push' ? 'Pushing…' : 'Push'}
@@ -342,7 +349,14 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
           <p className="font-medium">Update from {parent}</p>
           <Label htmlFor="bring-in-message">Message (optional)</Label>
           <Input id="bring-in-message" value={bringInMessage} onChange={(e) => setBringInMessage(e.target.value)} placeholder={`Update from ${parent}`} />
-          <Button type="submit" variant="outline" className="mt-auto" disabled={busy !== undefined}>
+          {parentState && (
+            <p className="text-muted-foreground text-sm">
+              {parentState.behind
+                ? `${sentence(parent)} has ${parentState.documents === undefined ? 'changes' : `${parentState.documents} record${parentState.documents === 1 ? '' : 's'}`} this workspace does not${parentState.conflicts ? `; ${parentState.conflicts} would conflict` : ''}.`
+                : `Up to date with ${parent}.`}
+            </p>
+          )}
+          <Button type="submit" variant="outline" className="mt-auto" disabled={busy !== undefined || notHere || upToDate}>
             {busy === 'bringIn' ? 'Updating…' : `Update from ${parent}`}
           </Button>
         </form>
@@ -378,14 +392,14 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
             )}
             <div className="mt-auto flex flex-wrap gap-2">
               {request.mayMerge && (
-                <Button type="button" variant="outline" disabled={busy !== undefined} onClick={() => void merge()}>
+                <Button type="button" variant="outline" disabled={busy !== undefined || notHere} onClick={() => void merge()}>
                   {busy === 'mergeMergeRequest' ? 'Merging…' : 'Merge'}
                 </Button>
               )}
               <Button
                 type="button"
                 variant="ghost"
-                disabled={busy !== undefined}
+                disabled={busy !== undefined || notHere}
                 onClick={() => void act<{ workspace: string }>('closeMergeRequest', {}, () => `The merge request into ${parent} is closed. Nothing was merged.`)}
               >
                 {busy === 'closeMergeRequest' ? 'Closing…' : 'Close'}
@@ -405,7 +419,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
             <p className="text-muted-foreground text-sm">Asks for what you have pushed to be merged into {parent}. Whoever may merge into it decides.</p>
             <Label htmlFor="request-message">Message (required)</Label>
             <Input id="request-message" value={requestMessage} onChange={(e) => setRequestMessage(e.target.value)} placeholder="Unit 3's items, reviewed" />
-            <Button type="submit" variant="outline" className="mt-auto" disabled={!requestMessage.trim() || busy !== undefined}>
+            <Button type="submit" variant="outline" className="mt-auto" disabled={!requestMessage.trim() || busy !== undefined || notHere}>
               {busy === 'openMergeRequest' ? 'Opening…' : 'Open merge request'}
             </Button>
           </form>

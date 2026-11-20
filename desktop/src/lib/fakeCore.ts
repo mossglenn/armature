@@ -338,17 +338,17 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       pushed: w.pushed,
       unpushed: w.commits.length - w.pushed,
       snapshots: { budget: model.settings.snapshots, held: [], declined: [] },
-      remote: remoteDown ? { reachable: false } : { head: commitId(), moved: w.remoteMoved, link: w.link?.state ?? 'here', ...(w.link?.state === 'elsewhere' ? { ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}), linkedAt: w.link.linkedAt } : {}) },
+      remote: remoteDown ? { reachable: false } : { head: commitId(), moved: w.remoteMoved, link: w.link?.state ?? 'here', parent: w.remoteMoved || w.conflict ? { branch: parentOf(w), behind: true, documents: 3, conflicts: w.conflict ? 1 : 0 } : { branch: parentOf(w), behind: false }, ...(w.link?.state === 'elsewhere' ? { ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}), linkedAt: w.link.linkedAt } : {}) },
     };
   };
   const parentOf = (w: Held): string => w.record.from ?? 'main';
   /** The instance's refusal of a write to a workspace it links elsewhere or nowhere (ADR-0072 decision 3), as a push or an update meets it. */
+  // The hub's own refusal of this computer's actions on a workspace linked elsewhere or to no computer (requireLinkedHere; 2026-11-20).
   const linkRefusal = (w: Held, extra: Record<string, unknown> = {}): CoreReply | undefined => {
     if (!w.link) return undefined;
     const { branch } = w.record;
-    if (w.link.state === 'unlinked') return refuse(409, 'not_linked', `The instance refused: ${branch} is a workspace linked to no computer, so nothing writes it; its owner links it to a computer first (ADR-0072 decision 3)`, { remote: true, workspace: branch, ...extra });
-    return refuse(409, 'held_elsewhere', `The instance refused: ${branch} is a workspace linked to ${w.link.linkLabel ? `the computer "${w.link.linkLabel}"` : 'another computer'} since ${w.link.linkedAt}, and only the desktop app there writes it; its owner unlinks it from that computer first (ADR-0072 decision 3)`, {
-      remote: true,
+    if (w.link.state === 'unlinked') return refuse(409, 'not_linked', `${branch} is a workspace linked to no computer, so nothing writes it; its owner links it to a computer first (ADR-0072 decision 3)`, { workspace: branch, ...extra });
+    return refuse(409, 'held_elsewhere', `${branch} is a workspace linked to ${w.link.linkLabel ? `the computer "${w.link.linkLabel}"` : 'another computer'} since ${w.link.linkedAt}, and only the desktop app there writes it; its owner unlinks it from that computer first (ADR-0072 decision 3)`, {
       workspace: branch,
       ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}),
       linkedAt: w.link.linkedAt,
@@ -618,6 +618,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (refused) return refused;
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      if (w.link) return linkRefusal(w)!;
       const unpushed = w.commits.slice(0, w.commits.length - w.pushed).reverse();
       // As the route: the overrides' shape is checked whether or not anything waits to be pushed.
       const overrides = overridesOf(fields.overrides);
@@ -643,7 +644,6 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         }
       }
       // As the route, past the person's own gate: the instance refuses the first commit of a workspace it links elsewhere or nowhere (ADR-0072 decision 3).
-      if (unpushed.length > 0 && w.link) return linkRefusal(w, { pushed: [], at: { local: unpushed[0]!.commit, part: 1, total: 1 } })!;
       // As the route: the remote's 412 when the branch moved under the push, with what landed before it, where it stopped and what changed there.
       if (pushMeetsAMove && unpushed.length > 1) {
         pushMeetsAMove = false;
@@ -663,12 +663,11 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (refused) return refused;
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      const elsewhere = linkRefusal(w);
+      if (elsewhere) return elsewhere;
       const unpushed = w.commits.length - w.pushed;
       const parent = parentOf(w);
       if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before updating from ${parent}`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
-      // A merge into the workspace is a write to its branch: the instance refuses it from a computer it is not linked to.
-      const elsewhere = linkRefusal(w);
-      if (elsewhere) return elsewhere;
       if (bringInBreaksARule) {
         bringInBreaksARule = false;
         return refuse(422, 'invariant_violation', 'The instance refused: the merged state breaks 1 rule; nothing was merged', {
@@ -704,6 +703,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (refused) return refused;
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      if (w.link) return linkRefusal(w)!;
       if (typeof fields.message !== 'string' || !fields.message.trim()) return refuse(400, 'message_required', "A merge request needs a message saying what it holds and why; it becomes the merge commit's (ADR-0025)");
       const unpushed = w.commits.length - w.pushed;
       if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before opening a merge request`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
@@ -720,6 +720,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (refused) return refused;
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      if (w.link) return linkRefusal(w)!;
       if (fields.deleteWorkspace !== undefined && typeof fields.deleteWorkspace !== 'boolean') return refuse(400, 'bad_request', 'deleteWorkspace must be a boolean');
       const overrides = overridesOf(fields.overrides);
       if (!(overrides instanceof Map)) return overrides;
@@ -770,6 +771,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (refused) return refused;
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      if (w.link) return linkRefusal(w)!;
       if (!w.request) return refuse(409, 'no_request', `${w.record.branch} has no open merge request into ${parentOf(w)}`, { workspace: w.record.branch, parent: parentOf(w) });
       const request: Request = { ...w.request, status: 'Closed', decidedBy: w.record.owner, decidedAt: new Date().toISOString() };
       w.request = undefined;
@@ -828,7 +830,12 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
   };
   const testHooks = {
     writeAsTool,
-    conflictOn: (branch: string) => void (model.workspaces.get(branch) && (model.workspaces.get(branch)!.conflict = true)),
+    // The parent moves against the workspace: a commit on the instance, which a page waiting on it hears of.
+    conflictOn: (branch: string) => {
+      const w = model.workspaces.get(branch);
+      if (w) w.conflict = true;
+      model.remoteEvents += 1;
+    },
     link: (remote: string) => emit({ event: 'deep-link', remote }),
     // A tool on this machine reports on a workspace's latest commit, as a local linter would (POST /checks/runs).
     reportRun: (branch: string, check: string, conclusion: Run['conclusion'], summary?: string, detailsUrl?: string) => {
