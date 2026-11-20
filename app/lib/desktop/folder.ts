@@ -86,7 +86,7 @@ const SEGMENTS: ReadonlyArray<[RegExp, string]> = [
 function cloudStorageClient(folder: string): string {
   const name = folder.split('-')[0];
   if (/^googledrive$/i.test(name)) return 'Google Drive';
-  return name || 'a sync client';
+  return name || 'a cloud storage app';
 }
 
 /** The sync client that keeps `folder`, or undefined when none is recognized. */
@@ -109,10 +109,12 @@ function clientOfPath(folder: string, machine: Machine): string | undefined {
   };
 
   if (machine.platform === 'darwin') {
+    // A folder's name on disk: vocabulary-allow: document
     if (within(path.join(machine.home, 'Library', 'Mobile Documents'))) return 'iCloud Drive';
     const cloud = within(path.join(machine.home, 'Library', 'CloudStorage'));
-    if (cloud) return cloud.length ? cloudStorageClient(cloud[0]) : 'a sync client';
+    if (cloud) return cloud.length ? cloudStorageClient(cloud[0]) : 'a cloud storage app';
     // "Desktop & Documents Folders": the two folders synced in place, told only by the attribute iCloud's provider sets on them.
+    // Folders' names on disk: vocabulary-allow: document
     for (const name of ['Desktop', 'Documents']) {
       const synced = path.join(machine.home, name);
       if (within(synced) && /clouddocs|icloud/i.test(machine.fileProvider?.(synced) ?? '')) return 'iCloud Drive';
@@ -135,9 +137,9 @@ export function syncedFolderWarning(folder: string, machine: Machine = thisMachi
   const client = syncClientOf(folder, machine);
   if (!client) return undefined;
   return (
-    `${folder} looks like a folder ${client} keeps in sync. The workspaces work there, at a cost: ` +
-    'a file the client has made online-only cannot be read until it is downloaded again (503 store_unreadable), ' +
-    'and a rename the client holds up is retried for about two and a half seconds before the write is refused (503 store_unwritable). ' +
-    'The program keeps its workspaces on this machine by default; a folder outside the synced one avoids both.'
+    `${folder} looks like a folder ${client} copies to the cloud. The workspaces work there, at a cost: ` +
+    'a file it has made online-only cannot be read until it is downloaded again (503 store_unreadable), ' +
+    'and a rename it holds up is retried for about two and a half seconds before the write is refused (503 store_unwritable). ' +
+    'The app keeps its workspaces on this computer by default; a folder outside the copied one avoids both.'
   );
 }

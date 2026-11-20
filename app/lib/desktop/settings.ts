@@ -104,6 +104,7 @@ function remoteIdentity(value: unknown): RemoteIdentity {
   const { resolver, issuer, clientId } = value as Record<string, unknown>;
   if (resolver === 'header') return { resolver };
   if (resolver === 'oidc') return { resolver, issuer: address('identity.issuer', issuer), clientId: text('identity.clientId', clientId) };
+  // The field's own name in settings.json: vocabulary-allow: resolver
   throw bad('identity.resolver', `identity.resolver must be header or oidc, not ${JSON.stringify(resolver)}`);
 }
 
@@ -203,9 +204,10 @@ export async function readSettingsForStart(dataDir: string, now: () => Date = ()
     const aside = `${path}.unreadable-${now().toISOString().replace(/\.\d+Z$/, 'Z').replace(/[-:]/g, '')}`;
     try {
       await rename(path, aside);
-      return { settings: defaultSettings(), problems: [`${path} is not a JSON object; it was moved to ${aside} and the program starts from the defaults`] };
+      return { settings: defaultSettings(), problems: [`${path} is not a JSON object; it was moved to ${aside} and the app starts from the defaults`] };
     } catch {
-      return { settings: defaultSettings(), problems: [`${path} is not a JSON object and could not be moved aside; the program starts from the defaults, and the next save replaces it`] };
+      // The settings are a file, so they are saved: vocabulary-allow: save
+      return { settings: defaultSettings(), problems: [`${path} is not a JSON object and could not be moved aside; the app starts from the defaults, and the next save replaces it`] };
     }
   }
   let settings = defaultSettings();
@@ -215,6 +217,7 @@ export async function readSettingsForStart(dataDir: string, now: () => Date = ()
       settings = parseSettings({ [key]: given }, settings);
     } catch (err) {
       if (!(err instanceof ApiError)) throw err;
+      // vocabulary-allow: save
       problems.push(`${path}: ${err.message}; the setting is left out until it is saved again`);
     }
   }
@@ -241,7 +244,7 @@ export function changeRefusal(current: DesktopSettings, next: DesktopSettings, w
     return new ApiError(
       409,
       'workspaces_exist',
-      `The remote is ${current.remote}, which ${workspaces.length === 1 ? 'a workspace names' : `${workspaces.length} workspaces name`}; deliver or delete ${workspaces.length === 1 ? 'it' : 'them'} before connecting elsewhere`,
+      `The app is connected to ${current.remote}, which ${workspaces.length === 1 ? 'a workspace names' : `${workspaces.length} workspaces name`}; merge or remove ${workspaces.length === 1 ? 'it' : 'them'} before connecting elsewhere`,
       { field: 'remote', workspaces: [...workspaces] }
     );
   }

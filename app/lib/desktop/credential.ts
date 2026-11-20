@@ -58,7 +58,7 @@ export interface Credential {
   readonly signedIn: boolean;
 }
 
-const signedOut = () => new ApiError(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in again');
+const signedOut = () => new ApiError(401, 'signed_out', 'The app is not signed in to your instance; sign in again');
 
 /** A credential from a sign-in's tokens, or from the refresh token the keychain kept alone. */
 export function credential(initial: Partial<Tokens>, options: CredentialOptions): Credential {
@@ -90,7 +90,7 @@ export function credential(initial: Partial<Tokens>, options: CredentialOptions)
       });
     } catch {
       if (cleared) throw signedOut();
-      throw new ApiError(503, 'issuer_unreachable', `The identity provider's token endpoint, ${options.tokenEndpoint}, could not be reached; the remote cannot be signed in to until it can`);
+      throw new ApiError(503, 'issuer_unreachable', `The sign-in provider's token endpoint, ${options.tokenEndpoint}, could not be reached; your instance cannot be signed in to until it can`);
     }
     let tokens: Tokens;
     try {
