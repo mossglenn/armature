@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { UpdateNotice } from '@/components/UpdateNotice';
 import type { Backend, ShellState } from '@/lib/backend';
+import { InstanceProvider, instanceName } from '@/lib/instance';
 import { useShell } from '@/lib/useShell';
 import { cn } from '@/lib/utils';
 import { Connect } from '@/pages/Connect';
@@ -28,7 +29,7 @@ function hubLine(state?: ShellState): string {
   if (!state) return 'Starting…';
   if (state.core === 'failed') return state.error ?? 'The hub could not start';
   if (state.core === 'starting') return 'Starting the hub…';
-  if (state.started?.needs) return 'Not connected yet';
+  if (state.started?.needs) return 'Not connected';
   return state.core === 'running' ? 'The hub is running' : 'The hub is paused';
 }
 
@@ -77,7 +78,7 @@ export function App({ backend }: { backend: Backend }) {
     { page: { name: 'signIn' }, label: 'Sign in', shown: connected && oidc },
     { page: { name: 'pairing' }, label: 'Pairing', shown: true },
     { page: { name: 'settings' }, label: 'Settings', shown: true },
-    { page: { name: 'log' }, label: 'Log', shown: true },
+    { page: { name: 'log' }, label: 'Diagnostics', shown: true },
     { page: { name: 'connect' }, label: 'Connect', shown: !connected },
   ];
   const go = (next: Page, said?: string) => {
@@ -91,9 +92,10 @@ export function App({ backend }: { backend: Backend }) {
   const current = page?.name === 'workspace' ? 'workspaces' : page?.name;
 
   return (
+    <InstanceProvider value={instanceName(state)}>
     <div className="flex h-full">
       <nav className="bg-muted/40 flex w-52 shrink-0 flex-col border-r p-4" aria-label="Pages">
-        <p className="mb-4 text-lg font-semibold">Armature</p>
+        <p className="mb-4 text-lg font-semibold">Armature Desktop</p>
         <ul className="flex flex-col gap-1">
           {nav
             .filter((item) => item.shown)
@@ -170,5 +172,6 @@ export function App({ backend }: { backend: Backend }) {
         {page?.name === 'log' && <Log backend={backend} state={state} />}
       </main>
     </div>
+    </InstanceProvider>
   );
 }

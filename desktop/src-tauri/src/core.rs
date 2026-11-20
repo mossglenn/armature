@@ -523,7 +523,7 @@ pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) -> Option
             None
         }
         "signOut" => match core.binding.lock().unwrap().clone().map(|binding| keychain::forget_refresh_token(&binding.account())) {
-            Some(Err(err)) => told(format!("You are signed out for now, but the sign-in kept in the keychain could not be removed ({err}), so the program will be signed in again at its next start; remove it in the keychain, or sign out again")),
+            Some(Err(err)) => told(format!("You are signed out for now, but the sign-in kept in the keychain could not be removed ({err}), so the app will be signed in again at its next start; remove it in the keychain, or sign out again")),
             _ => None,
         },
         "resetPairing" => {
@@ -531,7 +531,7 @@ pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) -> Option
             *core.local_token.lock().unwrap() = Some(token.to_string());
             match keychain::keep_local_token(token) {
                 Ok(()) => None,
-                Err(err) => told(format!("The new pairing value is in force now, but it could not be kept in the keychain ({err}), so the old value returns at the program's next start; reset again once the keychain can be written")),
+                Err(err) => told(format!("The new pairing key is in use now, but it could not be kept in the keychain ({err}), so the old key returns at the app's next start; make a new one again once the keychain can be written")),
             }
         }
         _ => None,

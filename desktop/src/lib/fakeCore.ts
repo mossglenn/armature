@@ -216,6 +216,9 @@ const ACTIONS = ['create', 'clone', 'push', 'bringIn', 'deliver', 'remove'];
 
 export function fakeCore(scenario = 'header', update?: string, options: { slow?: boolean; login?: string; keychain?: string; start?: string; port?: string; signin?: string } = {}): Backend {
   const model = modelFor(scenario);
+  /** The instance as the core's messages name it: by its own name, or the general word (app/lib/desktop/core.ts). */
+  const instance = (): string => model.settings.instance?.name ?? 'your instance';
+  const Instance = (): string => (model.settings.instance?.name ? instance() : 'Your instance');
   if (update === 'available' || update === 'fails') model.update = { ...OFFERED };
   const actions: string[] = [];
   const listeners = new Set<(event: CoreEvent) => void>();
@@ -265,7 +268,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     const body = started();
     if (starting) return { core: 'starting', dataDir: DATA_DIR, logDir: '/Users/someone/Library/Logs/com.mossglenn.armature' };
     if (portBusy) {
-      return { core: 'failed', error: `Port ${model.settings.port} is in use by another program; choose another port in the settings`, dataDir: DATA_DIR, logDir: '/Users/someone/Library/Logs/com.mossglenn.armature' };
+      return { core: 'failed', error: `Port ${model.settings.port} is in use by something else on this computer; choose another port in the settings`, dataDir: DATA_DIR, logDir: '/Users/someone/Library/Logs/com.mossglenn.armature' };
     }
     return {
       core: body.started === true ? 'running' : 'stopped',
@@ -292,7 +295,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     };
   };
   const needsHub = (): CoreReply | undefined => (model.running && started().started === true ? undefined : refuse(409, 'not_started', 'The hub is not running; send start'));
-  const needsOwner = (): CoreReply | undefined => (ownerOf() ? undefined : refuse(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in'));
+  const needsOwner = (): CoreReply | undefined => (ownerOf() ? undefined : refuse(401, 'signed_out', `The app is not signed in to ${instance()}; sign in`));
   const workspaceOf = (fields: Record<string, unknown>) => model.workspaces.get(String(fields.workspace ?? ''));
 
   const handlers: Record<string, (fields: Record<string, unknown>) => Promise<CoreReply> | CoreReply> = {
@@ -301,7 +304,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (!/^https?:\/\/[^/]+/.test(address)) return refuse(400, 'bad_settings', `remote=${address} is not an http or https address`, { field: 'remote' });
       const profile = profiles[address];
       // A copy, as the real reply is JSON over a pipe: the page's profile does not change when the fake's remote does.
-      return profile ? ok(structuredClone(profile)) : refuse(502, 'remote_unreachable', `The remote at ${address} could not be reached`, { remote: true });
+      return profile ? ok(structuredClone(profile)) : refuse(502, 'remote_unreachable', `The instance at ${address} cannot be reached`, { remote: true });
     },
     connect: ({ remote, identity, instance }) => {
       const address = String(remote ?? '').trim().replace(/\/+$/, '');
@@ -310,16 +313,16 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         return refuse(400, 'bad_request', 'connect takes the identity (and the instance, when the profile had one) the profile showed, so what is kept is what was confirmed; read the profile first', { field: 'identity' });
       }
       const profile = profiles[address];
-      if (!profile) return refuse(502, 'remote_unreachable', `The remote at ${address} could not be reached`, { remote: true });
+      if (!profile) return refuse(502, 'remote_unreachable', `The instance at ${address} cannot be reached`, { remote: true });
       if (JSON.stringify(identity) !== JSON.stringify(profile.identity) || JSON.stringify(instance ?? null) !== JSON.stringify(profile.instance ?? null)) {
-        return refuse(409, 'profile_changed', `The remote at ${address} now answers with a profile that differs from the one confirmed; read it again and check it before connecting`, {
+        return refuse(409, 'profile_changed', `The instance's details changed since you looked them up; look them up again and read them before connecting`, {
           remote: address,
           confirmed: { identity, instance: instance ?? null },
           found: { identity: profile.identity, instance: profile.instance ?? null },
         });
       }
       if (model.settings.remote && model.settings.remote !== address && model.workspaces.size > 0) {
-        return refuse(409, 'workspaces_exist', `The remote is ${model.settings.remote}, which ${model.workspaces.size} workspaces name; deliver or delete them before connecting elsewhere`, {
+        return refuse(409, 'workspaces_exist', `The app is connected to ${model.settings.remote}, which ${model.workspaces.size} workspaces name; merge or remove them before connecting elsewhere`, {
           field: 'remote',
           workspaces: [...model.workspaces.keys()],
         });
@@ -334,11 +337,11 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     settings: ({ set }) => {
       if (set === undefined) {
         const folder = model.settings.folder ?? `${DATA_DIR}/workspaces`;
-        return ok({ settings: model.settings, ...(SYNCED.test(folder) ? { warning: `${folder} looks like a folder a sync client keeps in sync.` } : {}) });
+        return ok({ settings: model.settings, ...(SYNCED.test(folder) ? { warning: `${folder} looks like a folder a cloud storage app copies to the cloud.` } : {}) });
       }
       const change = set as Partial<Settings>;
       for (const key of ['remote', 'instance', 'identity'] as const) {
-        if (key in change) return refuse(400, 'use_connect', `${key} is set by connect, which reads the remote's profile first`, { field: key });
+        if (key in change) return refuse(400, 'use_connect', `${key} is set by connect, which looks up the instance's details first`, { field: key });
       }
       if (change.port !== undefined && (!Number.isInteger(change.port) || change.port < 1 || change.port > 65535)) return refuse(400, 'bad_settings', 'port must be a whole number from 1 to 65535', { field: 'port' });
       if (change.snapshots !== undefined && (!Number.isInteger(change.snapshots) || change.snapshots < 0)) return refuse(400, 'bad_settings', 'snapshots must be a whole number from 0 to 10000', { field: 'snapshots' });
@@ -352,7 +355,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       model.settings = next;
       const restart = model.running && (['folder', 'port', 'snapshots', 'user'] as const).some((key) => before[key] !== next[key]);
       const folder = next.folder ?? `${DATA_DIR}/workspaces`;
-      return ok({ settings: next, restart, ...(SYNCED.test(folder) ? { warning: `${folder} looks like a folder a sync client keeps in sync.` } : {}) });
+      return ok({ settings: next, restart, ...(SYNCED.test(folder) ? { warning: `${folder} looks like a folder a cloud storage app copies to the cloud.` } : {}) });
     },
     // As the core (app/lib/desktop/checks.ts): the file read for the page, or written whole after the hub's check of it.
     checks: ({ set }) => {
@@ -386,7 +389,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     },
     signIn: async ({ offline }) => {
       unregisteredSignIn = false;
-      if (model.settings.identity?.resolver !== 'oidc') return refuse(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
+      if (model.settings.identity?.resolver !== 'oidc') return refuse(409, 'not_oidc', `${Instance()} does not sign people in; the app sends your ID (user in the settings)`);
       if (waitingSignIn) return refuse(409, 'sign_in_in_progress', 'A sign-in is already waiting for the browser');
       emit({ event: 'open', url: `${ISSUER}/protocol/openid-connect/auth?client_id=armature-desktop` });
       if (options.signin === 'waits') {
@@ -403,7 +406,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (scenario === 'oidc-unregistered') {
         // The sign-in stands: the provider signed the person in, and the remote is asked again once they are registered.
         unregisteredSignIn = true;
-        return refuse(403, 'not_registered', 'The remote refused: someone@example.edu is not registered on this instance; an administrator registers them', { remote: true, signedIn: true, staysSignedIn: offline !== false });
+        return refuse(403, 'not_registered', `${Instance()} refused: someone@example.edu is not registered on this instance; an administrator registers them`, { remote: true, signedIn: true, staysSignedIn: offline !== false });
       }
       model.signedIn = { id: 'User/someone', externalId: 'someone@example.edu', displayName: 'Someone at Example' };
       return ok({ signedIn: true, person: model.signedIn, staysSignedIn: offline !== false });
@@ -417,14 +420,14 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     whoAmI: () => {
       if (model.settings.identity?.resolver !== 'oidc') {
         const user = model.settings.user;
-        if (!model.settings.remote || !model.settings.identity) return refuse(409, 'not_connected', 'The program is not connected to a remote; connect first');
-        if (!user) return refuse(409, 'no_user', 'The remote runs under header; set your identifier on it in the settings (user)');
+        if (!model.settings.remote || !model.settings.identity) return refuse(409, 'not_connected', 'The app is not connected to an instance; connect first');
+        if (!user) return refuse(409, 'no_user', `${Instance()} has no sign-in; set your ID on it in the settings (user)`);
         const name = KNOWN[user];
-        if (!name) return refuse(401, 'unknown_user', `The remote refused: No User is registered for ${user}; create one with POST /api/v1/users`, { remote: true });
+        if (!name) return refuse(401, 'unknown_user', `${Instance()} refused: No User is registered for ${user}; create one with POST /api/v1/users`, { remote: true });
         return ok({ person: { id: `User/${user.split('@')[0]}`, externalId: user, displayName: name } });
       }
-      if (unregisteredSignIn) return refuse(403, 'not_registered', 'The remote refused: someone@example.edu is not registered on this instance; an administrator registers them', { remote: true });
-      return model.signedIn ? ok({ signedIn: true, person: model.signedIn, staysSignedIn: true }) : refuse(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in');
+      if (unregisteredSignIn) return refuse(403, 'not_registered', `${Instance()} refused: someone@example.edu is not registered on this instance; an administrator registers them`, { remote: true });
+      return model.signedIn ? ok({ signedIn: true, person: model.signedIn, staysSignedIn: true }) : refuse(401, 'signed_out', `The app is not signed in to ${instance()}; sign in`);
     },
     // `keychain`: what the shell adds to a reply when the keychain refused what the reply implies (src-tauri/src/core.rs `after_reply`).
     signOut: () => {
@@ -432,7 +435,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       return ok({
         signedOut: true,
         ...(options.keychain === 'fails'
-          ? { keychain: 'You are signed out for now, but the sign-in kept in the keychain could not be removed (the keychain is locked), so the program will be signed in again at its next start; remove it in the keychain, or sign out again' }
+          ? { keychain: 'You are signed out for now, but the sign-in kept in the keychain could not be removed (the keychain is locked), so the app will be signed in again at its next start; remove it in the keychain, or sign out again' }
           : {}),
       });
     },
@@ -441,7 +444,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       return ok({
         localToken: model.localToken,
         ...(options.keychain === 'fails'
-          ? { keychain: 'The new pairing value is in force now, but it could not be kept in the keychain (the keychain is locked), so the old value returns at the program’s next start; reset again once the keychain can be written' }
+          ? { keychain: 'The new pairing key is in use now, but it could not be kept in the keychain (the keychain is locked), so the old key returns at the app’s next start; make a new one again once the keychain can be written' }
           : {}),
       });
     },
@@ -449,8 +452,8 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const user = ownerOf();
       if (user) return ok({ user });
       return model.settings.identity?.resolver === 'oidc'
-        ? refuse(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in')
-        : refuse(409, 'no_user', 'The remote runs under header; set your identifier on it in the settings (user)');
+        ? refuse(401, 'signed_out', `The app is not signed in to ${instance()}; sign in`)
+        : refuse(409, 'no_user', `${Instance()} has no sign-in; set your ID on it in the settings (user)`);
     },
     workspaces: () => needsHub() ?? ok([...model.workspaces.values()].map((w) => w.record)),
     status: (fields) => (statusFails ? refuse(500, 'store_unreadable', 'The workspace folder could not be read') : undefined) ?? needsHub() ?? (workspaceOf(fields) ? ok(statusOf(String(fields.workspace))) : refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`)),

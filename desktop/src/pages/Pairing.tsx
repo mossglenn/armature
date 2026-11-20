@@ -3,6 +3,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { RefusalNotice } from '@/components/RefusalNotice';
 import { Button } from '@/components/ui/button';
 import type { Backend, ShellState } from '@/lib/backend';
+import { useInstance } from '@/lib/instance';
 import type { Refusal } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
@@ -22,6 +23,7 @@ import { useRequest } from '@/lib/useShell';
  */
 export function Pairing({ backend, state }: { backend: Backend; state?: ShellState }) {
   const { run, busy } = useRequest(backend);
+  const instance = useInstance();
   const [value, setValue] = useState<string | null | undefined>();
   const [toolUser, setToolUser] = useState<string | undefined>();
   /** Why the identifier is not shown, once the core has said it cannot give one. */
@@ -47,12 +49,12 @@ export function Pairing({ backend, state }: { backend: Backend; state?: ShellSta
           code === undefined
             ? undefined
             : code === 'signed_out'
-              ? 'A tool also sends who you are. Sign in, and your identifier for tools is shown here.'
+              ? `A tool also sends who you are. Sign in, and your ID on ${instance} is shown here.`
               : code === 'no_user'
-                ? 'A tool also sends who you are. Set your identifier in the settings, and it is shown here.'
+                ? `A tool also sends who you are. Set your ID on ${instance} in the settings, and it is shown here.`
                 : code === 'not_started' || code === 'not_opened'
                   ? undefined
-                  : 'A tool also sends who you are; the remote could not be asked for your identifier just now.'
+                  : `A tool also sends who you are; ${instance} could not be asked for your ID just now.`
         );
       })
       .catch(() => setToolUser(undefined));
@@ -82,9 +84,9 @@ export function Pairing({ backend, state }: { backend: Backend; state?: ShellSta
 
   return (
     <section>
-      <PageHeader title="Pairing">Paste this where the tool asks for its Armature pairing value. The tools the program starts itself need nothing.</PageHeader>
+      <PageHeader title="Pairing">Paste this where the tool asks for its Armature pairing key. The tools the app starts itself need nothing.</PageHeader>
       {value === null ? (
-        <p className="text-sm">The hub has not started yet, so there is no pairing value.</p>
+        <p className="text-sm">The hub has not started yet, so there is no pairing key.</p>
       ) : (
         <div className="flex max-w-2xl gap-2">
           <input
@@ -93,7 +95,7 @@ export function Pairing({ backend, state }: { backend: Backend; state?: ShellSta
             type={shown ? 'text' : 'password'}
             autoComplete="off"
             value={value ?? ''}
-            aria-label="The pairing value"
+            aria-label="The pairing key"
             className="bg-muted min-w-0 flex-1 rounded-md border px-3 py-2 font-mono text-xs"
             onFocus={(e) => e.target.select()}
           />
@@ -112,8 +114,8 @@ export function Pairing({ backend, state }: { backend: Backend; state?: ShellSta
             A tool also sends who you are, as <code className="font-mono text-xs">Armature-User</code>:
           </p>
           <div className="mt-2 flex gap-2">
-            <input id="tool-user" readOnly value={toolUser} aria-label="Your identifier for tools" className="bg-muted min-w-0 flex-1 rounded-md border px-3 py-2 font-mono text-xs" onFocus={(e) => e.target.select()} />
-            <Button variant="outline" onClick={() => void copy('tool-user', toolUser)} aria-label="Copy your identifier">
+            <input id="tool-user" readOnly value={toolUser} aria-label={`Your ID on ${instance}`} className="bg-muted min-w-0 flex-1 rounded-md border px-3 py-2 font-mono text-xs" onFocus={(e) => e.target.select()} />
+            <Button variant="outline" onClick={() => void copy('tool-user', toolUser)} aria-label="Copy your ID">
               {copied === 'tool-user' ? 'Copied' : 'Copy'}
             </Button>
           </div>
@@ -123,13 +125,13 @@ export function Pairing({ backend, state }: { backend: Backend; state?: ShellSta
       {!toolUser && noToolUser && <p className="text-muted-foreground mt-6 max-w-2xl text-sm">{noToolUser}</p>}
 
       <div className="mt-8 max-w-2xl rounded-lg border p-4">
-        <p className="font-medium">Reset the pairing</p>
-        <p className="text-muted-foreground mt-1 text-sm">Draws a new value. Every tool paired with the old one is refused until it is given the new one.</p>
+        <p className="font-medium">New pairing key</p>
+        <p className="text-muted-foreground mt-1 text-sm">Makes a new key. Every tool paired with the old one is refused until it is given the new one.</p>
         {confirming ? (
-          <div className="mt-3 flex items-center gap-2" role="group" aria-label="Confirm the reset">
-            <span className="text-sm">Every paired tool will need the new value. Reset?</span>
+          <div className="mt-3 flex items-center gap-2" role="group" aria-label="Confirm the new key">
+            <span className="text-sm">Every paired tool will need the new key. Make a new one?</span>
             <Button variant="destructive" size="sm" onClick={() => void reset()}>
-              Reset the pairing
+              New pairing key
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
               Cancel
@@ -137,7 +139,7 @@ export function Pairing({ backend, state }: { backend: Backend; state?: ShellSta
           </div>
         ) : (
           <Button variant="outline" className="mt-3" disabled={busy !== undefined || !value} onClick={() => setConfirming(true)}>
-            Reset…
+            New pairing key…
           </Button>
         )}
         {keychain && (

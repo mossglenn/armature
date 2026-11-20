@@ -23,12 +23,12 @@ pub fn show_window(app: &AppHandle) {
 }
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open Armature", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Open Armature Desktop", true, None::<&str>)?;
     let hub = MenuItem::with_id(app, "hub", "Pause the hub", false, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Armature", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Armature Desktop", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &hub, &PredefinedMenuItem::separator(app)?, &quit])?;
     let mut builder = TrayIconBuilder::with_id("main")
-        .tooltip("Armature")
+        .tooltip("Armature Desktop")
         .menu(&menu)
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id().as_ref() {
