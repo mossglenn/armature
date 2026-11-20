@@ -30,7 +30,7 @@ export class GroupTooLarge extends Error {
     readonly bytes: number,
     limits: PartLimits
   ) {
-    super(`${documents} documents (${bytes} bytes) name each other and must travel in one request, which holds ${limits.documents} documents and ${limits.bytes} bytes`);
+    super(`${documents} records (${bytes} bytes) name each other and must travel in one request, which holds ${limits.documents} records and ${limits.bytes} bytes`);
   }
 }
 
