@@ -62,6 +62,18 @@ accepting the record. Not built.
 >
 > Left: the one line in Quiver's and CoQui's `CLAUDE.md` (Consequences), once this is on `main`.
 
+> **Note (2026-11-19, later): Armature's own surfaces are brought to the vocabulary** (decision 6).
+> The desktop app's pages and components, the desktop core's messages and the viewer's pages were
+> reworded together, 264 findings to none, so the check's list holds all three folders and a
+> finding in any of them fails CI. The list takes a folder as well as a file. An allowed use
+> carries its marker with the reason beside it: settings and `checks.json` are saved, a branch or a
+> record is deleted on the instance, "Delivered" is the coverage figure. The desktop shell now
+> depends on the package (`desktop/package.json`) and takes the words for four refusal codes from
+> it (`RefusalNotice.tsx`), the first place the app stops being a separate copy (Consequences).
+> The pages name the instance by its own name, from the settings the core already sends. Not
+> brought, and outside the three surfaces the check reads: the messages of the hub's own workspace
+> routes, which a page shows as given, and the shell's diagnostic lines.
+
 It changes no schema and no route, and the hub never reads the vocabulary, so it needs no platform
 check, no client revision and no entry in `docs/client-changes.md` (§Decision 7). It adds a third
 package to the npm workspace built in Phase 7 (`docs/development-plan.md`, Phase 7: "tools-first

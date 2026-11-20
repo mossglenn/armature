@@ -1,95 +1,113 @@
-# The Armature desktop program
+# Armature Desktop
 
-For the person who installs it: a designer, a reviewer, anyone whose tools work on their own machine against their institution's Armature. How it is built is in [the plan](desktop-program-plan.md) and ADR-0069; the administrator's side is in [`deployment.md`](deployment.md) § "An instance under `oidc`".
+For the person who installs it: a designer, a reviewer, anyone whose tools work on their own computer against their institution's Armature. How it is built is in [the plan](desktop-program-plan.md) and ADR-0069; the side of whoever runs the instance is in [`deployment.md`](deployment.md) § "An instance under `oidc`".
+
+> **The names here are the ones the app uses in versions after 0.1.4** (`@armature/vocabulary`; the reasoning is [`naming-vocabulary.md`](naming-vocabulary.md)). Version 0.1.4 and earlier show older labels for the same things:
+>
+> | In versions after 0.1.4 | In 0.1.4 and earlier |
+> |---|---|
+> | Update from main | Bring in main |
+> | Merge into main; Preview merge | Deliver; Ask what a delivery would find |
+> | Create workspace | Make the workspace |
+> | 3 to push; Changed elsewhere; Offline | 3 unpushed; The remote moved; Remote unreachable |
+> | your instance, or its own name | the remote |
+> | this computer | this machine |
+> | Look up | Read |
+> | pairing key; New pairing key | pairing value; Reset the pairing |
+> | your ID | your identifier |
+> | Personal checks; On | Checks of your own; In force |
+> | override, overridden | set aside |
+> | Diagnostics | Log |
+> | Look for a new version; Try again | Check for updates; Check again |
 
 ## What it does
 
-Your instance of Armature keeps the design graph on a server. The desktop program keeps your own copy of the part you are working on, a **workspace**, on your machine, so your tools (an item editor, an AI assistant, a course builder) read and write it quickly and keep working when you are offline. When you are ready, the program sends your work to the instance: you **push** it, **bring in** what others have put on `main` since, and **deliver** it to `main` for a maintainer to see.
+Your instance of Armature keeps the design graph on a server. Armature Desktop, the desktop app, keeps your own copy of the part you are working on, a **workspace**, on your computer, so your tools (an item editor, an AI assistant, a course builder) read and write it quickly and keep working when you are offline. A tool records each change you make as a **commit**: a recorded change, with who made it, when and why. When you are ready, the app sends your work to the instance: you **push** your commits, **update from `main`** to take in what others have merged since, and **merge into `main`**, the instance's shared design.
 
-Each workspace is a branch of the instance's graph with your name on it. Nothing you do in a workspace reaches anyone else until you push.
+Each workspace is a branch on the instance with your name on it. Nothing you do in a workspace reaches anyone else until you push.
 
 ## Installing it
 
-Download the program from your instance's "Work from your own machine" page, or from [the releases](https://github.com/mossglenn/armature/releases): the newest `Armature desktop` release, the file for your system.
+Download the app from your instance's "Work from your own computer" page, or from [the releases](https://github.com/mossglenn/armature/releases): the newest `Armature desktop` release, the file for your system.
 
 | System | File | Notes |
 |---|---|---|
 | macOS on Apple silicon (M1 and later) | `Armature_<version>_aarch64.dmg` | Open it and drag Armature into Applications |
 | macOS on Intel | `Armature_<version>_x64.dmg` | The same |
-| Windows 10 or 11 | `Armature_<version>_x64-setup.exe` | Installs for you alone; no administrator needed |
-| Linux | `Armature_<version>_amd64.AppImage`, or the `.deb` | The AppImage updates itself; a `.deb` is updated by installing the next one |
+| Windows 10 or 11 | `Armature_<version>_x64-setup.exe` | Installs for you alone; needs no administrator of the computer |
+| Linux | `Armature_<version>_amd64.AppImage`, or the `.deb` | The AppImage installs new versions itself; a `.deb` is replaced by installing the next one |
 
-**The first time you open it,** your system warns that it does not know who made the program, since these builds are not yet signed by Apple or Microsoft. The program's updates are signed and checked before they install; only the first install asks you to vouch for it.
+**The first time you open it,** your system warns that it does not know who made the app, since these builds are not yet signed by Apple or Microsoft. The app's new versions are signed and verified before they install; only the first install asks you to vouch for it.
 
-- **macOS:** open Armature from Applications. When macOS says it cannot verify the program, choose **Done**, then open **System Settings → Privacy & Security**, scroll to the line about Armature, and choose **Open Anyway**. If macOS instead says the program "is damaged", it was quarantined by the browser that downloaded it: run `xattr -dr com.apple.quarantine /Applications/Armature.app` in Terminal, then open it again. Once it is open, macOS may ask for your login password so that Armature can use the items it keeps in your keychain (your sign-in and the pairing value): enter it and choose **Always Allow**. Until the program is signed by Apple, macOS may ask this again after an update, since it ties those items to the exact build that made them.
+- **macOS:** open Armature from Applications. When macOS says it cannot verify the app, choose **Done**, then open **System Settings → Privacy & Security**, scroll to the line about Armature, and choose **Open Anyway**. If macOS instead says the app "is damaged", it was quarantined by the browser that downloaded it: run `xattr -dr com.apple.quarantine /Applications/Armature.app` in Terminal, then open it again. Once it is open, macOS may ask for your login password so that Armature can use the items it keeps in your keychain (your sign-in and the pairing key): enter it and choose **Always Allow**. Until the app is signed by Apple, macOS may ask this again after a new version installs, since it ties those items to the exact build that made them.
 - **Windows:** when SmartScreen says "Windows protected your PC", choose **More info**, then **Run anyway**.
 - **Linux:** make the AppImage executable (`chmod +x Armature_*.AppImage`) and run it; or `sudo apt install ./Armature_*.deb`.
 
 ## Connecting to your instance
 
-The program opens on **Connect**. The easiest way in is the link on your instance's "Work from your own machine" page, which opens the program with the address filled in; or paste the address your administrator gave you (it usually begins `https://api.`) and choose **Read**.
+The app opens on **Connect**. The easiest way in is the link on your instance's "Work from your own computer" page, which opens the app with the address filled in; or paste the address you were given (it usually begins `https://api.`) and choose **Look up**.
 
-The program shows what it found: the instance's name, the address you gave, and who signs you in. Check them before you choose **Connect**: a link can come from anywhere, and the program connects to nothing until you confirm. The address shown is always the one you typed or the link brought; if the instance says its address is a different one, the program warns you, and you should connect only if the address you gave is the one your administrator gave you. Changing the address withdraws what was shown, and the program connects only to exactly what it showed you: an instance that answers differently when you connect is refused (`profile_changed`), so read it again.
+The app shows the **instance details**: the instance's name, the address you gave, and who signs you in. Read them before you choose **Connect**: a link can come from anywhere, and the app connects to nothing until you confirm. The address shown is always the one you typed or the link brought; if the instance says its address is a different one, the app warns you, and you should connect only if the address you gave is the one you were given. Changing the address withdraws what was shown, and the app connects only to exactly what it showed you: an instance whose details have changed by the time you connect is refused (`profile_changed`), so look it up again.
 
-An instance that says **"No sign-in: you say who you are"** is a development or rehearsal arrangement, not one for real work; the program then asks for your identifier instead of signing you in. Since version 0.1.4 it asks the instance whether it knows that identifier and tells you when it does not, there and under **Settings**, where the identifier can be corrected: nothing can be created, pushed or delivered as an identifier the instance does not know, so either correct it or ask the administrator to register you. The identifier is kept as you typed it either way.
+An instance that says **"No sign-in (for testing only)"** is for development or rehearsal, not for real work; the app then asks for your ID on that instance instead of signing you in. Since version 0.1.4 it asks the instance whether it knows that ID and tells you when it does not, there and under **Settings**, where the ID can be corrected: nothing can be created, pushed or merged as an ID the instance does not know, so either correct it or ask an administrator of the instance to register you. The ID is kept as you typed it either way.
 
 ## Signing in
 
-**Sign in** opens your browser at your institution's sign-in page. While the program waits for you there, **Cancel the sign-in** ends the wait, for when you closed the tab or changed your mind; if you leave the page and come back, it tells you a sign-in is still waiting. Once you are signed in, the page says who the instance knows you as. Once you have signed in there, the browser says you can return to the program, and the program shows who the instance says you are. You stay signed in across restarts: the program keeps its credential in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the program says so, since you would otherwise be signed in again at the next start. Signing out also asks your sign-in provider to end the kept sign-in, where the provider offers that (versions after 0.1.4); a provider that does not, or cannot be reached, changes nothing about the sign-out here. The credential is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After updating from version 0.1.2 or earlier you sign in once, for the same reason. The program signs in only at a provider reached over `https`.
+**Sign in** opens your browser at your institution's sign-in page. While the app waits for you there, **Cancel the sign-in** ends the wait, for when you closed the tab or changed your mind; if you leave the page and come back, it tells you a sign-in is still waiting. Once you have signed in there, the browser says you can return to the app, and the app shows who the instance knows you as. You stay signed in across restarts: the app keeps your sign-in in your system's keychain (the macOS Keychain, the Windows Credential Manager, or the Secret Service on Linux), never in a file. **Settings → Sign out** removes it; if the keychain refuses to give it up, the app says so, since you would otherwise be signed in again at the next start. Signing out also asks your sign-in provider to end the kept sign-in, where the provider offers that (versions after 0.1.4); a provider that does not, or cannot be reached, changes nothing about the sign-out here. Your sign-in is kept for your instance and its sign-in provider together, so if your instance changes its provider you sign in again. After moving up from version 0.1.2 or earlier you sign in once, for the same reason. The app signs in only at a provider reached over `https`.
 
 ## Your workspaces
 
-**Workspaces** lists yours, each with what is waiting: how many commits are not yet pushed, and whether `main` has moved on the instance.
+**Workspaces** lists yours, each with what is waiting: how many commits there are **to push**, and whether its branch was **changed elsewhere**. "Changed elsewhere" means the workspace's own branch on the instance has commits this computer did not push: by you on another computer, or by a tool writing to the branch directly. It does not say whether `main` has new work; **Update from main** finds that out.
 
-- **Make a workspace** from `main` (or from another branch): give it a short name, such as `unit-3`. The branch on the instance is named after you and it, for example `jdoe_unit-3`.
-- **Clone a branch** the instance already has, a colleague's for instance. If you may not write to it, the program says so and makes the workspace anyway, for reading.
+- **New workspace** creates one from `main` (or from another branch): give it a short name, such as `unit-3`, and choose **Create workspace**. The branch on the instance is named after you and it, for example `jdoe_unit-3`.
+- **Clone a branch** the instance already has, a colleague's for instance. If you may not write to it, the app says so and creates the workspace anyway, for reading.
 
 Open a workspace to work with it:
 
-- **Push** sends your commits to the instance. Your tools commit as you work; nothing leaves your machine until you push.
-- **Bring in `main`** merges what others have delivered into your workspace, so you deliver against the current design. If your work and theirs changed the same thing, the program lists each conflict, field by field, and says which tool to open to resolve it.
-- **Deliver** merges your workspace into `main`, with a message saying what it holds. Only a maintainer of `main` can deliver; anyone else is told whom to ask. **Ask what a delivery would find** changes nothing and says whether a delivery would go through now: conflicts, broken rules, and the checks your instance requires (below).
-- **Remove** deletes the workspace from your machine, once everything is pushed. Its branch on the instance is deleted too when `main` already holds all of it, and kept otherwise.
-- **Discard and remove** is for a workspace with commits that can never be pushed: the instance is gone, your access to the branch was withdrawn, or a push keeps being refused. It appears under Remove whenever commits are unpushed, says how many you would give up, and asks you to confirm that number. It works offline and signed out, and asks nothing of the instance, which keeps whatever you had pushed. Nothing is deleted outright: the workspace's files are copied to a `_discarded` folder inside your workspaces folder first (the message says where). The program never reads that folder again, so delete it when you are sure you no longer want what is in it. If you can still push, push instead.
+- **Push** sends your commits to the instance. Your tools commit as you work; nothing leaves your computer until you push.
+- **Update from main** merges what others have merged into `main` into your workspace, so you merge against the current design. If your work and theirs changed the same thing, the app lists each conflict, field by field, with the starting point, your workspace's value and `main`'s, and says which tool to open to resolve it.
+- **Merge into main** merges your workspace into `main`, with a message saying what it holds. Only a maintainer of `main` can merge into it; anyone else is told who can. **Preview merge** changes nothing and says whether a merge would go through now: conflicts, broken rules, and the required checks of your instance (below).
+- **Remove from this computer** takes the workspace off your computer, once everything is pushed. Its branch on the instance is deleted too when `main` already has all of it, and kept otherwise; the app says which happened.
+- **Discard and remove** is for a workspace with commits that can never be pushed: the instance is gone, your role on the branch was removed, or a push keeps being refused. It appears under the removal whenever there are commits to push, says how many you would give up, and asks you to confirm that number. It works offline and signed out, and asks nothing of the instance, which keeps whatever you had pushed. Nothing is erased outright: the workspace's files are moved to the discarded folder, `_discarded` inside your workspaces folder, first (the message says where). The app never reads that folder again, so empty it when you are sure you no longer want what is in it. If you can still push, push instead.
 
-## Your tools and the pairing value
+## Your tools and the pairing key
 
-Your tools find the program's hub at `http://127.0.0.1:3101` while the program runs. A tool that writes needs the **pairing value**: open **Pairing**, choose **Copy**, and paste it where the tool asks for its Armature pairing value. The value is covered on the page until you choose **Show**, and **Copy** works either way (in versions after 0.1.4; before, it was always shown). The value stays the same across restarts. **Reset** draws a new one, after which every paired tool needs the new value; use it if the value was shared by mistake.
+Your tools find the app's hub, the desktop hub, at `http://127.0.0.1:3101` while the app runs. A tool that writes needs the **pairing key**: open **Pairing**, choose **Copy**, and paste it where the tool asks for its Armature pairing key. The key is covered on the page until you choose **Show**, and **Copy** works either way (in versions after 0.1.4; before, it was always shown). The key stays the same across restarts. **New pairing key** makes a new one, after which every paired tool needs it; use it if the key was shared by mistake.
 
-Under **Pairing** too is the identifier your tools send to say who they work for, which the instance resolves to you; when the program cannot show it yet, the page says what is missing (a sign-in, or your identifier in the settings).
+Under **Pairing** too is your ID on the instance, which your tools send to say who they work for and the instance resolves to you; when the app cannot show it yet, the page says what is missing (a sign-in, or your ID in the settings).
 
 ## Where things are kept
 
-Your workspaces are in the workspaces folder: by default inside the program's data folder, or wherever **Settings** names. Keep it out of a folder that Dropbox, OneDrive, iCloud Drive or Google Drive keeps in sync: two machines writing one workspace through a sync client can damage it, and the program warns when the folder looks like such a folder. In versions after 0.1.4 the warning also follows a link into a synced folder, and knows a Mac's Desktop and Documents folders when iCloud keeps them (the "Desktop & Documents Folders" setting).
+Your workspaces are in the workspaces folder: by default inside the app's data folder, or wherever **Settings** names. Keep it out of a folder that Dropbox, OneDrive, iCloud Drive or Google Drive copies to the cloud: two computers writing one workspace through such a service can damage it, and the app warns when the folder looks like one of theirs. In versions after 0.1.4 the warning also follows a link into such a folder, and knows a Mac's Desktop and Documents folders when iCloud keeps them (the "Desktop & Documents Folders" setting).
 
-The folder you name in **Settings** must be empty, or one that already holds this program's workspaces: the program clears leftover temporary files from its folder at every start, and in a folder of other things it could remove some that are not its own, so a folder with other files in it is refused (`folder_in_use`; versions after 0.1.4). Naming another folder does not move your workspaces. They stay where they were, with any commits you have not pushed, and the program will find none in the new folder; the settings page says so when you save. Deliver or remove them first, or move the old folder's contents to the new place before the hub starts again.
+The folder you name in **Settings** must be empty, or one that already holds this app's workspaces: the app clears leftover temporary files from its folder at every start, and in a folder of other things it could remove some that are not its own, so a folder with other files in it is refused (`folder_in_use`; versions after 0.1.4). Naming another folder does not move your workspaces. They stay where they were, with any commits to push, and the app will find none in the new folder; the settings page says so when you save. Merge or remove them first, or move the old folder's contents to the new place before the hub starts again.
 
 | | macOS | Windows | Linux |
 |---|---|---|---|
 | Data (settings, workspaces) | `~/Library/Application Support/com.mossglenn.armature` | `%LOCALAPPDATA%\com.mossglenn.armature` | `~/.local/share/com.mossglenn.armature` |
-| Logs (one file a day, seven kept) | `~/Library/Logs/com.mossglenn.armature` | `%LOCALAPPDATA%\com.mossglenn.armature\logs` | `~/.local/share/com.mossglenn.armature/logs` |
+| The diagnostic log (one file a day, seven kept) | `~/Library/Logs/com.mossglenn.armature` | `%LOCALAPPDATA%\com.mossglenn.armature\logs` | `~/.local/share/com.mossglenn.armature/logs` |
 
-**Log** shows the latest lines and opens the log folder; the files are what to send with a report of a problem. A day's file stops at 16 MB and says so on its last line (versions after 0.1.4); the page goes on showing the lines that follow.
+**Diagnostics** shows the latest lines of the diagnostic log and opens its folder; the files are what to send with a report of a problem. A day's file stops at 16 MB and says so on its last line (versions after 0.1.4); the page goes on showing the lines that follow.
 
-If the settings file (`settings.json` in the data folder) cannot be read, the program still starts (versions after 0.1.4; before, it refused to until the file was corrected or deleted). A setting it does not know or cannot use is left out and named in the log, and the rest stand. A file that is not readable at all is moved aside, kept beside it as `settings.json.unreadable-<time>`, and the program starts as new: connect again, and name your workspaces folder again if you had chosen one. Your workspaces are untouched either way.
+If the settings file (`settings.json` in the data folder) cannot be read, the app still starts (versions after 0.1.4; before, it refused to until the file was corrected or removed). A setting it does not know or cannot use is left out and named in the diagnostic log, and the rest stand. A file that is not readable at all is moved aside, kept beside it as `settings.json.unreadable-<time>`, and the app starts as new: connect again, and name your workspaces folder again if you had chosen one. Your workspaces are untouched either way.
 
 
-## Checks of your own
+## Checks
 
-*In the program since version 0.1.3.*
+*In the app since version 0.1.3.*
 
-A *check* is a tool that examines your work and reports a verdict, a design linter for one. The program runs no checks itself and knows no design rules; it waits for the tools' verdicts and shows them.
+A *check* is a tool that examines your work and reports on it, a design linter for one. The app runs no checks itself and knows no design rules; it waits for each check's report and shows its **result**: Passed, Failed, Neutral (it reported without passing or failing) or Could not run.
 
-**Your instance's checks.** Your instance may require checks before work is delivered into `main`. The instance enforces those. A delivery it stops lists each check under the refusal: whether it has reported yet, what it concluded, and its own summary and the address of its details. `checks_pending` means a check has not reported on your latest work, so wait and deliver again. `checks_failed` means one did not pass. Whoever may deliver may set a check aside by giving a reason beside it and choosing **Deliver anyway**; the reason is recorded on the merge into `main`, with your name. A check marked *locked* can be set aside only by an administrator.
+**Required checks.** Your instance may require checks before work is merged into `main`. The instance enforces those. A merge it stops lists each check under the refusal: whether it has reported yet, its result, and its own summary and the address of its details. `checks_pending` means a check is waiting for a report on your latest commit, so wait and merge again. `checks_failed` means one failed. Whoever may merge may **override** a check by giving a reason beside it and choosing **Merge anyway**; the reason is recorded on the merge into `main`, with your name. A check marked *locked* can be overridden only by an administrator.
 
-**Checks of your own.** You can also ask checks of your own pushes. Open **Settings**, and under **Checks of your own** choose **Add a check**:
+**Personal checks.** You can also require checks of your own pushes. Open **Settings**, and under **Personal checks** choose **Add a check**:
 
 - **Check** is the name the tool reports under, such as `lint/mine`.
 - **Workspace** binds it to one workspace, or to every workspace.
 - **When it has not passed** either stops the push or lets it go on and says so.
-- **The tool's settings** are whatever that tool reads, as JSON; write `{}` for none. The program stores them and never reads them.
+- **The tool's settings** are whatever that tool reads, as JSON; write `{}` for none. The app stores them and never reads them.
 
-Choose **Save checks**. Nothing restarts: the next push reads them. While a check is in force, a push waits until that tool has reported on your latest work, and is refused if the check did not pass. Since the checks are yours, you may always push past one: give a reason beside it and choose **Push anyway**. The reason travels with the push as your own statement on its first commit. To stop a check for a while, clear **In force** and save. To take one away, choose **Remove** on it and then **Save checks**: nothing here is written until you save, a removal included, and until then the check still stops your pushes. Since version 0.1.4 the page says what you have removed, added or changed and not yet saved; leaving the page without saving drops those changes.
+Choose **Save checks**. Nothing restarts: the next push reads them. While a check is on, a push waits until that tool has reported on your latest commit, and is refused if the check failed. Since the checks are yours, you may always override one: give a reason beside it and choose **Push anyway**. The reason travels with the push as your own statement on its first commit. To stop a check for a while, clear **On** and save. To take one away, choose **Remove** on it and then **Save checks**: nothing here is written until you save, a removal included, and until then the check still stops your pushes. Since version 0.1.4 the page says what you have removed, added or changed and not yet saved; leaving the page without saving drops those changes.
 
 The checks are kept in a file named `checks.json` in the workspaces folder, which you may also edit by hand:
 
@@ -97,50 +115,52 @@ The checks are kept in a file named `checks.json` in the workspaces folder, whic
 { "requirements": [ { "check": "lint/mine", "params": { } } ] }
 ```
 
-Only the program and you can change that file. No tool can change it through the hub, so no tool can relax what you asked. If the file is edited into something the program cannot read, nothing is pushed until it is put right: the push says where the problem is, and saving on the Settings page replaces the file.
+Only the app and you can change that file. No tool can change it through the hub, so no tool can relax what you asked. If the file is edited into something the app cannot read, nothing is pushed until it is put right: the push says where the problem is, and saving on the Settings page replaces the file.
 
 ## In the background
 
-Closing the window does not stop the program: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first. If the hub's own process ends unexpectedly, the window says so and **Start the hub** starts it again (versions after 0.1.4; before, the way back was to quit and open the program again).
+Closing the window does not stop the app: it stays in the tray (the menu bar on macOS), so your tools keep their hub. The tray icon opens the window, pauses or resumes the hub, and quits. Quitting stops the hub cleanly first. If the hub's own process ends unexpectedly, the window says so and **Start the hub** starts it again (versions after 0.1.4; before, the way back was to quit and open the app again).
 
-**Settings → Start at login** starts the program when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the program tries again at its next start. The program makes the entry again each time it starts, so it follows the program if you move it. *In versions up to 0.1.3* it did not: if you moved the program after turning this on, the entry kept pointing at the old place and the program did not start when you signed in; turning the box off and on again puts it right there, and version 0.1.4 does it itself. An update you install in such a session brings the window back when the program starts again.
+**Settings → Start at login** starts the app when you sign in to your computer, in the tray without a window. It is off until you turn it on. If your system refuses the entry, the settings page says so beside the box, and the box still shows what you chose; the app tries again at its next start. The app makes the entry again each time it starts, so it follows the app if you move it. *In versions up to 0.1.3* it did not: if you moved the app after turning this on, the entry kept pointing at the old place and the app did not start when you signed in; turning the box off and on again puts it right there, and version 0.1.4 does it itself. A new version you install in such a session brings the window back when the app starts again.
 
-## Updates
+## New versions
 
-The program checks for a new version when it starts and once a day. When there is one, a notice at the top of the window says which version, with its notes; choose **Install and restart** when it suits you. The hub stops while the update installs, which takes a few seconds, and your tools reach it again once the program is back. While a push, bring-in, delivery, clone or removal is running, the button waits for it, and so does quitting (up to half a minute), so nothing is cut off under it. **Settings → Check for updates** checks at once.
+The app looks for a new version when it starts and once a day. When there is one, a notice at the top of the window says which version, with its notes; choose **Install and restart** when it suits you. The hub stops while the new version installs, which takes a few seconds, and your tools reach it again once the app is back. While a push, an update from `main`, a merge, a clone or a removal is running, the button waits for it, and so does quitting (up to half a minute), so nothing is cut off under it. **Settings → Look for a new version** looks at once.
 
-Version 0.1.3 asks you to sign in once more after it installs: the sign-in the program keeps is now tied to the sign-in service that issued it, and the one an earlier version kept is removed rather than trusted. Your workspaces and your unpushed work are untouched.
+Version 0.1.3 asks you to sign in once more after it installs: the sign-in the app keeps is now tied to the sign-in provider that issued it, and the one an earlier version kept is removed rather than trusted. Your workspaces and your commits to push are untouched.
 
-On macOS, the first start after an update may ask for your login password for the keychain again; enter it and choose **Always Allow** (§ "Installing it" says why). An update is installed only if its signature verifies. If an install fails, or a download goes a minute without receiving anything, the program keeps running the version you have, says why, and offers to try again. If the release channel cannot be reached, or answers without a release, the program says so rather than calling your version the latest, and tries again within the hour. A `.deb` install does not check the channel at all: install the next package when one is released, as the table above says.
+On macOS, the first start after a new version installs may ask for your login password for the keychain again; enter it and choose **Always Allow** (§ "Installing it" says why). A new version is installed only if its signature verifies. If an install fails, or a download goes a minute without receiving anything, the app keeps running the version you have, says why, and offers to try again. If the release channel cannot be reached, or answers without a release, the app says so rather than calling your version the latest, and tries again within the hour. A `.deb` install does not look at the channel at all: install the next package when one is released, as the table above says.
 
 ## When something is refused
 
-Every refusal shows the message, a code and whether your instance or this machine gave it. The ones you are most likely to meet:
+Every refusal shows its words first, then a code and who refused it: your instance, by its name, or this computer. The ones you are most likely to meet:
 
 | Code | What it means | What to do |
 |---|---|---|
-| `remote_unreachable` | The instance did not answer | Check your connection; offline, everything but push, bring in, deliver and remove still works. Behind an institution's TLS inspection the program trusts the certificate authorities your system trusts, as your browser does (since 0.1.1); if your browser reaches the instance and the program does not, ask your administrator for the authority's certificate and set `NODE_EXTRA_CA_CERTS` to its file |
+| `remote_unreachable` | Your instance cannot be reached | Look at your connection; offline, everything but pushing, updating from `main`, merging and removing still works. Behind an institution's TLS inspection the app trusts the certificate authorities your system trusts, as your browser does (since 0.1.1); if your browser reaches the instance and the app does not, ask whoever runs your instance for the authority's certificate and set `NODE_EXTRA_CA_CERTS` to its file |
 | `insecure_remote` | An instance that signs people in was given as `http://` | Use its `https://` address |
-| `profile_changed` | The instance answered differently when you connected than when you read it | Choose **Read** again and check what it shows before connecting |
-| `not_registered` | You signed in, but the instance does not know you | Ask your administrator to register you. Your sign-in is kept (versions after 0.1.4): once you are registered, choose **Check again** on the sign-in page, with no need to sign in again |
+| `profile_changed` | The instance's details changed since you looked them up | Choose **Look up** again and read what it shows before connecting |
+| `not_registered` | You signed in, but the instance does not know you | Ask an administrator of your instance to register you. Your sign-in is kept (versions after 0.1.4): once you are registered, choose **Try again** on the sign-in page, with no need to sign in again |
 | `sign_in_refused`, `sign_in_timeout` | The sign-in did not complete in the browser | Sign in again |
 | `issuer_unreachable` | Your institution's sign-in provider did not answer, or answered that it is busy or restarting | Try again shortly. You stay signed in: nothing is removed |
-| `insecure_issuer` | The instance names a sign-in provider that is not reached over `https` | Tell your administrator; the program will not sign in there |
+| `insecure_issuer` | The instance names a sign-in provider that is not reached over `https` | Tell whoever runs your instance; the app will not sign in there |
 | `signed_out` | The instance no longer accepts your sign-in | Sign in again |
-| `unsupported_version` | The instance is older than this program | Ask your administrator to update it |
-| `unpushed_commits` | Something waits to be pushed | Push first. If the message says an earlier bring-in was not finished and names documents changed on both sides, pushing will not clear it, and the program has no way on from there yet; the work stays in the workspace's folder |
-| `bring_in_first` | `main` has moved since you last brought it in | Bring in `main`, then deliver |
-| `forbidden` | You may not do this on that branch; its reason says why | The message names who may |
-| `checks_pending` | A check has not reported yet: one your instance requires before a delivery, or one of your own before a push | Wait for the check to run, then try again; or give a reason beside the check and go on anyway (see "Checks of your own") |
-| `checks_failed` | A required check did not pass | Read what the check found, at the address it gives, and fix it; or give a reason beside the check and go on anyway (see "Checks of your own") |
-| `personal_checks_invalid` | The program cannot read your `checks.json` | Open **Settings**, which lists the problems, and save your checks again; or correct or remove the file by hand |
-| `discard_mismatch` | The number of unpushed commits changed after the program showed it to you, usually because a tool wrote meanwhile | Read the new number and confirm again, or push |
-| `workspaces_exist` | You asked to connect elsewhere while workspaces exist | Deliver or remove them first |
-| `other_remote` | The workspace was made from another instance than the one the program is connected to now, which can happen after the workspaces folder was changed and changed back | Connect to the instance the message names to push or deliver it; or remove it from this machine, which touches nothing on either instance |
+| `unsupported_version` | Your instance is too old for this version of the app | Ask whoever runs your instance to bring it up to date |
+| `unpushed_commits` | There are commits to push | Push first. If the message says an earlier update from `main` was not finished and names records changed on both sides, pushing will not clear it, and the app has no way on from there yet; the work stays in the workspace's folder |
+| `bring_in_first` | Update from `main` first: `main` has work your workspace has not taken in | Choose **Update from main**, then merge |
+| `forbidden` | You may not do this on that branch; its reason says why | The message names who can |
+| `checks_pending` | A check is waiting for a report: a required check of your instance before a merge, or a personal check before a push | Wait for the check to run, then try again; or override it with a reason beside the check (see "Checks") |
+| `checks_failed` | A required check failed | Read what the check found, at the address it gives, and fix it; or override it with a reason beside the check (see "Checks") |
+| `personal_checks_invalid` | The app cannot read your `checks.json` | Open **Settings**, which lists the problems, and save your checks again; or correct or remove the file by hand |
+| `discard_mismatch` | The number of commits to push changed after the app showed it to you, usually because a tool wrote meanwhile | Read the new number and confirm again, or push |
+| `workspaces_exist` | You asked to connect elsewhere while workspaces exist | Merge or remove them first |
+| `other_remote` | The workspace was created from another instance than the one the app is connected to now, which can happen after the workspaces folder was changed and changed back | Connect to the instance the message names to push or merge it; or remove it from this computer, which touches nothing on either instance |
 | `folder_in_use` | The folder named for the workspaces holds other files | Choose an empty folder, or the folder your workspaces are already in |
-| `port_in_use` | Another program holds the port | The program opens on **Settings**: choose another port, save, and choose **Start the hub** |
-| `folder_locked` | Another copy of the program, or another hub, holds the workspaces folder | Quit the other one |
+| `port_in_use` | Something else on this computer holds the port | The app opens on **Settings**: choose another port, save, and choose **Start the hub** |
+| `folder_locked` | Another copy of the app, or another hub, holds the workspaces folder | Quit the other one |
 
-## Removing the program
+A refusal that comes from the hub's own routes, and not from the app, may still word some of this the older way ("the remote", "deliver", "bring in") in its message; the code is the same.
 
-Deliver or push what you want to keep, turn off **Settings → Start at login** if you turned it on (on macOS and Linux the system's entry would otherwise outlive the program), then quit the program and delete it as you would any other (drag it to the Trash on macOS; **Settings → Apps** on Windows; delete the AppImage or `sudo apt remove armature` on Linux). Its data and logs stay in the folders above until you delete them, and its keychain items (service `com.mossglenn.armature`) until you remove them in your system's keychain.
+## Removing the app
+
+Merge or push what you want to keep, turn off **Settings → Start at login** if you turned it on (on macOS and Linux the system's entry would otherwise outlive the app), then quit the app and remove it as you would any other (drag it to the Trash on macOS; **Settings → Apps** on Windows; delete the AppImage or `sudo apt remove armature` on Linux). Its data and its diagnostic log stay in the folders above until you delete them, and its keychain items (service `com.mossglenn.armature`) until you remove them in your system's keychain.
