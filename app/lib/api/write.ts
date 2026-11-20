@@ -1,6 +1,6 @@
 import { CLASS_FIELDS, CLASS_KEY, type FieldShape } from '@armature/types';
 import { DOCUMENT_SCHEMAS } from '@armature/types/schemas';
-import { hasAttestedBy, hasCreatedBy, isOperatorWritable, isWritable, livesOnMain, mainOnlyCode } from './classes';
+import { hasAttestedBy, hasCreatedBy, isOperatorWritable, isWritable, livesOnMain, mainOnlyCode, mainOnlyReason } from './classes';
 import { ApiError } from './errors';
 import { commitMessage, REGISTRY_BRANCH, userCopyFor, type ResolvedUser } from './identity';
 import { checkInvariants, createWriteContext, type WriteContext } from './invariants';
@@ -16,8 +16,10 @@ import { changesOf, StoreError, type DocumentReader, type Store, type TerminusDo
  *      matches its generated Zod (validation library) schema in
  *      app/lib/schemas.ts (400 invalid_document); a class that lives on
  *      main is refused on any other branch: `Grant` (constraint 21, 400
- *      grants_live_on_main, ADR-0068 decision 2) and `CheckRequirement`
- *      (constraint 23, 400 requirements_live_on_main, ADR-0070 decision 5)
+ *      grants_live_on_main, ADR-0068 decision 2), `CheckRequirement`
+ *      (constraint 23, 400 requirements_live_on_main, ADR-0070 decision 5),
+ *      and the hub's own `Workspace` and `MergeRequest` (constraint 27, 400
+ *      workspaces_live_on_main and merge_requests_live_on_main, ADR-0072)
  *   2. identity: an id held by another type is a 409 (ADR-0024 decision 4);
  *      an existing document is found by @id, or for a Hash-keyed class by
  *      its key fields, so a replace is recognized either way. An omitted
@@ -163,14 +165,7 @@ export async function writeDocuments(documents: TerminusDocument[], opts: WriteO
   checkUnique(documents);
   const onMain = documents.find((doc) => livesOnMain(doc['@type']));
   if (onMain && (opts.target ?? branch.branch) !== REGISTRY_BRANCH) {
-    const requirement = onMain['@type'] === 'CheckRequirement';
-    throw new ApiError(
-      400,
-      mainOnlyCode(onMain['@type']),
-      requirement
-        ? `CheckRequirement documents live on ${REGISTRY_BRANCH} only, whatever branch they bind; name the merge target in branch and write this one there (ADR-0070 decision 5)`
-        : `${onMain['@type']} documents live on ${REGISTRY_BRANCH} only, whatever branch the work is on; write this one there (ADR-0068 decision 2; ADR-0032 decision 2 for a User)`
-    );
+    throw new ApiError(400, mainOnlyCode(onMain['@type']), `${onMain['@type']} documents live on ${REGISTRY_BRANCH} only, ${mainOnlyReason(onMain['@type'])}`);
   }
   const moved = (current: string | undefined) =>
     new ApiError(412, 'precondition_failed', `Branch ${branch.branch} has moved since commit ${opts.ifMatch}`, {

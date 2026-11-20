@@ -30,20 +30,36 @@ export const isWritable = (type: string): boolean =>
  * rehearsal of 2026-11-05). `CheckRequirement` (ADR-0070 decision 5) was the
  * operator's alone until ADR-0068 decision 4's row for it was built
  * (`write_requirement` in authorization.ts, 2026-11-13).
+ * `Workspace` and `MergeRequest` (ADR-0072) are the hub's own records, written
+ * by its routes in marked commits and by no client; the operator repairs one
+ * as it repairs anything else, by a commit with a reason.
  */
-export const isOperatorWritable = (type: string): boolean => isWritable(type) || type === 'User';
+export const isOperatorWritable = (type: string): boolean => isWritable(type) || type === 'User' || type === 'Workspace' || type === 'MergeRequest';
 
 /**
  * Classes kept on `main` only, whatever branch a request names, because they
  * are read there for every request: `Grant` (ADR-0068 decision 2; constraint
- * 21), `CheckRequirement` (ADR-0070 decision 5; constraint 23), and `User`
- * (ADR-0032 decision 2), which only the operator's `put` writes through the
- * pipeline.
+ * 21), `CheckRequirement` (ADR-0070 decision 5; constraint 23), `Workspace`
+ * and `MergeRequest` (ADR-0072 decisions 2 and 5; constraint 27), which the
+ * hub alone writes, and `User` (ADR-0032 decision 2), which only the
+ * operator's `put` writes through the pipeline. Each with the code a write
+ * elsewhere is refused with and the decision that keeps it there.
  */
-export const livesOnMain = (type: string): boolean => type === 'Grant' || type === 'User' || type === 'CheckRequirement';
+const MAIN_ONLY: Record<string, { code: string; why: string }> = {
+  Grant: { code: 'grants_live_on_main', why: 'whatever branch the work is on; write this one there (ADR-0068 decision 2; ADR-0032 decision 2 for a User)' },
+  User: { code: 'grants_live_on_main', why: 'whatever branch the work is on; write this one there (ADR-0068 decision 2; ADR-0032 decision 2 for a User)' },
+  CheckRequirement: { code: 'requirements_live_on_main', why: 'whatever branch they bind; name the merge target in branch and write this one there (ADR-0070 decision 5)' },
+  Workspace: { code: 'workspaces_live_on_main', why: 'whatever branch they name (ADR-0072 decision 2)' },
+  MergeRequest: { code: 'merge_requests_live_on_main', why: 'whatever branches they name (ADR-0072 decision 5)' },
+};
 
-/** The code a write of a `livesOnMain` class elsewhere is refused with: constraint 23's own, or 21's. */
-export const mainOnlyCode = (type: string): string => (type === 'CheckRequirement' ? 'requirements_live_on_main' : 'grants_live_on_main');
+export const livesOnMain = (type: string): boolean => Object.hasOwn(MAIN_ONLY, type);
+
+/** The code a write of a `livesOnMain` class elsewhere is refused with: constraint 21's, 23's or 27's. */
+export const mainOnlyCode = (type: string): string => MAIN_ONLY[type]?.code ?? 'grants_live_on_main';
+
+/** Why the class is kept there, as the refusal ends. */
+export const mainOnlyReason = (type: string): string => MAIN_ONLY[type]?.why ?? '';
 
 /** True when `type` is `ancestor` or inherits from it, transitively. */
 export const inheritsFrom = (type: string, ancestor: string): boolean =>

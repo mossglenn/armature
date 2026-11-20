@@ -28,7 +28,10 @@ import type { DocumentReader, Store, TerminusDocument } from '../api/store';
  * under one identity, the issuer and the external identifier together
  * (`duplicate_user`; the code review of 2026-11-09's Q4, which reopened what
  * the deep review set aside: the operator's `put` takes `User` documents and
- * could breach it, and now refuses to). The repair for each is `put` on the record,
+ * could breach it, and now refuses to); and, since 2026-11-20, an `Active`
+ * workspace record naming a branch the store lacks (`workspace_without_branch`,
+ * what a creation that failed between its steps leaves; ADR-0072 decision 2)
+ * and an `Open` merge request naming one (`request_without_branch`). The repair for each is `put` on the record,
  * as a commit with a reason. A requirement whose reporter is not an agent is
  * constraint 24, which the engine reports like any rule.
  */
@@ -98,6 +101,31 @@ async function checkOwnership(store: Store, documents: TerminusDocument[]): Prom
         field: 'branch',
         message: `${requirement['@id']} requires ${String(requirement.check)} of merges into branch ${branch}, which the store does not have; revoke it (ADR-0070 decision 5)`,
       });
+    }
+  }
+  for (const record of documents) {
+    if (record['@type'] === 'Workspace' && record.status === 'Active' && typeof record.branch === 'string' && !names.includes(record.branch)) {
+      out.push({
+        code: 'workspace_without_branch',
+        id: record['@id'],
+        index: documents.indexOf(record),
+        field: 'branch',
+        message: `${record['@id']} makes ${record.branch} a workspace, and the store has no such branch; close the record (ADR-0072 decision 2)`,
+      });
+    }
+    if (record['@type'] === 'MergeRequest' && record.status === 'Open') {
+      for (const field of ['source', 'target'] as const) {
+        const branch = record[field];
+        if (typeof branch === 'string' && !names.includes(branch)) {
+          out.push({
+            code: 'request_without_branch',
+            id: record['@id'],
+            index: documents.indexOf(record),
+            field,
+            message: `${record['@id']} is Open and names ${branch} as its ${field}, which the store does not have; close the request (ADR-0072 decision 5)`,
+          });
+        }
+      }
     }
   }
   const identities = new Map<string, string>();
