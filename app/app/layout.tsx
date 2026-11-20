@@ -10,10 +10,26 @@ import "./globals.css";
 // The Geist faces from the `geist` package's own files (next/font/local), so
 // `next build` needs no network; next/font/google fetched them at build time
 // (the deep review's build finding). Same CSS variables as before.
-export const metadata: Metadata = {
-  title: "Armature",
-  description: "Graph-based infrastructure for learning engineering: design intelligence from the artifact graph.",
-};
+
+/**
+ * The page's title is the instance's own name, as `GET /discover` gives it
+ * (`ARMATURE_INSTANCE_NAME`, or the hub's host name), since a person knows the
+ * instance by its name (docs/naming-vocabulary.md, collision 1); "Armature"
+ * when the hub names none or cannot be read, so the page still renders.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  let title = "Armature";
+  try {
+    const { data } = await viewerHub().discover();
+    if (data.instance?.name) title = data.instance.name;
+  } catch {
+    // The hub unreadable: the pages say so themselves.
+  }
+  return {
+    title,
+    description: "Graph-based infrastructure for learning engineering: design intelligence from the artifact graph.",
+  };
+}
 
 /** The branches the hub lists, for the picker; none when the hub cannot be read, so the page still renders. */
 async function branchChoices(): Promise<BranchChoice[]> {
