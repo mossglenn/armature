@@ -171,6 +171,21 @@ export const VALID_CheckLevel = [
 
 export type CheckLevel = typeof VALID_CheckLevel[number];
 
+export const VALID_WorkspaceStatus = [
+  "Active",
+  "Closed",
+] as const;
+
+export type WorkspaceStatus = typeof VALID_WorkspaceStatus[number];
+
+export const VALID_MergeRequestStatus = [
+  "Open",
+  "Merged",
+  "Closed",
+] as const;
+
+export type MergeRequestStatus = typeof VALID_MergeRequestStatus[number];
+
 export const VALID_ExternalSystem = [
   "CASE",
   "QTI",
@@ -232,6 +247,27 @@ export interface CheckRequirement extends TerminusDocument {
   params: unknown;
   status: GrantStatus;
   rationale?: string;
+}
+
+export interface Workspace extends TerminusDocument {
+  branch: string;
+  owner: string;  // User @id
+  parent: string;
+  link?: string;
+  linkedAt?: string;  // ISO 8601 datetime
+  linkLabel?: string;
+  status: WorkspaceStatus;
+}
+
+export interface MergeRequest extends TerminusDocument {
+  source: string;
+  target: string;
+  openedBy: string;  // User @id
+  message: string;
+  status: MergeRequestStatus;
+  decidedBy?: string;  // User @id
+  decidedAt?: string;  // ISO 8601 datetime
+  mergeCommit?: string;
 }
 
 /** @abstract */
@@ -459,6 +495,8 @@ export const CLASS_CATEGORY = {
   User: "infrastructure",
   Grant: "infrastructure",
   CheckRequirement: "infrastructure",
+  Workspace: "infrastructure",
+  MergeRequest: "infrastructure",
   DesignRecord: "infrastructure",
   ArmatureDocument: "infrastructure",
   LearningEvidence: "artifact",
@@ -499,6 +537,8 @@ export interface ClassMap {
   User: User;
   Grant: Grant;
   CheckRequirement: CheckRequirement;
+  Workspace: Workspace;
+  MergeRequest: MergeRequest;
   DesignRecord: DesignRecord;
   ArmatureDocument: ArmatureDocument;
   LearningEvidence: LearningEvidence;
@@ -545,6 +585,8 @@ export const CLASS_ANCESTORS = {
   User: [],
   Grant: [],
   CheckRequirement: [],
+  Workspace: [],
+  MergeRequest: [],
   DesignRecord: [],
   ArmatureDocument: ["DesignRecord"],
   LearningEvidence: ["ArmatureDocument", "DesignRecord"],
@@ -582,6 +624,8 @@ export const CLASS_KEY = {
   User: {"type":"Random"},
   Grant: {"type":"Hash","fields":["user","role","branch"]},
   CheckRequirement: {"type":"Hash","fields":["check","branch","fromPrefix"]},
+  Workspace: {"type":"Random"},
+  MergeRequest: {"type":"Random"},
   LearningMetric: {"type":"Random"},
   DescriptiveEvidence: {"type":"Random"},
   LearningDataset: {"type":"Random"},
@@ -650,6 +694,25 @@ export const CLASS_FIELDS: Record<ClassName, Record<string, FieldShape>> = {
     params: {"type":"sys:JSON","kind":"primitive","optional":false,"many":false},
     status: {"type":"GrantStatus","kind":"enum","optional":false,"many":false},
     rationale: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+  },
+  Workspace: {
+    branch: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    owner: {"type":"User","kind":"reference","optional":false,"many":false},
+    parent: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    link: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    linkedAt: {"type":"xsd:dateTime","kind":"primitive","optional":true,"many":false},
+    linkLabel: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
+    status: {"type":"WorkspaceStatus","kind":"enum","optional":false,"many":false},
+  },
+  MergeRequest: {
+    source: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    target: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    openedBy: {"type":"User","kind":"reference","optional":false,"many":false},
+    message: {"type":"xsd:string","kind":"primitive","optional":false,"many":false},
+    status: {"type":"MergeRequestStatus","kind":"enum","optional":false,"many":false},
+    decidedBy: {"type":"User","kind":"reference","optional":true,"many":false},
+    decidedAt: {"type":"xsd:dateTime","kind":"primitive","optional":true,"many":false},
+    mergeCommit: {"type":"xsd:string","kind":"primitive","optional":true,"many":false},
   },
   DesignRecord: {},
   ArmatureDocument: {
