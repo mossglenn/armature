@@ -213,7 +213,7 @@ test.describe('signing in', () => {
 });
 
 test.describe('the workspaces', () => {
-  test('push, bring in and deliver, with each refusal met on the way', async ({ page }) => {
+  test('push, update and a merge request, with each refusal met on the way', async ({ page }) => {
     await open(page, 'header');
     const list = page.getByRole('list', { name: 'Your workspaces' });
     await expect(list).toContainText('demo-designer_unit-3');
@@ -226,23 +226,32 @@ test.describe('the workspaces', () => {
 
     await page.getByRole('button', { name: 'Update from main' }).click();
     await expect(page.getByRole('alert')).toContainText('409 unpushed_commits');
+    // A request is about what the instance holds, so it is opened with nothing left to push.
+    await page.getByLabel('Message (required)').fill('Unit 3, reviewed');
+    await page.getByRole('button', { name: 'Open merge request', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('409 unpushed_commits');
 
     await page.getByRole('button', { name: 'Push', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('Pushed 2 commits.');
     await expect(page.getByLabel('Commits to push')).toContainText('Everything here is on hub.example.test');
 
-    await page.getByLabel('Message (required)').fill('Unit 3, reviewed');
-    await page.getByRole('button', { name: 'Merge into main', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('409 bring_in_first');
+    await page.getByRole('button', { name: 'Open merge request', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('A merge request into main is open.');
+    const request = page.getByRole('region', { name: 'Merge request' });
+    await expect(request).toContainText('Merge request into main');
+    await expect(request).toContainText('Unit 3, reviewed');
+    await expect(request.getByRole('group', { name: "The merge request's health" })).toContainText('Ready to merge');
+    // One request at a time: the form to open one is gone while it is open.
+    await expect(page.getByRole('button', { name: 'Open merge request', exact: true })).toHaveCount(0);
 
     await page.getByLabel('Message (optional)').fill('Catch up with main');
     await page.getByRole('button', { name: 'Update from main' }).click();
     await expect(page.getByRole('status')).toContainText('Updated from main: 3 records.');
 
-    await page.getByLabel('Message (required)').fill('Unit 3, reviewed');
-    await page.getByLabel('Remove from this computer afterwards').check();
-    await page.getByRole('button', { name: 'Merge into main', exact: true }).click();
+    await request.getByLabel('Remove from this computer afterwards').check();
+    await request.getByRole('button', { name: 'Merge', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('demo-designer_unit-3 is merged into main and removed from this computer');
     await expect(list).not.toContainText('demo-designer_unit-3');
   });
 
@@ -322,29 +331,121 @@ test.describe('the workspaces', () => {
     await expect(page.getByLabel('Commits to push')).not.toContainText('Everything here is on hub.example.test');
   });
 
-  test('a workspace is made from main, and a branch someone else owns is cloned with the remote’s warning', async ({ page }) => {
+  test('a workspace is made from a branch; one of yours linked to no computer is linked here; one linked to another is unlinked from it first, its cost said', async ({ page }) => {
     await open(page, 'header');
     // Names are kept as typed: the system may not capitalize or correct them (the Keycloak rehearsal, 2026-11-08).
-    for (const field of ['Name', 'From', 'Branch']) {
+    for (const field of ['Name', 'From']) {
       const box = page.getByRole('textbox', { name: field, exact: true });
       await expect(box).toHaveAttribute('autocapitalize', 'off');
       await expect(box).toHaveAttribute('spellcheck', 'false');
     }
+    const list = page.getByRole('list', { name: 'Your workspaces' });
     await page.getByRole('textbox', { name: 'Name' }).fill('unit-6');
     await page.getByRole('button', { name: 'Create workspace' }).click();
-    await expect(page.getByRole('list', { name: 'Your workspaces' })).toContainText('demo-designer_unit-6');
+    await expect(list).toContainText('demo-designer_unit-6');
     await page.getByRole('textbox', { name: 'Name' }).fill('unit-6');
     await page.getByRole('button', { name: 'Create workspace' }).click();
     await expect(page.getByRole('alert')).toContainText('409 workspace_exists');
+    // A workspace's parent is a branch: nothing is made from a workspace.
+    await page.getByRole('textbox', { name: 'Name' }).fill('unit-7');
+    await page.getByRole('textbox', { name: 'From' }).fill('demo-designer_glossary');
+    await page.getByRole('button', { name: 'Create workspace' }).click();
+    await expect(page.getByRole('alert')).toContainText('409 parent_is_workspace');
+    // No branch is cloned any more: a workspace is linked, and someone else's is read on the instance.
+    await expect(page.getByText('Clone a branch')).toHaveCount(0);
 
-    await page.getByRole('textbox', { name: 'Branch' }).fill('someone_unit-2');
-    await page.getByRole('button', { name: 'Clone it' }).click();
-    await expect(page.getByRole('status')).toContainText('may not: write someone_unit-2');
-    await expect(page.getByRole('list', { name: 'Your workspaces' })).toContainText('someone_unit-2');
+    const unlinked = page.getByRole('region', { name: 'Your unlinked workspaces' });
+    const elsewhere = page.getByRole('region', { name: 'Linked to another computer' });
+    await expect(unlinked).toContainText('demo-designer_unit-2');
+    await expect(elsewhere).toContainText('demo-designer_rubrics');
+    await expect(elsewhere).toContainText('linked to “Office iMac” since');
+    // Linking never takes a workspace over: one linked elsewhere offers only to be unlinked from there.
+    await expect(elsewhere.getByRole('button', { name: /Link to this computer/ })).toHaveCount(0);
+    await elsewhere.getByRole('button', { name: 'Unlink from the other computer: demo-designer_rubrics' }).click();
+    const confirm = page.getByRole('group', { name: 'Confirm the unlinking' });
+    await expect(confirm).toContainText('Commits on that computer that were not pushed can no longer be pushed. Unlink demo-designer_rubrics?');
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(elsewhere).toContainText('demo-designer_rubrics');
+    await elsewhere.getByRole('button', { name: 'Unlink from the other computer: demo-designer_rubrics' }).click();
+    await confirm.getByRole('button', { name: 'Unlink', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('demo-designer_rubrics is unlinked from the other computer. It can now be linked to this one.');
+    await expect(elsewhere).toHaveCount(0);
+    await expect(unlinked).toContainText('demo-designer_rubrics');
+
+    await unlinked.getByRole('button', { name: 'Link to this computer: demo-designer_rubrics' }).click();
+    await expect(page.getByRole('status')).toContainText('demo-designer_rubrics is linked to this computer.');
+    await expect(list).toContainText('demo-designer_rubrics');
+    await expect(unlinked).not.toContainText('demo-designer_rubrics');
+    await expect(unlinked).toContainText('demo-designer_unit-2');
+  });
+
+  test('a workspace is unlinked from this computer once everything is pushed, stays on the instance, and is linked again', async ({ page }) => {
+    await open(page, 'header');
+    await page.evaluate(() => (window as unknown as { __fakeCore: { writeAsTool: (b: string, m: string) => void } }).__fakeCore.writeAsTool('demo-designer_glossary', 'Define "framing"'));
+    const list = page.getByRole('list', { name: 'Your workspaces' });
+    await list.getByRole('button', { name: /demo-designer_glossary/ }).click();
+    const unlink = page.getByRole('region', { name: 'Unlink' });
+    await expect(unlink).toContainText('Unlink from this computer');
+    await unlink.getByRole('button', { name: 'Unlink…' }).click();
+    const confirm = page.getByRole('group', { name: 'Confirm the unlinking' });
+    await expect(confirm).toContainText('Unlink demo-designer_glossary from this computer?');
+    await confirm.getByRole('button', { name: 'Unlink', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('409 unpushed_commits');
+
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await unlink.getByRole('button', { name: 'Unlink…' }).click();
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('heading', { name: 'demo-designer_glossary' })).toBeVisible();
+    await unlink.getByRole('button', { name: 'Unlink…' }).click();
+    await confirm.getByRole('button', { name: 'Unlink', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('demo-designer_glossary is unlinked from this computer. It is on hub.example.test, and can be linked again here or on another computer.');
+    await expect(list).not.toContainText('demo-designer_glossary');
+    const unlinked = page.getByRole('region', { name: 'Your unlinked workspaces' });
+    await unlinked.getByRole('button', { name: 'Link to this computer: demo-designer_glossary' }).click();
+    await expect(list).toContainText('demo-designer_glossary');
+  });
+
+  test('a workspace the instance links to another computer, or to none, says so before a push meets the refusal, with the way on', async ({ page }) => {
+    await open(page, 'header');
+    await page.evaluate(() => {
+      const fake = (window as unknown as { __fakeCore: { linkElsewhere: (b: string, l?: string) => void; unlinkFromElsewhere: (b: string) => void } }).__fakeCore;
+      fake.linkElsewhere('demo-designer_unit-3', 'Office iMac');
+      fake.unlinkFromElsewhere('demo-designer_glossary');
+    });
+    // Read again as the page is come back to.
+    await nav(page, 'Settings').click();
+    await nav(page, 'Workspaces').click();
+    const list = page.getByRole('list', { name: 'Your workspaces' });
+    await expect(list.getByRole('button', { name: /demo-designer_unit-3/ })).toContainText('Linked to another computer');
+    await expect(list.getByRole('button', { name: /demo-designer_glossary/ })).toContainText('Not linked to this computer');
+
+    await list.getByRole('button', { name: /demo-designer_unit-3/ }).click();
+    const where = page.getByRole('status', { name: 'Where this workspace is linked' });
+    await expect(where).toContainText('Linked to another computer: this workspace is linked to “Office iMac” since');
+    // With commits that were never pushed, the message is the vocabulary's own, and names the way on.
+    await expect(where).toContainText('This workspace was changed elsewhere, and this computer\'s unpushed commits can no longer be pushed. You can discard them and link the workspace again.');
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('409 held_elsewhere');
+    await expect(page.getByRole('alert')).toContainText('Linked to another computer (“Office iMac”');
+    await expect(page.getByRole('alert')).toContainText('by hub.example.test');
+    await expect(page.getByRole('alert')).toContainText('Nothing was pushed before this.');
+
+    await page.getByRole('button', { name: '← Workspaces' }).click();
+    await list.getByRole('button', { name: /demo-designer_glossary/ }).click();
+    await expect(where).toContainText('Not linked to this computer: this workspace was unlinked, and is linked to no computer.');
+    await expect(where).toContainText('Remove it from this computer; it can then be linked again from the Workspaces page.');
+    await page.getByRole('button', { name: 'Update from main' }).click();
+    await expect(page.getByRole('alert')).toContainText('409 not_linked');
+    await expect(page.getByRole('alert')).toContainText('Not linked to this computer.');
   });
 });
 
 interface ChecksHooks {
+  writeAsTool: (branch: string, message: string) => void;
+  mayNotMerge: () => void;
+  mergedElsewhere: (branch: string) => void;
+  parentMoves: (branch: string) => void;
   reportRun: (branch: string, check: string, conclusion: string, summary?: string, detailsUrl?: string) => void;
   remoteRequires: (check: string, locked?: boolean) => void;
   remoteReports: (branch: string, check: string, conclusion: string, summary?: string) => void;
@@ -514,50 +615,93 @@ test.describe('required checks', () => {
     await expect(page.getByRole('status')).toContainText('Pushed 2 commits.');
   });
 
-  test('a delivery the instance’s checks stop is asked about first, waited for, then set aside with a reason', async ({ page }) => {
+  /** A workspace with one commit pushed, and its page open: something for a request to merge. */
+  const pushedWork = async (page: Page, branch: string) => {
+    await hooks(page, (fake, b) => fake.writeAsTool(b, 'Define "framing"'), branch);
+    await openWorkspace(page, branch);
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Pushed 1 commit.');
+  };
+  const request = (page: Page) => page.getByRole('region', { name: 'Merge request' });
+
+  test('a merge request the instance’s checks stop shows them in its health, is waited for as they report, then overridden with a reason', async ({ page }) => {
     await open(page, 'header');
     await hooks(page, (fake) => fake.remoteRequires('lint/team'));
-    await openWorkspace(page, GLOSSARY);
-
-    // Asking changes nothing and needs no reason of its own.
-    await page.getByRole('button', { name: 'Preview merge' }).click();
-    await expect(page.getByRole('status')).toContainText('Nothing was merged. A merge now would be refused: 1 required check not passed.');
-    await expect(checks(page)).toContainText('Required checks on hub.example.test');
-    await expect(checks(page).getByRole('listitem', { name: 'lint/team' })).toContainText('Waiting for a report');
-    await expect(page.getByRole('button', { name: 'Merge anyway' })).toBeHidden();
+    await pushedWork(page, GLOSSARY);
 
     await page.getByLabel('Message (required)').fill('The glossary, reviewed');
-    await page.getByRole('button', { name: 'Merge into main', exact: true }).click();
+    await page.getByRole('button', { name: 'Open merge request', exact: true }).click();
+    // The open request is the preview: its health says what a merge would meet, with the instance's results.
+    await expect(request(page)).toContainText('Waiting for checks');
+    await expect(request(page).getByLabel('Checks', { exact: true })).toContainText('Required checks on hub.example.test');
+    await expect(request(page).getByRole('listitem', { name: 'lint/team' })).toContainText('Waiting for a report');
+    await expect(page.getByRole('button', { name: 'Merge anyway' })).toBeHidden();
+
+    await request(page).getByRole('button', { name: 'Merge', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('409 checks_pending');
     await expect(page.getByRole('alert')).toContainText('by hub.example.test');
 
+    // The service reports on the instance, and the health follows without the page being asked to look again.
     await hooks(page, (fake, branch) => fake.remoteReports(branch, 'lint/team', 'fail', 'Objective 3 has no practice activity'), GLOSSARY);
-    await page.getByRole('button', { name: 'Merge into main', exact: true }).click();
+    await expect(request(page)).toContainText('Checks failed');
+    await request(page).getByRole('button', { name: 'Merge', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('422 checks_failed');
     await expect(checks(page)).toContainText('Objective 3 has no practice activity');
-    // The reason for the delivery is kept across the refusal, and the override carries it.
-    await expect(page.getByLabel('Message (required)')).toHaveValue('The glossary, reviewed');
     await page.getByLabel('Reason for overriding lint/team').fill('The activity lands in unit 4, agreed with J.');
     await page.getByRole('button', { name: 'Merge anyway' }).click();
     await expect(page.getByRole('status')).toContainText('Merged into main as');
     await expect(checks(page)).toContainText('Overridden: The activity lands in unit 4, agreed with J.');
-
-    await page.getByRole('button', { name: 'Preview merge' }).click();
-    await expect(page.getByRole('status')).toContainText('A merge now would be refused');
+    // Merged, the request is decided, and the form to open another is back.
+    await expect(request(page)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open merge request', exact: true })).toBeVisible();
   });
 
   test('a locked check is said to be the administrator’s, and the remote’s refusal of an override is shown as given', async ({ page }) => {
     await open(page, 'header');
     await hooks(page, (fake) => fake.remoteRequires('policy/accessibility', true));
-    await openWorkspace(page, GLOSSARY);
+    await pushedWork(page, GLOSSARY);
     await page.getByLabel('Message (required)').fill('The glossary');
-    await page.getByRole('button', { name: 'Merge into main', exact: true }).click();
+    await page.getByRole('button', { name: 'Open merge request', exact: true }).click();
+    await request(page).getByRole('button', { name: 'Merge', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('409 checks_pending');
     await expect(checks(page).getByRole('listitem', { name: 'policy/accessibility' })).toContainText('locked');
     await page.getByLabel(/Reason for overriding policy\/accessibility\s+\(locked/).fill('Trying anyway');
     await page.getByRole('button', { name: 'Merge anyway' }).click();
     await expect(page.getByRole('alert')).toContainText('403 forbidden');
     await expect(page.getByRole('alert')).toContainText('by hub.example.test');
+  });
+
+  test('someone who may not merge into the parent opens the request, sees its health follow the parent, and sees it merged by whoever may', async ({ page }) => {
+    await open(page, 'header');
+    await hooks(page, (fake) => fake.mayNotMerge());
+    await pushedWork(page, GLOSSARY);
+    await page.getByLabel('Message (required)').fill('The glossary, for review');
+    await page.getByRole('button', { name: 'Open merge request', exact: true }).click();
+    await expect(request(page)).toContainText('Ready to merge');
+    await expect(request(page)).toContainText('Whoever may merge into main merges it, on hub.example.test.');
+    await expect(request(page).getByRole('button', { name: 'Merge', exact: true })).toHaveCount(0);
+    // main moves against it: the health says so, and where conflicts are resolved.
+    await hooks(page, (fake, branch) => fake.parentMoves(branch), GLOSSARY);
+    await expect(request(page)).toContainText('Has conflicts');
+    await expect(request(page)).toContainText('Update from main, resolve what it reports in your tool, and push.');
+    // A maintainer merges it on the instance: the page shows the request gone, with nothing asked of it.
+    await hooks(page, (fake, branch) => fake.mergedElsewhere(branch), GLOSSARY);
+    await expect(request(page)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open merge request', exact: true })).toBeVisible();
+  });
+
+  test('a request the opener thinks better of is closed, and one with nothing to merge says so', async ({ page }) => {
+    await open(page, 'header');
+    await openWorkspace(page, GLOSSARY);
+    await page.getByLabel('Message (required)').fill('Nothing yet');
+    await page.getByRole('button', { name: 'Open merge request', exact: true }).click();
+    await expect(request(page)).toContainText('Nothing to merge');
+    await expect(request(page)).toContainText('main already has everything pushed from here.');
+    await request(page).getByRole('button', { name: 'Merge', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('409 nothing_to_merge');
+    await request(page).getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('The merge request into main is closed. Nothing was merged.');
+    await expect(request(page)).toHaveCount(0);
   });
 });
 
@@ -579,8 +723,10 @@ test.describe('removing a workspace', () => {
     await remove.getByRole('button', { name: 'Remove…', exact: true }).click();
     await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
-    await expect(page.getByRole('status')).toContainText('Its branch is kept on hub.example.test, since it has work main does not');
+    await expect(page.getByRole('status')).toContainText('Its branch is kept on hub.example.test, since it has work its parent does not; link it again to go on with it.');
     await expect(list).not.toContainText('demo-designer_glossary');
+    // Kept there, it is a workspace linked to no computer (ADR-0072 decision 4).
+    await expect(page.getByRole('region', { name: 'Your unlinked workspaces' })).toContainText('demo-designer_glossary');
   });
 
   test('a workspace whose commits will never be pushed is discarded, the count confirmed first and checked by the hub', async ({ page }) => {
@@ -618,23 +764,19 @@ test.describe('removing a workspace', () => {
     await expect(list).not.toContainText('demo-designer_glossary');
   });
 
-  test('a workspace delivered without deleting it is removed from the remote too', async ({ page }) => {
+  test('a workspace merged without removing it is removed from the instance too', async ({ page }) => {
     await open(page, 'header');
     await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_unit-3/ }).click();
     await page.getByRole('button', { name: 'Push', exact: true }).click();
     await page.getByRole('button', { name: 'Update from main' }).click();
     await expect(page.getByRole('status')).toContainText('Updated from main');
     await page.getByLabel('Message (required)').fill('Unit 3, reviewed');
-    await page.getByRole('button', { name: 'Merge into main', exact: true }).click();
+    await page.getByRole('button', { name: 'Open merge request', exact: true }).click();
+    await page.getByRole('region', { name: 'Merge request' }).getByRole('button', { name: 'Merge', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('Merged into main as');
-    // Delivered again with nothing new: main already holds it, and the page says so, not "Delivered into main as" main's own head (the 2026-11-09 review's P10).
-    await page.getByLabel('Message (required)').fill('Unit 3, once more');
-    await page.getByRole('button', { name: 'Merge into main', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Nothing to merge');
-    await expect(page.getByRole('status')).not.toContainText('Merged into main as');
     await page.getByLabel('Remove', { exact: true }).getByRole('button', { name: 'Remove…', exact: true }).click();
     await page.getByRole('group', { name: 'Confirm the removal' }).getByRole('button', { name: 'Remove', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Its branch was deleted on hub.example.test');
+    await expect(page.getByRole('status')).toContainText('Its branch was deleted on hub.example.test, since its parent has all of it.');
   });
 });
 
@@ -715,7 +857,7 @@ test.describe('pairing, settings and the log', () => {
     await nav(page, 'Settings').click();
     await expect(page.getByLabel('Your instance', { exact: true })).toContainText(HEADER_REMOTE);
     await expect(page.getByLabel('Versions')).toContainText('0.1.0');
-    await expect(page.getByLabel('Versions')).toContainText('2026-11-16');
+    await expect(page.getByLabel('Versions')).toContainText('2026-11-20');
 
     await page.getByLabel('Workspaces folder').fill('/Users/someone/Dropbox/Armature');
     await page.getByLabel('Port').fill('3102');

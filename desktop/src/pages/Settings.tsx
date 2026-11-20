@@ -29,7 +29,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   const { run, busy } = useRequest(backend);
   const instance = useInstance();
   const [settings, setSettings] = useState<SettingsShape | undefined>();
-  const [form, setForm] = useState({ folder: '', port: '', snapshots: '', user: '' });
+  const [form, setForm] = useState({ folder: '', port: '', snapshots: '', user: '', computerName: '' });
   const [warning, setWarning] = useState<string | undefined>();
   const [restart, setRestart] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -50,7 +50,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
   const show = (reply: SettingsReply) => {
     setSettings(reply.settings);
     setWarning(reply.warning);
-    setForm({ folder: reply.settings.folder ?? '', port: String(reply.settings.port), snapshots: String(reply.settings.snapshots), user: reply.settings.user ?? '' });
+    setForm({ folder: reply.settings.folder ?? '', port: String(reply.settings.port), snapshots: String(reply.settings.snapshots), user: reply.settings.user ?? '', computerName: reply.settings.computerName ?? '' });
   };
 
   // Asked of the remote whenever the saved identifier is shown, never kept: the page used to take an
@@ -97,6 +97,8 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
       folder: form.folder.trim() ? form.folder.trim() : null,
       port,
       snapshots,
+      // Unset, nothing is sent to the instance about this computer (ADR-0072 decision 2).
+      computerName: form.computerName.trim() ? form.computerName.trim() : null,
     };
     if (settings.identity?.resolver === 'header') set.user = form.user.trim() || null;
     const before = settings.folder ?? '';
@@ -231,6 +233,11 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
             )}
           </>
         )}
+        <Label htmlFor="computer-name">A name for this computer (optional)</Label>
+        <Input id="computer-name" maxLength={100} placeholder="Office iMac" {...field('computerName')} />
+        <p className="text-muted-foreground text-sm">
+          Shown where one of your workspaces is linked to this computer and you look from another. It is kept on {instance}, where everyone it serves can read it, so nothing is sent unless you give one; a workspace linked already keeps the name it was linked with.
+        </p>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" disabled={!settings || busy !== undefined} checked={settings?.startAtLogin ?? false} onChange={(e) => void startAtLogin(e.target.checked)} />
           Start at login, in the tray

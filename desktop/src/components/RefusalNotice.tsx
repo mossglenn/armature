@@ -46,14 +46,28 @@ const WORDED: Record<string, string> = {
   remote_unreachable: 'state.unreachable',
 };
 
-/** A term's name with what it stands for filled in: the parent, which is main today, and the instance's own name. */
-const worded = (code: string, instance: string): string | undefined => {
+/** A term's name with what it stands for filled in: the workspace's parent and the instance's own name. */
+const worded = (code: string, instance: string, parent: string): string | undefined => {
   const name = terms[WORDED[code] ?? '']?.name;
   // Before a connection there is no instance to name, and the message names the address that was tried.
   if (!name || (code === 'remote_unreachable' && instance === GENERAL)) return undefined;
   // The instance leads the sentence where the term begins with it.
-  return `${name.replace(/^<instance>/, sentence(instance)).replace('<instance>', instance).replace('<parent>', 'main')}.`;
+  return `${name.replace(/^<instance>/, sentence(instance)).replace('<instance>', instance).replace('<parent>', parent)}.`;
 };
+
+/**
+ * The instance's refusal of a write to a workspace it links to another computer, or to none
+ * (ADR-0072 decision 3), in the vocabulary's words, with the name and the time the record carries.
+ * A push refused so has commits that can no longer be pushed, which the vocabulary's message says
+ * with the way on.
+ */
+function linkRefusal(refusal: Refusal): string | undefined {
+  if (refusal.error !== 'held_elsewhere' && refusal.error !== 'not_linked') return undefined;
+  const label = typeof refusal.linkLabel === 'string' ? ` (“${refusal.linkLabel}”${typeof refusal.linkedAt === 'string' ? `, since ${new Date(refusal.linkedAt).toLocaleDateString()}` : ''})` : '';
+  const state = refusal.error === 'held_elsewhere' ? `${terms['state.linked-elsewhere']?.name}${label}` : terms['state.not-linked']?.name;
+  const stranded = Array.isArray(refusal.pushed) ? ` ${terms['state.stranded-commits']?.name}` : refusal.error === 'held_elsewhere' ? ' Unlink it from that computer first, there or from the Workspaces page.' : ' Link it from the Workspaces page first.';
+  return `${state}.${stranded}`;
+}
 
 const list = (value: unknown): string[] => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
 
@@ -68,8 +82,10 @@ const list = (value: unknown): string[] => (Array.isArray(value) ? value.filter(
  * push (a 412's `moved`), how far a refused push got (`pushed` and `at`), and who holds a branch
  * the person may not write (`holders`).
  */
-export function RefusalNotice({ refusal, status }: { refusal: Refusal; status?: number }) {
+export function RefusalNotice({ refusal, status, parent = 'main', direction = 'update' }: { refusal: Refusal; status?: number; parent?: string; direction?: 'update' | 'merge' }) {
   const instance = useInstance();
+  // A conflict names its sides by the merge: an update merges the parent into the workspace, a request the workspace into the parent.
+  const sides = direction === 'merge' ? { target: parent, source: 'Your workspace' } : { target: 'Your workspace', source: parent };
   const conflicts = Array.isArray(refusal.conflicts) ? (refusal.conflicts as Conflict[]) : [];
   // A checks.json the push gate cannot read (422 personal_checks_invalid): every problem, by where it is in the file.
   const violations = Array.isArray(refusal.violations) ? (refusal.violations as Violation[]) : [];
@@ -80,7 +96,7 @@ export function RefusalNotice({ refusal, status }: { refusal: Refusal; status?: 
   const issues = refusal.error === 'personal_checks_invalid' && Array.isArray(refusal.issues) ? (refusal.issues as Array<{ path?: string; message?: string }>) : [];
   return (
     <div role="alert" className="border-destructive/40 bg-destructive/5 rounded-md border p-3 text-sm">
-      <p>{SAID[refusal.error] ?? worded(refusal.error, instance) ?? refusal.message}</p>
+      <p>{SAID[refusal.error] ?? linkRefusal(refusal) ?? worded(refusal.error, instance, parent) ?? refusal.message}</p>
       <p className="text-muted-foreground mt-2 flex flex-wrap items-center gap-2 text-xs">
         <Badge variant="outline" className="font-mono">
           {status ? `${status} ` : ''}
@@ -117,7 +133,7 @@ export function RefusalNotice({ refusal, status }: { refusal: Refusal; status?: 
       {moved.length > 0 && (
         <div className="mt-3">
           <p className="font-medium">
-            {moved.length} record{moved.length === 1 ? '' : 's'} changed on {instance} since your last push. Update from main if it is main that has updates; otherwise this branch was changed elsewhere: by you on another computer, or by a tool writing to it directly.
+            {moved.length} record{moved.length === 1 ? '' : 's'} changed on {instance} since your last push. Update from {parent} if it is {parent} that has updates; otherwise this branch was changed elsewhere, which {instance} refuses once the workspace is linked to this computer there.
           </p>
           <ul className="mt-2 space-y-1 font-mono text-xs" aria-label={`Changed on ${instance}`}>
             {moved.slice(0, 20).map((id) => (
@@ -148,7 +164,7 @@ export function RefusalNotice({ refusal, status }: { refusal: Refusal; status?: 
       {conflicts.length > 0 && (
         <div className="mt-3">
           <p className="font-medium">
-            {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}: open the tool you edit these records in to review and resolve them, push, then update from main again.
+            {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}: open the tool you edit these records in to review and resolve them, push, then update from {parent} again.
           </p>
           <ul className="mt-2 space-y-2">
             {conflicts.map((conflict, i) => (
@@ -163,9 +179,9 @@ export function RefusalNotice({ refusal, status }: { refusal: Refusal; status?: 
                   <dl className="mt-1 grid grid-cols-[8rem_1fr] gap-x-2">
                     <dt className="text-muted-foreground">Starting point</dt>
                     <dd>{shown(conflict.base)}</dd>
-                    <dt className="text-muted-foreground">Your workspace</dt>
+                    <dt className="text-muted-foreground">{sides.target}</dt>
                     <dd>{shown(conflict.target)}</dd>
-                    <dt className="text-muted-foreground">main</dt>
+                    <dt className="text-muted-foreground">{sides.source}</dt>
                     <dd>{shown(conflict.source)}</dd>
                   </dl>
                 )}

@@ -1,4 +1,5 @@
 import type { Readable, Writable } from 'node:stream';
+import { randomBytes } from 'node:crypto';
 import { chmod, mkdir, readdir } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { createClient, HubError, type Discovery } from '@armature/client';
@@ -9,6 +10,7 @@ import type { HubConfig } from '../api/config';
 import { ApiError } from '../api/errors';
 import { openFileStore } from '../api/filestore/store';
 import { drawLocalToken, LOCAL_TOKEN_HEADER } from '../api/localToken';
+import { parentOf } from '../api/workspace/records';
 import { CURRENT_REVISION } from '../api/version';
 import { startHub, type RunningHub } from '../hub';
 import { folderFiles, folderRecords, lockFolder } from '../workspaceFolder';
@@ -30,8 +32,11 @@ import { issuerMetadata, revokeRefreshToken, signIn, type FetchLike } from './si
  * shell names (./settings.ts) rather than the environment; the sign-in and
  * the credential behind `hub.remoteToken` (./signIn.ts, ./credential.ts);
  * the pairing key kept by the shell's keychain across starts, drawn here only
- * when none is kept (plan §7, ADR-0065 decision 7, note); and the program's
- * own actions, push, bring in and deliver.
+ * when none is kept (plan §7, ADR-0065 decision 7, note); the installation's
+ * identifier, drawn at the first start and kept in the settings, which the
+ * instance links this computer's workspaces to (ADR-0072 decision 2); and the
+ * app's own actions: push, update, link, unlink, remove and the merge
+ * request's three (ADR-0072 decision 7).
  *
  * The actions run through a second Hono app over the same configuration with
  * `actionRoutes` on, never bound to a port, called with `app.request()` as the
@@ -78,6 +83,10 @@ interface Running {
 
 /** Each call the core makes to the remote itself ends within this. */
 const REMOTE_CALL_MS = 15_000;
+
+/** How long the instance may hold a wait for something to change, in seconds, and how long the core gives that call. */
+const CHANGE_WAIT_S = 20;
+const CHANGE_CALL_MS = 30_000;
 
 const isLoopbackHost = (host: string) => host === 'localhost' || host === '[::1]' || host.endsWith('.localhost') || /^127\.\d+\.\d+\.\d+$/.test(host);
 
@@ -130,6 +139,11 @@ export function runCore(options: CoreOptions): Core {
   let running: Running | undefined;
   let starting: Promise<Answer> | undefined;
   let signingIn: AbortController | undefined;
+  /** The waits on the instance's event feed in flight (`awaitRemoteChange`), ended when the hub stops or the shell goes. */
+  const waiting = new Set<AbortController>();
+  const endWaits = () => {
+    for (const wait of waiting) wait.abort();
+  };
   /** Whether the last sign-in was given a refresh token, for `whoAmI`; unknown for a sign-in the keychain kept. */
   let staysSignedIn: boolean | undefined;
 
@@ -278,6 +292,8 @@ export function runCore(options: CoreOptions): Core {
       // One hub in two apps, the served one and the program's own: the runs a plugin posts gate the program's push.
       runs: new RunStore(),
       feed: new EventFeed(),
+      // This computer, as the instance links workspaces to it; the name is sent only when the owner gave one.
+      installation: { id: current.installation!, ...(current.computerName ? { label: current.computerName } : {}) },
     };
     let hub: RunningHub;
     try {
@@ -328,6 +344,7 @@ export function runCore(options: CoreOptions): Core {
     stopping ??= (async () => {
       if (starting) await starting.catch(() => undefined);
       signingIn?.abort();
+      endWaits();
       const was = running;
       if (!was) return false;
       running = undefined;
@@ -415,6 +432,12 @@ export function runCore(options: CoreOptions): Core {
         const read = await readSettingsForStart(dir);
         settings = read.settings;
         for (const problem of read.problems) log(problem, 'warn');
+        // The installation's identifier, drawn once and kept (ADR-0072 decision 2): what the instance links this computer's workspaces to.
+        if (!settings.installation) {
+          settings = { ...settings, installation: randomBytes(16).toString('hex') };
+          await writeSettings(dir, settings);
+          log('This is the first start of the app in this data folder: it drew the random value by which the instance tells this computer from your others');
+        }
         if (refresh !== undefined && refresh !== keptRefresh) {
           keptRefresh = refresh;
           held?.clear();
@@ -482,6 +505,8 @@ export function runCore(options: CoreOptions): Core {
         for (const key of ['remote', 'instance', 'identity']) {
           if (key in change) throw new ApiError(400, 'use_connect', `${key} is set by connect, which looks up the instance's details first`, { field: key });
         }
+        // Drawn once by the core: a new one would leave every workspace linked to the old, as if to another computer.
+        if ('installation' in change) throw new ApiError(400, 'bad_settings', 'installation is drawn by the app at its first start and is not a setting to change', { field: 'installation' });
       }
       const next = parseSettings(change, current);
       const refusal = changeRefusal(current, next, await workspaceNames());
@@ -489,6 +514,8 @@ export function runCore(options: CoreOptions): Core {
       if (next.folder !== undefined && next.folder !== current.folder) await requireStoreFolder(next.folder);
       await writeSettings(dir, next);
       settings = next;
+      // The computer's name is read at each link, so a change needs no restart; a link already made keeps the name it was made with.
+      if (running && next.installation) running.config.installation = { id: next.installation, ...(next.computerName ? { label: next.computerName } : {}) };
       const warning = syncedFolderWarning(workspacesFolder(dir, next));
       return ok({ settings: next, restart: running !== undefined && needsRestart(current, next), ...(warning ? { warning } : {}) });
     },
@@ -651,7 +678,15 @@ export function runCore(options: CoreOptions): Core {
       return viaProgram('GET', `/branches/${named(request)}/log?count=${count}`);
     },
     create: async (request) => viaProgram('POST', '/workspace', { name: text(request, 'name'), ...(request.from !== undefined ? { from: text(request, 'from') } : {}) }, true),
-    clone: async (request) => viaProgram('POST', '/workspace', { existing: text(request, 'branch') }, true),
+    // Link to this computer (ADR-0072 decision 4): one of the owner's workspaces that is linked to none, linked here and cloned.
+    link: async (request) => viaProgram('POST', '/workspace', { link: text(request, 'workspace') }, true),
+    // The owner's workspaces on the instance that are not on this computer: those linked to none, and those linked to another.
+    elsewhere: async () => viaProgram('GET', '/workspace/elsewhere', undefined, true),
+    // Unlink from this computer; with `elsewhere`, for a workspace not held here, from the other computer, which the page confirms first.
+    unlink: async (request) => {
+      if (request.elsewhere !== undefined && typeof request.elsewhere !== 'boolean') throw new ApiError(400, 'bad_request', 'elsewhere must be true or false', { field: 'elsewhere' });
+      return viaProgram('POST', `/workspace/${named(request)}/unlink`, request.elsewhere === true ? { elsewhere: true } : undefined, true);
+    },
     // `overrides`, [{ check, reason }], sets personal requirements aside for this push (ADR-0070 decision 8); the route checks its shape.
     push: async (request) => viaProgram('POST', `/workspace/${named(request)}/push`, request.overrides === undefined ? undefined : { overrides: request.overrides }, true),
     bringIn: async (request) => viaProgram('POST', `/workspace/${named(request)}/bring-in`, request.message === undefined ? undefined : { message: request.message }, true),
@@ -664,19 +699,64 @@ export function runCore(options: CoreOptions): Core {
       }
       return viaProgram('DELETE', `/workspace/${named(request)}${discard === undefined ? '' : `?discard=${discard}`}`, undefined, true);
     },
-    deliver: async (request) =>
+    // The workspace's merge request into its parent (ADR-0072 decisions 5 and 7), which replaced delivery and its dry run:
+    // the record, its health and every refusal are the instance's, passed on as the routes answer them.
+    mergeRequest: async (request) => viaProgram('GET', `/workspace/${named(request)}/merge-request`, undefined, true),
+    openMergeRequest: async (request) => viaProgram('POST', `/workspace/${named(request)}/merge-request`, { message: request.message }, true),
+    mergeMergeRequest: async (request) =>
       viaProgram(
         'POST',
-        `/workspace/${named(request)}/deliver`,
+        `/workspace/${named(request)}/merge-request/merge`,
         {
-          message: request.message,
-          ...(request.deleteWorkspace !== undefined ? { deleteWorkspace: request.deleteWorkspace } : {}),
-          // The remote's gate: `overrides` are the remote merge's, `dryRun` asks what it would find (ADR-0070 decisions 6 and 8).
+          // The instance's gate: `overrides` are the merge's own (ADR-0070 decision 6).
           ...(request.overrides !== undefined ? { overrides: request.overrides } : {}),
-          ...(request.dryRun !== undefined ? { dryRun: request.dryRun } : {}),
+          ...(request.deleteWorkspace !== undefined ? { deleteWorkspace: request.deleteWorkspace } : {}),
         },
         true
       ),
+    closeMergeRequest: async (request) => viaProgram('POST', `/workspace/${named(request)}/merge-request/close`, undefined, true),
+
+    /**
+     * Waits until something on the instance may have changed a merge request's health, so a page reads it again
+     * then and not on a timer (ADR-0072 decision 7: "kept current from the event feed"). The instance's feed is
+     * asked for what happened since `cursor` and holds the request until a commit lands or its wait ends
+     * (ADR-0070 decision 2). `changed` is true when an event names the workspace's branch, its parent or `main`,
+     * where a request's own changes are commits. Without a cursor, the answer is a cursor at the present, at
+     * once. A cursor the instance no longer serves is answered with a new one and `changed: true`: read again.
+     */
+    awaitRemoteChange: async (request) => {
+      const { settings: current } = opened();
+      const { config } = started();
+      const workspace = text(request, 'workspace');
+      const cursor = optionalText(request, 'cursor');
+      const record = await config.workspaces!.get(workspace);
+      if (!record) throw new ApiError(404, 'not_found', `This hub holds no workspace ${workspace}`);
+      const watched = new Set([workspace, parentOf(record), 'main']);
+      const remote = current.remote!;
+      const wait = new AbortController();
+      waiting.add(wait);
+      try {
+        const client = createClient({
+          baseUrl: remote,
+          ...(current.identity?.resolver === 'oidc' ? { token: remoteToken } : { user: await owner() }),
+          timeout: CHANGE_CALL_MS,
+          signal: wait.signal,
+        });
+        try {
+          const { data } = await fromRemote(remote, instance(), () => client.events.since(cursor, { wait: cursor ? CHANGE_WAIT_S : 0 }));
+          return ok({ cursor: data.cursor, changed: data.events.some((event) => typeof event.branch === 'string' && watched.has(event.branch)) });
+        } catch (err) {
+          if (wait.signal.aborted) return ok({ cursor: cursor ?? null, changed: false, stopped: true });
+          if (err instanceof ApiError && (err.code === 'bad_cursor' || err.code === 'cursor_too_old')) {
+            const { data } = await fromRemote(remote, instance(), () => client.events.since(undefined, { wait: 0 }));
+            return ok({ cursor: data.cursor, changed: true });
+          }
+          throw err;
+        }
+      } finally {
+        waiting.delete(wait);
+      }
+    },
   };
 
   const channel = openChannel({
@@ -685,7 +765,10 @@ export function runCore(options: CoreOptions): Core {
     // By own name only: `constructor` and `__proto__` name members every object has, and are no requests (C10).
     handlerFor: (type) => (Object.hasOwn(handlers, type) ? handlers[type] : undefined),
     // The shell is gone: a sign-in waiting on the browser has no one to answer, and would hold the hub open for its five minutes (C3).
-    onInputEnd: () => signingIn?.abort(),
+    onInputEnd: () => {
+      signingIn?.abort();
+      endWaits();
+    },
   });
   emit = channel.emit;
   const closed = channel.closed.then(async () => {

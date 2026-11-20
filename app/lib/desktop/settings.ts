@@ -51,13 +51,29 @@ export interface DesktopSettings {
   user?: string;
   /** Whether the shell starts the program at login; off until use shows otherwise (plan §9). */
   startAtLogin: boolean;
+  /**
+   * This installation's identifier (ADR-0072 decision 2): 128 random bits the core draws at its first start
+   * and keeps here, which the instance links this computer's workspaces to. Not a secret, and never set by
+   * a person: a new one would strand every workspace linked to the old, each of which would then have to
+   * be unlinked from the other computer and linked again.
+   */
+  installation?: string;
+  /**
+   * A name the owner gives this computer, sent as the label of its links and shown where a workspace is
+   * linked elsewhere. Unset, nothing is sent: the instance's `main` is read by everyone it serves, and a
+   * computer's name says more about a person than the app needs (ADR-0072 decision 2).
+   */
+  computerName?: string;
 }
 
 export type RemoteIdentity = { resolver: 'header' } | { resolver: 'oidc'; issuer: string; clientId: string };
 
 export const defaultSettings = (): DesktopSettings => ({ port: DEFAULT_PORT, snapshots: DEFAULT_SNAPSHOT_BUDGET, startAtLogin: false });
 
-const KEYS: ReadonlySet<string> = new Set(['remote', 'instance', 'identity', 'folder', 'port', 'snapshots', 'user', 'startAtLogin']);
+const KEYS: ReadonlySet<string> = new Set(['remote', 'instance', 'identity', 'folder', 'port', 'snapshots', 'user', 'startAtLogin', 'installation', 'computerName']);
+
+/** An installation's identifier as the hub's link takes one (`../api/workspaces.ts`). */
+const INSTALLATION = /^[A-Za-z0-9_-]{16,128}$/;
 
 const bad = (field: string, message: string) => new ApiError(400, 'bad_settings', message, { field });
 
@@ -145,6 +161,16 @@ export function parseSettings(value: unknown, base: DesktopSettings = defaultSet
   set('startAtLogin', (raw) => {
     if (typeof raw !== 'boolean') throw bad('startAtLogin', 'startAtLogin must be true or false');
     return raw;
+  });
+  set('installation', (raw) => {
+    const id = text('installation', raw);
+    if (!INSTALLATION.test(id)) throw bad('installation', 'installation must be 16 to 128 letters, digits, hyphens or underscores');
+    return id;
+  });
+  set('computerName', (raw) => {
+    const name = text('computerName', raw);
+    if (name.length > 100 || /[\r\n]/.test(name)) throw bad('computerName', 'computerName must be one line of at most 100 characters');
+    return name;
   });
   return next;
 }

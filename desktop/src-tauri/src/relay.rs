@@ -11,7 +11,9 @@ use serde_json::Value;
 
 /// The requests a page may send the core: everything but the shell's own.
 pub const WEBVIEW_REQUESTS: &[&str] = &[
-    "profile", "connect", "settings", "checks", "signIn", "cancelSignIn", "whoAmI", "signOut", "resetPairing", "toolIdentity", "workspaces", "status", "commits", "create", "clone", "push", "bringIn", "deliver", "remove",
+    "profile", "connect", "settings", "checks", "signIn", "cancelSignIn", "whoAmI", "signOut", "resetPairing", "toolIdentity", "workspaces", "status", "commits", "create", "push", "bringIn", "remove",
+    // Links and merge requests (ADR-0072 decision 7).
+    "link", "elsewhere", "unlink", "mergeRequest", "openMergeRequest", "mergeMergeRequest", "closeMergeRequest", "awaitRemoteChange",
 ];
 
 /// Whether a page may send the core a request of this type.
@@ -126,8 +128,12 @@ mod tests {
         for own in ["start", "stop", "credential"] {
             assert!(!allowed_from_webview(own), "{own}");
         }
-        for page in ["connect", "signIn", "push", "deliver", "resetPairing", "toolIdentity", "commits", "remove", "checks", "cancelSignIn", "whoAmI"] {
+        for page in ["connect", "signIn", "push", "resetPairing", "toolIdentity", "commits", "remove", "checks", "cancelSignIn", "whoAmI", "link", "unlink", "elsewhere", "openMergeRequest", "mergeMergeRequest", "closeMergeRequest", "mergeRequest", "awaitRemoteChange"] {
             assert!(allowed_from_webview(page), "{page}");
+        }
+        // Gone with ADR-0072: a workspace is linked, not cloned, and its work leaves by a merge request.
+        for gone in ["clone", "deliver"] {
+            assert!(!allowed_from_webview(gone), "{gone}");
         }
         assert!(!allowed_from_webview(""));
         assert!(!allowed_from_webview("Push"));
