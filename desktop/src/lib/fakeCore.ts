@@ -712,7 +712,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       return { found, state: state() };
     },
     installUpdate: async () => {
-      if (!model.update) throw new Error('No update is waiting; check for updates first');
+      if (!model.update) throw new Error('No new version is waiting; look for one first');
       const offered = model.update;
       model.update = { ...offered, state: 'downloading', progress: 40 };
       emit({ event: 'shell' });

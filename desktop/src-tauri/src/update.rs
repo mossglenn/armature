@@ -176,7 +176,7 @@ pub fn watch(app: &AppHandle) {
             let last = *handle.state::<Updates>().last_check.lock().unwrap();
             if due(last, SystemTime::now()) {
                 if let Err(err) = check(&handle).await {
-                    core::say(&handle, "info", &format!("The release channel could not be checked ({err}); the program tries again within the hour"));
+                    core::say(&handle, "info", &format!("The release channel could not be reached ({err}); the app tries again within the hour"));
                 }
             }
             tokio::time::sleep(WAKE_EVERY).await;
@@ -209,7 +209,7 @@ pub async fn check(app: &AppHandle) -> Result<Found, String> {
         // Said once a run, for whoever looks into a feed that should have a release; the state, the
         // pending update and the last check stay as they were (the module's header).
         if !updates.warned_no_release.swap(true, SeqCst) {
-            core::say(app, "info", "The release channel answered without a release (none is published, or it did not answer); the program tries again within the hour");
+            core::say(app, "info", "The release channel answered without a release (none is released, or it did not answer); the app tries again within the hour");
         }
         return Ok(found);
     }
@@ -232,7 +232,7 @@ pub async fn check(app: &AppHandle) -> Result<Found, String> {
 pub async fn install(app: &AppHandle) -> Result<(), String> {
     let updates = app.state::<Updates>();
     let Some(mut update) = updates.pending.lock().unwrap().clone() else {
-        return Err("No update is waiting; check for updates first".to_string());
+        return Err("No new version is waiting; look for one first".to_string());
     };
     // The pages hold the button while an action runs; this is the backstop, shown as a failed
     // install so a page that did ask is told why (the module's header).
@@ -300,7 +300,7 @@ async fn run_install(app: &AppHandle, update: &Update, core_ended: &mut bool) ->
     // back even when the session began at login (login.rs; the review's R7). Tauri's `restart`
     // re-reads the process's own arguments, so it cannot be told otherwise. The shell is marked
     // exiting so nothing takes the end for a quit.
-    core::say(app, "info", &format!("Version {} is installed; the program starts again", update.version));
+    core::say(app, "info", &format!("Version {} is installed; the app starts again", update.version));
     app.state::<Core>().exiting.store(true, SeqCst);
     let mut env = app.env();
     env.args_os = login::restart_arguments(env.args_os);

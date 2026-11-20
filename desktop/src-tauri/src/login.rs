@@ -91,8 +91,8 @@ pub fn follow(app: &AppHandle, settings: &Value) {
         };
         match result {
             Ok(()) if !news => {}
-            Ok(()) if wanted => core::say(app, "info", "The program now starts at login, in the tray"),
-            Ok(()) => core::say(app, "info", "The program no longer starts at login"),
+            Ok(()) if wanted => core::say(app, "info", "The app now starts at login, in the tray"),
+            Ok(()) => core::say(app, "info", "The app no longer starts at login"),
             Err(err) => {
                 let what = match (news, wanted) {
                     (true, true) => "turned on",
