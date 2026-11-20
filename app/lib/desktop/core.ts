@@ -90,14 +90,25 @@ function text(request: ControlRequest, field: string): string {
 
 const optionalText = (request: ControlRequest, field: string): string | undefined => (request[field] === undefined ? undefined : text(request, field));
 
-/** A call to a remote as an answer the shell can show: the remote's refusal as it gave it, or 502 when it cannot be reached. */
-async function fromRemote<T>(remote: string, call: () => Promise<T>): Promise<T> {
+/** The general word for the instance, where its own name is not known (`@armature/vocabulary`: `instance`, `instance.own-name`). */
+const YOUR_INSTANCE = 'your instance';
+
+/** The name where it begins a sentence: "Your instance cannot be reached". An instance's own name is written as it gave it, a host name too. */
+const sentence = (name: string): string => (name === YOUR_INSTANCE ? 'Your instance' : name);
+
+/**
+ * A call to the instance as an answer the shell can show: its refusal as it gave it, or 502 when it
+ * cannot be reached. `named` is the instance's own name, which a message for a person uses; an
+ * address being looked up has none yet, and is named by the address.
+ */
+async function fromRemote<T>(remote: string, named: string | undefined, call: () => Promise<T>): Promise<T> {
+  const who = named ? sentence(named) : `The instance at ${remote}`;
   try {
     return await call();
   } catch (err) {
-    if (err instanceof HubError) throw new ApiError(err.status as ApiError['status'], err.code, `The remote refused: ${err.message}`, { ...err.details, remote: true });
+    if (err instanceof HubError) throw new ApiError(err.status as ApiError['status'], err.code, `${who} refused: ${err.message}`, { ...err.details, remote: true });
     if (err instanceof ApiError) throw err;
-    throw new ApiError(502, 'remote_unreachable', `The remote at ${remote} could not be reached`, { remote: true });
+    throw new ApiError(502, 'remote_unreachable', named ? `${who} cannot be reached (${remote})` : `${who} cannot be reached`, { remote: true });
   }
 }
 
@@ -107,6 +118,8 @@ export function runCore(options: CoreOptions): Core {
 
   let dataDir: string | undefined;
   let settings: DesktopSettings | undefined;
+  /** The instance by the name it gave and the person confirmed, as a message names it; the general word before one is connected. */
+  const instance = (): string => settings?.instance?.name ?? YOUR_INSTANCE;
   /** The local token: the keychain's, sent at start, or drawn here; one per program, not per start (plan §7). */
   let localToken: string | undefined;
   /** The refresh token the keychain kept, until the credential is made from it on first use. */
@@ -136,7 +149,7 @@ export function runCore(options: CoreOptions): Core {
   // The credential under oidc, made from the kept refresh token on first use, so a start needs no network.
   const credentialFor = async (identity: Extract<RemoteIdentity, { resolver: 'oidc' }>): Promise<Credential> => {
     if (held) return held;
-    if (!keptRefresh) throw new ApiError(401, 'signed_out', 'The desktop program is not signed in to the remote; sign in');
+    if (!keptRefresh) throw new ApiError(401, 'signed_out', `The app is not signed in to ${instance()}; sign in`);
     const { tokenEndpoint } = await issuerMetadata(identity.issuer, fetchFn);
     held ??= makeCredential(identity, { refreshToken: keptRefresh }, tokenEndpoint);
     return held;
@@ -160,7 +173,7 @@ export function runCore(options: CoreOptions): Core {
     });
   const remoteToken = async (): Promise<string> => {
     const identity = oidcOf(opened().settings.identity);
-    if (!identity) throw new Error('The remote runs under header; no token is sent');
+    if (!identity) throw new Error('The instance has no sign-in; no token is sent');
     return (await credentialFor(identity))();
   };
 
@@ -169,7 +182,7 @@ export function runCore(options: CoreOptions): Core {
     if (me) return me;
     const { settings: current } = opened();
     const remote = current.remote!;
-    const person = (await fromRemote(remote, () => createClient({ baseUrl: remote, token: remoteToken, timeout: REMOTE_CALL_MS }).users.me())).data;
+    const person = (await fromRemote(remote, instance(), () => createClient({ baseUrl: remote, token: remoteToken, timeout: REMOTE_CALL_MS }).users.me())).data;
     me = { id: person['@id'], externalId: person.externalId, ...(person.displayName ? { displayName: person.displayName } : {}) };
     return me;
   };
@@ -178,7 +191,7 @@ export function runCore(options: CoreOptions): Core {
   const owner = async (): Promise<string> => {
     const { settings: current } = opened();
     if (current.identity?.resolver === 'oidc') return (await whoAmI()).externalId;
-    if (!current.user) throw new ApiError(409, 'no_user', 'The remote runs under header; set your identifier on it in the settings (user)');
+    if (!current.user) throw new ApiError(409, 'no_user', `${sentence(instance())} has no sign-in; set your ID on it in the settings (user)`);
     return current.user;
   };
 
@@ -214,7 +227,7 @@ export function runCore(options: CoreOptions): Core {
     throw new ApiError(
       409,
       'folder_in_use',
-      `${folder} holds other files (${others.slice(0, 3).join(', ')}${others.length > 3 ? ', …' : ''}); choose an empty folder, or one that already holds this program's workspaces`,
+      `${folder} holds other files (${others.slice(0, 3).join(', ')}${others.length > 3 ? ', …' : ''}); choose an empty folder, or one that already holds this app's workspaces`,
       { field: 'folder', folder }
     );
   };
@@ -272,7 +285,7 @@ export function runCore(options: CoreOptions): Core {
     } catch (err) {
       await unlock();
       if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-        throw new ApiError(409, 'port_in_use', `Port ${current.port} is in use by another program; choose another port in the settings`, { port: current.port });
+        throw new ApiError(409, 'port_in_use', `Port ${current.port} is in use by something else on this computer; choose another port in the settings`, { port: current.port });
       }
       throw err;
     }
@@ -339,8 +352,8 @@ export function runCore(options: CoreOptions): Core {
   const readProfile = async (given: unknown) => {
     const { remote } = parseSettings({ remote: given });
     const address = remote!;
-    const discovery: Discovery = (await fromRemote(address, () => createClient({ baseUrl: address, timeout: REMOTE_CALL_MS }).discover())).data;
-    if (discovery.role !== 'remote') throw new ApiError(400, 'not_a_remote', `${address} is a workspace hub, not a remote; connect to the instance's own address`, { remote: address });
+    const discovery: Discovery = (await fromRemote(address, undefined, () => createClient({ baseUrl: address, timeout: REMOTE_CALL_MS }).discover())).data;
+    if (discovery.role !== 'remote') throw new ApiError(400, 'not_a_remote', `${address} is a desktop hub, not an instance; connect to the instance's own address`, { remote: address });
     const { resolver, issuer, clientId } = discovery.identity;
     let identity: RemoteIdentity;
     if (resolver === 'oidc') {
@@ -355,14 +368,14 @@ export function runCore(options: CoreOptions): Core {
     } else if (resolver === 'header') {
       identity = { resolver };
     } else {
-      throw new ApiError(400, 'unknown_resolver', `${address} runs under ${resolver}, which this program does not know`, { remote: address });
+      throw new ApiError(400, 'unknown_resolver', `${address} identifies people by ${resolver}, which this version of the app does not know`, { remote: address });
     }
     // The identity and the instance in the shape the settings keep, so what the page confirms and what `connect` re-reads compare alike.
     let checked: DesktopSettings;
     try {
       checked = parseSettings({ remote: address, identity, instance: discovery.instance ?? null });
     } catch (err) {
-      if (err instanceof ApiError) throw new ApiError(400, 'bad_profile', `${address} answered with a profile this program cannot use: ${err.message}`, { ...err.details, remote: address });
+      if (err instanceof ApiError) throw new ApiError(400, 'bad_profile', `${address} answered with details this app cannot use: ${err.message}`, { ...err.details, remote: address });
       throw err;
     }
     const warnings: string[] = [];
@@ -428,6 +441,7 @@ export function runCore(options: CoreOptions): Core {
       // a hub may answer the confirming read with the real provider and the connecting read with a
       // look-alike, and the settings would keep the look-alike (the 2026-11-09 review's C2).
       if (request.identity === undefined) {
+        // For the shell, which sends the request, not for a person: vocabulary-allow: profile
         throw new ApiError(400, 'bad_request', 'connect takes the identity (and the instance, when the profile had one) the profile showed, so what is kept is what was confirmed; read the profile first', { field: 'identity' });
       }
       const confirmed = parseSettings({ identity: request.identity, instance: request.instance ?? null });
@@ -436,7 +450,7 @@ export function runCore(options: CoreOptions): Core {
       const user = profile.identity.resolver === 'oidc' ? { user: null } : {};
       const next = parseSettings({ remote: profile.remote, instance: profile.instance ?? null, identity: profile.identity, ...user }, current);
       if (JSON.stringify(next.identity) !== JSON.stringify(confirmed.identity) || JSON.stringify(next.instance ?? null) !== JSON.stringify(confirmed.instance ?? null)) {
-        throw new ApiError(409, 'profile_changed', `The remote at ${profile.remote} now answers with a profile that differs from the one confirmed; read it again and check it before connecting`, {
+        throw new ApiError(409, 'profile_changed', `The instance's details changed since you looked them up; look them up again and read them before connecting`, {
           remote: profile.remote,
           confirmed: { identity: confirmed.identity, instance: confirmed.instance ?? null },
           found: { identity: next.identity, instance: next.instance ?? null },
@@ -466,7 +480,7 @@ export function runCore(options: CoreOptions): Core {
       }
       if (typeof change === 'object' && change !== null) {
         for (const key of ['remote', 'instance', 'identity']) {
-          if (key in change) throw new ApiError(400, 'use_connect', `${key} is set by connect, which reads the remote's profile first`, { field: key });
+          if (key in change) throw new ApiError(400, 'use_connect', `${key} is set by connect, which looks up the instance's details first`, { field: key });
         }
       }
       const next = parseSettings(change, current);
@@ -494,7 +508,7 @@ export function runCore(options: CoreOptions): Core {
 
     signIn: async (request, context) => {
       const identity = oidcOf(opened().settings.identity);
-      if (!identity) throw new ApiError(409, 'not_oidc', 'The remote does not sign people in; under header the program sends your identifier (user in the settings)');
+      if (!identity) throw new ApiError(409, 'not_oidc', `${sentence(instance())} does not sign people in; the app sends your ID (user in the settings)`);
       if (signingIn) throw new ApiError(409, 'sign_in_in_progress', 'A sign-in is already waiting for the browser');
       if (request.offline !== undefined && typeof request.offline !== 'boolean') throw new ApiError(400, 'bad_request', 'offline must be true or false', { field: 'offline' });
       signingIn = new AbortController();
@@ -544,14 +558,15 @@ export function runCore(options: CoreOptions): Core {
       const remote = text(request, 'remote').replace(/\/+$/, '');
       const refresh = text(request, 'refreshToken');
       const identity = oidcOf(current.identity);
-      if (!identity) throw new ApiError(409, 'not_oidc', 'The remote does not sign people in; there is no credential to keep');
+      if (!identity) throw new ApiError(409, 'not_oidc', `${sentence(instance())} does not sign people in; there is no sign-in to keep`);
       if (remote !== current.remote) {
-        throw new ApiError(409, 'other_remote', `The settings name the remote ${current.remote}, not ${remote}; that credential is not for it`, { remote: current.remote });
+        throw new ApiError(409, 'other_remote', `The app is connected to ${instance()} at ${current.remote}, not to ${remote}; that sign-in is not for it`, { remote: current.remote });
       }
       const issuer = text(request, 'issuer').replace(/\/+$/, '');
       const clientId = text(request, 'clientId');
       if (issuer !== identity.issuer.replace(/\/+$/, '') || clientId !== identity.clientId) {
-        throw new ApiError(409, 'other_issuer', `The settings name the identity provider ${identity.issuer} and the client ${identity.clientId}; that credential was issued by ${issuer} to ${clientId} and is not sent there`, {
+        // The sign-in provider's own word for the app as it knows it: vocabulary-allow: client
+        throw new ApiError(409, 'other_issuer', `The settings name the sign-in provider ${identity.issuer} and the client ${identity.clientId}; that sign-in was issued by ${issuer} to ${clientId} and is not sent there`, {
           issuer: identity.issuer,
           clientId: identity.clientId,
         });
@@ -587,8 +602,8 @@ export function runCore(options: CoreOptions): Core {
       // the sign-out is done here either way, and an unreachable provider must not hold the page.
       if (identity && refresh) {
         void revokeRefreshToken(identity, refresh, fetchFn).then((outcome) => {
-          if (outcome === 'revoked') log(`Signed out: ${identity.issuer} has revoked the kept sign-in`);
-          else if (outcome === 'failed') log(`Signed out here; ${identity.issuer} could not be told to revoke the kept sign-in, which stays valid there until it expires`, 'warn');
+          if (outcome === 'revoked') log(`Signed out: ${identity.issuer} has ended the kept sign-in`);
+          else if (outcome === 'failed') log(`Signed out here; ${identity.issuer} could not be told to end the kept sign-in, which stays valid there until it expires`, 'warn');
         });
       }
       return ok({ signedOut: true });
@@ -618,10 +633,10 @@ export function runCore(options: CoreOptions): Core {
       const identity = oidcOf(current.identity);
       if (!identity) {
         const remote = current.remote;
-        if (!remote || !current.identity) throw new ApiError(409, 'not_connected', 'The program is not connected to a remote; connect first');
+        if (!remote || !current.identity) throw new ApiError(409, 'not_connected', 'The app is not connected to an instance; connect first');
         const user = current.user;
-        if (!user) throw new ApiError(409, 'no_user', 'The remote runs under header; set your identifier on it in the settings (user)');
-        const person = (await fromRemote(remote, () => createClient({ baseUrl: remote, user, timeout: REMOTE_CALL_MS }).users.me())).data;
+        if (!user) throw new ApiError(409, 'no_user', `${sentence(instance())} has no sign-in; set your ID on it in the settings (user)`);
+        const person = (await fromRemote(remote, instance(), () => createClient({ baseUrl: remote, user, timeout: REMOTE_CALL_MS }).users.me())).data;
         return ok({ person: { id: person['@id'], externalId: person.externalId, ...(person.displayName ? { displayName: person.displayName } : {}) } });
       }
       return ok({ signedIn: true, person: await whoAmI(), ...(staysSignedIn !== undefined ? { staysSignedIn } : { staysSignedIn: keptRefresh !== undefined }) });

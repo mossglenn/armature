@@ -177,6 +177,7 @@ export function openChannel({ input, output, handlerFor, onInputEnd, drainMs = D
     const handler = handlerFor(request.type);
     let result: Answer;
     if (!handler) {
+      // For the shell, which sends the requests: vocabulary-allow: core
       result = { status: 400, body: { error: 'unknown_request', message: `The core answers no request of type ${request.type}` } };
     } else {
       try {

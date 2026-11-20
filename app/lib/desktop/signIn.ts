@@ -106,26 +106,26 @@ export async function issuerMetadata(issuer: string, fetchFn: FetchLike = fetch)
   const expected = issuer.replace(/\/+$/, '');
   const address = `${expected}/.well-known/openid-configuration`;
   if (!isSecureAddress(expected)) {
-    throw new ApiError(400, 'insecure_issuer', `The identity provider ${expected} is not reached over https, so the program will not sign in there`, { issuer: expected });
+    throw new ApiError(400, 'insecure_issuer', `The sign-in provider ${expected} is not reached over https, so the app will not sign in there`, { issuer: expected });
   }
   let res: Response;
   try {
     res = await fetchFn(address, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(ISSUER_CALL_MS) });
   } catch {
-    throw new ApiError(503, 'issuer_unreachable', `The identity provider at ${expected} could not be reached`, { issuer: expected });
+    throw new ApiError(503, 'issuer_unreachable', `The sign-in provider at ${expected} could not be reached`, { issuer: expected });
   }
   if (!res.ok) throw new ApiError(502, 'issuer_error', `${address} answered ${res.status}`, { issuer: expected });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   const { authorization_endpoint, token_endpoint } = body;
   if (typeof body.issuer !== 'string' || body.issuer.replace(/\/+$/, '') !== expected) {
-    throw new ApiError(502, 'issuer_error', `${address} names the issuer ${JSON.stringify(body.issuer)}, not ${expected}`, { issuer: expected });
+    throw new ApiError(502, 'issuer_error', `${address} names the sign-in provider ${JSON.stringify(body.issuer)}, not ${expected}`, { issuer: expected });
   }
   if (typeof authorization_endpoint !== 'string' || typeof token_endpoint !== 'string') {
     throw new ApiError(502, 'issuer_error', `${address} names no authorization_endpoint or token_endpoint`, { issuer: expected });
   }
   for (const [name, endpoint] of [['authorization_endpoint', authorization_endpoint], ['token_endpoint', token_endpoint]] as const) {
     if (!isSecureAddress(endpoint)) {
-      throw new ApiError(400, 'insecure_issuer', `${address} names the ${name} ${JSON.stringify(endpoint)}, which is not an https address, so the program will not sign in there`, { issuer: expected, endpoint: name });
+      throw new ApiError(400, 'insecure_issuer', `${address} names the ${name} ${JSON.stringify(endpoint)}, which is not an https address, so the app will not sign in there`, { issuer: expected, endpoint: name });
     }
   }
   const revocation = body.revocation_endpoint;
@@ -181,19 +181,19 @@ export async function tokensFrom(res: Response, now: () => number, what: string)
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     if (res.status >= 500 || res.status === 429) {
-      throw new ApiError(503, 'issuer_unreachable', `The identity provider answered ${res.status} to ${what}; it is busy or restarting, so try again shortly`, { status: res.status });
+      throw new ApiError(503, 'issuer_unreachable', `The sign-in provider answered ${res.status} to ${what}; it is busy or restarting, so try again shortly`, { status: res.status });
     }
     if ((res.status !== 400 && res.status !== 401) || typeof body.error !== 'string') {
-      throw new ApiError(502, 'issuer_error', `The identity provider answered ${res.status} to ${what}, with no reason a token endpoint gives`, { status: res.status });
+      throw new ApiError(502, 'issuer_error', `The sign-in provider answered ${res.status} to ${what}, with no reason a token endpoint gives`, { status: res.status });
     }
     const reason = body.error;
     const description = typeof body.error_description === 'string' ? body.error_description : undefined;
-    throw new ApiError(403, 'sign_in_refused', `The identity provider refused ${what}: ${reason}${description ? ` (${description})` : ''}`, {
+    throw new ApiError(403, 'sign_in_refused', `The sign-in provider refused ${what}: ${reason}${description ? ` (${description})` : ''}`, {
       reason,
       ...(description ? { description } : {}),
     });
   }
-  if (typeof body.access_token !== 'string' || !body.access_token) throw new ApiError(502, 'issuer_error', `The identity provider's answer to ${what} carries no access_token`);
+  if (typeof body.access_token !== 'string' || !body.access_token) throw new ApiError(502, 'issuer_error', `The sign-in provider's answer to ${what} carries no access_token`);
   return {
     accessToken: body.access_token,
     expiresAt: now() + lifetimeOf(body.expires_in) * 1000,
@@ -241,14 +241,14 @@ export async function signIn(options: SignInOptions): Promise<Tokens> {
     if (error) {
       const description = url.searchParams.get('error_description') ?? undefined;
       const scopeRefused = error === 'invalid_scope' && offline;
-      page(res, 200, 'Sign-in refused', `The identity provider refused: ${error}. Return to Armature.`);
+      page(res, 200, 'Sign-in refused', `The sign-in provider refused: ${error}. Return to Armature.`);
       settle.reject(
         new ApiError(
           403,
           'sign_in_refused',
           scopeRefused
-            ? 'The identity provider refused offline_access, which keeps you signed in; sign in without it, or ask the administrator to offer it to the desktop client'
-            : `The identity provider refused the sign-in: ${error}${description ? ` (${description})` : ''}`,
+            ? 'The sign-in provider refused offline_access, which keeps you signed in; sign in without it, or ask the administrator to offer it to the desktop client'
+            : `The sign-in provider refused the sign-in: ${error}${description ? ` (${description})` : ''}`,
           { reason: error, ...(description ? { description } : {}), ...(scopeRefused ? { offlineAccess: true } : {}) }
         )
       );
@@ -256,8 +256,8 @@ export async function signIn(options: SignInOptions): Promise<Tokens> {
     }
     const code = url.searchParams.get('code');
     if (!code) {
-      page(res, 400, 'Sign-in incomplete', 'The identity provider sent no code. Return to Armature and sign in again.');
-      settle.reject(new ApiError(502, 'issuer_error', 'The identity provider redirected without a code'));
+      page(res, 400, 'Sign-in incomplete', 'The sign-in provider sent no code. Return to Armature and sign in again.');
+      settle.reject(new ApiError(502, 'issuer_error', 'The sign-in provider redirected without a code'));
       return;
     }
     try {
@@ -272,7 +272,7 @@ export async function signIn(options: SignInOptions): Promise<Tokens> {
           signal: AbortSignal.timeout(ISSUER_CALL_MS),
         });
       } catch {
-        throw new ApiError(503, 'issuer_unreachable', `The identity provider's token endpoint, ${metadata.tokenEndpoint}, could not be reached`, { issuer: metadata.issuer });
+        throw new ApiError(503, 'issuer_unreachable', `The sign-in provider's token endpoint, ${metadata.tokenEndpoint}, could not be reached`, { issuer: metadata.issuer });
       }
       const tokens = await tokensFrom(exchanged, now, 'the sign-in');
       page(res, 200, 'Signed in', 'You are signed in. Return to Armature; this tab can be closed.');
@@ -303,6 +303,7 @@ export async function signIn(options: SignInOptions): Promise<Tokens> {
       response_type: 'code',
       client_id: options.clientId,
       redirect_uri: redirectUri,
+      // OpenID Connect's scope names: vocabulary-allow: profile
       scope: offline ? 'openid profile email offline_access' : 'openid profile email',
       state,
       code_challenge: challenge,
