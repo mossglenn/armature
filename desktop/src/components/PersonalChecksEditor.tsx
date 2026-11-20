@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/textarea';
 import type { Backend } from '@/lib/backend';
+import { useInstance } from '@/lib/instance';
 import type { PersonalChecks, PersonalRequirement, Refusal } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 import { verbatim } from '@/lib/utils';
@@ -57,6 +58,7 @@ function requirementsOf(rows: Row[]): { requirements: unknown[] } | { badParams:
       ...(row.fromPrefix !== undefined ? { fromPrefix: row.fromPrefix } : {}),
       level: row.level,
       params,
+      // The requirement's status as the file holds it, an identifier: vocabulary-allow: revoke
       status: row.active ? 'Active' : 'Revoked',
       ...(row.rationale.trim() ? { rationale: row.rationale.trim() } : {}),
     });
@@ -77,6 +79,7 @@ function unsavedOf(rows: Row[], inFile: number): string | undefined {
   const changed = kept.filter((row) => textOf(row) !== row.inFile).length;
   const parts = [...(removed ? [counted(removed, 'removed')] : []), ...(added ? [counted(added, 'added')] : []), ...(changed ? [counted(changed, 'changed')] : [])];
   if (!parts.length) return undefined;
+  // The checks are a file, checks.json, so they are saved: vocabulary-allow: save
   return `Not saved yet: ${parts.join(', ')}. The file is as it was, and your pushes are still held to it, until you save.`;
 }
 
@@ -97,6 +100,7 @@ function unsavedOf(rows: Row[], inFile: number): string | undefined {
  */
 export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend; workspaces: string[] }) {
   const { run, busy } = useRequest(backend);
+  const instance = useInstance();
   const [file, setFile] = useState<string | undefined>();
   const [rows, setRows] = useState<Row[]>([]);
   /** How many checks the file holds, as last read or saved. */
@@ -127,6 +131,7 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
     // Said here, in the form's terms: the core's refusal of a nameless check speaks of a file that cannot be
     // read and of pushes stopped, which is true of a file on disk and not of a form nothing was saved from.
     const unnamed = rows.findIndex((row) => !row.check.trim());
+    // vocabulary-allow: save
     if (unnamed !== -1) return setProblem(`Check ${unnamed + 1} has no name. Type the name its tool reports under, such as lint/mine, or remove it. Nothing was saved.`);
     const built = requirementsOf(rows);
     if ('badParams' in built) return setProblem(`The settings of ${rows[built.badParams]?.check.trim() || `check ${built.badParams + 1}`} are not JSON; write {} for none.`);
@@ -141,19 +146,20 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
   return (
     <form
       className="mt-6 flex flex-col gap-3 rounded-lg border p-4"
-      aria-label="Checks of your own"
+      aria-label="Personal checks"
       onSubmit={(e) => {
         e.preventDefault();
         void save();
       }}
     >
-      <p className="font-medium">Checks of your own</p>
+      <p className="font-medium">Personal checks</p>
       <p className="text-muted-foreground text-sm">
-        A check is a tool on this machine that reports on your latest work, a design linter for one. While a check is required here, a push waits until that tool has reported, and is refused if it did not pass. These are yours alone: your
-        instance&rsquo;s own required checks are enforced there, when you deliver.
+        A check is a tool on this computer that reports on your latest work, a design linter for one. While a check is required here, a push waits until that tool has reported, and is refused if it did not pass. These are yours alone: the
+        required checks of {instance} are enforced there, when you merge.
       </p>
       {invalid && (
         <div className="rounded-md bg-amber-50 p-2 text-sm text-amber-900" role="alert">
+          {/* vocabulary-allow: save */}
           <p>The file cannot be read as checks, so nothing can be pushed until it is put right. Saving here replaces it.</p>
           <ul className="mt-1 text-xs">
             {invalid.issues.map((issue, i) => (
@@ -165,7 +171,7 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
           </ul>
         </div>
       )}
-      {rows.length === 0 && !invalid && inFile === 0 && <p className="text-sm">No checks: every push goes straight to the remote.</p>}
+      {rows.length === 0 && !invalid && inFile === 0 && <p className="text-sm">No checks: every push goes straight to {instance}.</p>}
       <ul className="flex flex-col gap-3">
         {rows.map((row, i) => (
           <li key={i} className="rounded-md border p-3" aria-label={row.check.trim() || `Check ${i + 1}`}>
@@ -205,7 +211,7 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
             <div className="mt-3 flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={row.active} onChange={(e) => change(i, { active: e.target.checked })} />
-                In force
+                On
               </label>
               <Button
                 type="button"
@@ -234,8 +240,10 @@ export function PersonalChecksEditor({ backend, workspaces }: { backend: Backend
           Add a check
         </Button>
         <Button type="submit" disabled={busy !== undefined || file === undefined}>
+          {/* vocabulary-allow: save */}
           Save checks
         </Button>
+        {/* vocabulary-allow: save */}
         {saved && !unsaved && <span className="text-muted-foreground text-sm">Saved. The next push reads them.</span>}
       </div>
       {unsaved && (

@@ -7,17 +7,18 @@ import { Input } from '@/components/ui/input';
 import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend } from '@/lib/backend';
+import { useInstance } from '@/lib/instance';
 import type { Refusal, WorkspaceRecord, WorkspaceStatus, WorkspaceWarning } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
-/** A workspace's status in a few words: what is waiting, and what the remote did. */
+/** A workspace's status in a few words: what is waiting to be pushed, and whether its branch on the instance was changed elsewhere. */
 export function StatusBadges({ status }: { status?: WorkspaceStatus }) {
   if (!status) return <Badge variant="muted">…</Badge>;
   const remote = status.remote;
   return (
     <span className="flex flex-wrap gap-1">
-      {status.unpushed > 0 ? <Badge variant="warning">{status.unpushed} unpushed</Badge> : <Badge variant="success">All pushed</Badge>}
-      {'reachable' in remote ? <Badge variant="muted">{remote.reason === 'signed_out' ? 'Signed out' : 'Remote unreachable'}</Badge> : remote.moved ? <Badge variant="outline">The remote moved</Badge> : null}
+      {status.unpushed > 0 ? <Badge variant="warning">{status.unpushed} to push</Badge> : <Badge variant="success">All pushed</Badge>}
+      {'reachable' in remote ? <Badge variant="muted">{remote.reason === 'signed_out' ? 'Signed out' : 'Offline'}</Badge> : remote.moved ? <Badge variant="outline">Changed elsewhere</Badge> : null}
     </span>
   );
 }
@@ -30,6 +31,7 @@ export function StatusBadges({ status }: { status?: WorkspaceStatus }) {
  */
 export function Workspaces({ backend, open, notice }: { backend: Backend; open: (branch: string) => void; notice?: string }) {
   const { run, busy } = useRequest(backend);
+  const instance = useInstance();
   const [records, setRecords] = useState<WorkspaceRecord[] | undefined>();
   const [statuses, setStatuses] = useState<Record<string, WorkspaceStatus>>({});
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
@@ -67,14 +69,14 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
 
   return (
     <section>
-      <PageHeader title="Workspaces">Each is a branch of the remote, kept on this machine, where your tools write while you work, online or not.</PageHeader>
+      <PageHeader title="Workspaces">Each is a branch on {instance}, kept on this computer, where your tools write while you work, online or offline.</PageHeader>
 
       {notice && (
         <p className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
           {notice}
         </p>
       )}
-      {records && records.length === 0 && <p className="text-muted-foreground text-sm">No workspace yet. Make one below.</p>}
+      {records && records.length === 0 && <p className="text-muted-foreground text-sm">No workspace yet. Create one below.</p>}
       {records && records.length > 0 && (
         <ul className="divide-y rounded-lg border" aria-label="Your workspaces">
           {records.map((record) => (
@@ -120,7 +122,7 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
           <Label htmlFor="ws-from">From</Label>
           <Input id="ws-from" {...verbatim} value={from} onChange={(e) => setFrom(e.target.value)} />
           <Button type="submit" disabled={!name.trim() || busy !== undefined}>
-            {busy === 'create' ? 'Making it…' : 'Make the workspace'}
+            {busy === 'create' ? 'Creating…' : 'Create workspace'}
           </Button>
         </form>
         <form
@@ -132,7 +134,7 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
             void run<WorkspaceRecord & { warning?: WorkspaceWarning }>('clone', { branch: existing.trim() }).then(made);
           }}
         >
-          <p className="font-medium">Clone a branch the remote has</p>
+          <p className="font-medium">Clone a branch from {instance}</p>
           <Label htmlFor="ws-existing">Branch</Label>
           <Input id="ws-existing" {...verbatim} value={existing} onChange={(e) => setExisting(e.target.value)} placeholder="someone_unit-3" />
           <Button type="submit" variant="outline" disabled={!existing.trim() || busy !== undefined}>

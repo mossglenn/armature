@@ -7,17 +7,18 @@ import { Input } from '@/components/ui/input';
 import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend, ShellState } from '@/lib/backend';
+import { sentence, useInstance } from '@/lib/instance';
 import type { Person, Profile, Refusal, SettingsReply } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
 /**
- * Connect (docs/desktop-program-plan.md §4, item 1; §8): the remote's address, typed or brought by an
- * `armature://connect` link, read and shown before anything is connected. The profile is what the
- * remote's GET /discover says; the person confirms the instance's name, its address and how it signs
+ * Connect (docs/desktop-program-plan.md §4, item 1; §8): the instance's address, typed or brought by an
+ * `armature://connect` link, looked up and shown before anything is connected. The instance details
+ * (the core's `profile`) are what its GET /discover says; the person confirms the instance's name, its address and how it signs
  * people in. The address shown is always the one dialed, never the one the hub declares for itself,
  * and the card goes when the field changes; `connect` carries the identity and instance confirmed,
- * so the core keeps nothing else (the 2026-11-09 review's C1 and C2). A remote under header asks
- * for the person's identifier instead, and says it is a development arrangement. The link is
+ * so the core keeps nothing else (the 2026-11-09 review's C1 and C2). An instance with no sign-in
+ * (the `header` resolver) asks for the person's ID instead, and says it is for testing only. The link is
  * untrusted: it only fills the address field.
  */
 export function Connect({
@@ -35,6 +36,7 @@ export function Connect({
   onDone: (next: 'signIn' | 'workspaces', keychain?: string) => void;
 }) {
   const { run, busy } = useRequest(backend);
+  const connectedTo = useInstance();
   const current = typeof state?.started?.remote === 'string' ? state.started.remote : undefined;
   const needsUser = state?.started?.needs === 'user';
   const [address, setAddress] = useState(link ?? current ?? '');
@@ -45,6 +47,8 @@ export function Connect({
   const [keychain, setKeychain] = useState<string | undefined>();
   /** The identifier just saved that the remote answered it does not know. */
   const [unknown, setUnknown] = useState<string | undefined>();
+  /** The instance being connected to, by the name its details gave; the one connected, when a page is come back to. */
+  const named = profile?.instance?.name ?? connectedTo;
 
   useEffect(() => {
     if (link) {
@@ -98,8 +102,8 @@ export function Connect({
   if (askUser) {
     return (
       <section>
-        <PageHeader title="Who are you on this remote?">
-          The remote at {current ?? profile?.remote} takes your identifier as you say it, with no sign-in: a development arrangement, not one for real work.
+        <PageHeader title={`Who are you on ${named}?`}>
+          {sentence(named)}, at {current ?? profile?.remote}, takes your ID as you say it, with no sign-in: for testing only, not for real work.
         </PageHeader>
         <form
           className="flex max-w-md flex-col gap-3"
@@ -108,7 +112,7 @@ export function Connect({
             void saveUser();
           }}
         >
-          <Label htmlFor="user">Your identifier on the remote</Label>
+          <Label htmlFor="user">Your ID on {named}</Label>
           <Input
             id="user"
             {...verbatim}
@@ -126,7 +130,7 @@ export function Connect({
           {unknown && (
             <div role="alert" className="border-destructive/40 bg-destructive/5 flex flex-col gap-2 rounded-md border p-3 text-sm">
               <p>
-                The remote does not know <span className="font-mono">{unknown}</span>. Nothing can be created, pushed or delivered as an identifier it does not know. Correct it above, or ask the instance&rsquo;s administrator to register you.
+                {sentence(named)} does not know <span className="font-mono">{unknown}</span>. Nothing can be created, pushed or merged as an ID it does not know. Correct it above, or ask an administrator of {named} to register you.
               </p>
               <p className="text-muted-foreground">It is kept as typed, and can be changed on the Settings page.</p>
               <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => onDone('workspaces', keychain)}>
@@ -143,7 +147,7 @@ export function Connect({
   return (
     <section>
       <PageHeader title="Connect to your instance">
-        {current ? `Connected to ${current}. Connecting elsewhere is possible only while no workspace exists.` : 'The address your instance’s administrator gave you, or the one its web pages link to.'}
+        {current ? `Connected to ${current}. Connecting elsewhere is possible only while no workspace exists.` : 'The address you were given, or the one your instance’s web pages link to.'}
       </PageHeader>
       <form
         className="flex max-w-xl gap-2"
@@ -167,27 +171,27 @@ export function Connect({
           autoFocus={!link}
         />
         <Button type="submit" variant="outline" disabled={!address.trim() || busy !== undefined}>
-          {busy === 'profile' ? 'Reading…' : 'Read'}
+          {busy === 'profile' ? 'Looking up…' : 'Look up'}
         </Button>
       </form>
-      {link && !profile && <p className="text-muted-foreground mt-2 text-sm">A link asked to connect here. Read the instance and check it before connecting.</p>}
+      {link && !profile && <p className="text-muted-foreground mt-2 text-sm">A link asked to connect here. Look up the instance and read its details before connecting.</p>}
 
       {profile && (
-        <div className="mt-6 max-w-xl rounded-lg border p-4" aria-label="The instance">
+        <div className="mt-6 max-w-xl rounded-lg border p-4" aria-label="Instance details">
           <p className="text-lg font-medium">{profile.instance?.name ?? profile.remote}</p>
           <dl className="mt-3 grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1 text-sm">
             <dt className="text-muted-foreground">Address</dt>
             <dd className="font-mono break-all">{profile.remote}</dd>
             <dt className="text-muted-foreground">Signs you in at</dt>
-            <dd className="break-all">{profile.identity.resolver === 'oidc' ? profile.identity.issuer : 'No sign-in: you say who you are'}</dd>
+            <dd className="break-all">{profile.identity.resolver === 'oidc' ? profile.identity.issuer : 'No sign-in (for testing only)'}</dd>
             <dt className="text-muted-foreground">Versions</dt>
             <dd>
               {profile.compatible ? (
                 <Badge variant="success">Compatible</Badge>
               ) : (
                 <span>
-                  <Badge variant="warning">Not compatible</Badge> This program speaks {profile.revision}; the instance serves {profile.versions.join(', ')}.
-                  {profile.instance?.program?.releases ? ` Get the program that matches from ${profile.instance.program.releases}.` : ''}
+                  <Badge variant="warning">Not compatible</Badge> This app speaks API revision {profile.revision}; the instance serves {profile.versions.join(', ')}.
+                  {profile.instance?.program?.releases ? ` Get the version of the app that matches from ${profile.instance.program.releases}.` : ''}
                 </span>
               )}
             </dd>

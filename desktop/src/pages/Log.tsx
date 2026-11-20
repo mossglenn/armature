@@ -28,14 +28,14 @@ export function Log({ backend, state }: { backend: Backend; state?: ShellState }
 
   return (
     <section className="flex h-full flex-col">
-      <PageHeader title="Log">{state?.logDir ? <>Kept a week, a file a day, in {state.logDir}</> : null}</PageHeader>
+      <PageHeader title="Diagnostics">{state?.logDir ? <>Kept a week, a file a day, in {state.logDir}</> : null}</PageHeader>
       <div className="mb-3">
         <Button variant="outline" size="sm" onClick={() => void backend.openLogFolder()}>
-          Open the log folder
+          Open the folder
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
-        <pre className="p-3 text-xs" aria-label="Log lines">
+        <pre className="p-3 text-xs" aria-label="Diagnostic lines">
           {lines.join('\n') || 'Nothing yet.'}
         </pre>
         <div ref={end} />

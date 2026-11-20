@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend, ShellState } from '@/lib/backend';
+import { sentence, useInstance } from '@/lib/instance';
 import type { Person, Profile, Refusal, Settings as SettingsShape, SettingsReply, WorkspaceRecord } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
@@ -26,6 +27,7 @@ const wholeNumber = (text: string): number | undefined => (/^\d+$/.test(text.tri
  */
 export function Settings({ backend, state, connect, signedOut }: { backend: Backend; state?: ShellState; connect: () => void; signedOut: (keychain?: string) => void }) {
   const { run, busy } = useRequest(backend);
+  const instance = useInstance();
   const [settings, setSettings] = useState<SettingsShape | undefined>();
   const [form, setForm] = useState({ folder: '', port: '', snapshots: '', user: '' });
   const [warning, setWarning] = useState<string | undefined>();
@@ -90,7 +92,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
     const port = wholeNumber(form.port);
     const snapshots = wholeNumber(form.snapshots);
     if (port === undefined || port < 1 || port > 65535) return setProblem('The port is a whole number from 1 to 65535.');
-    if (snapshots === undefined) return setProblem('The number of older commits kept is a whole number, 0 or more.');
+    if (snapshots === undefined) return setProblem('The number of older commits kept offline is a whole number, 0 or more.');
     const set: Record<string, unknown> = {
       folder: form.folder.trim() ? form.folder.trim() : null,
       port,
@@ -121,14 +123,14 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
       const after = await backend.checkUpdate();
       const line = {
         update: `Version ${after.state.update?.version ?? ''} is available; it is offered at the top of the window.`,
-        latest: 'This is the latest version.',
+        latest: 'You have the latest version.',
         // Not "the latest version": the channel answered without a release, which is also what an error status looks like to the updater.
-        no_release: 'The release channel answered without a release (none is published yet, or it did not answer); the program tries again within the hour.',
-        packaged: 'This install is a system package; it is updated by installing the next package, and the program does not check the release channel.',
+        no_release: 'The release channel answered without a release (none is released yet, or it did not answer); the app tries again within the hour.',
+        packaged: 'This install is a system package; it is updated by installing the next package, and the app does not look at the release channel.',
       }[after.found];
       setChecked({ busy: false, line });
     } catch (err) {
-      setChecked({ busy: false, line: `The release channel could not be checked (${err instanceof Error ? err.message : String(err)}).` });
+      setChecked({ busy: false, line: `The release channel could not be reached (${err instanceof Error ? err.message : String(err)}).` });
     }
   };
 
@@ -139,8 +141,8 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
       ? (entry.error ??
         (entry.enabled !== undefined && entry.enabled !== (settings.startAtLogin ?? false)
           ? settings.startAtLogin
-            ? 'The system has no entry to start the program at login; it is made again at the next start.'
-            : 'The system still has an entry starting the program at login; it is removed at the next start.'
+            ? 'The system has no entry to start the app at login; it is made again at the next start.'
+            : 'The system still has an entry starting the app at login; it is removed at the next start.'
           : undefined))
       : undefined;
 
@@ -175,8 +177,8 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
     <section className="max-w-2xl">
       <PageHeader title="Settings" />
 
-      <div className="rounded-lg border p-4" aria-label="The remote">
-        <p className="font-medium">The remote</p>
+      <div className="rounded-lg border p-4" aria-label="Your instance">
+        <p className="font-medium">Your instance</p>
         <p className="mt-1 text-sm">{settings?.instance?.name ?? settings?.remote ?? 'Not connected'}</p>
         {settings?.remote && <p className="text-muted-foreground font-mono text-xs break-all">{settings.remote}</p>}
         <div className="mt-3 flex gap-2">
@@ -193,15 +195,15 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
 
       <form
         className="mt-6 flex flex-col gap-3 rounded-lg border p-4"
-        aria-label="This machine"
+        aria-label="This computer"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
-        <p className="font-medium">This machine</p>
+        <p className="font-medium">This computer</p>
         <Label htmlFor="folder">Workspaces folder</Label>
-        <Input id="folder" {...verbatim} placeholder={state?.dataDir ? `${state.dataDir}/workspaces` : 'In the program’s data folder'} {...field('folder')} />
+        <Input id="folder" {...verbatim} placeholder={state?.dataDir ? `${state.dataDir}/workspaces` : 'In the app’s data folder'} {...field('folder')} />
         {warning && <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">{warning}</p>}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
@@ -209,22 +211,22 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
             <Input id="port" inputMode="numeric" {...field('port')} />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="snapshots">Older commits kept</Label>
+            <Label htmlFor="snapshots">Older commits kept offline</Label>
             <Input id="snapshots" inputMode="numeric" {...field('snapshots')} />
           </div>
         </div>
         {settings?.identity?.resolver === 'header' && (
           <>
-            <Label htmlFor="settings-user">Your identifier on the remote</Label>
+            <Label htmlFor="settings-user">Your ID on {instance}</Label>
             <Input id="settings-user" {...verbatim} {...field('user')} />
             {known?.person && (
               <p className="text-muted-foreground text-sm">
-                The remote knows <span className="font-mono">{known.user}</span> as {known.person.displayName ?? known.person.id}.
+                {sentence(instance)} knows <span className="font-mono">{known.user}</span> as {known.person.displayName ?? known.person.id}.
               </p>
             )}
             {known && !known.person && (
               <p className="text-destructive text-sm" role="alert">
-                The remote does not know <span className="font-mono">{known.user}</span>. Nothing can be created, pushed or delivered as an identifier it does not know. Correct it here, or ask the instance&rsquo;s administrator to register you.
+                {sentence(instance)} does not know <span className="font-mono">{known.user}</span>. Nothing can be created, pushed or merged as an ID it does not know. Correct it here, or ask an administrator of {instance} to register you.
               </p>
             )}
           </>
@@ -240,12 +242,15 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
         )}
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={busy !== undefined || !settings}>
+            {/* vocabulary-allow: save */}
             Save
           </Button>
+          {/* vocabulary-allow: save */}
           {saved && !restart && hubRunning && <span className="text-muted-foreground text-sm">Saved.</span>}
         </div>
         {(restart || (saved && !hubRunning && settings?.remote !== undefined)) && (
           <div className="flex items-center gap-3 rounded-md bg-amber-50 p-2 text-sm text-amber-900" role="status">
+            {/* vocabulary-allow: save */}
             {hubRunning ? 'The hub uses these from its next start.' : 'Saved. The hub is not running.'}
             <Button type="button" size="sm" variant="outline" disabled={restarting} onClick={() => void restartHub()}>
               {hubRunning ? 'Restart the hub' : 'Start the hub'}
@@ -254,7 +259,7 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
         )}
         {folderMoved !== undefined && (
           <p className="max-w-2xl rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
-            {folderMoved === 1 ? 'The workspace you have stays' : `Your ${folderMoved} workspaces stay`} in the folder used until now, with any commits not yet pushed: the hub will find none in the new one. Deliver or remove{' '}
+            {folderMoved === 1 ? 'The workspace you have stays' : `Your ${folderMoved} workspaces stay`} in the folder used until now, with any commits to push: the hub will find none in the new one. Merge or remove{' '}
             {folderMoved === 1 ? 'it' : 'them'} first, or move the old folder&rsquo;s contents to the new place before the hub starts again; setting the folder back undoes this.
           </p>
         )}
@@ -271,16 +276,16 @@ export function Settings({ backend, state, connect, signedOut }: { backend: Back
       <div className="mt-6 rounded-lg border p-4 text-sm" aria-label="Versions">
         <p className="font-medium">Versions</p>
         <dl className="mt-2 grid grid-cols-[10rem_1fr] gap-y-1">
-          <dt className="text-muted-foreground">This program</dt>
+          <dt className="text-muted-foreground">This app</dt>
           <dd>{version ?? '…'}</dd>
-          <dt className="text-muted-foreground">Its hub’s revision</dt>
+          <dt className="text-muted-foreground">Its hub’s API revision</dt>
           <dd>{revision ?? '…'}</dd>
-          <dt className="text-muted-foreground">The remote serves</dt>
+          <dt className="text-muted-foreground">{sentence(instance)} serves</dt>
           <dd>{remoteVersions === 'unreachable' ? 'Cannot be reached' : (remoteVersions?.join(', ') ?? '…')}</dd>
         </dl>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" disabled={checked.busy} onClick={() => void checkUpdate()}>
-            {checked.busy ? 'Checking…' : 'Check for updates'}
+            {checked.busy ? 'Looking…' : 'Look for a new version'}
           </Button>
           {checked.line && (
             <span className="text-muted-foreground" role="status">
