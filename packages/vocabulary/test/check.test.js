@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import ts from 'typescript';
 import { findAvoided } from '../src/index.ts';
 import {
-  BROUGHT, PATHS, SURFACES, checkVocabulary, parseDocument, surfaceFindings, surfaceStrings, validate,
+  BROUGHT, PATHS, SURFACES, checkVocabulary, isBrought, parseDocument, surfaceFindings, surfaceStrings, validate,
 } from '../../../scripts/check_vocabulary.js';
 
 const root = new URL('../../../', import.meta.url);
@@ -241,7 +241,17 @@ test('avoided words on a page are found with their lines, and a marked string is
   );
 });
 
+test('a file is held to the vocabulary when it, or a folder above it, is listed', () => {
+  const brought = ['desktop/src', 'app/app/page.tsx'];
+  assert.equal(isBrought('desktop/src/pages/Workspace.tsx', brought), true);
+  assert.equal(isBrought('app/app/page.tsx', brought), true);
+  assert.equal(isBrought('app/app/layout.tsx', brought), false);
+  assert.equal(isBrought('desktop/src-tauri/src/tray.rs', brought), false, 'a folder is matched whole, not as a prefix of a name');
+  // Armature's own three surfaces are held since 2026-11-19.
+  for (const surface of SURFACES) assert.equal(isBrought(`${surface.dir}/x.tsx`), true, surface.dir);
+});
+
 test('every surface and every file held to the vocabulary exists', () => {
   for (const surface of SURFACES) assert.ok(existsSync(new URL(surface.dir, root)), surface.dir);
-  for (const path of BROUGHT) assert.ok(existsSync(new URL(path, root)), `${path} is listed in BROUGHT and is not a file`);
+  for (const path of BROUGHT) assert.ok(existsSync(new URL(path, root)), `${path} is listed in BROUGHT and is not there`);
 });

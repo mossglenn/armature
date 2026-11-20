@@ -31,11 +31,12 @@
 //
 // Then it reads Armature's own person-facing strings (the desktop app's pages and
 // components, the desktop core's messages, the viewer's pages) with the package's
-// findAvoided and prints what it finds. That part reports and does not fail, since
-// the pages still carry the names in use before any was chosen; it fails for a file
-// once the file is listed in BROUGHT, which happens as each page is reworded. A
-// string that keeps an avoided word on purpose carries `vocabulary-allow: <word>`
-// in a comment on its line or the line above.
+// findAvoided and prints what it finds. A finding fails the check in a file listed
+// in BROUGHT, or under a folder listed there: the files brought to the vocabulary.
+// All three surfaces are, since 2026-11-19; a surface added later reports without
+// failing until it is reworded and listed. A string that keeps an avoided word on
+// purpose carries `vocabulary-allow: <word>` in a comment on its line or the line
+// above, with the reason beside it.
 //
 // Runs in CI's app job, which runs for documents alone too, and from the root:
 //   npm run check:vocabulary            the check, and a summary of the pages
@@ -92,10 +93,16 @@ const QUALIFIERS = [
   'kept',
 ];
 
-// The files whose strings have been brought to the vocabulary, as paths from the
-// repository's root: a finding in one of them fails the check. Filled as each page
-// is reworded (ADR-0073 decision 6); the list is Armature's, not the package's.
-export const BROUGHT = [];
+// What has been brought to the vocabulary, as paths from the repository's root: a
+// file, or a folder with everything under it. A finding there fails the check
+// (ADR-0073 decision 6); the list is Armature's, not the package's. The three
+// surfaces were reworded together on 2026-11-19.
+export const BROUGHT = ['desktop/src', 'app/lib/desktop', 'app/app'];
+
+// Whether a file is held to the vocabulary: listed itself, or under a folder that is.
+export function isBrought(file, brought = BROUGHT) {
+  return brought.some((path) => file === path || file.startsWith(`${path}/`));
+}
 
 // Armature's own surfaces a person reads.
 export const SURFACES = [
@@ -521,7 +528,7 @@ async function main() {
   const failing = [];
   for (const surface of SURFACES) {
     const findings = filesUnder(surface.dir, surface).flatMap((file) => surfaceFindings(ts, findAvoided, file, read(file)));
-    failing.push(...findings.filter((finding) => BROUGHT.includes(finding.file)));
+    failing.push(...findings.filter((finding) => isBrought(finding.file)));
     const files = new Set(findings.map((finding) => finding.file));
     console.log(`\n${surface.name} (${surface.dir}): ${findings.length} avoided ${findings.length === 1 ? 'word' : 'words'} in ${files.size} ${files.size === 1 ? 'file' : 'files'}`);
     if (all) {
@@ -542,7 +549,7 @@ async function main() {
     }
     process.exit(1);
   }
-  console.log(`\nreport only: ${BROUGHT.length ? `${BROUGHT.length} files are held to the vocabulary and pass; the rest` : 'no file is held to the vocabulary yet; each'} fails once it is reworded and listed in BROUGHT (ADR-0073 decision 6).${all ? '' : ' `-- --all` lists every finding.'}`);
+  console.log(`\nok    Armature's own pages hold to the vocabulary: no avoided word under ${BROUGHT.join(', ')} (ADR-0073 decision 6).`);
 }
 
 function clip(text) {
