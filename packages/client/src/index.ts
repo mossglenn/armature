@@ -260,6 +260,8 @@ export interface MergeResult {
   upToDate: boolean;
   /** A dry run (2026-11-01): what the merge would have reported, nothing committed; the merge would land when both are empty. */
   dryRun?: boolean;
+  /** On a dry run that is not up to date (2026-11-20): how many documents the merge would bring, records kept on `main` alone not counted. */
+  brings?: number;
   conflicts?: MergeConflict[];
   violations?: Violation[];
   /**
@@ -636,10 +638,22 @@ export interface WorkspaceStatus {
    * (`other_remote`, since 2026-11-16) because the workspace was cloned from another remote than the hub's.
    * Since 2026-11-20 `link` says where the remote links the workspace: `elsewhere` (with that computer's
    * `linkLabel` and `linkedAt`) or `unlinked` means this computer's push will be refused.
+   * `parent` (same day) says whether the workspace's parent holds anything an update would bring; absent when the remote would not say.
    */
-  remote: { head: string; moved: boolean; link: LinkState; linkLabel?: string; linkedAt?: string } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
+  remote: { head: string; moved: boolean; link: LinkState; linkLabel?: string; linkedAt?: string; parent?: ParentState } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
   /** The snapshots of the remote this hub holds for the workspace (2026-11-02): the budget, the commits held and those declined. */
   snapshots?: { budget: number; held: string[]; declined: unknown[] };
+}
+
+/** Where a workspace stands against its parent on the remote (2026-11-20): the remote's dry run of the merge an update makes. */
+export interface ParentState {
+  branch: string;
+  /** True when the parent holds commits the workspace's branch on the remote does not. */
+  behind: boolean;
+  /** When behind: how many documents an update would bring, records kept on `main` alone not counted. */
+  documents?: number;
+  /** When behind: how many records an update would be refused for; zero when it would merge. */
+  conflicts?: number;
 }
 
 /** One local commit replayed on the remote by a push (ADR-0065 decision 5; 2026-11-01). */

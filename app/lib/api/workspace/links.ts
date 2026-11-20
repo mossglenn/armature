@@ -77,6 +77,32 @@ export async function linkState(hub: HubConfig, remote: ArmatureClient, branch: 
 }
 
 /**
+ * Refuses an action of this computer's on a workspace the remote links to
+ * another computer, or to none (decided 2026-11-20, from the rehearsal of the
+ * first build): 409 `held_elsewhere` or `not_linked`, as the remote answers a
+ * write to the branch. The remote alone protects the branch, and it lets a
+ * merge request be merged from anywhere, since whoever may merge into the
+ * target need not be the owner; but a computer that has just said nothing
+ * more can be sent from it should not then offer to push nothing, or to open,
+ * merge or close the workspace's request. A workspace the remote has no
+ * record of yet (`none`) passes: it is adopted, or is an ordinary branch.
+ */
+export async function requireLinkedHere(hub: HubConfig, remote: ArmatureClient, branch: string, doing: string): Promise<void> {
+  const { state, record } = await linkState(hub, remote, branch);
+  if (state === 'elsewhere') {
+    const where = record?.linkLabel ? ` (${record.linkLabel})` : '';
+    throw new ApiError(409, 'held_elsewhere', `${branch} is linked to another computer${where}, so this one cannot ${doing}; unlink it there, or from the list of workspaces linked elsewhere, then link it here (ADR-0072 decision 3)`, {
+      workspace: branch,
+      ...(record?.linkLabel ? { linkLabel: record.linkLabel } : {}),
+      ...(record?.linkedAt ? { linkedAt: record.linkedAt } : {}),
+    });
+  }
+  if (state === 'unlinked') {
+    throw new ApiError(409, 'not_linked', `${branch} is linked to no computer, so this one cannot ${doing}; remove it from this computer and link it again (ADR-0072 decision 3)`, { workspace: branch });
+  }
+}
+
+/**
  * Clears the remote's link when it is this installation's, and only then: a
  * workspace unlinked from elsewhere and linked to another computer since is
  * that computer's, and removing a stale copy here must not take it away.

@@ -163,7 +163,8 @@ describe('over the file-backed store in memory', () => {
       expect(status.body.workspace.branch).toBe(BRANCH);
       expect(status.body.head).toBe(write.headers.get('etag')?.replace(/"/g, ''));
       expect(status.body.localCommits).toBe(1);
-      expect(status.body.remote).toEqual({ head: record.base, moved: false, link: 'here' });
+      // Main has moved since by the workspace's own records, which is not being behind it.
+      expect(status.body.remote).toEqual({ head: record.base, moved: false, link: 'here', parent: { branch: 'main', behind: false } });
     });
 
     it('@armature/client reads the same status through its workspace functions', async () => {
