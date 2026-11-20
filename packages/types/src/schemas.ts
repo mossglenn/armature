@@ -7,7 +7,7 @@
 // Phase 3). Shape only: cross-document rules live in the invariants engine.
 
 import { z } from 'zod';
-import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict, VALID_GrantRole, VALID_GrantStatus, VALID_CheckLevel, VALID_ExternalSystem, VALID_AttachmentStore } from './types';
+import { VALID_BloomsLevel, VALID_ObjectiveState, VALID_ItemType, VALID_ItemStatus, VALID_EvidenceMethod, VALID_ObjectiveRole, VALID_ActivityType, VALID_PrerequisiteType, VALID_ConfidenceLevel, VALID_NeedPriority, VALID_DesignNoteCategory, VALID_FindingStatus, VALID_AttestationVerdict, VALID_GrantRole, VALID_GrantStatus, VALID_CheckLevel, VALID_WorkspaceStatus, VALID_MergeRequestStatus, VALID_ExternalSystem, VALID_AttachmentStore } from './types';
 
 /**
  * A reference to another document: its id, or { "@ref": "<capture>" } naming a
@@ -108,6 +108,33 @@ export const CheckRequirementSchema = z.strictObject({
   params: JsonValueSchema,
   status: z.enum(VALID_GrantStatus),
   rationale: z.string().min(1).max(10_000).optional(),
+});
+
+export const WorkspaceSchema = z.strictObject({
+  '@id': z.string().min(1).optional(),
+  '@type': z.literal('Workspace').optional(),
+  '@capture': z.string().min(1).optional(),
+  branch: z.string().min(1).max(10_000),
+  owner: ReferenceSchema,
+  parent: z.string().min(1).max(10_000),
+  link: z.string().min(1).max(10_000).optional(),
+  linkedAt: z.iso.datetime().optional(),
+  linkLabel: z.string().min(1).max(10_000).optional(),
+  status: z.enum(VALID_WorkspaceStatus),
+});
+
+export const MergeRequestSchema = z.strictObject({
+  '@id': z.string().min(1).optional(),
+  '@type': z.literal('MergeRequest').optional(),
+  '@capture': z.string().min(1).optional(),
+  source: z.string().min(1).max(10_000),
+  target: z.string().min(1).max(10_000),
+  openedBy: ReferenceSchema,
+  message: z.string().min(1).max(10_000),
+  status: z.enum(VALID_MergeRequestStatus),
+  decidedBy: ReferenceSchema.optional(),
+  decidedAt: z.iso.datetime().optional(),
+  mergeCommit: z.string().min(1).max(10_000).optional(),
 });
 
 export const LearningMetricSchema = z.strictObject({
@@ -404,6 +431,8 @@ export const DOCUMENT_SCHEMAS = {
   User: UserSchema,
   Grant: GrantSchema,
   CheckRequirement: CheckRequirementSchema,
+  Workspace: WorkspaceSchema,
+  MergeRequest: MergeRequestSchema,
   LearningMetric: LearningMetricSchema,
   DescriptiveEvidence: DescriptiveEvidenceSchema,
   LearningDataset: LearningDatasetSchema,

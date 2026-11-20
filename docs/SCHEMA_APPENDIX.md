@@ -1,6 +1,6 @@
 # Armature Schema Reference
 
-_Schema snapshot · Generated 2026-11-13_
+_Schema snapshot · Generated 2026-11-20_
 
 ---
 
@@ -52,6 +52,27 @@ classDiagram
     +JSON params
     +GrantStatus status
     +string? rationale
+  }
+
+  class Workspace {
+    +string branch
+    +User owner
+    +string parent
+    +string? link
+    +dateTime? linkedAt
+    +string? linkLabel
+    +WorkspaceStatus status
+  }
+
+  class MergeRequest {
+    +string source
+    +string target
+    +User openedBy
+    +string message
+    +MergeRequestStatus status
+    +User? decidedBy
+    +dateTime? decidedAt
+    +string? mergeCommit
   }
 
   class DesignRecord {
@@ -302,6 +323,9 @@ classDiagram
   Grant --> User : user
   Grant "0..*" --> User : relayedUsers
   CheckRequirement --> User : reporter
+  Workspace --> User : owner
+  MergeRequest --> User : openedBy
+  MergeRequest ..> User : decidedBy
   ArmatureDocument ..> User : createdBy
   ArmatureDocument *-- ExternalRef : externalRefs
   ArmatureDocument *-- Attachment : attachments
@@ -349,7 +373,7 @@ classDiagram
 
 ## Infrastructure
 
-_Non-artifact types that underpin the design process: the user, the grants of authority recorded on main (ADR-0068), the checks a merge requires, also on main (ADR-0070), and the abstract roots every record inherits._
+_Non-artifact types that underpin the design process: the user, the grants of authority recorded on main (ADR-0068), the checks a merge requires, also on main (ADR-0070), the records that make a branch a workspace and that ask for a merge (ADR-0072), and the abstract roots every record inherits._
 
 ### `User`
 _category: infrastructure · key: Random_
@@ -395,6 +419,37 @@ _category: infrastructure · key: Hash(check, branch, fromPrefix)_
 | `params` | `JSON` | required |
 | `status` | `GrantStatus` | required |
 | `rationale` | `string?` | optional |
+
+### `Workspace`
+_category: infrastructure · key: Random_
+
+> The record that makes a branch a workspace: a branch linked to one installation of the desktop app, written on the instance only by that installation's desktop hub (ADR-0072 decisions 1 to 4). The store's branches carry no metadata, so this record on main is how the hub, and every client, tells a workspace from a branch. Infrastructure, outside DesignRecord as Grant is (ADR-0017): a workspace record is not a design decision and cannot be the subject of a note, a finding or an attestation, and it is in no export slice. Identity is Random, minted by the hub, since a branch name may be used again after its branch is deleted. The hub writes every Workspace record itself, in marked commits on main: when a workspace is created (POST /branches with workspace, in the commit that writes the owner's grant, before the branch exists), when it is linked or unlinked, and when its branch is deleted (Closed). No client writes one through the document routes; the operator's put may, as a repair (ADR-0062). Every write to the branch an Active linked record names carries the link as Armature-Workspace-Link, and is otherwise refused: 409 held_elsewhere, or 409 not_linked when the record is unlinked (decision 3). A workspace's work leaves it only through a MergeRequest into its parent. API CONSTRAINTS: 0 (owner is a User), 27 (main only), 28 (at most one Active record names a branch), 29 (parent names no workspace), 30 (link and linkedAt come together; linkLabel only with a link; a Closed record is unlinked). See ADR-0065, ADR-0068, ADR-0072.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `branch` | `string` | required |
+| `owner` | `User` | required |
+| `parent` | `string` | required |
+| `link` | `string?` | optional |
+| `linkedAt` | `dateTime?` | optional |
+| `linkLabel` | `string?` | optional |
+| `status` | `WorkspaceStatus` | required |
+
+### `MergeRequest`
+_category: infrastructure · key: Random_
+
+> The record that someone asked for one branch to be merged into another, and of who decided (ADR-0072 decision 5). Recorded on main so that asking and deciding are commits with an author and a reason. Infrastructure, beside Grant and outside DesignRecord (ADR-0017): no note, finding or attestation can be about a merge request, and it is in no export slice; that is reconsidered when a client wants a note or a sign-off about one, and moving it is a schema change with its own ADR. Identity is Random, minted by the hub. The hub writes every MergeRequest itself, in marked commits on main, through the routes under /merge-requests; no client writes one through the document routes, and the operator's put may, as a repair (ADR-0062). Whether the request would merge cleanly (conflicts, broken rules, required checks) is computed at both heads each time someone reads it and never stored (ADR-0056). Every merge from a workspace, and every merge into main, is made through a request; the merge route refuses either made outside one (409 request_required). The merge commit carries the hub-written trailer Armature-Merge-Request naming this record. API CONSTRAINTS: 0 (openedBy and decidedBy are Users), 27 (main only), 31 (at most one Open request names a source and a target), 32 (the target is a branch, never a workspace), 33 (the decision comes whole: none on an Open request; decidedBy, decidedAt and mergeCommit on a Merged one; decidedBy and decidedAt on a Closed one). See ADR-0025, ADR-0068, ADR-0070, ADR-0072.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `source` | `string` | required |
+| `target` | `string` | required |
+| `openedBy` | `User` | required |
+| `message` | `string` | required |
+| `status` | `MergeRequestStatus` | required |
+| `decidedBy` | `User?` | optional |
+| `decidedAt` | `dateTime?` | optional |
+| `mergeCommit` | `string?` | optional |
 
 ### `DesignRecord`
 _category: infrastructure · **abstract**_
@@ -794,6 +849,21 @@ _category: relationship · extends `DesignRecord` · key: Hash(subject, fragment
 
 - `Required`
 - `Advisory`
+
+### `WorkspaceStatus`
+
+> Whether a Workspace record is in force (ADR-0072 decision 2). Active: the branch it names is a workspace, linked to one installation or unlinked. Closed: its branch was deleted; the record stays as the account of whose workspace it was, and the branch name may be used again by a new record. Deliberately two values and never a delete, as GrantStatus is.
+
+- `Active`
+- `Closed`
+
+### `MergeRequestStatus`
+
+> Where a MergeRequest stands (ADR-0072 decision 5). Open: asked for and not yet decided; its health is computed on every read, never stored. Merged: whoever may merge into the target merged it; the record names the merge commit. Closed: ended without a merge, by its opener, the source's owner or whoever may merge into the target. A decided request is never reopened; a new one is opened.
+
+- `Open`
+- `Merged`
+- `Closed`
 
 ### Objectives
 
