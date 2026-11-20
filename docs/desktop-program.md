@@ -159,8 +159,6 @@ Every refusal shows its words first, then a code and who refused it: your instan
 | `port_in_use` | Something else on this computer holds the port | The app opens on **Settings**: choose another port, save, and choose **Start the hub** |
 | `folder_locked` | Another copy of the app, or another hub, holds the workspaces folder | Quit the other one |
 
-A refusal that comes from the hub's own routes, and not from the app, may still word some of this the older way ("the remote", "deliver", "bring in") in its message; the code is the same.
-
 ## Removing the app
 
 Merge or push what you want to keep, turn off **Settings → Start at login** if you turned it on (on macOS and Linux the system's entry would otherwise outlive the app), then quit the app and remove it as you would any other (drag it to the Trash on macOS; **Settings → Apps** on Windows; delete the AppImage or `sudo apt remove armature` on Linux). Its data and its diagnostic log stay in the folders above until you delete them, and its keychain items (service `com.mossglenn.armature`) until you remove them in your system's keychain.

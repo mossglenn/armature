@@ -74,6 +74,13 @@ accepting the record. Not built.
 > brought, and outside the three surfaces the check reads: the messages of the hub's own workspace
 > routes, which a page shows as given, and the shell's diagnostic lines.
 
+> **Note (2026-11-19, night): the hub's workspace routes** word the refusals a person meets on a
+> page the same way ("The instance refused", "commits not pushed", "update from main", "merge"),
+> and the default message of an update is "Update from main". They say "the instance", the general
+> word, since a hub's message cannot know the instance's own name. The check reads those modules
+> as a fourth surface for the report only: the API's messages are read by tool authors too, for
+> whom "remote" is the right word, so what remains there fails nothing.
+
 It changes no schema and no route, and the hub never reads the vocabulary, so it needs no platform
 check, no client revision and no entry in `docs/client-changes.md` (§Decision 7). It adds a third
 package to the npm workspace built in Phase 7 (`docs/development-plan.md`, Phase 7: "tools-first
