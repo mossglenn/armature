@@ -28,7 +28,7 @@ Each workspace is a branch on the instance with your name on it. Nothing you do 
 
 ## Installing it
 
-Download the app from your instance's "Work from your own computer" page, or from [the releases](https://github.com/mossglenn/armature/releases): the newest `Armature desktop` release, the file for your system.
+Download the app from your instance's "Work from your own computer" page, or from [the releases](https://github.com/mossglenn/armature/releases): the newest `Armature Desktop` release (`Armature desktop` up to 0.1.4), the file for your system.
 
 | System | File | Notes |
 |---|---|---|

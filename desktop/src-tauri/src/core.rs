@@ -416,7 +416,7 @@ pub async fn start_hub(app: &AppHandle) {
         // written, so the kept value is still there at the next start and the paired tools work again.
         Err(err) => {
             core.keychain_unreadable.store(true, SeqCst);
-            say(app, "warn", &format!("The keychain could not be read ({err}); a pairing value is drawn for this start only and is not kept, so paired tools need it again until the keychain can be read"));
+            say(app, "warn", &format!("The keychain could not be read ({err}); a pairing key is made for this start only and is not kept, so paired tools need it again until the keychain can be read"));
         }
     }
     let reply = match ask(app, request).await {
@@ -433,7 +433,7 @@ pub async fn start_hub(app: &AppHandle) {
         *core.local_token.lock().unwrap() = Some(token.to_string());
         if !core.keychain_unreadable.load(SeqCst) {
             if let Err(err) = keychain::keep_local_token(token) {
-                say(app, "warn", &format!("The pairing value could not be kept in the keychain ({err}); a new one is drawn at the next start"));
+                say(app, "warn", &format!("The pairing key could not be kept in the keychain ({err}); a new one is made at the next start"));
             }
         }
     }
@@ -574,7 +574,7 @@ fn on_line(app: &AppHandle, line: &str) {
             match binding.map(|binding| keychain::keep_refresh_token(&binding.account(), &token)) {
                 Some(Ok(())) => {}
                 Some(Err(err)) => say(app, "warn", &format!("The credential could not be kept in the keychain ({err}); sign in again at the next start")),
-                None => say(app, "warn", "A credential arrived before the remote was known; it is not kept"),
+                None => say(app, "warn", "A sign-in arrived before the instance was known; it is not kept"),
             }
         }
         EventAction::OpenAndForward(url) => {
@@ -625,7 +625,7 @@ fn on_terminated(app: &AppHandle, code: Option<i32>) {
     // The system ending the session takes the core before the shell, which follows at once: that is
     // an end, logged as one. The state still says the core is gone, should the shell outlive it.
     let (level, message) = if ended_by_the_system(code, cfg!(windows)) {
-        ("info", "The system ended the core as the session ended (a logoff or a shutdown); open the program again to go on".to_string())
+        ("info", "The system ended the core as the session ended (a logoff or a shutdown); open the app again to go on".to_string())
     } else {
         ("error", format!("The core ended unexpectedly (exit code {}); start the hub again from the window", code.map_or("none".to_string(), |c| c.to_string())))
     };
@@ -669,7 +669,7 @@ pub fn stop_before_exit(app: &AppHandle) {
             std::thread::sleep(Duration::from_millis(25));
         }
     };
-    log("info", "The program is ending; the core stops the hub and releases the lock");
+    log("info", "The app is ending; the core stops the hub and releases the lock");
     if let Some(first) = core.actions_in_flight().into_iter().next() {
         let first = describe(&first);
         log("info", &format!("Waiting for {first} to finish before the hub stops"));

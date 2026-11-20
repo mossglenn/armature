@@ -109,8 +109,8 @@ jobs:
             echo "::error::The program's version differs between tauri.conf.json, package.json and Cargo.toml"; exit 1
           fi
           case "$GITHUB_REF_NAME" in
-            desktop-rehearsal-*) title="Armature desktop $conf, $GITHUB_REF_NAME" ;;
-            "desktop-v$conf") title="Armature desktop $conf" ;;
+            desktop-rehearsal-*) title="Armature Desktop $conf, $GITHUB_REF_NAME" ;;
+            "desktop-v$conf") title="Armature Desktop $conf" ;;
             *) echo "::error::The tag $GITHUB_REF_NAME does not name the program's version, $conf (desktop-v$conf)"; exit 1 ;;
           esac
           echo "version=$conf" >> "$GITHUB_OUTPUT"
@@ -253,9 +253,9 @@ jobs:
         run: |
           set -euo pipefail
           cat > notes.md <<'EOF'
-          The Armature desktop program: a workspace hub on your machine for your tools, connected to your instance. What it does, how to install it and what each message means: https://github.com/mossglenn/armature/blob/main/docs/desktop-program.md
+          Armature Desktop: a hub on your computer for your tools, connected to your instance. What it does, how to install it and what each message means: https://github.com/mossglenn/armature/blob/main/docs/desktop-program.md
 
-          These builds are not signed by Apple or Microsoft yet. On macOS, the first time, open it, then choose Open Anyway in System Settings, Privacy & Security; on Windows, choose More info, then Run anyway. The guide has the details. Updates are signed and checked before they install.
+          These builds are not signed by Apple or Microsoft yet. On macOS, the first time, open it, then choose Open Anyway in System Settings, Privacy & Security; on Windows, choose More info, then Run anyway. The guide has the details. New versions are signed and verified before they install.
           EOF
           node desktop/scripts/latest-json.mjs bundles "$TAG" "$VERSION" notes.md > latest.json
           cat latest.json
