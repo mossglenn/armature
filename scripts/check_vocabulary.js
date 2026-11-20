@@ -30,11 +30,12 @@
 // itself or the document's standing example of it (main); see EXAMPLES.
 //
 // Then it reads Armature's own person-facing strings (the desktop app's pages and
-// components, the desktop core's messages, the viewer's pages) with the package's
+// components, the desktop core's messages, the viewer's pages, and for the report
+// only the hub's workspace routes) with the package's
 // findAvoided and prints what it finds. A finding fails the check in a file listed
 // in BROUGHT, or under a folder listed there: the files brought to the vocabulary.
-// All three surfaces are, since 2026-11-19; a surface added later reports without
-// failing until it is reworded and listed. A string that keeps an avoided word on
+// The first three surfaces are, since 2026-11-19; a surface that is not listed
+// reports without failing. A string that keeps an avoided word on
 // purpose carries `vocabulary-allow: <word>` in a comment on its line or the line
 // above, with the reason beside it.
 //
@@ -109,6 +110,10 @@ export const SURFACES = [
   { name: "The desktop app's pages and components", dir: 'desktop/src', include: /\.tsx$/ },
   { name: "The desktop core's messages", dir: 'app/lib/desktop', include: /\.ts$/, exclude: /\.test\.ts$/ },
   { name: "The viewer's pages", dir: 'app/app', include: /\.tsx$/ },
+  // Not in BROUGHT: the API's messages are read by tool authors too, for whom "remote" and "ETag" are
+  // the right words. The refusals a person meets on a page were reworded on 2026-11-19; what this
+  // reports is the rest, a hub's messages about itself and about a proxy in front of an instance.
+  { name: "The hub's workspace routes, for the report only", dir: 'app/lib/api', include: /^app\/lib\/api\/(workspace\/[^/]+|routes\/workspace)\.ts$/, exclude: /\.test\.ts$/ },
 ];
 
 // ---------------------------------------------------------------------------

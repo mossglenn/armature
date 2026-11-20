@@ -248,7 +248,9 @@ test('a file is held to the vocabulary when it, or a folder above it, is listed'
   assert.equal(isBrought('app/app/layout.tsx', brought), false);
   assert.equal(isBrought('desktop/src-tauri/src/tray.rs', brought), false, 'a folder is matched whole, not as a prefix of a name');
   // Armature's own three surfaces are held since 2026-11-19.
-  for (const surface of SURFACES) assert.equal(isBrought(`${surface.dir}/x.tsx`), true, surface.dir);
+  for (const dir of ['desktop/src', 'app/lib/desktop', 'app/app']) assert.equal(isBrought(`${dir}/x.tsx`), true, dir);
+  // The hub's workspace routes are read for the report and fail nothing.
+  assert.equal(isBrought('app/lib/api/workspace/push.ts'), false);
 });
 
 test('every surface and every file held to the vocabulary exists', () => {
