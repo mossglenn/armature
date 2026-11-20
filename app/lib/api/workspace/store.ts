@@ -220,7 +220,7 @@ class WorkspaceStore implements Store {
 
 /** The remote could not be reached, so a commit this hub does not hold cannot be read: the plan's `remote_needed`. */
 const remoteNeeded = (hub: HubConfig, id: string) =>
-  new ApiError(404, 'unknown_ref', `This workspace hub does not hold commit ${id}, and the remote at ${hub.remote} could not be reached to read it`, {
+  new ApiError(404, 'unknown_ref', `This hub does not hold commit ${id}, and the instance at ${hub.remote} cannot be reached to read it`, {
     remote_needed: true,
     remote: hub.remote,
   });
@@ -259,7 +259,7 @@ function remoteReader(hub: HubConfig, as: string | undefined, commitId: string):
   const asLocal = (err: unknown): Error => {
     if (err instanceof HubError) {
       if (err.status === 404 && err.code === 'unknown_ref') return new StoreError(404, 'api:NotValidRefError', err.details, 'unknown_ref');
-      return new ApiError(err.status as ApiError['status'], err.code, `The remote refused: ${err.message}`, { ...err.details, remote: true });
+      return new ApiError(err.status as ApiError['status'], err.code, `The instance refused: ${err.message}`, { ...err.details, remote: true });
     }
     if (err instanceof TypeError || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError'))) return remoteNeeded(hub, commitId);
     return err instanceof Error ? err : new Error(String(err));

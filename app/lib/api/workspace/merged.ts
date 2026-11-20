@@ -57,14 +57,14 @@ const LOG_PAGE = 100;
 const RECOVERY_PAGES = 50;
 
 /** The message of the local commit holding what a merge changed. */
-const broughtInMessage = (record: WorkspaceRecord, merge: string) => `Bring in ${MIRROR_BRANCH} from ${record.remote}: remote commit ${merge}`;
+const broughtInMessage = (record: WorkspaceRecord, merge: string) => `Update from ${MIRROR_BRANCH} at ${record.remote}: the instance's commit ${merge}`;
 
 /** The documents the remote branch changed between two of its commits, read at the later one. */
 async function changedDocuments(hub: HubConfig, remote: ArmatureClient, branch: string, since: string, at: string): Promise<TerminusDocument[]> {
   const { changes } = (await fromRemote(hub, () => remote.branches.changes(branch, since))).data;
   const deleted = changes.filter((change) => change.op === 'delete');
   if (deleted.length) {
-    throw new Error(`The remote's merge deleted ${deleted.map((d) => d.id).join(', ')}, which no route of the API does; bringing it in is not supported`);
+    throw new Error(`The instance's merge deleted ${deleted.map((d) => d.id).join(', ')}, which no route of the API does; updating from it is not supported`);
   }
   const documents: TerminusDocument[] = [];
   for (const change of changes) {
@@ -114,7 +114,7 @@ export async function writeMerged(hub: HubConfig, records: WorkspaceRecords, rec
         throw new ApiError(
           409,
           'unpushed_commits',
-          `The remote merged ${MIRROR_BRANCH} into ${branch} (commit ${marker.merged}) and this hub did not finish reading it back; ${since.length} local commit(s) made since changed ${overlapping.length} document(s) that merge changed too, and no merge runs here to reconcile them`,
+          `The instance merged ${MIRROR_BRANCH} into ${branch} (commit ${marker.merged}) and this hub did not finish reading it back; ${since.length} commit(s) made here since changed ${overlapping.length} record(s) that merge changed too, and no merge runs here to reconcile them`,
           { unpushed: since.map((commit) => commit.id), merged: marker.merged, overlapping }
         );
       }
@@ -142,7 +142,7 @@ async function commitAfter(hub: HubConfig, remote: ArmatureClient, branch: strin
     const log = (await fromRemote(hub, () => remote.branches.log(branch, { start: page * LOG_PAGE, count: LOG_PAGE }))).data.commits;
     for (const commit of log) {
       if (commit.commit === since) return newer;
-      newer = { ...commit, commit: remoteCommitOf(hub, commit.commit, `the log of ${branch}`) };
+      newer = { ...commit, commit: remoteCommitOf(hub, commit.commit, `the history of ${branch}`) };
     }
     if (log.length < LOG_PAGE) return undefined;
   }

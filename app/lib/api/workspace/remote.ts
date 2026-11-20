@@ -80,7 +80,7 @@ async function withoutRedirect(remote: string, input: string | URL | Request, in
   throw new ApiError(
     502,
     'remote_error',
-    `The remote at ${remote} answered with a redirect${location ? ` to ${location}` : ''}, which this hub does not follow; set the remote's address to where it is served`,
+    `The instance at ${remote} answered with a redirect${location ? ` to ${location}` : ''}, which this hub does not follow; set the instance's address to where it is served`,
     { remote: true, reason: 'redirect', ...(location ? { location } : {}) }
   );
 }
@@ -102,12 +102,12 @@ export const COMMIT_ID = /^[a-z0-9]{1,97}$/;
  * the likely cause. A missing commit is the same code without a reason.
  */
 export function remoteCommit(hub: HubConfig, commit: string | undefined, what: string): string {
-  if (!commit) throw new ApiError(502, 'remote_error', `The remote answered ${what} without a commit`, { remote: true });
+  if (!commit) throw new ApiError(502, 'remote_error', `The instance answered ${what} without a commit`, { remote: true });
   if (!COMMIT_ID.test(commit)) {
     throw new ApiError(
       502,
       'remote_error',
-      `The remote at ${hub.remote} answered ${what} with an ETag that is not a commit identifier, ${JSON.stringify(commit)}; a proxy in front of it has altered the ETag (a compressing proxy appends the encoding's name), which would break If-Match and every push from here`,
+      `The instance at ${hub.remote} answered ${what} with an ETag that is not a commit identifier, ${JSON.stringify(commit)}; a proxy in front of it has altered the ETag (a compressing proxy appends the encoding's name), which would break If-Match and every push from here`,
       { remote: true, reason: 'etag_altered', commit }
     );
   }
@@ -123,7 +123,7 @@ export function remoteCommit(hub: HubConfig, commit: string | undefined, what: s
  */
 export function remoteCommitOf(hub: HubConfig, commit: unknown, what: string): string {
   if (typeof commit === 'string' && COMMIT_ID.test(commit)) return commit;
-  throw new ApiError(502, 'remote_error', `The remote at ${hub.remote} answered ${what} with ${JSON.stringify(commit) ?? 'nothing'} where a commit identifier belongs`, {
+  throw new ApiError(502, 'remote_error', `The instance at ${hub.remote} answered ${what} with ${JSON.stringify(commit) ?? 'nothing'} where a commit identifier belongs`, {
     remote: true,
     reason: 'not_a_commit',
   });
@@ -167,13 +167,13 @@ export async function fromRemote<T>(hub: HubConfig, call: () => Promise<T>): Pro
     return await call();
   } catch (err) {
     if (err instanceof HubError) {
-      throw new ApiError(err.status as ApiError['status'], err.code, `The remote refused: ${err.message}`, {
+      throw new ApiError(err.status as ApiError['status'], err.code, `The instance refused: ${err.message}`, {
         ...err.details,
         remote: true,
       });
     }
     if (err instanceof TypeError || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError'))) {
-      throw new ApiError(502, 'remote_unreachable', `The remote at ${hub.remote} could not be reached`, { remote: true });
+      throw new ApiError(502, 'remote_unreachable', `The instance at ${hub.remote} cannot be reached`, { remote: true });
     }
     throw err;
   }

@@ -124,10 +124,10 @@ function forReplay(doc: TerminusDocument, mapping: Map<string, string>): Terminu
  * happen through the API, so none is expected.
  */
 async function documentsOf(local: Store, commit: Commit, mapping: Map<string, string>): Promise<TerminusDocument[]> {
-  if (!commit.parent) throw new Error(`Local commit ${commit.id} has no parent`);
+  if (!commit.parent) throw new Error(`Commit ${commit.id}, made here, has no parent`);
   const changes = changesOf(await local.diff(commit.parent, commit.id));
   const deleted = changes.filter((change) => change.op === 'delete').map((change) => change.id);
-  if (deleted.length) throw new Error(`Local commit ${commit.id} deletes ${deleted.join(', ')}, which no route of the API does; a push cannot replay it`);
+  if (deleted.length) throw new Error(`Commit ${commit.id}, made here, deletes ${deleted.join(', ')}, which no route of the API does; a push cannot replay it`);
   const at = local.at({ commit: commit.id });
   const ids = changes.map((change) => change.id);
   const documents: TerminusDocument[] = [];
@@ -154,7 +154,7 @@ async function clientFor(hub: HubConfig, record: WorkspaceRecord, author: string
   const { document } = await storeOf(hub, { branch: MIRROR_BRANCH }).getDocument(author);
   const user = document as UserDocument;
   if (!isAgentExternalId(user.externalId)) {
-    throw new ApiError(403, 'forbidden', `Local commit by ${user.externalId}, not this workspace's owner, cannot be pushed as the owner`, {
+    throw new ApiError(403, 'forbidden', `A commit by ${user.externalId}, not this workspace's owner, cannot be pushed as the owner`, {
       permission: 'write',
       branch: record.branch,
       owner: record.ownerExternalId,
@@ -181,7 +181,7 @@ async function landedCommit(hub: HubConfig, client: ArmatureClient, branch: stri
     for (const commit of log.data.commits) {
       if (commit.commit === marker.ifMatch) return undefined;
       if (trailerValue(commit.message, WORKSPACE_COMMIT_TRAILER) !== marker.local) continue;
-      if (trailerValue(commit.message, WORKSPACE_PART_TRAILER) === expectedPart) return remoteCommitOf(hub, commit.commit, `the log of ${branch}`);
+      if (trailerValue(commit.message, WORKSPACE_PART_TRAILER) === expectedPart) return remoteCommitOf(hub, commit.commit, `the history of ${branch}`);
     }
     if (log.data.commits.length < LOG_PAGE) return undefined;
   }
@@ -288,7 +288,7 @@ export async function pushWorkspace(hub: HubConfig, records: WorkspaceRecords, r
         parts = splitIntoParts(await documentsOf(local, commit, mapping), limits);
       } catch (err) {
         if (!(err instanceof GroupTooLarge)) throw err;
-        throw new ApiError(422, 'group_too_large', `Local commit ${commit.id} cannot be pushed: ${err.message}`, { local: commit.id, documents: err.ids, pushed });
+        throw new ApiError(422, 'group_too_large', `Commit ${commit.id} cannot be pushed: ${err.message}`, { local: commit.id, documents: err.ids, pushed });
       }
       const landed = resume?.local === commit.id ? resume.landed : [];
       resume = undefined;

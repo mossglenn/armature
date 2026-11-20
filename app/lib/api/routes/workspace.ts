@@ -120,8 +120,8 @@ async function writeWarning(hub: HubConfig, remote: ArmatureClient, me: UserDocu
  * hides, and `lock` and `store.json` met the store's own files as a 500.
  */
 function reservedName(branch: string): string | undefined {
-  if (branch === MIRROR_BRANCH) return `${MIRROR_BRANCH} is this hub's mirror of the remote's, brought in by a workspace and never one itself`;
-  if (isSnapshotBranch(branch)) return "a name of that shape holds the remote's state at a commit here";
+  if (branch === MIRROR_BRANCH) return `${MIRROR_BRANCH} is this hub's copy of the instance's ${MIRROR_BRANCH}, which a workspace updates from, and never a workspace itself`;
+  if (isSnapshotBranch(branch)) return "a name of that shape holds the instance's state at a commit here";
   if (RESERVED_FILES.has(branch.toLowerCase())) return "the hub's folder keeps a file of that name";
   return undefined;
 }
@@ -161,7 +161,7 @@ function requireItsRemote(hub: HubConfig, record: WorkspaceRecord, action: strin
   throw new ApiError(
     409,
     'other_remote',
-    `${record.branch} was cloned from ${record.remote}, and this hub's remote is ${hub.remote}; connect to ${record.remote} to ${action} it, or remove it from this machine`,
+    `${record.branch} was created from the instance at ${record.remote}, and this hub is connected to ${hub.remote}; connect to ${record.remote} to ${action} it, or remove it from this computer`,
     { workspace: record.branch, clonedFrom: record.remote, remote: hub.remote }
   );
 }
@@ -334,7 +334,7 @@ workspace.post('/:name/push', async (c) => {
 workspace.post('/:name/bring-in', async (c) => {
   requireActionRoutes(c, 'bring-in');
   const record = await ownedWorkspace(c, 'bring-in');
-  requireItsRemote(hubOf(c), record, 'bring main into');
+  requireItsRemote(hubOf(c), record, 'update');
   // The body is optional: a bare POST brings main in with the default message.
   const body = await optionalJson(c);
   if (body.message !== undefined && typeof body.message !== 'string') throw new ApiError(400, 'bad_request', 'message must be a string');
@@ -344,7 +344,7 @@ workspace.post('/:name/bring-in', async (c) => {
 workspace.post('/:name/deliver', async (c) => {
   requireActionRoutes(c, 'deliver');
   const record = await ownedWorkspace(c, 'deliver');
-  requireItsRemote(hubOf(c), record, 'deliver');
+  requireItsRemote(hubOf(c), record, 'merge');
   const body = await readJson(c);
   if (typeof body.message !== 'string' || !body.message.trim()) throw new ApiError(400, 'message_required', 'A delivery needs a message saying why (ADR-0025)');
   if (body.deleteWorkspace !== undefined && typeof body.deleteWorkspace !== 'boolean') throw new ApiError(400, 'bad_request', 'deleteWorkspace must be a boolean');
@@ -363,7 +363,7 @@ workspace.delete('/:name', async (c) => {
   const raw = c.req.query('discard');
   const discard = raw === undefined ? undefined : Number(raw);
   if (discard !== undefined && (!/^[1-9]\d*$/.test(raw ?? '') || !Number.isSafeInteger(discard))) {
-    throw new ApiError(400, 'bad_query', 'discard is the number of local commits to give up, a whole number of at least 1');
+    throw new ApiError(400, 'bad_query', 'discard is the number of commits not pushed to give up, a whole number of at least 1');
   }
   return c.json(await removeWorkspace(hubOf(c), recordsOf(c), record, { discard }));
 });

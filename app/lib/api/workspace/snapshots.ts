@@ -157,14 +157,14 @@ export async function fetchRemoteLog(hub: HubConfig, remote: ArmatureClient, bra
   const seen = new Set<string>();
   for (let page = 0; page < LOG_PAGES; page++) {
     const entries = (await fromRemote(hub, () => remote.branches.log(branch, { start: page * LOG_PAGE, count: LOG_PAGE }))).data.commits;
-    if (!Array.isArray(entries)) throw new ApiError(502, 'remote_error', `The remote at ${hub.remote} answered the log of ${branch} without its commits`, { remote: true });
+    if (!Array.isArray(entries)) throw new ApiError(502, 'remote_error', `The instance at ${hub.remote} answered the history of ${branch} without its commits`, { remote: true });
     for (const c of entries) {
-      const commit = remoteCommitOf(hub, c?.commit, `the log of ${branch}`);
+      const commit = remoteCommitOf(hub, c?.commit, `the history of ${branch}`);
       if (seen.has(commit)) {
         throw new ApiError(
           502,
           'remote_error',
-          `The remote at ${hub.remote} answered the log of ${branch} with commit ${commit} twice; it, or a proxy in front of it, does not page the log (start is ignored)`,
+          `The instance at ${hub.remote} answered the history of ${branch} with commit ${commit} twice; it, or a proxy in front of it, does not page the history (start is ignored)`,
           { remote: true, reason: 'log_repeats', commit }
         );
       }
@@ -175,7 +175,7 @@ export async function fetchRemoteLog(hub: HubConfig, remote: ArmatureClient, bra
   }
   const from = commits.findIndex((c) => c.commit === base);
   if (from < 0) {
-    throw new ApiError(502, 'remote_error', `The remote at ${hub.remote} answered the log of ${branch} without ${base}, the commit this hub cloned it at`, {
+    throw new ApiError(502, 'remote_error', `The instance at ${hub.remote} answered the history of ${branch} without ${base}, the commit this hub cloned it at`, {
       remote: true,
       reason: 'log_without_base',
       base,

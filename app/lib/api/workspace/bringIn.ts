@@ -154,7 +154,7 @@ async function unpushedOf(hub: HubConfig, records: WorkspaceRecords, record: Wor
 async function requireNothingUnpushed(hub: HubConfig, records: WorkspaceRecords, record: WorkspaceRecord, action: string): Promise<{ lastRemote: string }> {
   const { unpushed, lastRemote } = await unpushedOf(hub, records, record);
   if (unpushed.length) {
-    throw new ApiError(409, 'unpushed_commits', `${unpushed.length} local commit(s) of ${record.branch} are not on the remote; push before ${action}`, { unpushed });
+    throw new ApiError(409, 'unpushed_commits', `${unpushed.length} commit(s) of ${record.branch} are not pushed; push before ${action}`, { unpushed });
   }
   return { lastRemote };
 }
@@ -169,7 +169,7 @@ async function bringInHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
   // A bring-in that did not finish is settled first (./merged.ts): what the remote merged then is written
   // here before anything is counted as unpushed or asked of the remote again.
   const settled = await settleBringIn(hub, records, record, remote);
-  const { lastRemote } = await requireNothingUnpushed(hub, records, record, 'bringing in main');
+  const { lastRemote } = await requireNothingUnpushed(hub, records, record, `updating from ${MIRROR_BRANCH}`);
   const local = localOf(hub, branch);
   const table = (await records.getPush(branch)) ?? emptyPushTable();
   // The marker, before the request: the remote may merge and its answer, or the read-back, not arrive.
@@ -178,7 +178,7 @@ async function bringInHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
   let merged: MergeResult;
   try {
     merged = (
-      await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: message ?? `Bring in ${MIRROR_BRANCH}`, ifMatch: lastRemote }))
+      await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: message ?? `Update from ${MIRROR_BRANCH}`, ifMatch: lastRemote }))
     ).data;
   } catch (err) {
     if (err instanceof ApiError && err.code !== 'remote_unreachable') {
@@ -226,7 +226,7 @@ async function deliverHeld(
   opts: DeliverOptions
 ): Promise<DeliverResult> {
   const { branch } = record;
-  await requireNothingUnpushed(hub, records, record, 'delivering');
+  await requireNothingUnpushed(hub, records, record, 'merging');
   const remote = await ownerClient(hub, record);
   // The remote's requirements, mirrored again for the tools here to read (ADR-0070 decision 8). The remote enforces
   // them on the merge below, and its refusals, `checks_pending` and `checks_failed` with their verdicts, come back as given.
@@ -234,7 +234,7 @@ async function deliverHeld(
   // main brought in cleanly: the merge of main into the workspace has nothing left to do.
   const preview: MergeResult = (await fromRemote(hub, () => remote.branches.merge(branch, { from: MIRROR_BRANCH, message: 'preview', dryRun: true }))).data;
   if (!preview.upToDate) {
-    throw new ApiError(409, 'bring_in_first', `${MIRROR_BRANCH} has moved since ${branch} last brought it in; bring it in, resolve what it reports, then deliver`, {
+    throw new ApiError(409, 'bring_in_first', `${MIRROR_BRANCH} has work ${branch} has not taken in; update from ${MIRROR_BRANCH}, resolve what it reports, then merge`, {
       conflicts: preview.conflicts ?? [],
       violations: preview.violations ?? [],
     });
@@ -286,8 +286,8 @@ async function discardHeld(hub: HubConfig, records: WorkspaceRecords, record: Wo
       409,
       'discard_mismatch',
       unpushed.length
-        ? `${branch} holds ${unpushed.length} local commit(s) that are not on the remote, not the ${stated} this discard names; nothing was removed`
-        : `${branch} holds no local commit that is not on the remote, so there is nothing to discard; remove it without discard`,
+        ? `${branch} holds ${unpushed.length} commit(s) that are not pushed, not the ${stated} this discard names; nothing was removed`
+        : `${branch} holds no commit that is not pushed, so there is nothing to discard; remove it without discard`,
       { unpushed, stated }
     );
   }
