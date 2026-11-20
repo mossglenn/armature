@@ -75,11 +75,16 @@ A tool's unit of work is usually a branch. CoQui, the first plugin, reviews item
 await hub.branches.create('review-round-3', { branch: 'main' });
 const { commit: head } = await hub.branches.head('review-round-3');
 // ... writes with { branch: 'review-round-3' } ...
-await hub.branches.merge('main', { message: 'Round 3 accepted', from: 'review-round-3' });
+const { data: request } = await hub.mergeRequests.open({ source: 'review-round-3', target: 'main', message: 'Round 3 accepted' });
+await hub.mergeRequests.merge(request['@id']);        // as whoever may merge into main
 await hub.branches.changes('review-round-3', head);   // what the round changed: [{ id, op }]
 ```
 
 A branch can be deleted only when another branch already holds its latest commit, and `main` never.
+
+**A merge into `main` goes through a merge request** (ADR-0072, since 2026-11-20). `branches.merge('main', …)` answers 409 `request_required`: a request records who asked and who decided, and its `message` becomes the merge commit's. Whoever may merge into the target opens one and merges it, as above; someone who may not opens it and leaves the merge to one who may, which is how a reviewer's work reaches `main` without the reviewer becoming a maintainer. `mergeRequests.get(id)` answers the record with its *health*: `mergeable`, `conflicts`, `violations`, `checks`, computed at both heads on the read and never stored, so read it again when the event feed reports a commit on either branch or on `main`. A dry run of any merge is still answered, and a merge between two branches other than `main` is still made directly.
+
+**Two kinds of branch.** A *branch* is on the hub, written by any client with the right, from anywhere. A *workspace* is a branch linked to one installation of the desktop app, which a `Workspace` record on `main` says, and only that installation's desktop hub writes it: your tool's write to one, from anywhere else, is 409 `held_elsewhere`. A tool that runs beside the desktop app writes to the desktop hub on the person's machine, which pushes; a tool that writes to the shared hub while connected works on branches of its own. `hub.workspaces.get(name)` answers the record, or 404 for a branch that is no workspace. Work leaves a workspace only through a merge request into its *parent*, the branch it was created from.
 
 ---
 
@@ -128,7 +133,7 @@ Every class declares a category in its schema metadata (`@metadata.armature.cate
 | `artifact` | `Course`, `Module`, `LearningObjective`, `AssessmentItem`, `Assessment`, `LearningActivity`, `Lesson`, `LearningNeed`, `LearningEvidence` (abstract), `LearningMetric`, `DescriptiveEvidence`, `LearningDataset`, `DesignNote`, `DesignFinding` | A primary design record with a `label`, an optional `description` and a `createdBy`. Writable. The tool chooses its identifier |
 | `relationship` | `NeedEvidenceLink`, `PrerequisiteRecord`, `ModuleObjective`, `ModuleActivityLink`, `ModuleLessonLink`, `LessonActivityLink`, `ItemInstance`, `ActivityItemLink`, `Attestation` | A junction document. Writable. Its identifier is derived from its key fields; a tool never supplies one |
 | `fragment` | `Fragment` (abstract), `TextFragment`, `ItemOption` | An embedded part of an item. Not a document; written as part of its item. Carries text, attachments or both |
-| `infrastructure` | `User`, `Grant`, `CheckRequirement`, `DesignRecord` (abstract), `ArmatureDocument` (abstract), `ExternalRef`, `Attachment` | Identity, authority, abstract roots, and the two embedded coordinates that point out of the graph (Section 7.12). `User` has its own routes; `Grant` is written through the document routes on `main` only (Section 10); `CheckRequirement` (ADR-0070, since 2026-11-12) lives on `main` the same way, names an agent as its `reporter`, and until its permission rows are built is written by the operator's `put` alone, so the document routes refuse it; the roots cannot be created; the coordinates are written as part of the record that carries them |
+| `infrastructure` | `User`, `Grant`, `CheckRequirement`, `Workspace`, `MergeRequest`, `DesignRecord` (abstract), `ArmatureDocument` (abstract), `ExternalRef`, `Attachment` | Identity, authority, abstract roots, and the two embedded coordinates that point out of the graph (Section 7.12). `User` has its own routes; `Grant` is written through the document routes on `main` only (Section 10); `Workspace` and `MergeRequest` (ADR-0072, since 2026-11-20) are the hub's own records on `main`, read like any document and written by no tool: a workspace is created with `branches.create(name, from, { workspace })` by a desktop hub, and a request through `hub.mergeRequests` (Section 3); `CheckRequirement` (ADR-0070, since 2026-11-12) lives on `main` the same way, names an agent as its `reporter`, and until its permission rows are built is written by the operator's `put` alone, so the document routes refuse it; the roots cannot be created; the coordinates are written as part of the record that carries them |
 
 ### 7. Patterns you will meet everywhere
 
@@ -382,7 +387,9 @@ Every refusal is a `HubError` with a stable `code`. A tool branches on the code,
 | 409 | `type_conflict` | The identifier is held by a document of another type (rule 12) | Mint a different identifier; identifiers are never reused across types |
 | 409 | `branch_exists`, `user_exists`, `unmerged_branch`, `branch_moved`, `registration_conflict` | Branch and user bookkeeping | Usually fine to treat as done (`branch_exists`, `user_exists`) or retry once |
 | 409 | `merge_conflict` (with `conflicts`), `no_common_ancestor` | Both sides changed the same field, or created the same identifier differently | Show the three values; nothing is resolved for you |
-| 409 | `bring_in_first` | A merge that required checks apply to, whose source does not yet hold the target's head (also a workspace hub's deliver before `main` is brought in) | Merge the target into the source, let the checks run on the result, then merge |
+| 409 | `request_required` (with `reason`), `request_open` (with `request`), `request_decided`, `nothing_to_merge` | A merge into `main` or from a workspace made directly; a second open request for a source and a target; a request already merged or closed; a request whose target holds everything on its source (since 2026-11-20) | Open a merge request and merge that; use the open one; open a new one; close it |
+| 409 | `held_elsewhere`, `not_linked` | A write to a workspace's branch from anywhere but the computer it is linked to, or to one linked to no computer (since 2026-11-20) | It is not your tool's to write: read it, and write a branch of your own or through the desktop hub |
+| 409 | `bring_in_first` | A merge that required checks apply to, whose source does not yet hold the target's design (commits that changed only the hub's own records on `main` do not count; since 2026-11-20) | Merge the target into the source, let the checks run on the result, then merge |
 | 409 | `checks_pending` (with `pending` and `checks`) | A required check has not reported on the source's head under the requirement's current settings: at a merge on a remote hub, or at a push on a workspace hub | Wait on the event feed and ask again; if the check service is down, someone who may merge can override with a reason |
 | 412 | `precondition_failed` | The branch moved since `ifMatch` | Re-read at the new head, reconcile, write again |
 | 422 | `invariant_violation` (with `violations`: `{ code, id?, index, field?, message }`) | The shape is right but a rule is broken: a reference to the wrong class, a duplicate position, a placement approved ahead of its item, an attestation naming a part that does not exist | Every violation at once, so fix them together. Codes are listed per rule in the [API reference](api.md#the-write-pipeline); most mean the tool's own state disagrees with the hub's |
@@ -539,11 +546,11 @@ for (;;) {
 
 Three details carry the weight. **`paramsHash` is copied from the hub.** The store reorders a JSON value's keys and prints `1.0` as `1`, so a hash of the text you sent would not match; the hub computes it over the value as stored and a run counts only under the requirement's current one. **A run counts only from the requirement's `reporter`**; a run by anyone else is kept and shown, and satisfies nothing. **Runs are held in memory**: on `hub.started` report again on the heads you care about, and on `requirement.changed` read the requirements again and report under the new hash. The finding itself, if a person should act on it, is still a `DesignFinding` a person records (Section 7.8); a run is a verdict about a commit, and reports about records, never about a person's work (ADR-0021).
 
-**The person: merge, and read the refusal.** Nothing changes in the call. What changes is that it can now be refused for three more reasons, each with `checks`, one verdict per requirement that applied.
+**The person: merge, and read the refusal.** The merge is the request's (Section 3; a merge between two branches other than `main` is `branches.merge`, refused the same ways). It can be refused for three more reasons, each with `checks`, one verdict per requirement that applied.
 
 ```ts
 try {
-  await hub.branches.merge('main', { message: 'Round 3 accepted', from: 'review-round-3' });
+  await hub.mergeRequests.merge(request['@id']);   // the request opened from 'review-round-3' into 'main' (Section 3)
 } catch (e) {
   if (!(e instanceof HubError)) throw e;
   if (e.code === 'bring_in_first') { /* merge main into the round's branch, let the linter run, try again */ }
@@ -588,5 +595,7 @@ What never changes for a tool's convenience: a stored derived value (Section 7.1
 - **Never write to `main` without `ifMatch`** when anything else might be writing there.
 - **Never compute a `paramsHash` yourself**; copy the one `checks.requirements()` returns.
 - **Never write a check run's verdict into the graph**, and never write the `Armature-Check` trailers; the merge route records what a merge relied on.
+- **Never write to someone's workspace**, and never send `Armature-Workspace-Link`: that header is a desktop hub's, and a branch it guards is one person's work on one computer. Read it; write a branch of your own, or through the desktop hub.
+- **Never store a merge request's health**; read it when the feed says something moved.
 - **Never summarize a person's work in a check run**; a run reports about records at a commit (ADR-0021).
 - **Never talk to TerminusDB.** Nothing a tool needs is behind the hub; what the hub does not offer is a question for the project, not a reason to go around it.
