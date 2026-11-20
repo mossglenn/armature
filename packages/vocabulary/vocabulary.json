@@ -1,6 +1,6 @@
 {
   "$schema": "./vocabulary.schema.json",
-  "revision": "2026-11-19",
+  "revision": "2026-11-20",
   "terms": [
     {
       "id": "instance",
@@ -274,9 +274,6 @@
         "people"
       ],
       "means": "A workspace belongs to one computer, and only the app on that computer may write it.",
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 5,
         "concept": "Link"
@@ -296,9 +293,6 @@
         "people"
       ],
       "means": "A workspace belongs to no computer and can be linked to one.",
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 5,
         "concept": "Link"
@@ -733,19 +727,6 @@
       }
     },
     {
-      "id": "action.clone-branch",
-      "name": "Clone a branch",
-      "status": "chosen",
-      "audience": [
-        "people"
-      ],
-      "means": "Copy an existing branch from the instance into a new workspace; the label stays until workspaces are linked (ADR-0072), when it goes.",
-      "row": {
-        "section": 7,
-        "concept": "Clone a branch"
-      }
-    },
-    {
       "id": "action.push",
       "name": "Push",
       "status": "chosen",
@@ -811,10 +792,6 @@
       "identifiers": [
         "POST /workspace/:name/deliver"
       ],
-      "until": {
-        "name": "Merge into main",
-        "adr": "0072"
-      },
       "row": {
         "section": 7,
         "concept": "Merge request"
@@ -862,10 +839,6 @@
       "identifiers": [
         "dryRun"
       ],
-      "until": {
-        "name": "Preview merge",
-        "adr": "0072"
-      },
       "row": {
         "section": 7,
         "concept": "Ask what a delivery would find"
@@ -911,9 +884,6 @@
         "people"
       ],
       "means": "Release a workspace from this computer once everything is pushed; it stays on the instance.",
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 7,
         "concept": "Unlink from this computer"
@@ -927,9 +897,6 @@
         "people"
       ],
       "means": "Take an unlinked workspace you own onto this computer.",
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 7,
         "concept": "Link to this computer"
@@ -943,9 +910,6 @@
         "people"
       ],
       "means": "The list a workspace is linked from.",
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 7,
         "concept": "Link to this computer"
@@ -959,9 +923,6 @@
         "people"
       ],
       "means": "Release a workspace linked to a computer that is lost or out of reach; its unpushed commits can no longer be pushed.",
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 7,
         "concept": "Unlink from elsewhere"
@@ -1416,9 +1377,6 @@
         "developers"
       ],
       "means": "A record that someone asked for a branch or a workspace to be merged into a branch.",
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 7,
         "concept": "Merge request"
@@ -1432,9 +1390,6 @@
         "people"
       ],
       "means": "End a merge request without merging it.",
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 7,
         "concept": "Merge request"
@@ -1519,9 +1474,6 @@
       "identifiers": [
         "held_elsewhere"
       ],
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 8,
         "concept": "Linked elsewhere, not linked"
@@ -1538,9 +1490,6 @@
       "identifiers": [
         "not_linked"
       ],
-      "until": {
-        "adr": "0072"
-      },
       "row": {
         "section": 8,
         "concept": "Linked elsewhere, not linked"
@@ -3431,7 +3380,7 @@
         "administrators",
         "developers"
       ],
-      "reason": "A merge request's status (ADR-0072, not built).",
+      "reason": "A merge request's status (ADR-0072).",
       "row": {
         "section": 7,
         "concept": "Merge request"
@@ -3445,7 +3394,7 @@
         "administrators",
         "developers"
       ],
-      "reason": "A merge request's status (ADR-0072, not built).",
+      "reason": "A merge request's status (ADR-0072).",
       "row": {
         "section": 7,
         "concept": "Merge request"
@@ -3459,7 +3408,7 @@
         "administrators",
         "developers"
       ],
-      "reason": "A merge request's status (ADR-0072, not built).",
+      "reason": "A merge request's status (ADR-0072).",
       "row": {
         "section": 7,
         "concept": "Merge request"
@@ -3471,7 +3420,7 @@
       "audience": [
         "people"
       ],
-      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "reason": "A value of a merge request's health (ADR-0072).",
       "row": {
         "section": 8,
         "concept": "A merge request's health"
@@ -3483,7 +3432,7 @@
       "audience": [
         "people"
       ],
-      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "reason": "A value of a merge request's health (ADR-0072).",
       "row": {
         "section": 8,
         "concept": "A merge request's health"
@@ -3495,7 +3444,7 @@
       "audience": [
         "people"
       ],
-      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "reason": "A value of a merge request's health (ADR-0072).",
       "row": {
         "section": 8,
         "concept": "A merge request's health"
@@ -3507,7 +3456,7 @@
       "audience": [
         "people"
       ],
-      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "reason": "A value of a merge request's health (ADR-0072).",
       "row": {
         "section": 8,
         "concept": "A merge request's health"
@@ -3519,7 +3468,7 @@
       "audience": [
         "people"
       ],
-      "reason": "A value of a merge request's health (ADR-0072, not built).",
+      "reason": "A value of a merge request's health (ADR-0072).",
       "row": {
         "section": 8,
         "concept": "A merge request's health"
@@ -4516,6 +4465,22 @@
       "use": "older-commits-kept-offline",
       "reason": "It is internal, surfaced only as the setting \"Older commits kept offline\".",
       "row": "§17"
+    },
+    {
+      "word": "clone",
+      "forms": [
+        "clones",
+        "cloned",
+        "cloning"
+      ],
+      "for": "state.linked",
+      "audience": [
+        "people"
+      ],
+      "use": "state.linked",
+      "allowed": "The API's and the plans' word for copying a branch into a workspace's folder.",
+      "reason": "Your own workspace on another computer is linked, not cloned, and a colleague's is read on the instance (ADR-0072).",
+      "row": "§7, Clone a branch"
     }
   ]
 }

@@ -184,7 +184,7 @@ workspace.post('/', async (c) => {
   const body = await readJson(c);
   const { name, from, link } = body;
   if (body.existing !== undefined) {
-    throw new ApiError(400, 'bad_request', 'A workspace is linked to this computer, not cloned: send link with the name of one of your workspaces that is linked to no computer (ADR-0072 decision 4)');
+    throw new ApiError(400, 'bad_request', 'A workspace of yours is linked to this computer, and no other branch is copied to it: send link with the name of one of your workspaces that is linked to no computer (ADR-0072 decision 4)');
   }
   if ((name === undefined) === (link === undefined)) {
     throw new ApiError(400, 'bad_request', 'Send either name (and optionally from) for a new workspace, or link to link one of your workspaces to this computer');
@@ -287,7 +287,7 @@ workspace.get('/:name/status', async (c) => {
   let remote: { head: string; moved: boolean; link: LinkState; linkLabel?: string; linkedAt?: string } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
   try {
     // A workspace cloned from another remote than this hub's has no remote to ask here (requireItsRemote).
-    if (record.remote !== (hub.remote ?? '')) throw new ApiError(409, 'other_remote', `${record.branch} was cloned from ${record.remote}`);
+    if (record.remote !== (hub.remote ?? '')) throw new ApiError(409, 'other_remote', `${record.branch} was created from the instance at ${record.remote}`);
     const client = remoteClient(hub, record.ownerExternalId);
     const summary = await fromRemote(hub, () => client.branches.head(record.branch));
     // The body's head, not the ETag: a proxy in front of the remote can alter the ETag (remoteCommit in workspace/remote.ts), the body it cannot.

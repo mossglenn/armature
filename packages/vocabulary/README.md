@@ -32,8 +32,8 @@ const label = terms['action.push'].name;                        // "Push"
 // A name with a placeholder: <parent>, <branch>, <instance> or <n>.
 terms['action.update-from-parent'].name.replace('<parent>', 'main');   // "Update from main"
 
-// A name that waits on something not yet built says what to show until then.
-terms['action.open-merge-request'].until;                       // { name: "Merge into main", adr: "0072" }
+// A name that waits on something not yet built says what it waits on, and what to show until then when there is something.
+terms['action.revert'].until;                                   // { when: "an undo is built" }
 
 // The words for a refusal code are a term whose identifiers name the code.
 terms['refusal.bring_in_first'].name;                           // "Update from <parent> first"
@@ -47,7 +47,7 @@ isReserved('Draft');     // held for item-status and for objective-state
 isReserved('banana');    // null: the word is free
 ```
 
-A term whose `until` has no `name` (`action.link-to-this-computer`) names something that does not exist yet: show nothing until the decision it waits on is built.
+A term whose `until` has no `name` (`action.revert`) names something that does not exist yet: show nothing until what it waits on is built. One with a `name` shows that name meanwhile, as "Merge into main" stood for "Open merge request into <branch>" until ADR-0072 was built on 2026-11-20.
 
 ### An allowed use
 
