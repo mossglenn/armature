@@ -16,10 +16,16 @@ test('the data is typed and keyed by id', () => {
   assert.match(vocabulary.revision, /^\d{4}-\d{2}-\d{2}$/);
 });
 
-test('a name that waits on ADR-0072 carries its name for until then', () => {
-  assert.deepEqual(terms['action.open-merge-request']?.until, { name: 'Merge into main', adr: '0072' });
-  // Without a name, the concept does not exist until then.
-  assert.deepEqual(terms['action.link-to-this-computer']?.until, { adr: '0072' });
+test('a name that waits on something says what, and the names ADR-0072 held back are held back no longer', () => {
+  // Without a name for until then, the concept does not exist yet.
+  assert.deepEqual(terms['action.revert']?.until, { when: 'an undo is built' });
+  // Built on 2026-11-20: the request and the link are shown by their own names, and no placeholder stands for them.
+  assert.equal(terms['action.open-merge-request']?.until, undefined);
+  assert.equal(terms['action.open-merge-request']?.name, 'Open merge request into <branch>');
+  assert.equal(terms['action.link-to-this-computer']?.until, undefined);
+  assert.equal(terms['action.clone-branch'], undefined);
+  assert.deepEqual(findAvoided('Clone a branch', 'people').map((finding) => finding.instead), ['linked']);
+  assert.deepEqual(findAvoided('Clone a branch', 'developers'), []);
 });
 
 test("a refusal code's words are a term whose identifiers name the code", () => {
@@ -96,9 +102,11 @@ test('isReserved("Draft") names the item status', () => {
   assert.deepEqual(isReserved('  draft '), held, 'case and spacing are ignored');
 });
 
-test("isReserved holds a term's name for that term, and its name for until then", () => {
+test("isReserved holds a term's name for that term; a name for until then is held only while the term waits", () => {
   assert.deepEqual(isReserved('workspace')?.map((reservation) => [reservation.for, reservation.source]), [['workspace', 'term']]);
-  assert.deepEqual(isReserved('Merge into main')?.map((reservation) => reservation.for), ['action.open-merge-request']);
+  // "Merge into main" stood for the merge request's opening until ADR-0072 was built; no term waits with a name now, so it is free.
+  assert.equal(isReserved('Merge into main'), null);
+  assert.deepEqual(isReserved('Open merge request into <branch>')?.map((reservation) => reservation.for), ['action.open-merge-request']);
 });
 
 test('isReserved answers null for a free word, so a plain test of it works', () => {

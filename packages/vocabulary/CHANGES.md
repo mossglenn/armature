@@ -4,6 +4,16 @@ Every change of a name or a status in `vocabulary.json`, newest first. Each entr
 
 A term's `id` is never renamed. When a name is chosen differently, its entry here gives the id, the old name and the new one, so a tool keyed on ids changes only the word.
 
+## 2026-11-20
+
+ADR-0072 is built: workspaces are linked to one computer, and work leaves a workspace by a merge request. The names that waited on it are the names now.
+
+- **Twelve terms lose `until`**, and are shown as they are named: `state.linked`, `state.unlinked`, `state.linked-elsewhere`, `state.not-linked`, `action.link-to-this-computer`, `action.unlink-from-this-computer`, `action.unlink-from-other-computer`, `heading.your-unlinked-workspaces`, `merge-request`, `action.close-merge-request`, and the two that had a name for until then: `action.open-merge-request` ("Open merge request into <branch>", no longer "Merge into main") and `merge-request.health` ("the merge request's health", no longer "Preview merge"). A tool that showed the placeholder shows the name; one that showed nothing for the ten without a placeholder may now show them.
+- **`action.clone-branch` is removed**, as its own description said it would be: "Clone a branch" was the label until workspaces were linked. The one removal of an id so far; nothing replaces it, since a workspace of your own on another computer is linked (`action.link-to-this-computer`) and a colleague's is read on the instance.
+- **`clone` is avoided for people** (with "clones", "cloned", "cloning"), for `state.linked`: 67 avoided words. It stays the API's and the plans' word.
+- **Reserved words:** the eight of a merge request's status and health no longer say "not built" in their `reason`.
+- `action.revert` and `action.start-over` keep their `until`: each waits on an action that is not built, and on no decision.
+
 ## 2026-11-19
 
 The first file, seeded from `docs/naming-vocabulary.md` as Amos decided it on 2026-11-18 (ADR-0073 decision 8 and its note of that day).
