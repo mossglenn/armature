@@ -86,6 +86,25 @@ the record. Not built.
 > **Not done here, and needed before the next release of the desktop app:** an instance's schema
 > is loaded before its hub is updated (`load_schema.js`), as for any schema change, and the app at
 > this revision reaches only a remote serving it; no version of the app carries this yet.
+>
+> **Note (2026-11-20, later, from the first rehearsal on two computers; Amos):** the rehearsal found
+> that a computer a workspace had just been unlinked from still pushed (nothing, so nothing was
+> refused) and merged the request it had opened earlier. The branch was never written, which is
+> what decision 3 protects, and the remote is unchanged: a request is merged by whoever may merge
+> into its target, from anywhere. Decided the same day:
+>
+> 13. **The desktop hub refuses its own actions on a workspace not linked to it**: push, the update
+>     from the parent, and opening, merging or closing the workspace's request answer 409
+>     `held_elsewhere` or `not_linked` from the hub itself, before anything else is judged, and the
+>     page does not offer them (`workspace/links.ts`, `requireLinkedHere`).
+> 14. **An action is offered only when it has something to do.** Push needs an unpushed commit. The
+>     update needs the parent to hold something the workspace lacks, which the status now says
+>     (`remote.parent`: `behind`, `documents`, `conflicts`), from the remote's dry run of that
+>     merge, whose answer gains `brings`: the documents it would bring, not counting the records
+>     kept on `main` alone, since `main` moves by those at every grant and request. The page hears
+>     of a change on the instance through the wait of item 11, now kept whether or not a request is
+>     open, so an update that became possible is offered without being asked for. This answers
+>     the first half of issue #170 for a tool.
 
 It changes the schema, adding two classes and two enums, so when it is built `schema.json`, the
 generated types and the appendix go in one commit (CLAUDE.md, "After schema changes"). It relies on no store behavior beyond what grants already rely on, so no platform check

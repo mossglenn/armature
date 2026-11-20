@@ -100,6 +100,15 @@ request.** The reference is [`api.md`](api.md), §§ "Workspaces",
 - **`DELETE /workspace/:name`** answers `link` (`cleared`, `kept`, `not_ours`) where the branch
   stays on the remote, which keeps it as an unlinked workspace; a discard clears the link when the
   remote answers.
+- **A computer a workspace is not linked to is refused by its own hub** (later the same day, from
+  the first rehearsal): `push`, `bring-in` and the three merge-request actions answer **409**
+  `held_elsewhere` or `not_linked` from the desktop hub, before anything else is judged, whether or
+  not anything waits to be pushed. A request is still merged on the remote by whoever may.
+- **The status says where the parent stands**: `remote.parent` is `{ branch, behind }`, with
+  `documents` and `conflicts` when behind, from the remote's dry run of the update. A tool can say
+  "the parent has moved" without asking for the update. On a remote hub, a dry run of a merge that
+  is not up to date carries `brings`, the documents it would bring, records kept on `main` alone
+  not counted.
 - **A workspace held before this** is recorded on the remote, linked to this installation, at the
   hub's first contact after the update. Until then it works as it did, unprotected.
 - **A hub needs an installation identifier**: the desktop app keeps one in its settings;
