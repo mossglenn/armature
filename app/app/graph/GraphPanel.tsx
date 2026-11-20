@@ -192,7 +192,7 @@ export function GraphPanel({
             <h3 className="mt-1 mb-3 text-[15px] font-semibold tracking-tight">{e.label}</h3>
             <Fields doc={doc} byId={byId} onSelect={onSelect} skip={new Set(['@type', 'label'])} />
             <p className="mt-4 border-t border-zinc-200 pt-3 text-[12px] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-              A relationship is a document in the store (ADR-0003), drawn as an edge; its rationale is here.
+              A relationship is a record of its own (ADR-0003), drawn as an edge; its rationale is here.
             </p>
           </>
         ) : (
@@ -235,11 +235,12 @@ export function GraphPanel({
 
       <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Actions">
         <button type="button" className={ACTION} onClick={onFrame} title="Zoom to this record and what is lit (z)">Frame</button>
+        {/* A record deleted on the instance: vocabulary-allow: delete */}
         {ghost && <span className="rounded bg-zinc-100 px-2 py-0.5 text-[12px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" title="Drawn as it was at the commit the Changes lens counts from">Deleted since</span>}
         {!isRoot && !ghost && <Link href={`${focusPath(n)}${branchQuery}`} className={ACTION} title="This record's neighborhood on its own page">Focus</Link>}
         {n.cls === 'Module' && <Link href={`/coverage/${encodeURIComponent(localPart(n.id))}${branchQuery}`} className={ACTION}>Coverage View</Link>}
         {asOf && atRef !== asOf && <a href={refHref(asOf, n.id)} className={ACTION} title={`The design at commit ${asOf.slice(0, 12)}, as this record met it (ADR-0057)`}>View as of {asOf.slice(0, 8)}</a>}
-        {rawUrl && !ghost && <a href={rawUrl(n.id)} className={ACTION} title="The document on the hub">Raw JSON</a>}
+        {rawUrl && !ghost && <a href={rawUrl(n.id)} className={ACTION} title="This record as the API returns it">Raw JSON</a>}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label="Related records">
@@ -250,7 +251,7 @@ export function GraphPanel({
               key={r.direction}
               type="button"
               disabled={off}
-              title={off ? 'The trace read walks from metrics, datasets, assessments, items, objectives, needs, evidence, modules and activities' : r.title}
+              title={off ? 'The trace read walks from measurements, datasets, assessments, items, objectives, needs, evidence, modules and activities' : r.title}
               onClick={() => onRelation({ ...relation, direction: r.direction })}
               className={`rounded px-2 py-0.5 text-[12px] disabled:opacity-40 ${relation.direction === r.direction ? 'bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}
             >
@@ -283,7 +284,7 @@ export function GraphPanel({
       <div className="mt-3">
         {tab === 'fields' && <Fields doc={n.doc} byId={byId} onSelect={onSelect} />}
         {tab === 'about' && (aboutIt.length === 0 ? (
-          <p className="text-[12px] text-zinc-500 dark:text-zinc-400">No note, finding or attestation is about this record.</p>
+          <p className="text-[12px] text-zinc-500 dark:text-zinc-400">No design note, finding or sign-off is about this record.</p>
         ) : (
           <ul className="space-y-3">
             {aboutIt.map((d) => {
@@ -327,7 +328,7 @@ export function GraphPanel({
       </div>
 
       <p className="mt-4 border-t border-zinc-200 pt-3 text-[12px] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        Fields, annotations and references come from the export in this page; attestation state, history and the trace are the hub&apos;s reads for the selected record.
+        Fields, annotations and references come from the export in this page; sign-offs, history and the trace are the hub&apos;s reads for the selected record.
       </p>
     </aside>
   );

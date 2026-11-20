@@ -51,9 +51,10 @@ const VERDICT_CLASS: Record<Verdict, string> = {
   FullyAssessed: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200',
   OverAssessed: 'bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200',
 };
+// Which coverage figure an item counts in. "Delivered" is the figure's name, in the course-delivery sense: vocabulary-allow: deliver
 const ELIGIBILITY_LABEL = {
-  delivered: 'counts now',
-  projected: 'counts once approved',
+  delivered: 'in Delivered', // vocabulary-allow: deliver
+  projected: 'in Projected only',
   none: 'retired',
 } as const;
 
@@ -253,7 +254,8 @@ export default async function CoveragePage({
       </header>
 
       <section className="mb-10 grid gap-4 sm:grid-cols-2">
-        <Counts title="Coverage (approved items, approved placements)" counts={data.summary.coverage} />
+        {/* vocabulary-allow: deliver */}
+        <Counts title="Delivered (approved items, approved placements)" counts={data.summary.coverage} />
         <Counts title="Projected (everything not retired)" counts={data.summary.projected} />
       </section>
 
@@ -321,7 +323,7 @@ export default async function CoveragePage({
       </section>
 
       <footer className="border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        Verdicts are computed by the hub at read time from the placements and items as they stand; nothing is stored (ADR-0056).
+        Levels are computed by the hub at read time from the placements and items as they stand; nothing is stored (ADR-0056).
         Item statistics are imported measurements, one per administration, newest first (ADR-0058).
         {publicHub && (
           <>
