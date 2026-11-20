@@ -128,7 +128,7 @@ cd app && npm run dev
 
 Then open <http://localhost:3000> for the viewer, or call the API directly at <http://localhost:3100/api/v1>.
 
-An instance runs store, hub and viewer as three containers on two private networks (a client beside it joins the front one and never reaches the store), all on loopback (a hosted one adds Caddy for HTTPS with `--profile public`); the schema and seed are still loaded from the machine as in step 4, or through the `operator` service on a server without Node. [Running an instance](docs/deployment.md) is the administrator's guide:
+An instance runs store, hub and viewer as three containers on two private networks (a client beside it joins the front one and never reaches the store), all on loopback (a hosted one adds Caddy for HTTPS with `--profile public`); the schema and seed are still loaded from the machine as in step 4, or through the `operator` service on a server without Node. [Running an instance](docs/deployment.md) is the operator's guide:
 
 ```bash
 cd docker && docker compose --profile hub up -d --build && cd ..
