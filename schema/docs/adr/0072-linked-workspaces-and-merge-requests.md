@@ -10,7 +10,8 @@
 > deliberate steps. A *merge request* records that someone asked for one branch to be merged into
 > another. Whether it would merge cleanly (conflicts, broken rules, required checks) is worked out
 > each time someone looks, never stored. Whoever may merge into the target merges it or closes it.
-> Accepted on 19 November 2026, its five open questions decided as recommended; nothing is built.
+> Accepted on 19 November 2026, its five open questions decided as recommended, and built on
+> 20 November 2026 (the Status says what was chosen in building).
 
 ## Status
 
@@ -21,6 +22,70 @@ one move; and option 1 of three for asking for a merge (a request recorded on `m
 computed on read). The vocabulary is `docs/naming-vocabulary.md`. Amos decided the five open
 questions on 2026-11-19, one by one and each as recommended (decisions 2, 5 and 7), before accepting
 the record. Not built.
+
+> **Note (2026-11-20): built**, whole, on `phase-8/adr-0072`: the schema's two classes and two
+> enums; constraints 27 to 33 (25 and 26 are held for ADR-0071); the link check; the routes under
+> `/workspaces` and `/merge-requests`; `request_required` on the merge route; the trailer; the
+> desktop hub's linking, unlinking and merge requests in place of delivery; the desktop app's core,
+> pages and stand-in core; the upgrade of workspaces held before; client revision 2026-11-20. The
+> tests of §Verification are `workspaces.test.ts` (the remote), `cycle.test.ts` and
+> `workspace.test.ts` (the desktop hub), `core.test.ts` (the app's core) and `desktop/e2e` (its
+> pages). The twelve names of `@armature/vocabulary` that waited on this lost their `until`.
+>
+> **Chosen in building, each without a separate decision and open to overrule:**
+>
+> 1. **An unlinked workspace's branch is deleted without a link**, by whoever may delete it.
+>    Decision 3 lists the deletion among the writes that carry the link, and says a write to an
+>    unlinked workspace is 409 `not_linked`. Held to the letter, a workspace linked nowhere whose
+>    owner is gone could never be removed by anyone: an administrator may unlink but not link. A
+>    linked workspace's branch is still deleted only from its own computer.
+> 2. **The merge gate's first step ignores commits that changed only the records kept on `main`
+>    alone** (ADR-0070's note of this date). Opening a request is a commit on `main`, as is every
+>    workspace made, linked or unlinked, so a gated request into `main` was refused
+>    `bring_in_first` at the moment it was opened.
+> 3. **`POST /workspaces`** records an existing branch as a workspace, for its Owner: the route
+>    decision 7's upgrade needs, which the ADR implies and does not name. `GET /workspaces/:branch`
+>    is open to any resolved identity, since the record is how a client tells a workspace from a
+>    branch; the list is the owner's, or an administrator's, as decision 6 has it, though the
+>    records are readable on `main` through the document routes either way.
+> 4. **The routes under `/workspaces` sit under `armature/branches`**, with the setting
+>    `workspaces: "linked"`, since the ADR adds one capability and it is the merge requests'. The
+>    desktop hub's `armature/workspace` gains `link` and `delivery`.
+> 5. **Deleting a branch closes the open requests that name it**, as source or target, in the
+>    commit that revokes its grants and closes its workspace record: a request about a branch that
+>    is gone can be neither merged nor read. A read of one whose branch went some other way says
+>    `missing`.
+> 6. **A request found merged and still `Open` is recorded from the trailer.** The merge and the
+>    record's change are two commits, the merge first; should the hub stop between them, merging
+>    the request again finds the merge commit by `Armature-Merge-Request` in the target's newest
+>    hundred commits and records it, making no second merge. With no such commit and nothing to
+>    merge, 409 `nothing_to_merge`. Decision 5's "in the same marked commit on `main`" is read as
+>    the record's own commit, since a merge is the store's and carries no document write.
+> 7. **A dry run's conflicts and violations are kept by the two heads**, in memory, since a
+>    request's health is read on every look and the check behind it takes seconds; the required
+>    checks' verdicts are never kept. A merge that commits checks again.
+> 8. **`openedBy` and `decidedBy` are the person** when an agent acts for one, as a grant's owner
+>    is; the commit's author is the agent. The record has no time of opening beyond its commit's,
+>    since the table of decision 5 has none.
+> 9. **Codes added beyond those the ADR names:** 409 `request_decided`, `nothing_to_merge`,
+>    `branch_gone`, `target_is_workspace`, `workspace_exists`; 400 `bad_link`; on a desktop hub 409
+>    `no_request` and `workspace_here`; and the violation codes of constraints 28 to 33.
+> 10. **On the desktop hub**, `POST /workspace` takes `{ link }` where it took `{ existing }`, which
+>     is refused; "unlink from the other computer" is `POST /workspace/:name/unlink` with
+>     `{ elsewhere: true }`, for a workspace the hub does not hold; a removal that leaves the branch
+>     on the remote, and a discard, clear the link only when it is this installation's; the hub's
+>     own records are left out of what an update reads back, as no export slice holds them; and a
+>     host other than the desktop app keeps its installation's identifier in the hub's folder
+>     (`installation.json`) unless `ARMATURE_INSTALLATION` gives one.
+> 11. **"Kept current from the event feed"** (decision 7) is the core's `awaitRemoteChange`: a wait
+>     on the remote's `GET /events`, after which the page reads the request again when an event
+>     names the workspace's branch, its parent or `main`.
+> 12. **The computer's name** (`linkLabel`) is the setting `computerName`, read at each link; a
+>     workspace already linked keeps the label it was linked with.
+>
+> **Not done here, and needed before the next release of the desktop app:** an instance's schema
+> is loaded before its hub is updated (`load_schema.js`), as for any schema change, and the app at
+> this revision reaches only a remote serving it; no version of the app carries this yet.
 
 It changes the schema, adding two classes and two enums, so when it is built `schema.json`, the
 generated types and the appendix go in one commit (CLAUDE.md, "After schema changes"). It relies on no store behavior beyond what grants already rely on, so no platform check

@@ -256,6 +256,16 @@ the hub". It does not touch item 18's first half, the path read.
 > **Note (2026-11-19):** ADR-0072 is accepted, not yet built. Decision 6's merge gate runs when a
 > merge request is merged, as on any merge, with the same refusals and overrides; a request's
 > health reports the gate's answer on every read, storing none of it (ADR-0072 decision 5).
+>
+> **Note (2026-11-20):** built, with one change to decision 6's first step, made in building ADR-0072
+> and open to overrule. The step asked that the source hold the target's head. Opening a merge request
+> is a commit on `main`, as is every workspace made, linked or unlinked, so a gated request into
+> `main` was refused `bring_in_first` at the moment it was opened, and again whenever anyone else did
+> any of those. The step now counts only commits on the target that changed something other than the
+> classes kept on `main` alone (`Grant`, `CheckRequirement`, `User`, `Workspace`, `MergeRequest`): no
+> branch writes those, so they can neither conflict with one nor change what a check judged at its
+> head. Design on the target that the source lacks is refused as before (`designMoved` in
+> `routes/branches.ts`; `workspaces.test.ts` holds both).
 
 ## Context
 
