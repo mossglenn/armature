@@ -7,6 +7,7 @@ import { activeRequirements, grantOwner, revokeGrantsNaming } from '../grants';
 import { blocks, checkTrailers, parseOverrides, requirementsFor, runsOf, verdictsOf, type CheckVerdict } from '../checks';
 import { MERGE_REQUEST_TRAILER, withTrailer } from '../trailers';
 import { requirePermission } from '../authorization';
+import { livesOnMain } from '../classes';
 import { commitMessage, registry, REGISTRY_BRANCH, resolveUser, type ResolvedUser } from '../identity';
 import { activeWorkspace, closed, newWorkspace, parseLink, requireLink, type WorkspaceDocument } from '../workspaces';
 import { isInternalBranch } from '../role';
@@ -317,7 +318,10 @@ async function conflictsOf(witnesses: ConflictWitness[], atSource: Store): Promi
  *
  * 1. the source must hold the target's head, so that the merged state is the
  *    source's head and a verdict on that commit is a verdict on what lands;
- *    409 `bring_in_first` otherwise, before the check is run;
+ *    409 `bring_in_first` otherwise, before the check is run. Commits on the
+ *    target that changed only records kept on `main` alone do not count
+ *    (`designMoved`, since 2026-11-20): no branch writes those, and a merge
+ *    request's own opening is one;
  * 2. a run by the requirement's reporter under its current `paramsHash` must
  *    exist at the source's head; 409 `checks_pending` otherwise;
  * 3. that run must conclude `pass` or `neutral`; 422 `checks_failed`
@@ -402,8 +406,9 @@ export async function mergeBranches(c: Context, who: ResolvedUser, opts: MergeOp
     await requirePermission(c, who, { permission: 'override_check', branch: targetName, check, locked: named.some((r) => r.locked === true) });
   }
   const verdicts = (): CheckVerdict[] => verdictsOf(required, runsOf(c), sourceHead.id, overrides);
-  // Step 1: a verdict on the source's head is a verdict on what lands only when the source holds the target's head.
-  const bringInFirst = base !== targetHead.id && required.some((r) => r.level !== 'Advisory' && !overrides.has(String(r.check)));
+  // Step 1: a verdict on the source's head is a verdict on what lands only when the source holds the target's design.
+  const gated = required.some((r) => r.level !== 'Advisory' && !overrides.has(String(r.check)));
+  const bringInFirst = gated && base !== targetHead.id && (await designMoved(target, base, targetHead.id));
   if (bringInFirst && !dryRun) {
     throw new ApiError(409, 'bring_in_first', `${targetName} has commits ${sourceName} does not hold, and this merge has required checks; merge ${targetName} into ${sourceName}, let the checks run on the result, then merge`, {
       ...sides,
@@ -481,6 +486,18 @@ export async function mergeBranches(c: Context, who: ResolvedUser, opts: MergeOp
     throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflictsNow.length} field(s)`, { ...sides, conflicts: conflictsNow });
   }
   return { etag: result.commit, body: { commit: result.commit, ...sides, upToDate: false, ...(found.length ? { checks: found } : {}) } };
+}
+
+/**
+ * Whether the target holds design the source lacks: whether anything changed between `base` and the target's head
+ * other than the records kept on `main` alone (`livesOnMain`: grants, requirements, users, workspace records,
+ * merge requests). A branch never writes those, so they cannot conflict with it or change what a check judged
+ * at its head; and since 2026-11-20 opening a merge request is itself a commit on `main`, so a gate that asked
+ * the source to hold `main`'s head would refuse every request into `main` at the moment it was opened
+ * (decided in building ADR-0072; ADR-0070's note of 2026-11-20).
+ */
+async function designMoved(target: Store, base: string, head: string): Promise<boolean> {
+  return changesOf(await target.diff(base, head)).some((change) => !livesOnMain(change.id.split('/')[0]));
 }
 
 /**

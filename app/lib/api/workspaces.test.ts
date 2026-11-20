@@ -676,6 +676,40 @@ describe('merge requests (decision 5)', () => {
     expect(message).toContain(`Armature-Merge-Request: ${opened.body['@id']}`);
   });
 
+  it("a gated request into main is not refused for main's own records: opening it is a commit on main, and only design the source lacks asks for an update first", async () => {
+    const REPORTER = `agent:test/ws-gate-main-${stamp}`;
+    const registered = await json(await on('POST', '/users', { message: 'A check service', user: { displayName: 'Gate on main', externalId: REPORTER } }));
+    const LINT = `ws/lint-main-${stamp}`;
+    const PARAMS = { severity: 'error' };
+    // Bound to this test's sources by their prefix, so no other merge into main in this file is gated.
+    const prefix = `test-ws-${stamp}-gm`;
+    const requirement = { '@type': 'CheckRequirement', check: LINT, fromPrefix: prefix, reporter: registered.body.id, level: 'Required', locked: false, params: PARAMS, status: 'Active' };
+    expect((await on('POST', '/documents?branch=main', { message: 'Lint before these reach main', documents: [requirement] })).status).toBe(200);
+    const branch = `${prefix}-1`;
+    expect((await on('POST', '/branches', { name: branch })).status).toBe(201);
+    const written = await json(await on('PUT', `/documents/LearningNeed/${branch}?branch=${branch}`, need('Gated into main')));
+    const report = (commit: string) => as(REPORTER)('POST', '/checks/runs', { check: LINT, branch, commit, conclusion: 'pass', paramsHash: paramsHash(PARAMS) });
+    expect((await report(written.body.commit)).status).toBe(201);
+    // Opening the request moves main, by the request's own record; so does a workspace someone else makes meanwhile.
+    const opened = await open(branch, 'main');
+    await workspace(reviewer, THERE);
+    const id = idOf(opened.body);
+    expect((await json(await on('GET', `/merge-requests/${id}`))).body.health).toMatchObject({ mergeable: true, bringInFirst: false });
+    // Design on main that the source lacks is another matter: a verdict at the source's head is no longer a verdict on what would land.
+    expect((await on('PUT', `/documents/LearningNeed/gm-main-${stamp}?branch=main`, need('Design on main'))).status).toBe(200);
+    expect((await json(await on('GET', `/merge-requests/${id}`))).body.health).toMatchObject({ mergeable: false, bringInFirst: true });
+    const refused = await json(await on('POST', `/merge-requests/${id}/merge`));
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toBe('bring_in_first');
+    // The source takes main in, the check runs on the result, and the request merges.
+    const updated = await json(await on('POST', `/branches/${branch}/merge`, { message: 'Update from main', from: 'main' }));
+    expect(updated.status).toBe(200);
+    expect((await report(updated.body.commit)).status).toBe(201);
+    const merged = await json(await on('POST', `/merge-requests/${id}/merge`));
+    expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+    expect(merged.body.checks).toEqual([expect.objectContaining({ check: LINT, conclusion: 'pass', satisfied: true })]);
+  });
+
   it('the trailer is the hub\'s: a client\'s message carrying it is refused on any write', async () => {
     const { branch } = await work();
     const res = await json(await on('PUT', `/documents/LearningNeed/forged-${stamp}?branch=${branch}`, { message: 'A write\n\nArmature-Merge-Request: MergeRequest/x', document: { label: 'x', rationale: 'r' } }));
