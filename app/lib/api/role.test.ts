@@ -20,11 +20,11 @@ const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': 'demo-des
 const MALFORMED = JSON.stringify({ message: '' });
 
 const send = (hub: typeof app, method: string, path: string, body: string | undefined = MALFORMED) =>
-  hub.request(`/api/v1${path}`, { method, headers: HEADERS, body: method === 'DELETE' ? undefined : body });
+  hub.request(`/api/v1${path}`, { method, headers: HEADERS, body: method === 'DELETE' || method === 'GET' ? undefined : body });
 const error = async (res: Response) => (await res.json()).error;
 
 /** A route-table path with its parameter filled. */
-const concrete = (path: string) => path.replace(':name', 'role-probe-no-such-branch');
+const concrete = (path: string) => path.replace(/:(name|branch|id)/, 'role-probe-no-such-branch');
 
 describe('the routes only a remote serves (plan §9)', () => {
   it('a workspace hub answers each remote_only, before identity is asked', async () => {
@@ -32,7 +32,7 @@ describe('the routes only a remote serves (plan §9)', () => {
       const res = await workspace.request(`/api/v1${concrete(route.path)}`, {
         method: route.method,
         headers: { 'Content-Type': 'application/json', 'Armature-Local-Token': TOKEN },
-        body: route.method === 'DELETE' ? undefined : MALFORMED,
+        body: route.method === 'DELETE' || route.method === 'GET' ? undefined : MALFORMED,
       });
       expect(res.status, `${route.method} ${route.path}`).toBe(400);
       expect(await error(res), `${route.method} ${route.path}`).toBe('remote_only');
@@ -86,7 +86,15 @@ describe('GET /discover names the role and its refusals (plan §3)', () => {
       'POST /api/v1/branches',
       'POST /api/v1/branches/:name/merge',
       'DELETE /api/v1/branches/:name',
+      // The records that make a branch a workspace are the remote's (ADR-0072); the merge-request routes are
+      // under a capability a workspace hub does not list at all.
+      'GET /api/v1/workspaces',
+      'POST /api/v1/workspaces',
+      'GET /api/v1/workspaces/:branch',
+      'POST /api/v1/workspaces/:branch/link',
+      'POST /api/v1/workspaces/:branch/unlink',
     ]);
+    expect(body.capabilities).not.toHaveProperty('armature/merge-requests');
     expect(body.capabilities['armature/users'].remoteOnly).toEqual(['POST /api/v1/users']);
     expect(body.capabilities['armature/documents'].readOnlyBranches).toEqual(['main']);
   });

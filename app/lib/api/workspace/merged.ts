@@ -3,14 +3,15 @@ import type { ClassName } from '@armature/types';
 import type { HubConfig } from '../config';
 import { ApiError } from '../errors';
 import { canonical } from '../fragments';
-import { MIRROR_BRANCH } from '../role';
 import { changesOf, createOperatorStore, isRecord, type Commit, type OperatorStore, type TerminusDocument } from '../store';
 import { localCommitsSince } from './commits';
-import type { BringingIn, PushedCommit, PushTable, WorkspaceRecord, WorkspaceRecords } from './records';
+import { parentOf, type BringingIn, type PushedCommit, type PushTable, type WorkspaceRecord, type WorkspaceRecords } from './records';
 import { fromRemote, remoteCommitOf } from './remote';
 
 /**
- * The remote's merge of `main` into a workspace, written here: the documents
+ * The remote's merge of a workspace's parent into it (`main`, until a
+ * workspace is made from another branch; ADR-0065 decision 6, later change of
+ * 2026-11-18), written here: the documents
  * it changed as one local commit the push table maps to the merge commit
  * (`./bringIn.ts` says why outside the pipeline), and the settling of a
  * bring-in that did not finish.
@@ -57,11 +58,19 @@ const LOG_PAGE = 100;
 const RECOVERY_PAGES = 50;
 
 /** The message of the local commit holding what a merge changed. */
-const broughtInMessage = (record: WorkspaceRecord, merge: string) => `Update from ${MIRROR_BRANCH} at ${record.remote}: the instance's commit ${merge}`;
+const broughtInMessage = (record: WorkspaceRecord, merge: string) => `Update from ${parentOf(record)} at ${record.remote}: the instance's commit ${merge}`;
+
+/**
+ * The hub's own records on `main`, which a merge from a parent carries into a branch as `main` held them
+ * (ADR-0072): the remote's alone, as the clone leaves them out (no export slice holds them), so they are
+ * not written here either.
+ */
+const REMOTE_ONLY_CLASSES = new Set(['Workspace', 'MergeRequest']);
 
 /** The documents the remote branch changed between two of its commits, read at the later one. */
 async function changedDocuments(hub: HubConfig, remote: ArmatureClient, branch: string, since: string, at: string): Promise<TerminusDocument[]> {
-  const { changes } = (await fromRemote(hub, () => remote.branches.changes(branch, since))).data;
+  const all = (await fromRemote(hub, () => remote.branches.changes(branch, since))).data.changes;
+  const changes = all.filter((change) => !REMOTE_ONLY_CLASSES.has(typeOf(change.id)));
   const deleted = changes.filter((change) => change.op === 'delete');
   if (deleted.length) {
     throw new Error(`The instance's merge deleted ${deleted.map((d) => d.id).join(', ')}, which no route of the API does; updating from it is not supported`);
@@ -114,7 +123,7 @@ export async function writeMerged(hub: HubConfig, records: WorkspaceRecords, rec
         throw new ApiError(
           409,
           'unpushed_commits',
-          `The instance merged ${MIRROR_BRANCH} into ${branch} (commit ${marker.merged}) and this hub did not finish reading it back; ${since.length} commit(s) made here since changed ${overlapping.length} record(s) that merge changed too, and no merge runs here to reconcile them`,
+          `The instance merged ${parentOf(record)} into ${branch} (commit ${marker.merged}) and this hub did not finish reading it back; ${since.length} commit(s) made here since changed ${overlapping.length} record(s) that merge changed too, and no merge runs here to reconcile them`,
           { unpushed: since.map((commit) => commit.id), merged: marker.merged, overlapping }
         );
       }

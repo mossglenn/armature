@@ -104,6 +104,7 @@ beforeAll(async () => {
     store: () => localConfig,
     localToken: TOKEN,
     actionRoutes: true,
+    installation: { id: 'a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7' },
     remoteToken: () => currentToken(),
   };
   hubConfig = config;
@@ -117,7 +118,7 @@ afterAll(async () => {
 
 describe('a workspace hub reaching a remote under oidc with the owner’s token', () => {
   it('refuses the remote without a token: a remote under oidc takes no Armature-User', async () => {
-    const bare = createApp(() => ({ ...configFromEnv(), role: 'workspace', remote: remote.url, workspaces: memoryRecords(), store: () => localStoreConfig(), localToken: TOKEN, actionRoutes: true }));
+    const bare = createApp(() => ({ ...configFromEnv(), role: 'workspace', remote: remote.url, workspaces: memoryRecords(), store: () => localStoreConfig(), localToken: TOKEN, actionRoutes: true, installation: { id: 'a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7' } }));
     const res = await json(
       await bare.request('/api/v1/workspace', {
         method: 'POST',

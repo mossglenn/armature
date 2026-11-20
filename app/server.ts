@@ -56,10 +56,17 @@
  *                                                            decision 7; lib/api/localToken.ts); the desktop program
  *                                                            sets it for the tools it launches; drawn and printed
  *                                                            once at start when unset
- *   ARMATURE_WORKSPACE_ACTIONS                               `routes` serves push, bring in and deliver as routes
- *                                                            on a workspace hub, for the compose profile until the
- *                                                            desktop program exists; unset, they are the program's
- *                                                            own and the routes are refused
+ *   ARMATURE_WORKSPACE_ACTIONS                               `routes` serves push, bring in, the merge request's
+ *                                                            actions, unlink and remove as routes on a workspace
+ *                                                            hub, for the compose profile and the suites; unset,
+ *                                                            they are the desktop app's own and the routes are
+ *                                                            refused
+ *   ARMATURE_INSTALLATION, ARMATURE_INSTALLATION_NAME         a workspace hub's installation (ADR-0072 decision 2):
+ *                                                            the identifier its workspaces are linked to on the
+ *                                                            remote, and a name for this computer shown where a
+ *                                                            workspace is linked elsewhere. Unset, an identifier
+ *                                                            is drawn once and kept in the folder as
+ *                                                            installation.json, and no name is sent
  *   PORT                                                     default 3100 (Next.js dev uses 3000)
  *   HOST                                                     default 127.0.0.1: the `header` resolver trusts
  *                                                            the caller, so the hub stays on this machine
@@ -80,7 +87,7 @@ import { loadEnvLocal } from './lib/envLocal';
 import { drawLocalToken } from './lib/api/localToken';
 import { openFileStore } from './lib/api/filestore/store';
 import { bindRefusal, startHub } from './lib/hub';
-import { folderFiles, folderRecords, lockFolder } from './lib/workspaceFolder';
+import { folderFiles, folderInstallation, folderRecords, lockFolder } from './lib/workspaceFolder';
 
 async function main(): Promise<void> {
   loadEnvLocal();
@@ -103,11 +110,13 @@ async function main(): Promise<void> {
   // A workspace hub's pairing key (ADR-0065 decision 7): the program's when it set
   // ARMATURE_LOCAL_TOKEN, else drawn here and shown once, so the hub is never open.
   const drawn = config.role === 'workspace' && !config.localToken ? drawLocalToken() : undefined;
+  // A workspace hub's installation (ADR-0072 decision 2): the environment's, else the folder's own, drawn once and kept.
+  const installation = dir ? (config.installation ?? { id: await folderInstallation(dir) }) : undefined;
   const hub = await startHub({
     port,
     hostname,
     ...(dir
-      ? { config: { ...config, workspaces: folderRecords(dir), ...(files ? { store: () => ({ files }) } : {}), ...(drawn ? { localToken: drawn } : {}) } }
+      ? { config: { ...config, workspaces: folderRecords(dir), installation, ...(files ? { store: () => ({ files }) } : {}), ...(drawn ? { localToken: drawn } : {}) } }
       : {}),
   });
   console.log(`Armature hub (revision ${hub.revision}) listening at ${hub.url}/api/v1`);
@@ -124,7 +133,8 @@ async function main(): Promise<void> {
   if (config.role === 'workspace') {
     console.log(`  role: workspace, of the remote at ${config.remote}; records in ${config.workspaceDir}`);
     console.log(`  remote identity: ${config.remoteToken ? 'the bearer token in ARMATURE_REMOTE_TOKEN (a remote under oidc)' : "the owner's identifier in Armature-User (a remote under header)"}`);
-    console.log(`  actions: push, bring in and deliver ${config.actionRoutes ? 'served as routes (ARMATURE_WORKSPACE_ACTIONS=routes)' : "are the program's own; the routes are refused"}`);
+    console.log(`  actions: push, bring in, merge requests, unlink and remove ${config.actionRoutes ? 'served as routes (ARMATURE_WORKSPACE_ACTIONS=routes)' : "are the desktop app's own; the routes are refused"}`);
+    console.log(`  installation: ${config.installation ? 'from ARMATURE_INSTALLATION' : 'kept in installation.json in the folder'}; its workspaces are linked to it on the remote (ADR-0072)`);
     if (drawn) console.log(`  pairing key: ${drawn}\n  (drawn at this start; every write carries it as Armature-Local-Token. Set ARMATURE_LOCAL_TOKEN to choose it)`);
     else console.log('  pairing key: from ARMATURE_LOCAL_TOKEN; every write carries it as Armature-Local-Token');
   }

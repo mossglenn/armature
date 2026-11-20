@@ -23,7 +23,7 @@ export interface WorkspaceRecord {
   /** The owner's `User` id on the remote, and their external identifier. */
   owner: string;
   ownerExternalId: string;
-  /** The remote branch the workspace started from, when the workspace hub created the branch; absent when an existing branch was cloned. */
+  /** The workspace's parent (`parentOf`): the remote branch it was created from, as the hub that created it knew or the remote's `Workspace` record says; absent on a clone older than 2026-11-20 of a branch someone else made. */
   from?: string;
   /** The remote commit cloned: the base. */
   base: string;
@@ -33,7 +33,16 @@ export interface WorkspaceRecord {
   clonedAt: string;
   /** The remote's connection profile at the clone (since 2026-11-06), which this hub's `GET /discover` repeats; absent when the remote published none or the clone is older. */
   instance?: InstanceProfile;
+  /**
+   * The installation the remote's `Workspace` record links this workspace to, as this hub last knew: its own
+   * (ADR-0072 decision 2; since 2026-11-20). Absent on a workspace made before then until the hub has
+   * recorded it on the remote, at its first contact after the upgrade (decision 7; `./links.ts`).
+   */
+  link?: string;
 }
+
+/** A workspace's parent: the branch it was created from, takes updates from and sends its merge requests to; `main` for one made before parents were kept. */
+export const parentOf = (record: Pick<WorkspaceRecord, 'from'>): string => record.from ?? 'main';
 
 /** One local commit replayed on the remote (ADR-0065 decision 5). */
 export interface PushedCommit {

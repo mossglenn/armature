@@ -155,7 +155,9 @@ describe('Grant documents (ADR-0068 decision 2; constraints 21 and 22)', () => {
     );
     expect(res.status).toBe(200);
     const relay = await json(await on('GET', `/documents/${res.body.ids[0]}`));
-    expect(relay.body).toMatchObject({ role: 'Relay', relayedUsers: [REVIEWER], expires });
+    expect(relay.body).toMatchObject({ role: 'Relay', relayedUsers: [REVIEWER] });
+    // The instant, not the text: the store writes a time without the trailing zeros of its fraction, so one in ten differs as a string.
+    expect(Date.parse(relay.body.expires)).toBe(Date.parse(expires));
   });
 
   it('keeps a grant out of the design record hierarchy: not a note subject (constraint 0), the holder a User', async () => {
@@ -322,7 +324,16 @@ describe('permissions (ADR-0068 decisions 4, 7 and 8)', () => {
     expect((await on('POST', '/branches', { name: M })).status).toBe(201);
     expect((await on('PUT', `/documents/LearningNeed/tm-${stamp}?branch=${M}`, need('tm'))).status).toBe(200);
     await forbidden(await reviewer('POST', '/branches/main/merge', { message: 'Deliver', from: M }), { permission: 'merge', branch: 'main' });
-    const merged = await json(await on('POST', '/branches/main/merge', { message: 'Deliver', from: M }));
+    // Since 2026-11-20 a merge into main is made through a merge request (ADR-0072 decision 5): the designer's
+    // direct merge is refused for that, not for want of authority, and the request is theirs to merge and not the reviewer's.
+    const direct = await json(await on('POST', '/branches/main/merge', { message: 'Deliver', from: M }));
+    expect(direct.status).toBe(409);
+    expect(direct.body.error).toBe('request_required');
+    const opened = await json(await on('POST', '/merge-requests', { source: M, target: 'main', message: 'Deliver' }));
+    expect(opened.status).toBe(201);
+    const id = opened.body['@id'].split('/')[1];
+    await forbidden(await reviewer('POST', `/merge-requests/${id}/merge`), { permission: 'merge', branch: 'main' });
+    const merged = await json(await on('POST', `/merge-requests/${id}/merge`));
     expect(merged.status).toBe(200);
     expect(merged.body.upToDate).toBe(false);
   });

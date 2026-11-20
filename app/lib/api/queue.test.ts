@@ -106,6 +106,7 @@ describe('every commit of the API is in the write queue', () => {
       outside: "A merge's check: a transient branch made, merged into and deleted (three calls), which no one else writes (the note of 2026-11-06)",
     },
     'workspace/bringIn.ts': { calls: 1, queue: 'workspace/bringIn.ts' },
+    'workspace/requests.ts': { calls: 1, queue: 'workspace/requests.ts' },
     'workspace/merged.ts': { calls: 1, queue: 'workspace/bringIn.ts', outside: 'None: a bring-in holds the queue, and push takes it to settle one (workspace/push.ts)' },
     'workspace/clone.ts': { calls: 7, queue: 'routes/workspace.ts', outside: 'None: the mirror takes its own queue here, the clone runs in the one its route holds' },
     'workspace/snapshots.ts': { calls: 3, queue: 'workspace/snapshots.ts' },
