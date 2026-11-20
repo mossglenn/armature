@@ -265,9 +265,19 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('whoAmI')).toMatchObject({ status: 200, body: { person: { externalId: DESIGNER } } });
   });
 
-  it('creates a workspace, which a tool writes to through the hub with the pairing key', async () => {
+  it('creates a workspace linked to this installation, which a tool writes to through the hub with the pairing key', async () => {
+    // The installation's identifier was drawn at the first start and is kept; no request sets it. The computer's
+    // name is the person's to give, read at each link with no restart (ADR-0072 decision 2).
+    const kept = (await driver.ask('settings')).body!.settings as { installation: string; computerName?: string };
+    expect(kept.installation).toMatch(/^[0-9a-f]{32}$/);
+    expect(kept.computerName).toBeUndefined();
+    expect(await driver.ask('settings', { set: { installation: 'a'.repeat(32) } })).toMatchObject({ status: 400, body: { error: 'bad_settings', field: 'installation' } });
+    expect(await driver.ask('settings', { set: { computerName: 'two\nlines' } })).toMatchObject({ status: 400, body: { field: 'computerName' } });
+    expect(await driver.ask('settings', { set: { computerName: 'Studio Mac' } })).toMatchObject({ status: 200, body: { restart: false } });
     const created = await driver.ask('create', { name: NAME });
-    expect(created).toMatchObject({ status: 201, body: { branch: WS, ownerExternalId: DESIGNER, remote: headerRemote.url } });
+    expect(created).toMatchObject({ status: 201, body: { branch: WS, ownerExternalId: DESIGNER, remote: headerRemote.url, from: 'main', link: kept.installation } });
+    const there = (await createClient({ baseUrl: headerRemote.url, user: DESIGNER }).workspaces.get(WS)).data;
+    expect(there).toMatchObject({ link: kept.installation, linkLabel: 'Studio Mac', parent: 'main' });
     expect((await driver.ask('workspaces')).body).toEqual([expect.objectContaining({ branch: WS })]);
     // What the pairing page shows a tool must send beside the value: under header, the identifier set.
     expect(await driver.ask('toolIdentity')).toMatchObject({ status: 200, body: { user: DESIGNER } });
@@ -280,19 +290,34 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('commits', { workspace: WS, count: 0 })).toMatchObject({ status: 400, body: { field: 'count' } });
   });
 
-  it('pushes, brings in main after it moved and delivers, each as the route answers', async () => {
+  it('pushes, updates from main after it moved, opens a merge request, waits on the instance for a change and merges, each as the route answers', async () => {
     const pushed = await driver.ask('push', { workspace: WS });
     expect(pushed.status, JSON.stringify(pushed.body)).toBe(200);
     expect(pushed.body!.pushed).toHaveLength(1);
 
     const onMain = createClient({ baseUrl: headerRemote.url, user: DESIGNER });
     await onMain.documents.put('LearningNeed', THEIRS, { message: 'Work on main', document: { label: 'theirs', rationale: 'r' } });
-    expect(await driver.ask('deliver', { workspace: WS, message: 'Too early' })).toMatchObject({ status: 409, body: { error: 'bring_in_first' } });
     expect(await driver.ask('bringIn', { workspace: WS, message: 'Catch up' })).toMatchObject({ status: 200, body: { upToDate: false } });
-    expect(await driver.ask('deliver', { workspace: WS })).toMatchObject({ status: 400, body: { error: 'message_required' } });
-    const delivered = await driver.ask('deliver', { workspace: WS, message: 'Deliver from the desktop' });
-    expect(delivered.status, JSON.stringify(delivered.body)).toBe(200);
+    expect(await driver.ask('mergeRequest', { workspace: WS })).toMatchObject({ status: 200, body: { workspace: WS, parent: 'main', mayMerge: true } });
+    expect(await driver.ask('openMergeRequest', { workspace: WS })).toMatchObject({ status: 400, body: { error: 'message_required' } });
+    const opened = await driver.ask('openMergeRequest', { workspace: WS, message: 'Merge from the desktop' });
+    expect(opened).toMatchObject({ status: 201, body: { request: { source: WS, target: 'main', status: 'Open' }, health: { mergeable: true } } });
+
+    // The wait on the instance's event feed (ADR-0072 decision 7): a cursor at the present, then held until a commit
+    // lands on the workspace's branch, its parent or main.
+    const now = await driver.ask('awaitRemoteChange', { workspace: WS });
+    expect(now).toMatchObject({ status: 200, body: { changed: false, cursor: expect.any(String) } });
+    const waiting = driver.ask('awaitRemoteChange', { workspace: WS, cursor: now.body!.cursor });
+    await onMain.documents.put('LearningNeed', `desktop-later-${stamp}`, { message: 'More on main', document: { label: 'later', rationale: 'r' } });
+    expect(await waiting).toMatchObject({ status: 200, body: { changed: true, cursor: expect.any(String) } });
+    expect(await driver.ask('awaitRemoteChange', { workspace: WS, cursor: 'no-such-cursor' })).toMatchObject({ status: 200, body: { changed: true } });
+
+    const merged = await driver.ask('mergeMergeRequest', { workspace: WS });
+    expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+    expect(merged.body).toMatchObject({ deleted: false, request: { status: 'Merged' } });
     expect((await onMain.documents.get('LearningNeed', MINE.split('/')[1])).data.label).toBe('mine');
+    expect(await driver.ask('mergeRequest', { workspace: WS })).toMatchObject({ status: 200, body: { parent: 'main' } });
+    expect((await driver.ask('mergeRequest', { workspace: WS })).body).not.toHaveProperty('request');
   });
 
   it("gates its push by the owner's checks.json, counting a run a tool posted to the served hub: one hub in two apps (ADR-0070 decision 8)", async () => {
@@ -436,13 +461,16 @@ describe('the cycle through the protocol, against a remote under header', () => 
     // Removed: refused while the pairing test's write is unpushed; pushed, the branch has work main lacks, so the remote keeps it.
     expect(await driver.ask('remove', { workspace: WS })).toMatchObject({ status: 409, body: { error: 'unpushed_commits' } });
     expect((await driver.ask('push', { workspace: WS })).status).toBe(200);
-    expect(await driver.ask('remove', { workspace: WS })).toMatchObject({ status: 200, body: { remote: 'kept', reason: 'unmerged' } });
+    // Kept on the instance, it stays as a workspace linked to no computer (ADR-0072 decision 4), and is listed as one.
+    expect(await driver.ask('remove', { workspace: WS })).toMatchObject({ status: 200, body: { remote: 'kept', reason: 'unmerged', link: 'cleared' } });
     expect((await driver.ask('workspaces')).body).toEqual([]);
+    expect((await driver.ask('elsewhere')).body).toMatchObject({ unlinked: [{ branch: WS, parent: 'main' }], linkedElsewhere: [] });
 
-    // A discard (since 2026-11-12): the branch cloned again, a commit that will not be pushed, and the
-    // removal that names it. The count is checked, nothing is asked of the remote, and the folder keeps
-    // what the workspace held under _discarded/.
-    expect((await driver.ask('clone', { branch: WS })).status).toBe(201);
+    // A discard (since 2026-11-12): the workspace linked again, a commit that will not be pushed, and the
+    // removal that names it. The count is checked, the instance's branch is left as it is, and the folder
+    // keeps what the workspace held under _discarded/.
+    expect((await driver.ask('link', { workspace: WS })).status).toBe(201);
+    expect((await driver.ask('elsewhere')).body).toMatchObject({ unlinked: [] });
     const written = await tool('PUT', `/documents/LearningNeed/discarded-${stamp}?branch=${WS}`, { message: 'Work that will not be pushed', document: { label: 'discarded', rationale: 'r' } });
     expect(written.status).toBe(200);
     for (const discard of [0, 1.5, '1']) {
@@ -450,7 +478,7 @@ describe('the cycle through the protocol, against a remote under header', () => 
     }
     expect(await driver.ask('remove', { workspace: WS, discard: 2 })).toMatchObject({ status: 409, body: { error: 'discard_mismatch', stated: 2 } });
     const discarded = await driver.ask('remove', { workspace: WS, discard: 1 });
-    expect(discarded).toMatchObject({ status: 200, body: { remote: 'untouched' } });
+    expect(discarded).toMatchObject({ status: 200, body: { remote: 'untouched', link: 'cleared' } });
     const { setAside, commits } = (discarded.body as { discarded: { setAside: string; commits: string[] } }).discarded;
     expect(commits).toHaveLength(1);
     const aside = join(dataDir, 'workspaces', ...setAside.split('/'));
@@ -817,7 +845,16 @@ describe('the fake core answers as the core does (the 2026-11-09 review’s D8)'
     ['status', { workspace: 'nothing-here' }],
     ['push', { workspace: 'nothing-here' }],
     ['bringIn', { workspace: 'nothing-here' }],
-    ['deliver', { workspace: 'nothing-here', message: 'x' }],
+    ['link', { workspace: 'nothing-here' }],
+    ['unlink', { workspace: 'nothing-here' }],
+    ['unlink', { workspace: 'nothing-here', elsewhere: true }],
+    ['unlink', { workspace: 'nothing-here', elsewhere: 'yes' }],
+    ['mergeRequest', { workspace: 'nothing-here' }],
+    ['openMergeRequest', { workspace: 'nothing-here', message: 'x' }],
+    ['mergeMergeRequest', { workspace: 'nothing-here' }],
+    ['closeMergeRequest', { workspace: 'nothing-here' }],
+    ['awaitRemoteChange', { workspace: 'nothing-here' }],
+    ['elsewhere'],
     ['remove', { workspace: 'nothing-here' }],
     ['create', { name: 'not a name' }],
     ['create', { name: NAME }],
@@ -829,11 +866,26 @@ describe('the fake core answers as the core does (the 2026-11-09 review’s D8)'
     ['push', { workspace: WS }],
     ['push', { workspace: WS, overrides: 'yes' }],
     ['bringIn', { workspace: WS }],
-    ['deliver', { workspace: WS }],
-    ['deliver', { workspace: WS, message: 'Alike', dryRun: true }],
+    // The merge request, from none to opened, read, waited on and closed; a workspace with nothing of its own has nothing to merge.
+    ['mergeRequest', { workspace: WS }],
+    ['openMergeRequest', { workspace: WS }],
+    ['closeMergeRequest', { workspace: WS }],
+    ['mergeMergeRequest', { workspace: WS }],
+    ['openMergeRequest', { workspace: WS, message: 'Alike' }],
+    ['openMergeRequest', { workspace: WS, message: 'Again' }],
+    ['mergeRequest', { workspace: WS }],
+    ['awaitRemoteChange', { workspace: WS }],
+    ['mergeMergeRequest', { workspace: WS, overrides: 'yes' }],
+    ['mergeMergeRequest', { workspace: WS }],
+    ['closeMergeRequest', { workspace: WS }],
     ['remove', { workspace: WS, discard: 0 }],
     ['remove', { workspace: WS, discard: 3 }],
-    ['deliver', { workspace: WS, message: 'Alike' }],
+    // Unlinked from this computer it is on the instance alone; linked again, it is here; removed, its branch goes, since main has all of it.
+    ['unlink', { workspace: WS, elsewhere: true }],
+    ['unlink', { workspace: WS }],
+    ['status', { workspace: WS }],
+    ['link', { workspace: WS }],
+    ['link', { workspace: WS }],
     ['remove', { workspace: WS }],
     ['status', { workspace: WS }],
     ['no-such-request'],

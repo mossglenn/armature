@@ -8,7 +8,8 @@ import { verbatim } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import type { Backend } from '@/lib/backend';
 import { useInstance } from '@/lib/instance';
-import type { Refusal, WorkspaceRecord, WorkspaceStatus, WorkspaceWarning } from '@/lib/types';
+import { terms } from '@armature/vocabulary';
+import type { Elsewhere, Refusal, RemoteWorkspace, WorkspaceRecord, WorkspaceStatus } from '@/lib/types';
 import { useRequest } from '@/lib/useShell';
 
 /** A workspace's status in a few words: what is waiting to be pushed, and whether its branch on the instance was changed elsewhere. */
@@ -19,15 +20,28 @@ export function StatusBadges({ status }: { status?: WorkspaceStatus }) {
     <span className="flex flex-wrap gap-1">
       {status.unpushed > 0 ? <Badge variant="warning">{status.unpushed} to push</Badge> : <Badge variant="success">All pushed</Badge>}
       {'reachable' in remote ? <Badge variant="muted">{remote.reason === 'signed_out' ? 'Signed out' : 'Offline'}</Badge> : remote.moved ? <Badge variant="outline">Changed elsewhere</Badge> : null}
+      {/* Where the instance links the workspace, when not here (ADR-0072 decision 3): this computer's push will be refused. */}
+      {!('reachable' in remote) && remote.link === 'elsewhere' && <Badge variant="warning">{terms['state.linked-elsewhere']?.name}</Badge>}
+      {!('reachable' in remote) && remote.link === 'unlinked' && <Badge variant="warning">{terms['state.not-linked']?.name}</Badge>}
     </span>
   );
 }
 
+/** Where and since when a workspace is linked, as the instance's record says: the name its owner gave that computer, if any. */
+export const linkedWhere = (linkLabel?: string, linkedAt?: string): string =>
+  `${linkLabel ? `to “${linkLabel}”` : 'to another computer'}${linkedAt ? ` since ${new Date(linkedAt).toLocaleDateString()}` : ''}`;
+
 /**
  * The workspaces (docs/desktop-program-plan.md §4, item 3): each with its status, which asks the
- * remote and says when it cannot be reached rather than failing; a new workspace from main or another
- * branch; an existing branch cloned, with the remote's warning when the person may not write it
- * (ADR-0068 decision 9), the workspace made all the same.
+ * instance and says when it cannot be reached rather than failing; and a new workspace from main or
+ * another branch, its parent.
+ *
+ * Below them, the person's workspaces on the instance that are not on this computer (ADR-0072
+ * decisions 4 and 7): those linked to no computer, each of which is linked here, and those linked to
+ * another, each of which can be unlinked from it when that computer is lost or out of reach, with
+ * the cost said before it is done. Linking never takes a workspace over, so the second list has no
+ * "Link". Until 2026-11-20 this was "Clone a branch": a workspace is linked, not cloned, and a
+ * colleague's is read on the instance.
  */
 export function Workspaces({ backend, open, notice }: { backend: Backend; open: (branch: string) => void; notice?: string }) {
   const { run, busy } = useRequest(backend);
@@ -35,10 +49,14 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
   const [records, setRecords] = useState<WorkspaceRecord[] | undefined>();
   const [statuses, setStatuses] = useState<Record<string, WorkspaceStatus>>({});
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
-  const [warning, setWarning] = useState<WorkspaceWarning | undefined>();
   const [name, setName] = useState('');
   const [from, setFrom] = useState('main');
-  const [existing, setExisting] = useState('');
+  /** The person's workspaces on the instance that are not here, or why they could not be read. */
+  const [elsewhere, setElsewhere] = useState<Elsewhere | undefined>();
+  const [elsewhereRefusal, setElsewhereRefusal] = useState<Refusal | undefined>();
+  /** The workspace whose unlinking from the other computer is being confirmed. */
+  const [confirming, setConfirming] = useState<RemoteWorkspace | undefined>();
+  const [done, setDone] = useState<string | undefined>();
 
   const load = useCallback(async () => {
     const outcome = await run<WorkspaceRecord[]>('workspaces');
@@ -48,6 +66,15 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
       void run<WorkspaceStatus>('status', { workspace: record.branch }).then((status) => {
         if (status.ok) setStatuses((all) => ({ ...all, [record.branch]: status.body }));
       });
+    }
+    // The instance is asked for the rest; when it cannot be, the page says so and shows what is here.
+    const there = await run<Elsewhere>('elsewhere');
+    if (there.ok) {
+      setElsewhere(there.body);
+      setElsewhereRefusal(undefined);
+    } else {
+      setElsewhere(undefined);
+      setElsewhereRefusal(there.refusal);
     }
   }, [run]);
   useEffect(() => void load(), [load]);
@@ -59,11 +86,26 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
     return () => window.removeEventListener('focus', onFocus);
   }, [load]);
 
-  const made = async (outcome: Awaited<ReturnType<typeof run<WorkspaceRecord & { warning?: WorkspaceWarning }>>>) => {
+  const made = async (outcome: Awaited<ReturnType<typeof run<WorkspaceRecord>>>) => {
     if (!outcome.ok) return setRefusal(outcome);
-    setWarning(outcome.body.warning);
     setName('');
-    setExisting('');
+    await load();
+  };
+  const link = async (workspace: RemoteWorkspace) => {
+    setRefusal(undefined);
+    setDone(undefined);
+    const outcome = await run<WorkspaceRecord>('link', { workspace: workspace.branch });
+    if (!outcome.ok) return setRefusal(outcome);
+    setDone(`${workspace.branch} is linked to this computer.`);
+    await load();
+  };
+  const unlinkElsewhere = async (workspace: RemoteWorkspace) => {
+    setConfirming(undefined);
+    setRefusal(undefined);
+    setDone(undefined);
+    const outcome = await run<{ unlinked: boolean }>('unlink', { workspace: workspace.branch, elsewhere: true });
+    if (!outcome.ok) return setRefusal(outcome);
+    setDone(`${workspace.branch} is unlinked from the other computer. It can now be linked to this one.`);
     await load();
   };
 
@@ -85,7 +127,7 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
                 <span>
                   <span className="font-medium">{record.branch}</span>
                   <span className="text-muted-foreground block text-xs">
-                    {record.from ? `from ${record.from}, ` : ''}cloned {new Date(record.clonedAt).toLocaleDateString()}
+                    {record.from ? `from ${record.from}, ` : ''}on this computer since {new Date(record.clonedAt).toLocaleDateString()}
                   </span>
                 </span>
                 <StatusBadges status={statuses[record.branch]} />
@@ -95,10 +137,10 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
         </ul>
       )}
 
-      {warning && (
-        <div className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="status">
-          {warning.message}
-        </div>
+      {done && (
+        <p className="mt-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+          {done}
+        </p>
       )}
       {refusal && (
         <div className="mt-4">
@@ -113,7 +155,7 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
           onSubmit={(e) => {
             e.preventDefault();
             setRefusal(undefined);
-            void run<WorkspaceRecord & { warning?: WorkspaceWarning }>('create', { name: name.trim(), from: from.trim() || 'main' }).then(made);
+            void run<WorkspaceRecord>('create', { name: name.trim(), from: from.trim() || 'main' }).then(made);
           }}
         >
           <p className="font-medium">New workspace</p>
@@ -125,23 +167,70 @@ export function Workspaces({ backend, open, notice }: { backend: Backend; open: 
             {busy === 'create' ? 'Creating…' : 'Create workspace'}
           </Button>
         </form>
-        <form
-          className="flex flex-col gap-2 rounded-lg border p-4"
-          aria-label="Clone a branch"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setRefusal(undefined);
-            void run<WorkspaceRecord & { warning?: WorkspaceWarning }>('clone', { branch: existing.trim() }).then(made);
-          }}
-        >
-          <p className="font-medium">Clone a branch from {instance}</p>
-          <Label htmlFor="ws-existing">Branch</Label>
-          <Input id="ws-existing" {...verbatim} value={existing} onChange={(e) => setExisting(e.target.value)} placeholder="someone_unit-3" />
-          <Button type="submit" variant="outline" disabled={!existing.trim() || busy !== undefined}>
-            {busy === 'clone' ? 'Cloning…' : 'Clone it'}
-          </Button>
-        </form>
+        <div className="flex flex-col gap-2 rounded-lg border p-4" role="region" aria-label={terms['heading.your-unlinked-workspaces']?.name}>
+          <p className="font-medium">{terms['heading.your-unlinked-workspaces']?.name}</p>
+          <p className="text-muted-foreground text-sm">On {instance}, and on no computer. Linking one brings it to this computer, where only the app here then writes it.</p>
+          {elsewhereRefusal && (
+            <p className="text-muted-foreground text-sm" role="status">
+              {elsewhereRefusal.error === 'remote_unreachable' || elsewhereRefusal.error === 'signed_out' || elsewhereRefusal.error === 'issuer_unreachable'
+                ? `${instance} could not be asked, so your workspaces there are not listed.`
+                : elsewhereRefusal.message}
+            </p>
+          )}
+          {elsewhere && elsewhere.unlinked.length === 0 && <p className="text-muted-foreground text-sm">None.</p>}
+          {elsewhere && elsewhere.unlinked.length > 0 && (
+            <ul className="divide-y text-sm">
+              {elsewhere.unlinked.map((workspace) => (
+                <li key={workspace.branch} className="flex items-center justify-between gap-3 py-2">
+                  <span>
+                    <span className="font-medium">{workspace.branch}</span>
+                    <span className="text-muted-foreground block text-xs">from {workspace.parent}</span>
+                  </span>
+                  <Button size="sm" variant="outline" disabled={busy !== undefined} aria-label={`${terms['action.link-to-this-computer']?.name}: ${workspace.branch}`} onClick={() => void link(workspace)}>
+                    {busy === 'link' ? 'Linking…' : terms['action.link-to-this-computer']?.name}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
+
+      {elsewhere && elsewhere.linkedElsewhere.length > 0 && (
+        <div className="mt-6 rounded-lg border p-4" role="region" aria-label={terms['state.linked-elsewhere']?.name}>
+          <p className="font-medium">{terms['state.linked-elsewhere']?.name}</p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Yours, and written only from the computer each is linked to. To work on one here, unlink it from that computer first: there, once everything is pushed, or from here when that computer is lost, broken or out of reach.
+          </p>
+          <ul className="mt-2 divide-y text-sm">
+            {elsewhere.linkedElsewhere.map((workspace) => (
+              <li key={workspace.branch} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                <span>
+                  <span className="font-medium">{workspace.branch}</span>
+                  <span className="text-muted-foreground block text-xs">
+                    from {workspace.parent}, linked {linkedWhere(workspace.linkLabel, workspace.linkedAt)}
+                  </span>
+                </span>
+                {confirming?.branch === workspace.branch ? (
+                  <span className="flex flex-wrap items-center gap-2" role="group" aria-label="Confirm the unlinking">
+                    <span>Commits on that computer that were not pushed can no longer be pushed. Unlink {workspace.branch}?</span>
+                    <Button variant="destructive" size="sm" disabled={busy !== undefined} onClick={() => void unlinkElsewhere(workspace)}>
+                      Unlink
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirming(undefined)}>
+                      Cancel
+                    </Button>
+                  </span>
+                ) : (
+                  <Button size="sm" variant="outline" disabled={busy !== undefined} aria-label={`${terms['action.unlink-from-other-computer']?.name}: ${workspace.branch}`} onClick={() => setConfirming(workspace)}>
+                    {terms['action.unlink-from-other-computer']?.name}…
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

@@ -7,27 +7,46 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Backend } from '@/lib/backend';
 import { sentence, useInstance } from '@/lib/instance';
-import { isVerdicts, stops, type BringInResult, type CheckVerdict, type CommitEntry, type DeliverResult, type PushResult, type Refusal, type RemoveResult, type WorkspaceStatus } from '@/lib/types';
+import { terms } from '@armature/vocabulary';
+import { Badge } from '@/components/ui/badge';
+import {
+  isVerdicts,
+  stops,
+  type BringInResult,
+  type CheckVerdict,
+  type CommitEntry,
+  type PushResult,
+  type Refusal,
+  type RemoteChange,
+  type RemoveResult,
+  type RequestHealth,
+  type RequestMerged,
+  type RequestState,
+  type WorkspaceStatus,
+} from '@/lib/types';
 import { shortCommit } from '@/lib/utils';
-import { useRequest } from '@/lib/useShell';
-import { StatusBadges } from './Workspaces';
+import { outcomeOf, useRequest, type Outcome } from '@/lib/useShell';
+import { linkedWhere, StatusBadges } from './Workspaces';
 
-/** The two actions a gate stops: a push, by the person's own checks; a merge into main, by the instance's (the route is still `/deliver`). */
-type Gated = 'push' | 'deliver';
+/** The two actions a gate stops: a push, by the person's own checks; the merge of a request, by the instance's. */
+type Gated = 'push' | 'mergeMergeRequest';
 const GATE_CODES = ['checks_pending', 'checks_failed'];
 
-/** What a preview of the merge (the route's dry run) found, as a sentence. */
-export function dryRunSentence(result: DeliverResult): string {
-  const conflicts = result.conflicts?.length ?? 0;
-  const violations = result.violations?.length ?? 0;
-  const stopping = (result.checks ?? []).filter(stops);
-  const found = [
-    conflicts ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}` : '',
-    violations ? `${violations} broken rule${violations === 1 ? '' : 's'}` : '',
-    stopping.length ? `${stopping.length} required check${stopping.length === 1 ? '' : 's'} not passed` : '',
-  ].filter(Boolean);
-  if (found.length) return `Nothing was merged. A merge now would be refused: ${found.join(', ')}.`;
-  return result.checks?.length ? 'Nothing was merged. A merge now would go through: every required check has passed.' : 'Nothing was merged. A merge now would go through.';
+/**
+ * A merge request's health in the vocabulary's words (`@armature/vocabulary`, the reserved words of
+ * *A merge request's health*): the first thing that stands in the way of a merge, as the instance
+ * computed it for this read, or that nothing does.
+ */
+export function healthWord(health: RequestHealth, parent: string): { word: string; variant: 'success' | 'warning' | 'muted' } {
+  if (health.missing) return { word: `${health.missing === 'source' ? 'Its branch' : parent} is gone`, variant: 'warning' };
+  if (health.upToDate) return { word: 'Nothing to merge', variant: 'muted' };
+  if (health.conflicts.length) return { word: 'Has conflicts', variant: 'warning' };
+  if (health.violations.length) return { word: 'Breaks rules', variant: 'warning' };
+  if (health.bringInFirst) return { word: `Update from ${parent} first`, variant: 'warning' };
+  const stopping = health.checks.filter(stops);
+  if (stopping.some((v) => v.conclusion !== 'pending')) return { word: 'Checks failed', variant: 'warning' };
+  if (stopping.length) return { word: 'Waiting for checks', variant: 'warning' };
+  return { word: 'Ready to merge', variant: 'success' };
 }
 
 /** A count of commits, as a sentence says it: "1 commit", "3 commits". */
@@ -46,12 +65,14 @@ export function removedSentence(branch: string, result: RemoveResult, instance: 
     return `${branch} is removed from this computer${given}.${where} ${sentence(instance)} was not asked, and keeps whatever was pushed.`;
   }
   // vocabulary-allow: delete
-  if (result.remote === 'deleted') return `${branch} is removed from this computer. Its branch was deleted on ${instance}, since main has all of it.`;
+  if (result.remote === 'deleted') return `${branch} is removed from this computer. Its branch was deleted on ${instance}, since its parent has all of it.`;
   if (result.remote === 'absent') return `${branch} is removed from this computer; ${instance} no longer had its branch.`;
   // vocabulary-allow: delete
   if (result.reason === 'forbidden') return `${branch} is removed from this computer. Its branch is kept on ${instance}: it is not yours to delete.`;
   if (result.reason === 'unreachable') return `${branch} is removed from this computer. ${sentence(instance)} cannot be reached, so its branch is still there.`;
-  return `${branch} is removed from this computer. Its branch is kept on ${instance}, since it has work main does not; clone it again to go on with it.`;
+  // Kept there as a workspace linked to no computer, when its link to this one could be cleared (ADR-0072 decision 4).
+  const again = result.link === 'kept' ? `it is still linked to this computer there, so unlink it from another computer's list before linking it again` : 'link it again to go on with it';
+  return `${branch} is removed from this computer. Its branch is kept on ${instance}, since it has work its parent does not; ${again}.`;
 }
 
 /** Why the instance was not asked, as the status says it: unreachable, or for want of a sign-in to ask with. */
@@ -67,33 +88,34 @@ export const notAsked = (instance: string, reason?: 'signed_out' | 'issuer_unrea
 /** The most commits the page lists; a workspace with more unpushed says how many it shows. */
 const MOST_COMMITS_SHOWN = 500;
 
-/**
- * What a merge into main did (the route's `deliver`). The instance answers `upToDate` when main
- * already had everything the workspace has, and merges nothing: until 2026-11-16 the page named
- * main's own head as the merge all the same, at a second merge too (the 2026-11-09 review's P10).
- */
-const mergedSentence = (r: DeliverResult): string => {
-  if (r.delivered.upToDate) return r.deleted ? 'Nothing to merge: main already has everything here. The workspace is removed from this computer.' : 'Nothing to merge: main already has everything here.';
-  return r.deleted ? `Merged into main as ${shortCommit(r.delivered.commit)}; the workspace is removed from this computer.` : `Merged into main as ${shortCommit(r.delivered.commit)}.`;
-};
+/** What merging a request did, as the instance answered. */
+const mergedSentence = (r: RequestMerged, parent: string): string =>
+  r.deleted ? `Merged into ${parent} as ${shortCommit(r.merged.commit)}; the workspace is removed from this computer.` : `Merged into ${parent} as ${shortCommit(r.merged.commit)}.`;
 
 /** Commit messages are stored with the hub's trailers (Armature-Workspace-Commit and the like); the page shows the person's words. */
 const firstLine = (message: string) => message.split('\n')[0] ?? message;
 
 /**
  * One workspace (docs/desktop-program-plan.md §4, item 4): the commits not yet pushed with their
- * messages; push; update from main with an optional message; merge into main with a required one and
- * the choice of removing the workspace. Each action's refusal is shown as the hub gave it, with its code; a
- * merge's conflicts are listed, and their review is the tool's (plan §6).
+ * messages; push; update from its parent with an optional message; its merge request; unlink and
+ * remove. Each action's refusal is shown as the hub gave it, with its code; a merge's conflicts are
+ * listed, and their review is the tool's (plan §6).
+ *
+ * **The merge request** (ADR-0072 decisions 5 and 7) is how the work leaves: opened into the
+ * workspace's parent with a message, which becomes the merge commit's. While it is open the page
+ * shows its health, what a merge would meet as the instance computes it on each read (conflicts,
+ * broken rules, required checks), and reads it again when the instance's event feed reports a
+ * commit on the workspace, its parent or `main` (the core's `awaitRemoteChange`). Whoever may merge
+ * into the parent merges it: the person here, when they may, or someone on the instance. It
+ * replaced "Merge into main" and "Preview merge" on 2026-11-20: an open request is the preview,
+ * kept current.
  *
  * Required checks (ADR-0070; plan §14, step 5a): a push the person's own checks stop, and a merge
  * the instance's checks stop, list the results under the refusal, each with a field for the reason
- * it is overridden; the action then goes again with those overrides. A merge can be previewed
- * first, which changes nothing and shows the instance's results. An action that went through shows
- * the results it relied on.
+ * it is overridden; the action then goes again with those overrides.
  *
- * The names are the vocabulary's (`@armature/vocabulary`): "Update from main" and "Merge into main"
- * are the labels until merge requests are built (ADR-0072), over the routes `bring-in` and `deliver`.
+ * A workspace the instance links to another computer, or to none (decision 3), says so before a
+ * push meets the refusal, with the way on.
  */
 export function Workspace({ backend, branch, back }: { backend: Backend; branch: string; back: (notice?: string) => void }) {
   const { run, busy } = useRequest(backend);
@@ -103,20 +125,23 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   const [refusal, setRefusal] = useState<{ refusal: Refusal; status: number } | undefined>();
   const [done, setDone] = useState<string | undefined>();
   const [bringInMessage, setBringInMessage] = useState('');
-  const [deliverMessage, setDeliverMessage] = useState('');
+  const [requestMessage, setRequestMessage] = useState('');
   const [deleteAfter, setDeleteAfter] = useState(false);
+  /** The workspace's parent, the request open into it and its health, as last read from the instance; undefined until then, or when it cannot be asked. */
+  const [request, setRequest] = useState<RequestState | undefined>();
+  const [confirmingUnlink, setConfirmingUnlink] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   /** The number of unpushed commits the person was shown when they asked to discard: what the confirmation names and the hub checks. */
   const [confirmingDiscard, setConfirmingDiscard] = useState<number | undefined>();
-  /** The verdicts of the gate that stopped the last push or delivery, for the override. */
+  /** The verdicts of the gate that stopped the last push or merge, for the override. */
   const [gate, setGate] = useState<{ action: Gated; checks: CheckVerdict[] } | undefined>();
-  /** The verdicts the last push, delivery or dry run answered with when it was not refused. */
+  /** The verdicts the last push or merge answered with when it was not refused. */
   const [relied, setRelied] = useState<{ action: Gated; checks: CheckVerdict[] } | undefined>();
 
   /**
    * Reads the status and the commits. `afterRefusal`: an action was just refused, and its refusal
    * stays on the page whatever this read says; the read still runs, since a refused push may have
-   * landed some of its commits and a refused delivery may have merged (the 2026-11-09 review's P7).
+   * landed some of its commits and a refused merge may have merged (the 2026-11-09 review's P7).
    */
   const load = useCallback(
     async (afterRefusal = false) => {
@@ -128,14 +153,50 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
       const count = Math.min(Math.max(s.ok ? s.body.unpushed : 0, 20), MOST_COMMITS_SHOWN);
       const c = await run<{ commits: CommitEntry[] }>('commits', { workspace: branch, count });
       if (c.ok) setCommits(c.body.commits);
+      // The merge request is the instance's: unread when it cannot be asked, and the page then says nothing of it.
+      const r = await run<RequestState>('mergeRequest', { workspace: branch });
+      setRequest(r.ok ? r.body : undefined);
     },
     [run, branch]
   );
   useEffect(() => void load(), [load]);
+
+  // While a request is open, its health is read again when something on the instance may have changed it: a
+  // commit on the workspace's branch, on its parent or on main, where the request's own changes are commits
+  // (ADR-0072 decision 5). The core holds the wait on the instance's event feed; a refused or stopped wait
+  // ends the watch until the page next reads the request. Not through `run`: a wait is no action the page is busy with.
+  const openRequest = request?.request?.['@id'];
+  useEffect(() => {
+    if (!openRequest) return;
+    let watching = true;
+    void (async () => {
+      let cursor: string | undefined;
+      while (watching) {
+        const fields: Record<string, unknown> = cursor ? { workspace: branch, cursor } : { workspace: branch };
+        const waited: Outcome<RemoteChange> = await backend.request('awaitRemoteChange', fields).then(
+          (reply) => outcomeOf<RemoteChange>(reply),
+          () => ({ ok: false, status: 0, refusal: { error: 'shell_error', message: 'The wait could not be made' } })
+        );
+        if (!watching || !waited.ok || waited.body.stopped || !waited.body.cursor) return;
+        cursor = waited.body.cursor;
+        if (!waited.body.changed) continue;
+        const read = outcomeOf<RequestState>(await backend.request('mergeRequest', { workspace: branch }));
+        if (!watching) return;
+        if (read.ok) setRequest(read.body);
+        // Merged or closed on the instance meanwhile: the watch ends with the request, and the status is read for what it changed.
+        if (read.ok && !read.body.request) return void load(true);
+      }
+    })();
+    return () => {
+      watching = false;
+    };
+  }, [backend, branch, openRequest, load]);
   // Read again when the window is come back to: a tool's commits, or a network that returned, showed
   // only after leaving the page and returning (P11). Not while an action runs, whose own read follows it.
   const busyNow = useRef(false);
   busyNow.current = busy !== undefined;
+  /** The action whose refusal is on the page: a merge's conflict is told from an update's by it, since the two name the sides the other way round. */
+  const lastAction = useRef<string | undefined>(undefined);
   useEffect(() => {
     const onFocus = () => {
       if (!busyNow.current) void load(true);
@@ -150,8 +211,9 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
     setDone(undefined);
     setGate(undefined);
     setRelied(undefined);
+    lastAction.current = type;
     const outcome = await run<T>(type, { workspace: branch, ...fields });
-    const gated = type === 'push' || type === 'deliver' ? type : undefined;
+    const gated = type === 'push' || type === 'mergeMergeRequest' ? type : undefined;
     if (!outcome.ok) {
       if (gated && GATE_CODES.includes(outcome.refusal.error) && isVerdicts(outcome.refusal.checks)) setGate({ action: gated, checks: outcome.refusal.checks });
       setRefusal(outcome);
@@ -166,19 +228,15 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   };
 
   const pushedSentence = (r: PushResult) => (r.upToDate ? `Nothing to push: ${instance} has everything here.` : `Pushed ${commitsOf(r.pushed.length)}.`);
-  const deliver = (extra: { overrides?: Override[]; dryRun?: true } = {}) =>
-    act<DeliverResult>(
-      'deliver',
-      // A dry run commits nothing, so it needs no reason of its own; the route still asks for a message.
-      { message: deliverMessage.trim() || (extra.dryRun ? 'Previewing a merge into main' : ''), ...(deleteAfter && !extra.dryRun ? { deleteWorkspace: true } : {}), ...extra },
-      (r) => (r.dryRun ? dryRunSentence(r) : mergedSentence(r)),
-      (r) => r.deleted === true
-    ).then((r) => {
-      if (!r || r.dryRun) return;
+  const parent = request?.parent ?? status?.workspace.from ?? 'main';
+  const merge = (extra: { overrides?: Override[] } = {}) =>
+    act<RequestMerged>('mergeMergeRequest', { ...(deleteAfter ? { deleteWorkspace: true } : {}), ...extra }, (r) => mergedSentence(r, parent), (r) => r.deleted === true).then((r) => {
       // vocabulary-allow: delete
-      if (r.deleted) back(r.delivered.upToDate ? `main already had everything in ${branch}. It is removed from this computer, and its branch deleted on ${instance}.` : `${branch} is merged into main and removed from this computer. Its branch is deleted on ${instance}.`);
-      else setDeliverMessage('');
+      if (r?.deleted) back(`${branch} is merged into ${parent} and removed from this computer. Its branch is deleted on ${instance}.`);
     });
+  /** Where the instance links this workspace, when it could be asked and it is not here. */
+  const linked = status && !('reachable' in status.remote) && (status.remote.link === 'elsewhere' || status.remote.link === 'unlinked') ? status.remote : undefined;
+  const health = request?.health ? healthWord(request.health, parent) : undefined;
 
   const unpushed = status ? commits.slice(0, status.unpushed) : [];
   return (
@@ -220,6 +278,18 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
         )}
       </div>
 
+      {linked && (
+        <div className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="status" aria-label="Where this workspace is linked">
+          <p className="font-medium">
+            {linked.link === 'elsewhere' ? `${terms['state.linked-elsewhere']?.name}: this workspace is linked ${linkedWhere(linked.linkLabel, linked.linkedAt)}.` : `${terms['state.not-linked']?.name}: this workspace was unlinked, and is linked to no computer.`}
+          </p>
+          <p className="mt-1">
+            {status && status.unpushed > 0
+              ? terms['state.stranded-commits']?.name
+              : `Nothing more can be pushed from here. Remove it from this computer; ${linked.link === 'unlinked' ? 'it can then be linked again from the Workspaces page' : 'to work on it here, unlink it from that computer first'}.`}
+          </p>
+        </div>
+      )}
       {done && (
         <p className="mt-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
           {done}
@@ -232,7 +302,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
       )}
       {refusal && (
         <div className="mt-4">
-          <RefusalNotice {...refusal} />
+          <RefusalNotice {...refusal} parent={parent} direction={lastAction.current === 'mergeMergeRequest' ? 'merge' : 'update'} />
         </div>
       )}
       {gate && (
@@ -242,7 +312,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
             whose={gate.action === 'push' ? 'yours' : 'instance'}
             again={gate.action === 'push' ? 'Push anyway' : 'Merge anyway'}
             busy={busy !== undefined}
-            onOverride={(overrides) => void (gate.action === 'push' ? act<PushResult>('push', { overrides }, pushedSentence) : deliver({ overrides }))}
+            onOverride={(overrides) => void (gate.action === 'push' ? act<PushResult>('push', { overrides }, pushedSentence) : merge({ overrides }))}
           />
         </div>
       )}
@@ -261,52 +331,123 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
         </div>
         <form
           className="flex flex-col gap-2 rounded-lg border p-4"
-          aria-label="Update from main"
+          aria-label={`Update from ${parent}`}
           onSubmit={(e) => {
             e.preventDefault();
             void act<BringInResult>('bringIn', bringInMessage.trim() ? { message: bringInMessage.trim() } : {}, (r) =>
-              r.upToDate ? 'Already up to date with main.' : `Updated from main: ${r.broughtIn?.documents ?? 0} record${r.broughtIn?.documents === 1 ? '' : 's'}.`
+              r.upToDate ? `Already up to date with ${parent}.` : `Updated from ${parent}: ${r.broughtIn?.documents ?? 0} record${r.broughtIn?.documents === 1 ? '' : 's'}.`
             ).then(() => setBringInMessage(''));
           }}
         >
-          <p className="font-medium">Update from main</p>
+          <p className="font-medium">Update from {parent}</p>
           <Label htmlFor="bring-in-message">Message (optional)</Label>
-          <Input id="bring-in-message" value={bringInMessage} onChange={(e) => setBringInMessage(e.target.value)} placeholder="Update from main" />
+          <Input id="bring-in-message" value={bringInMessage} onChange={(e) => setBringInMessage(e.target.value)} placeholder={`Update from ${parent}`} />
           <Button type="submit" variant="outline" className="mt-auto" disabled={busy !== undefined}>
-            {busy === 'bringIn' ? 'Updating…' : 'Update from main'}
+            {busy === 'bringIn' ? 'Updating…' : `Update from ${parent}`}
           </Button>
         </form>
-        <form
-          className="flex flex-col gap-2 rounded-lg border p-4"
-          aria-label="Merge into main"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void deliver();
-          }}
-        >
-          <p className="font-medium">Merge into main</p>
-          <Label htmlFor="deliver-message">Message (required)</Label>
-          <Input id="deliver-message" value={deliverMessage} onChange={(e) => setDeliverMessage(e.target.value)} placeholder="Unit 3's items, reviewed" />
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={deleteAfter} onChange={(e) => setDeleteAfter(e.target.checked)} />
-            Remove from this computer afterwards
-          </label>
-          <div className="mt-auto flex flex-col gap-2">
-            <Button type="button" variant="ghost" size="sm" disabled={busy !== undefined} onClick={() => void deliver({ dryRun: true })}>
-              Preview merge
+        {request?.request ? (
+          <div className="flex flex-col gap-2 rounded-lg border p-4" role="region" aria-label="Merge request">
+            <p className="font-medium">Merge request into {parent}</p>
+            <p className="text-sm">{firstLine(request.request.message)}</p>
+            {health && (
+              <p className="flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="The merge request's health">
+                <Badge variant={health.variant}>{health.word}</Badge>
+                {request.health?.conflicts.length ? <span className="text-muted-foreground">Update from {parent}, resolve what it reports in your tool, and push.</span> : null}
+                {request.health?.upToDate ? <span className="text-muted-foreground">{parent} already has everything pushed from here.</span> : null}
+              </p>
+            )}
+            {/* The same results are under a refused merge with their override fields; shown once. */}
+            {request.health && request.health.checks.length > 0 && gate?.action !== 'mergeMergeRequest' && <CheckVerdicts verdicts={request.health.checks} whose="instance" />}
+            {request.health && request.health.violations.length > 0 && (
+              <ul className="space-y-1 text-xs" aria-label="Broken rules">
+                {request.health.violations.map((violation, i) => (
+                  <li key={`${violation.id}-${violation.code}-${i}`}>
+                    <span className="font-mono">{violation.id ?? 'a record'}</span>: {violation.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {request.mayMerge ? (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={deleteAfter} onChange={(e) => setDeleteAfter(e.target.checked)} />
+                Remove from this computer afterwards
+              </label>
+            ) : (
+              <p className="text-muted-foreground text-sm">Whoever may merge into {parent} merges it, on {instance}. This page shows when they have.</p>
+            )}
+            <div className="mt-auto flex flex-wrap gap-2">
+              {request.mayMerge && (
+                <Button type="button" variant="outline" disabled={busy !== undefined} onClick={() => void merge()}>
+                  {busy === 'mergeMergeRequest' ? 'Merging…' : 'Merge'}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy !== undefined}
+                onClick={() => void act<{ workspace: string }>('closeMergeRequest', {}, () => `The merge request into ${parent} is closed. Nothing was merged.`)}
+              >
+                {busy === 'closeMergeRequest' ? 'Closing…' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form
+            className="flex flex-col gap-2 rounded-lg border p-4"
+            aria-label={`Open merge request into ${parent}`}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void act<RequestState>('openMergeRequest', { message: requestMessage.trim() }, () => `A merge request into ${parent} is open.`).then((r) => r && setRequestMessage(''));
+            }}
+          >
+            <p className="font-medium">Open merge request into {parent}</p>
+            <p className="text-muted-foreground text-sm">Asks for what you have pushed to be merged into {parent}. Whoever may merge into it decides.</p>
+            <Label htmlFor="request-message">Message (required)</Label>
+            <Input id="request-message" value={requestMessage} onChange={(e) => setRequestMessage(e.target.value)} placeholder="Unit 3's items, reviewed" />
+            <Button type="submit" variant="outline" className="mt-auto" disabled={!requestMessage.trim() || busy !== undefined}>
+              {busy === 'openMergeRequest' ? 'Opening…' : 'Open merge request'}
             </Button>
-            <Button type="submit" variant="outline" disabled={!deliverMessage.trim() || busy !== undefined}>
-              {busy === 'deliver' ? 'Merging…' : 'Merge into main'}
+          </form>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-lg border p-4" role="region" aria-label="Unlink">
+        <p className="font-medium">{terms['action.unlink-from-this-computer']?.name}</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Releases the workspace from this computer, with nothing left to push. It stays on {instance}, linked to no computer, to be linked from this one again or from another.
+        </p>
+        {confirmingUnlink ? (
+          <div className="mt-3 flex items-center gap-2" role="group" aria-label="Confirm the unlinking">
+            <span className="text-sm">Unlink {branch} from this computer?</span>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy !== undefined}
+              onClick={() => {
+                setConfirmingUnlink(false);
+                const said = `${branch} is unlinked from this computer. It is on ${instance}, and can be linked again here or on another computer.`;
+                void act<{ link: string }>('unlink', {}, () => said, () => true).then((r) => r && back(said));
+              }}
+            >
+              Unlink
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmingUnlink(false)}>
+              Cancel
             </Button>
           </div>
-        </form>
+        ) : (
+          <Button variant="outline" className="mt-3" disabled={busy !== undefined} onClick={() => setConfirmingUnlink(true)}>
+            Unlink…
+          </Button>
+        )}
       </div>
 
       <div className="mt-6 rounded-lg border p-4" aria-label="Remove">
         <p className="font-medium">Remove from this computer</p>
         <p className="text-muted-foreground mt-1 text-sm">
           {/* vocabulary-allow: delete */}
-          Takes the workspace off this computer, with nothing left to push. Its branch on {instance} is deleted too when main already has everything on it, as after a merge; otherwise it is kept there as the record of that work.
+          Takes the workspace off this computer, with nothing left to push. Its branch on {instance} is deleted too when its parent already has everything on it, as after a merge; otherwise it is kept there, linked to no computer.
         </p>
         {confirmingRemove ? (
           <div className="mt-3 flex items-center gap-2" role="group" aria-label="Confirm the removal">
@@ -335,7 +476,7 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
           <div className="mt-4 border-t pt-3" aria-label="Discard">
             <p className="text-muted-foreground text-sm">
               {commitsOf(status.unpushed)} here {status.unpushed === 1 ? 'is' : 'are'} not on {instance}. Push first to keep {status.unpushed === 1 ? 'it' : 'them'}. If {status.unpushed === 1 ? 'it' : 'they'} can never be pushed, the workspace can be
-              removed with {status.unpushed === 1 ? 'it' : 'them'}: nothing is asked of {instance}, and the workspace&rsquo;s files are moved to the discarded folder (_discarded, in the workspaces folder), where they stay.
+              removed with {status.unpushed === 1 ? 'it' : 'them'}: {instance} keeps what was pushed, and the workspace&rsquo;s files are moved to the discarded folder (_discarded, in the workspaces folder), where they stay.
             </p>
             {confirmingDiscard !== undefined ? (
               <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Confirm the discard">

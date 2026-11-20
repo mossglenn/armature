@@ -1,5 +1,5 @@
 import type { Backend, CoreEvent, CoreReply, ShellState, UpdateCheck, UpdateState } from './backend';
-import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, Settings, WorkspaceRecord, WorkspaceStatus } from './types';
+import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, RemoteWorkspace, RequestHealth, Settings, WorkspaceRecord, WorkspaceStatus } from './types';
 
 /**
  * The core as the pages meet it when no shell is present: `npm run dev` in a
@@ -9,7 +9,8 @@ import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, Settings,
  * against what the real core says. `?scenario=` in the address picks where it
  * starts:
  *
- *   header             (the default) connected to a remote under header, the hub running, two workspaces
+ *   header             (the default) connected to a remote under header, the hub running, two workspaces here,
+ *                      one more on the instance linked to no computer and one linked to another
  *   fresh              nothing set up: the connect page first
  *   oidc               connected to a remote that signs people in, signed out
  *   oidc-scope         the same, and the provider refuses offline_access
@@ -23,7 +24,7 @@ import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, Settings,
  *   no_release  the channel answers without a release (none published, or an error status)
  *   packaged    this install is a system package (a .deb): the channel is not checked
  *
- * `?slow` makes each long action (push, bring in, deliver, create, clone, remove) take a moment and
+ * `?slow` makes each long action (push, update, create, link, unlink, remove, a merge request's three) take a moment and
  * show in the state as the shell shows it, so a page's holding of the install button meanwhile can be
  * seen; `?login=fails` makes the system refuse the start-at-login entry, as the shell reports it;
  * `?keychain=fails` makes the keychain refuse to forget a sign-in or keep a new pairing key;
@@ -36,6 +37,11 @@ import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, Settings,
  * a check before a merge into main, and its service reports), `breakChecksFile` (checks.json edited by
  * hand into something the push gate cannot read). The person's own checks are written by the page.
  *
+ * Links and merge requests (ADR-0072) likewise: `unlinkFromElsewhere` and `linkElsewhere` (the instance's
+ * record of a workspace held here changes under it), `mayNotMerge` (the person may not merge into the
+ * parent, so someone else decides), `mergedElsewhere` and `parentMoves` (a maintainer merges the request
+ * on the instance; the parent moves against it), each of which the wait for a change then reports.
+ *
  * Three remotes answer `profile`: https://api.armature.example.edu (oidc),
  * http://hub.example.test:3100 (header), and https://api.armature-x.example.net, a
  * hub that declares the first one's name and address as its own (the
@@ -46,7 +52,9 @@ const OIDC_REMOTE = 'https://api.armature.example.edu';
 const HEADER_REMOTE = 'http://hub.example.test:3100';
 const HOSTILE_REMOTE = 'https://api.armature-x.example.net';
 const HUB_URL = 'http://127.0.0.1:3101';
-const REVISION = '2026-11-16';
+const REVISION = '2026-11-20';
+/** This installation, as the core draws one at its first start. */
+const INSTALLATION = 'f4k3f4k3f4k3f4k3f4k3f4k3f4k3f4k3';
 const DATA_DIR = '/Users/someone/Library/Application Support/com.mossglenn.armature';
 const ISSUER = 'https://login.example.edu/realms/armature';
 const SYNCED = /(^|\/)(OneDrive[^/]*|Dropbox[^/]*|Google ?Drive|My Drive|iCloudDrive)(\/|$)|Library\/(Mobile Documents|CloudStorage)/i;
@@ -81,12 +89,45 @@ const profiles: Record<string, Profile> = {
   },
 };
 
+/** A workspace's merge request into its parent, as the instance records one. */
+interface Request {
+  '@id': string;
+  '@type': 'MergeRequest';
+  source: string;
+  target: string;
+  openedBy: string;
+  message: string;
+  status: 'Open' | 'Merged' | 'Closed';
+  decidedBy?: string;
+  decidedAt?: string;
+  mergeCommit?: string;
+}
+
+interface Held {
+  record: WorkspaceRecord;
+  commits: CommitEntry[];
+  pushed: number;
+  remoteMoved: boolean;
+  conflict: boolean;
+  /** How many commits the workspace had when it was last merged into its parent, which holds its head while that is still all. */
+  mergedAt?: number;
+  /** The request open into its parent, if any. */
+  request?: Request;
+  /** Where the instance says it is linked, when not here: set by a test (`unlinkFromElsewhere`, `linkElsewhere`). */
+  link?: { state: 'unlinked' } | { state: 'elsewhere'; linkLabel?: string; linkedAt: string };
+}
+
 interface Model {
   settings: Settings;
   running: boolean;
   signedIn?: { id: string; externalId: string; displayName: string };
-  /** `deliveredAt`: how many commits the workspace had when it was last delivered, so main holds its head while that is still all. */
-  workspaces: Map<string, { record: WorkspaceRecord; commits: CommitEntry[]; pushed: number; remoteMoved: boolean; conflict: boolean; deliveredAt?: number }>;
+  workspaces: Map<string, Held>;
+  /** The person's workspaces on the instance that are not on this computer: linked to none, and linked to another. */
+  elsewhere: { unlinked: RemoteWorkspace[]; linkedElsewhere: RemoteWorkspace[] };
+  /** Whether the person may merge into a parent on the instance (ADR-0068 decision 4); a test takes it away. */
+  mayMerge: boolean;
+  /** A count the instance's event feed is read by: it moves when a test makes something happen there. */
+  remoteEvents: number;
   localToken: string;
   log: CoreEvent[];
   update?: UpdateState;
@@ -170,6 +211,7 @@ function seededWorkspaces(owner: string, remote: string): Model['workspaces'] {
     clonedAt: new Date(Date.now() - 86_400_000).toISOString(),
     // As the clone keeps it: the remote's connection profile at the time.
     instance: profiles[remote]?.instance,
+    link: INSTALLATION,
   });
   const unit3 = record('unit-3');
   const glossary = record('glossary');
@@ -192,10 +234,10 @@ function seededWorkspaces(owner: string, remote: string): Model['workspaces'] {
 }
 
 function modelFor(scenario: string): Model {
-  const base = { port: 3101, snapshots: 20, startAtLogin: false };
+  const base = { port: 3101, snapshots: 20, startAtLogin: false, installation: INSTALLATION };
   const localToken = 'f'.repeat(16) + 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4';
   const log: CoreEvent[] = [{ event: 'log', level: 'info', line: `Armature hub (revision ${REVISION}) listening at ${HUB_URL}/api/v1` }];
-  const none = { checks: [], runs: new Map<string, Run>(), remoteRuns: new Map<string, Run>(), remoteRequirements: [] };
+  const none = { checks: [], runs: new Map<string, Run>(), remoteRuns: new Map<string, Run>(), remoteRequirements: [], elsewhere: { unlinked: [], linkedElsewhere: [] }, mayMerge: true, remoteEvents: 0 };
   if (scenario === 'fresh') return { settings: base, running: false, workspaces: new Map(), localToken, log: [], ...none };
   if (scenario.startsWith('oidc')) {
     const p = profiles[OIDC_REMOTE]!;
@@ -203,7 +245,12 @@ function modelFor(scenario: string): Model {
   }
   const p = profiles[HEADER_REMOTE]!;
   const user = 'demo-designer@example.edu';
-  return { settings: { ...base, remote: HEADER_REMOTE, instance: p.instance, identity: p.identity, user }, running: true, workspaces: seededWorkspaces(user, HEADER_REMOTE), localToken, log, ...none };
+  // On the instance and not here: a workspace unlinked from another computer, and one still linked to it.
+  const elsewhere = {
+    unlinked: [{ branch: `${handleOf(user)}_unit-2`, parent: 'main' }],
+    linkedElsewhere: [{ branch: `${handleOf(user)}_rubrics`, parent: 'main', linkLabel: 'Office iMac', linkedAt: '2026-11-18T15:04:00Z' }],
+  };
+  return { settings: { ...base, remote: HEADER_REMOTE, instance: p.instance, identity: p.identity, user }, running: true, workspaces: seededWorkspaces(user, HEADER_REMOTE), localToken, log, ...none, elsewhere };
 }
 
 /** The people the fake remote under header has registered, as the seed names them. */
@@ -212,7 +259,7 @@ const KNOWN: Record<string, string> = { 'demo-designer@example.edu': 'Demo Desig
 const OFFERED: UpdateState = { version: '0.2.0', current: '0.1.0', date: '2026-11-20T15:00:00Z', notes: 'Starts at login when asked.\nShows an available update.', state: 'available' };
 
 /** The requests the shell counts as actions in flight (src-tauri/src/core.rs `ACTIONS`). */
-const ACTIONS = ['create', 'clone', 'push', 'bringIn', 'deliver', 'remove'];
+const ACTIONS = ['create', 'link', 'unlink', 'push', 'bringIn', 'openMergeRequest', 'mergeMergeRequest', 'closeMergeRequest', 'remove'];
 
 export function fakeCore(scenario = 'header', update?: string, options: { slow?: boolean; login?: string; keychain?: string; start?: string; port?: string; signin?: string } = {}): Backend {
   const model = modelFor(scenario);
@@ -291,9 +338,43 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       pushed: w.pushed,
       unpushed: w.commits.length - w.pushed,
       snapshots: { budget: model.settings.snapshots, held: [], declined: [] },
-      remote: remoteDown ? { reachable: false } : { head: commitId(), moved: w.remoteMoved },
+      remote: remoteDown ? { reachable: false } : { head: commitId(), moved: w.remoteMoved, link: w.link?.state ?? 'here', ...(w.link?.state === 'elsewhere' ? { ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}), linkedAt: w.link.linkedAt } : {}) },
     };
   };
+  const parentOf = (w: Held): string => w.record.from ?? 'main';
+  /** The instance's refusal of a write to a workspace it links elsewhere or nowhere (ADR-0072 decision 3), as a push or an update meets it. */
+  const linkRefusal = (w: Held, extra: Record<string, unknown> = {}): CoreReply | undefined => {
+    if (!w.link) return undefined;
+    const { branch } = w.record;
+    if (w.link.state === 'unlinked') return refuse(409, 'not_linked', `The instance refused: ${branch} is a workspace linked to no computer, so nothing writes it; its owner links it to a computer first (ADR-0072 decision 3)`, { remote: true, workspace: branch, ...extra });
+    return refuse(409, 'held_elsewhere', `The instance refused: ${branch} is a workspace linked to ${w.link.linkLabel ? `the computer "${w.link.linkLabel}"` : 'another computer'} since ${w.link.linkedAt}, and only the desktop app there writes it; its owner unlinks it from that computer first (ADR-0072 decision 3)`, {
+      remote: true,
+      workspace: branch,
+      ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}),
+      linkedAt: w.link.linkedAt,
+      ...extra,
+    });
+  };
+  /** What a merge of the workspace's request would meet now, as the instance computes it on each read (decision 5). */
+  const healthOf = (w: Held): RequestHealth => {
+    const head = w.commits[0]?.commit ?? w.record.local;
+    const upToDate = w.commits.length === (w.mergedAt ?? 0);
+    const conflicts = w.conflict ? [{ id: 'AssessmentItem/item-4', field: 'stem', base: 'Which bias…', target: 'Which of these biases…', source: 'Which kind of bias…' }] : [];
+    const required = parentOf(w) === 'main' ? model.remoteRequirements : [];
+    const checks = verdictsFor(required.map((r) => ({ check: r.check, level: 'Required' as const, locked: r.locked, id: `CheckRequirement/${r.check}`, reporter: 'User/lint-service' })), model.remoteRuns, w.record.branch, head, new Map());
+    return {
+      mergeable: !upToDate && conflicts.length === 0 && stopping(checks).length === 0,
+      upToDate,
+      base: w.record.base,
+      source: head,
+      target: 'cmainhead0fake',
+      conflicts,
+      violations: [],
+      checks,
+      bringInFirst: false,
+    };
+  };
+  const requestState = (w: Held) => ({ workspace: w.record.branch, parent: parentOf(w), ...(w.request ? { request: w.request, health: healthOf(w) } : {}), mayMerge: model.mayMerge });
   const needsHub = (): CoreReply | undefined => (model.running && started().started === true ? undefined : refuse(409, 'not_started', 'The hub is not running; send start'));
   const needsOwner = (): CoreReply | undefined => (ownerOf() ? undefined : refuse(401, 'signed_out', `The app is not signed in to ${instance()}; sign in`));
   const workspaceOf = (fields: Record<string, unknown>) => model.workspaces.get(String(fields.workspace ?? ''));
@@ -342,6 +423,10 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const change = set as Partial<Settings>;
       for (const key of ['remote', 'instance', 'identity'] as const) {
         if (key in change) return refuse(400, 'use_connect', `${key} is set by connect, which looks up the instance's details first`, { field: key });
+      }
+      if ('installation' in change) return refuse(400, 'bad_settings', 'installation is drawn by the app at its first start and is not a setting to change', { field: 'installation' });
+      if (change.computerName !== undefined && change.computerName !== null && (typeof change.computerName !== 'string' || !change.computerName.trim() || change.computerName.length > 100)) {
+        return refuse(400, 'bad_settings', 'computerName must be one line of at most 100 characters', { field: 'computerName' });
       }
       if (change.port !== undefined && (!Number.isInteger(change.port) || change.port < 1 || change.port > 65535)) return refuse(400, 'bad_settings', 'port must be a whole number from 1 to 65535', { field: 'port' });
       if (change.snapshots !== undefined && (!Number.isInteger(change.snapshots) || change.snapshots < 0)) return refuse(400, 'bad_settings', 'snapshots must be a whole number from 0 to 10000', { field: 'snapshots' });
@@ -469,28 +554,64 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const branch = `${handleOf(owner)}_${String(name)}`;
       if (!/^[A-Za-z0-9_-]+$/.test(String(name))) return refuse(400, 'bad_name', `The workspace's branch, ${branch}, must match ^[A-Za-z0-9_-]+$`);
       if (model.workspaces.has(branch)) return refuse(409, 'workspace_exists', `This hub already holds the workspace ${branch}`);
-      const record: WorkspaceRecord = { branch, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, from: String(from ?? 'main'), base: commitId(), local: commitId(), clonedAt: new Date().toISOString(), instance: model.settings.instance };
+      // As the instance: a workspace is created from a branch, its parent, never from a workspace (ADR-0072 decision 1).
+      const parent = String(from ?? 'main');
+      if (model.workspaces.has(parent) || [...model.elsewhere.unlinked, ...model.elsewhere.linkedElsewhere].some((r) => r.branch === parent)) {
+        return refuse(409, 'parent_is_workspace', `The instance refused: ${parent} is a workspace; a workspace is created from a branch, which is then its parent (ADR-0072 decision 1)`, { remote: true, parent });
+      }
+      const record: WorkspaceRecord = { branch, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, from: parent, base: commitId(), local: commitId(), clonedAt: new Date().toISOString(), instance: model.settings.instance, link: INSTALLATION };
       model.workspaces.set(branch, { record, commits: [], pushed: 0, remoteMoved: false, conflict: false });
       return ok({ ...record, snapshots: [] }, 201);
     },
-    clone: ({ branch }) => {
+    // Link to this computer (ADR-0072 decision 4): one of the person's workspaces that is linked to none.
+    link: (fields) => {
       const refused = needsHub() ?? needsOwner();
       if (refused) return refused;
-      const name = String(branch ?? '');
+      const name = String(fields.workspace ?? '');
       if (model.workspaces.has(name)) return refuse(409, 'workspace_exists', `This hub already holds the workspace ${name}`);
-      if (name === 'missing') return refuse(404, 'not_found', `The instance refused: Branch ${name} has no commits`, { remote: true });
+      const held = model.elsewhere.linkedElsewhere.find((r) => r.branch === name);
+      if (held) {
+        return refuse(409, 'held_elsewhere', `The instance refused: ${name} is a workspace linked to ${held.linkLabel ? `the computer "${held.linkLabel}"` : 'another computer'}, and only the desktop app there writes it; its owner unlinks it from that computer first (ADR-0072 decision 3)`, {
+          remote: true,
+          workspace: name,
+          ...(held.linkLabel ? { linkLabel: held.linkLabel } : {}),
+          ...(held.linkedAt ? { linkedAt: held.linkedAt } : {}),
+        });
+      }
+      const there = model.elsewhere.unlinked.find((r) => r.branch === name);
+      if (!there) return refuse(404, 'not_found', `The instance refused: ${name} is not a workspace: no Active Workspace record names it`, { remote: true });
+      model.elsewhere.unlinked = model.elsewhere.unlinked.filter((r) => r.branch !== name);
       const owner = ownerOf()!;
-      const record: WorkspaceRecord = { branch: name, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, base: commitId(), local: commitId(), clonedAt: new Date().toISOString(), instance: model.settings.instance };
+      const record: WorkspaceRecord = { branch: name, remote: model.settings.remote!, owner: `User/${handleOf(owner)}`, ownerExternalId: owner, from: there.parent, base: commitId(), local: commitId(), clonedAt: new Date().toISOString(), instance: model.settings.instance, link: INSTALLATION };
       model.workspaces.set(name, { record, commits: [], pushed: 0, remoteMoved: false, conflict: false });
-      const theirs = !name.startsWith(`${handleOf(owner)}_`);
-      return ok(
-        {
-          ...record,
-          snapshots: [],
-          ...(theirs ? { warning: { code: 'forbidden', message: `${owner} may not: write ${name} on the remote. The workspace is made and can be read and worked in; its push will be refused until a grant is made (ADR-0068 decision 9)`, holders: ['User/its-owner'] } } : {}),
-        },
-        201
-      );
+      return ok({ ...record, snapshots: [] }, 201);
+    },
+    elsewhere: () => needsHub() ?? needsOwner() ?? (remoteDown ? refuse(502, 'remote_unreachable', `The instance at ${model.settings.remote} cannot be reached`, { remote: true }) : ok(structuredClone(model.elsewhere))),
+    // Unlink from this computer; with `elsewhere`, from the other computer, for a workspace not held here.
+    unlink: (fields) => {
+      const refused = needsHub() ?? needsOwner();
+      if (refused) return refused;
+      if (fields.elsewhere !== undefined && typeof fields.elsewhere !== 'boolean') return refuse(400, 'bad_request', 'elsewhere must be true or false', { field: 'elsewhere' });
+      const name = String(fields.workspace ?? '');
+      const w = model.workspaces.get(name);
+      if (w) {
+        if (fields.elsewhere === true) return refuse(409, 'workspace_here', `${name} is on this computer; unlink it from this computer, without elsewhere`, { workspace: name });
+        const unpushed = w.commits.length - w.pushed;
+        if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${name} are not pushed; push before unlinking it from this computer`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
+        model.workspaces.delete(name);
+        // Unlinked on the instance when the link was this computer's; one linked elsewhere since stays that computer's.
+        if (w.link?.state === 'elsewhere') model.elsewhere.linkedElsewhere.push({ branch: name, parent: parentOf(w), ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}), linkedAt: w.link.linkedAt });
+        else model.elsewhere.unlinked.push({ branch: name, parent: parentOf(w) });
+        return ok({ workspace: w.record, link: w.link ? 'not_ours' : 'cleared' });
+      }
+      if (fields.elsewhere !== true) return refuse(404, 'not_found', `This hub holds no workspace ${name}; to unlink one from the other computer, send elsewhere: true`);
+      const there = model.elsewhere.linkedElsewhere.find((r) => r.branch === name);
+      const idle = model.elsewhere.unlinked.find((r) => r.branch === name);
+      if (!there && !idle) return refuse(404, 'not_found', `The instance refused: ${name} is not a workspace: no Active Workspace record names it`, { remote: true });
+      if (!there) return ok({ workspace: name, unlinked: false, elsewhere: true });
+      model.elsewhere.linkedElsewhere = model.elsewhere.linkedElsewhere.filter((r) => r.branch !== name);
+      model.elsewhere.unlinked.push({ branch: name, parent: there.parent });
+      return ok({ workspace: name, unlinked: true, elsewhere: true, was: { ...(there.linkLabel ? { linkLabel: there.linkLabel } : {}), ...(there.linkedAt ? { linkedAt: there.linkedAt } : {}) } });
     },
     push: (fields) => {
       const refused = needsHub() ?? needsOwner();
@@ -521,6 +642,8 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
           return refuse(409, 'checks_pending', `Pushing ${branch} waits for ${pending.join(', ')} to report on ${head}, by your own requirement; nothing was pushed`, { commit: head, pending, checks });
         }
       }
+      // As the route, past the person's own gate: the instance refuses the first commit of a workspace it links elsewhere or nowhere (ADR-0072 decision 3).
+      if (unpushed.length > 0 && w.link) return linkRefusal(w, { pushed: [], at: { local: unpushed[0]!.commit, part: 1, total: 1 } })!;
       // As the route: the remote's 412 when the branch moved under the push, with what landed before it, where it stopped and what changed there.
       if (pushMeetsAMove && unpushed.length > 1) {
         pushMeetsAMove = false;
@@ -541,7 +664,11 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
       const unpushed = w.commits.length - w.pushed;
-      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before updating from main`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
+      const parent = parentOf(w);
+      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before updating from ${parent}`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
+      // A merge into the workspace is a write to its branch: the instance refuses it from a computer it is not linked to.
+      const elsewhere = linkRefusal(w);
+      if (elsewhere) return elsewhere;
       if (bringInBreaksARule) {
         bringInBreaksARule = false;
         return refuse(422, 'invariant_violation', 'The instance refused: the merged state breaks 1 rule; nothing was merged', {
@@ -558,48 +685,109 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (!w.remoteMoved) return ok({ workspace: w.record, remoteHead: commitId(), upToDate: true });
       w.remoteMoved = false;
       const local = commitId();
-      w.commits.unshift({ commit: local, author: w.record.owner, message: String(fields.message ?? 'Update from main'), timestamp: Date.now() / 1000 });
+      w.commits.unshift({ commit: local, author: w.record.owner, message: String(fields.message ?? `Update from ${parent}`), timestamp: Date.now() / 1000 });
       w.pushed += 1;
+      // What the update brought in is the parent's own, so nothing new waits to be merged for it.
+      if (w.mergedAt !== undefined) w.mergedAt += 1;
       return ok({ workspace: w.record, remoteHead: commitId(), upToDate: false, merge: { base: commitId(), source: commitId(), target: commitId() }, broughtIn: { local, documents: 3 } });
     },
-    deliver: (fields) => {
+    // The workspace's merge request into its parent (ADR-0072 decisions 5 and 7): the record, its health and every refusal are the instance's.
+    mergeRequest: (fields) => {
       const refused = needsHub() ?? needsOwner();
       if (refused) return refused;
       const w = workspaceOf(fields);
       if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
-      if (typeof fields.message !== 'string' || !fields.message.trim()) return refuse(400, 'message_required', 'A delivery needs a message saying why (ADR-0025)');
+      return ok(requestState(w));
+    },
+    openMergeRequest: (fields) => {
+      const refused = needsHub() ?? needsOwner();
+      if (refused) return refused;
+      const w = workspaceOf(fields);
+      if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      if (typeof fields.message !== 'string' || !fields.message.trim()) return refuse(400, 'message_required', "A merge request needs a message saying what it holds and why; it becomes the merge commit's (ADR-0025)");
       const unpushed = w.commits.length - w.pushed;
-      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before merging`);
-      if (w.remoteMoved) return refuse(409, 'bring_in_first', `main has work ${w.record.branch} has not taken in; update from main, resolve what it reports, then merge`, { conflicts: [], violations: [] });
-      // The remote's merge gate (ADR-0070 decision 6), its refusals as the remote gave them; a dry run answers with the verdicts and changes nothing.
+      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before opening a merge request`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
+      const parent = parentOf(w);
+      if (w.request) {
+        return refuse(409, 'request_open', `The instance refused: ${w.request['@id']} already asks for ${w.record.branch} to be merged into ${parent}; merge or close it, or read it for what a merge would meet`, { remote: true, request: w.request['@id'], source: w.record.branch, target: parent });
+      }
+      w.request = { '@id': `MergeRequest/${commitId()}`, '@type': 'MergeRequest', source: w.record.branch, target: parent, openedBy: w.record.owner, message: fields.message.trim(), status: 'Open' };
+      model.remoteEvents += 1;
+      return ok(requestState(w), 201);
+    },
+    mergeMergeRequest: (fields) => {
+      const refused = needsHub() ?? needsOwner();
+      if (refused) return refused;
+      const w = workspaceOf(fields);
+      if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      if (fields.deleteWorkspace !== undefined && typeof fields.deleteWorkspace !== 'boolean') return refuse(400, 'bad_request', 'deleteWorkspace must be a boolean');
       const overrides = overridesOf(fields.overrides);
       if (!(overrides instanceof Map)) return overrides;
+      const unpushed = w.commits.length - w.pushed;
+      if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before merging`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
       const { branch } = w.record;
-      const head = w.commits[0]?.commit ?? w.record.local;
-      const required = model.remoteRequirements;
-      const stray = [...overrides.keys()].find((check) => !required.some((r) => r.check === check));
-      if (stray) return refuse(400, 'bad_request', `The instance refused: ${stray} is not a required check of this merge`, { remote: true });
-      const checks = verdictsFor(required.map((r) => ({ check: r.check, level: 'Required' as const, locked: r.locked, id: `CheckRequirement/${r.check}`, reporter: 'User/lint-service' })), model.remoteRuns, branch, head, overrides);
-      if (fields.dryRun === true) {
-        return ok({ workspace: w.record, delivered: { base: commitId(), source: head, target: commitId(), upToDate: w.deliveredAt === w.commits.length }, deleted: false, dryRun: true, conflicts: [], violations: [], ...(checks.length ? { checks } : {}) });
+      const parent = parentOf(w);
+      if (!w.request) return refuse(409, 'no_request', `${branch} has no open merge request into ${parent}; open one first`, { workspace: branch, parent });
+      // Whoever may merge into the target merges; the person may be only the one who asked (ADR-0068 decision 4).
+      if (!model.mayMerge) {
+        return refuse(403, 'forbidden', `The instance refused: ${ownerOf()} may not: merge into ${parent} needs Maintainer of ${parent} or of every branch (ADR-0068 decision 4)`, { remote: true, permission: 'merge', branch: parent });
       }
+      const head = w.commits[0]?.commit ?? w.record.local;
+      const sides = { base: w.record.base, source: head, target: 'cmainhead0fake' };
+      // The instance's merge, checked before it commits, then its gate (ADR-0070 decision 6), each refusal as it gave it.
+      if (w.commits.length === (w.mergedAt ?? 0)) {
+        return refuse(409, 'nothing_to_merge', `The instance refused: ${parent} already holds everything on ${branch}, so there is nothing for ${w.request['@id']} to merge; close it, or push more work to ${branch}`, { remote: true, request: w.request['@id'], ...sides });
+      }
+      if (w.conflict) {
+        return refuse(409, 'merge_conflict', `The instance refused: Merging ${branch} into ${parent} conflicts on 1 field(s)`, { remote: true, ...sides, conflicts: healthOf(w).conflicts });
+      }
+      const required = parent === 'main' ? model.remoteRequirements : [];
+      const stray = [...overrides.keys()].find((check) => !required.some((r) => r.check === check));
+      if (stray) return refuse(400, 'bad_request', `The instance refused: overrides names ${stray}, which no required check of this merge is`, { remote: true, check: stray });
+      const checks = verdictsFor(required.map((r) => ({ check: r.check, level: 'Required' as const, locked: r.locked, id: `CheckRequirement/${r.check}`, reporter: 'User/lint-service' })), model.remoteRuns, branch, head, overrides);
       const locked = checks.find((v) => v.overridden && v.locked);
       if (locked) {
-        return refuse(403, 'forbidden', `The instance refused: ${ownerOf()} may not: override the locked check ${locked.check} on main`, { remote: true, permission: 'override_check', branch: 'main', check: locked.check, locked: true });
+        return refuse(403, 'forbidden', `The instance refused: ${ownerOf()} may not: overriding ${locked.check}, a locked requirement, needs an Administrator (ADR-0068 decision 4)`, { remote: true, permission: 'override_check', branch: parent, check: locked.check, locked: true });
       }
       const stopped = stopping(checks);
       const failed = stopped.filter((v) => v.conclusion !== 'pending').map((v) => v.check);
-      if (failed.length) return refuse(422, 'checks_failed', `The instance refused: merging ${branch} into main needs ${failed.join(', ')} to pass at ${head}; nothing was merged`, { remote: true, failed, checks });
+      if (failed.length) return refuse(422, 'checks_failed', `The instance refused: Merging ${branch} into ${parent} needs ${failed.join(', ')} to pass at ${head}; ${parent} is unchanged`, { remote: true, ...sides, failed, checks });
       if (stopped.length) {
         const pending = stopped.map((v) => v.check);
-        return refuse(409, 'checks_pending', `The instance refused: merging ${branch} into main waits for ${pending.join(', ')} to report on ${head}`, { remote: true, pending, checks });
+        return refuse(409, 'checks_pending', `The instance refused: Merging ${branch} into ${parent} waits for ${pending.join(', ')} to report on ${head}`, { remote: true, ...sides, pending, checks });
       }
+      const commit = commitId();
+      const request: Request = { ...w.request, status: 'Merged', decidedBy: w.record.owner, decidedAt: new Date().toISOString(), mergeCommit: commit };
+      w.request = undefined;
+      w.mergedAt = w.commits.length;
+      model.remoteEvents += 1;
       const deleted = fields.deleteWorkspace === true;
-      // As the remote's merge answers when main already holds the workspace's head: nothing merged, no commit made.
-      const upToDate = w.deliveredAt === w.commits.length;
-      if (deleted) model.workspaces.delete(w.record.branch);
-      else w.deliveredAt = w.commits.length;
-      return ok({ workspace: w.record, delivered: { commit: upToDate ? '' : commitId(), base: commitId(), source: commitId(), target: commitId(), upToDate }, deleted, ...(checks.length ? { checks } : {}) });
+      if (deleted) model.workspaces.delete(branch);
+      return ok({ workspace: w.record, request, merged: { commit, ...sides, upToDate: false }, ...(checks.length ? { checks } : {}), deleted });
+    },
+    closeMergeRequest: (fields) => {
+      const refused = needsHub() ?? needsOwner();
+      if (refused) return refused;
+      const w = workspaceOf(fields);
+      if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      if (!w.request) return refuse(409, 'no_request', `${w.record.branch} has no open merge request into ${parentOf(w)}`, { workspace: w.record.branch, parent: parentOf(w) });
+      const request: Request = { ...w.request, status: 'Closed', decidedBy: w.record.owner, decidedAt: new Date().toISOString() };
+      w.request = undefined;
+      model.remoteEvents += 1;
+      return ok({ workspace: w.record.branch, request });
+    },
+    // As the core: the instance's event feed, held until something on it may have changed the request's health. The cursor is the count read at.
+    awaitRemoteChange: async (fields) => {
+      const refused = needsHub() ?? needsOwner();
+      if (refused) return refused;
+      const w = workspaceOf(fields);
+      if (!w) return refuse(404, 'not_found', `This hub holds no workspace ${String(fields.workspace)}`);
+      if (remoteDown) return refuse(502, 'remote_unreachable', `${Instance()} cannot be reached (${model.settings.remote})`, { remote: true });
+      if (typeof fields.cursor !== 'string') return ok({ cursor: String(model.remoteEvents), changed: false });
+      const since = Number(fields.cursor);
+      // Held as the instance holds it, a moment at a time, so a page's wait neither spins nor outlives the page for long.
+      for (let waited = 0; waited < 20 && model.remoteEvents === since; waited++) await new Promise((resolve) => setTimeout(resolve, 100));
+      return ok({ cursor: String(model.remoteEvents), changed: model.remoteEvents !== since });
     },
     remove: (fields) => {
       const refused = needsHub() ?? needsOwner();
@@ -616,12 +804,20 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
           return refuse(409, 'discard_mismatch', `${w.record.branch} holds ${unpushed} commit(s) that are not pushed, not the ${discard} this discard names; nothing was removed`, { unpushed: given, stated: discard });
         }
         model.workspaces.delete(w.record.branch);
-        return ok({ workspace: w.record, remote: 'untouched', discarded: { commits: given, setAside: `_discarded/${w.record.branch}.20261112T203000Z` } });
+        // As the route since 2026-11-20: the instance's link to this computer is cleared when it answers and the link is this computer's.
+        const link = remoteDown ? 'kept' : w.link ? 'not_ours' : 'cleared';
+        if (!remoteDown && w.link?.state === 'elsewhere') model.elsewhere.linkedElsewhere.push({ branch: w.record.branch, parent: parentOf(w), ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}), linkedAt: w.link.linkedAt });
+        else if (!remoteDown) model.elsewhere.unlinked.push({ branch: w.record.branch, parent: parentOf(w) });
+        return ok({ workspace: w.record, remote: 'untouched', link, discarded: { commits: given, setAside: `_discarded/${w.record.branch}.20261112T203000Z` } });
       }
       if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before removing it`);
       model.workspaces.delete(w.record.branch);
-      const inMain = w.deliveredAt !== undefined && w.deliveredAt === w.commits.length;
-      return ok({ workspace: w.record, ...(inMain ? { remote: 'deleted' } : { remote: 'kept', reason: 'unmerged' }) });
+      // The instance deletes a branch its parent holds the head of: nothing of its own since it was made, or since it was last merged.
+      const held = w.commits.length === (w.mergedAt ?? 0);
+      if (held) return ok({ workspace: w.record, remote: 'deleted' });
+      // Kept there, it stays as a workspace linked to no computer, which can be linked again (ADR-0072 decision 4).
+      model.elsewhere.unlinked.push({ branch: w.record.branch, parent: parentOf(w) });
+      return ok({ workspace: w.record, remote: 'kept', reason: 'unmerged', link: w.link ? 'not_ours' : 'cleared' });
     },
   };
 
@@ -644,6 +840,33 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     remoteReports: (branch: string, check: string, conclusion: Run['conclusion'], summary?: string) => {
       const w = model.workspaces.get(branch);
       if (w) model.remoteRuns.set(`${branch} ${check}`, { commit: w.commits[0]?.commit ?? w.record.local, conclusion, ...(summary ? { summary } : {}) });
+      model.remoteEvents += 1;
+    },
+    // Links and merge requests (ADR-0072): what happens on the instance under a workspace held here.
+    unlinkFromElsewhere: (branch: string) => {
+      const w = model.workspaces.get(branch);
+      if (w) w.link = { state: 'unlinked' };
+      model.remoteEvents += 1;
+    },
+    linkElsewhere: (branch: string, linkLabel?: string) => {
+      const w = model.workspaces.get(branch);
+      if (w) w.link = { state: 'elsewhere', ...(linkLabel ? { linkLabel } : {}), linkedAt: '2026-11-19T09:30:00Z' };
+      model.remoteEvents += 1;
+    },
+    mayNotMerge: () => void (model.mayMerge = false),
+    // A maintainer merges the workspace's open request on the instance.
+    mergedElsewhere: (branch: string) => {
+      const w = model.workspaces.get(branch);
+      if (!w?.request) return;
+      w.request = undefined;
+      w.mergedAt = w.commits.length;
+      model.remoteEvents += 1;
+    },
+    // The parent moves against the workspace: its request's health then shows a conflict.
+    parentMoves: (branch: string) => {
+      const w = model.workspaces.get(branch);
+      if (w) w.conflict = true;
+      model.remoteEvents += 1;
     },
     // The remote cannot be reached (the status still answers, saying so), or the status cannot be read at all.
     pushMeetsAMove: () => void (pushMeetsAMove = true),

@@ -42,6 +42,10 @@ export interface Settings {
   snapshots: number;
   user?: string;
   startAtLogin: boolean;
+  /** This installation's identifier, drawn by the core at its first start (ADR-0072 decision 2); shown nowhere, set by no page. */
+  installation?: string;
+  /** The name the person gave this computer, shown where one of their workspaces is linked elsewhere; unset, nothing is sent. */
+  computerName?: string;
 }
 
 export interface SettingsReply {
@@ -66,16 +70,31 @@ export interface Person {
 export type {
   BringInResult,
   CheckVerdict,
-  DeliverResult,
   MergeConflict,
   PersonalRequirement,
   PushResult,
+  RemoteWorkspace,
   RemoveResult,
+  RequestHealth,
+  RequestMerged,
+  RequestState,
   Violation,
   WorkspaceRecord,
   WorkspaceStatus,
-  WorkspaceWarning,
 } from '@armature/client';
+
+/** `elsewhere`'s answer: the person's workspaces on the instance that are not on this computer (ADR-0072 decision 7). */
+export interface Elsewhere {
+  unlinked: import('@armature/client').RemoteWorkspace[];
+  linkedElsewhere: import('@armature/client').RemoteWorkspace[];
+}
+
+/** `awaitRemoteChange`'s answer: where to ask from next, and whether a merge request's health may have changed. */
+export interface RemoteChange {
+  cursor: string | null;
+  changed: boolean;
+  stopped?: boolean;
+}
 
 /** A commit as the branch log gives it, newest first. */
 export type { Commit as CommitEntry } from '@armature/client';

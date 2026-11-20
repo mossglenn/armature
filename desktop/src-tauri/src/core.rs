@@ -14,7 +14,7 @@
 //! the next start takes over (ADR-0069 decision 4). An update ends the core the same way before it
 //! installs (`end_for_update`; update.rs).
 //!
-//! A push, bring-in, deliver, create, clone or remove in flight (`ACTIONS`) finishes first: quitting
+//! A push, an update, a create, a link, an unlink, a removal or an action on a merge request in flight (`ACTIONS`) finishes first: quitting
 //! waits up to `ACTION_WAIT` for it, an update's install the same before it ends the core (and gives
 //! up instead), and the pages hold the install button while one runs, since the core's `stop` closes
 //! the hub at once and a push cut off is recovered only at the next start (the 2026-11-09 review's S3
@@ -59,21 +59,24 @@ pub const ACTION_WAIT: Duration = Duration::from_secs(30);
 /// The requests that change a workspace or its remote, the core's long actions
 /// (app/lib/desktop/core.ts): the hub is not stopped under one, and the pages hold the install
 /// button while one runs (the module's header).
-pub const ACTIONS: &[&str] = &["create", "clone", "push", "bringIn", "deliver", "remove"];
+pub const ACTIONS: &[&str] = &["create", "link", "unlink", "push", "bringIn", "openMergeRequest", "mergeMergeRequest", "closeMergeRequest", "remove"];
 
 /// Whether a request is one of `ACTIONS`.
 pub fn is_action(request_type: &str) -> bool {
     ACTIONS.contains(&request_type)
 }
 
-/// An action named for the middle of a sentence: "the push", "the bring-in".
+/// An action named for the middle of a sentence: "the push", "the update".
 pub fn describe(action: &str) -> &'static str {
     match action {
         "create" => "the workspace being created",
-        "clone" => "the clone",
+        "link" => "the linking of a workspace",
+        "unlink" => "the unlinking of a workspace",
         "push" => "the push",
-        "bringIn" => "the bring-in",
-        "deliver" => "the delivery",
+        "bringIn" => "the update",
+        "openMergeRequest" => "the opening of a merge request",
+        "mergeMergeRequest" => "the merge",
+        "closeMergeRequest" => "the closing of a merge request",
         "remove" => "the removal",
         _ => "the action",
     }
@@ -816,15 +819,16 @@ mod tests {
 
     #[test]
     fn the_long_actions_are_known_by_name_and_described_for_a_sentence() {
-        for action in ["create", "clone", "push", "bringIn", "deliver", "remove"] {
+        for action in ACTIONS {
             assert!(is_action(action), "{action}");
             assert_ne!(describe(action), "the action", "{action}");
         }
-        for request in ["settings", "workspaces", "status", "commits", "signOut", "stop", "resetPairing"] {
+        // Reads and waits are no actions: the hub may stop under them, and a wait on the instance's feed would otherwise hold a quit.
+        for request in ["settings", "workspaces", "status", "commits", "signOut", "stop", "resetPairing", "elsewhere", "mergeRequest", "awaitRemoteChange", "clone", "deliver"] {
             assert!(!is_action(request), "{request}");
         }
-        assert_eq!(describe("bringIn"), "the bring-in");
-        assert_eq!(describe("deliver"), "the delivery");
+        assert_eq!(describe("bringIn"), "the update");
+        assert_eq!(describe("mergeMergeRequest"), "the merge");
     }
 
     #[test]
