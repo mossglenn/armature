@@ -639,7 +639,7 @@ test.describe('removing a workspace', () => {
 });
 
 test.describe('pairing, settings and the log', () => {
-  test('the pairing value is shown and copied, and a reset is confirmed first', async ({ page, context }) => {
+  test('the pairing key is shown and copied, and a reset is confirmed first', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await open(page, 'header');
     await nav(page, 'Pairing').click();

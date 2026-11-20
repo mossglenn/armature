@@ -116,7 +116,7 @@ describe('the core’s bundle, run as the shell runs it', () => {
     expect(await core.exited).toBe(0);
     expect(existsSync(lock)).toBe(false);
     await expect(fetch(`${hub}/discover`)).rejects.toThrow();
-    // Nothing but the channel's lines on standard output, and the local token in none of the log lines.
+    // Nothing but the channel's lines on standard output, and the pairing key in none of the log lines.
     const messages = core.lines.map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(messages.some((m) => m.event === 'log')).toBe(true);
     expect(messages.filter((m) => m.event === 'log').every((m) => !String(m.line).includes(localToken))).toBe(true);

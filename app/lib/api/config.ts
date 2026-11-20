@@ -103,7 +103,7 @@ export interface HubConfig {
   /** ARMATURE_SNAPSHOTS: how many remote commits a workspace holds as snapshots (plan §16 question 3); reads at the rest are forwarded. */
   snapshotBudget: number;
   /**
-   * A workspace hub's per-launch secret (ADR-0065 decision 7, note; ./localToken.ts): ARMATURE_LOCAL_TOKEN, or
+   * A workspace hub's pairing key (ADR-0065 decision 7, note; ./localToken.ts): ARMATURE_LOCAL_TOKEN, or
    * drawn by the host at start when unset. Every write to a workspace hub carries it as `Armature-Local-Token`;
    * a workspace hub with none refuses every write. Unused on a remote hub.
    */

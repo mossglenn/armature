@@ -59,7 +59,7 @@ import { ensureSnapshots, fetchRemoteLog, isSnapshotBranch, resolvableCommitsOf 
  *                             files set aside first (409 discard_mismatch when
  *                             n is not what is there; since 2026-11-12)
  *
- * Every route but the reads carries the hub's per-launch secret as
+ * Every route but the reads carries the hub's pairing key as
  * `Armature-Local-Token` (../localToken.ts; since 2026-11-03). Push, bring in
  * and deliver are the desktop program's own actions rather than routes a tool
  * may call (ADR-0065 decision 7, note of 2026-10-30); until the program exists

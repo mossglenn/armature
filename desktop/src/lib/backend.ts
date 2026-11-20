@@ -80,7 +80,7 @@ export interface Backend {
   onEvent(listener: (event: CoreEvent) => void): () => void;
   /** The latest log lines the shell kept, for a log page opened after them. */
   logLines(): Promise<CoreEvent[]>;
-  /** The pairing value in force, for the pairing page alone. */
+  /** The pairing key in force, for the pairing page alone. */
   pairingValue(): Promise<string | null>;
   openLogFolder(): Promise<void>;
   /** The program's own version, for the settings page. */

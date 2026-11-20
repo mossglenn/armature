@@ -12,7 +12,7 @@ import { writeWhole } from '../workspaceFolder';
  * the core, the host of the hub.
  *
  * The file has no writer under `app/lib/api/`: a tool on loopback holds the
- * pairing value and could call any route, so a route that wrote the file
+ * pairing key and could call any route, so a route that wrote the file
  * would let a tool relax its owner's gate. The writer is here, reached only
  * over the control channel, which the shell's own pages alone can use. The
  * hub reads the file at each push through its records (`getChecks`), so a

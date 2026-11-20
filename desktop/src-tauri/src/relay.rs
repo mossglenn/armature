@@ -55,7 +55,7 @@ pub fn classify(event: &Value) -> EventAction {
     }
 }
 
-/// A reply's body with the local token removed, for the shell's state, which every page reads;
+/// A reply's body with the pairing key removed, for the shell's state, which every page reads;
 /// the pairing page asks for the value on its own.
 pub fn without_local_token(mut body: Value) -> Value {
     if let Some(object) = body.as_object_mut() {

@@ -37,7 +37,7 @@ describe('over the file-backed store in memory', () => {
   let config: HubConfig;
   let workspace: ReturnType<typeof createApp>;
   let onMain: ReturnType<typeof createClient>;
-  /** The workspace hub's per-launch secret, which every write to it carries (ADR-0065 decision 7). */
+  /** The workspace hub's pairing key, which every write to it carries (ADR-0065 decision 7). */
   const TOKEN = `cycle-token-${stamp}`;
   const headers = (user: string) => ({ 'Content-Type': 'application/json', 'Armature-User': user, 'Armature-Local-Token': TOKEN });
   const on = (method: string, path: string, body?: unknown, user = DESIGNER) =>

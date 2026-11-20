@@ -56,7 +56,7 @@ export interface ClientOptions {
    */
   agent?: string;
   /**
-   * A workspace hub's per-launch secret, sent as `Armature-Local-Token` on every request: a
+   * A workspace hub's pairing key, sent as `Armature-Local-Token` on every request: a
    * tool the desktop program launched reads it from `ARMATURE_LOCAL_TOKEN`, another has it
    * pasted once. A write to a workspace hub without it is 403 `forbidden` (`reason:
    * local_token`); a remote hub ignores it (ADR-0065 decision 7, since 2026-11-03).

@@ -28,7 +28,7 @@ async fn core_request(app: AppHandle, request: Value) -> Result<Value, String> {
         return Ok(json!({ "status": 403, "body": { "error": "shell_only", "message": format!("{request_type} is the shell's own request, not a page's") } }));
     }
     let mut reply = core::ask(&app, request).await?;
-    // A keychain that refused what the reply implies (the sign-in removed, the new pairing value
+    // A keychain that refused what the reply implies (the sign-in removed, the new pairing key
     // kept) is said in the reply, so the page tells the person rather than only the log.
     if let Some(problem) = core::after_reply(&app, &request_type, &reply) {
         if let Some(body) = reply["body"].as_object_mut() {
@@ -44,7 +44,7 @@ fn log_lines(app: AppHandle) -> Vec<Value> {
     app.state::<Core>().recent_lines()
 }
 
-/// The pairing value every tool on the machine sends as `Armature-Local-Token` (plan §7), for the
+/// The pairing key every tool on the machine sends as `Armature-Local-Token` (plan §7), for the
 /// pairing page alone; never in the shared state or the log.
 #[tauri::command]
 fn pairing_value(app: AppHandle) -> Option<String> {

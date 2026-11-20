@@ -17,7 +17,7 @@ import { writeWhole } from '../workspaceFolder';
  * `%LOCALAPPDATA%\com.mossglenn.armature` on Windows,
  * `~/.local/share/com.mossglenn.armature` on Linux).
  *
- * No credential is ever in it: the refresh token and the local token live in
+ * No credential is ever in it: the refresh token and the pairing key live in
  * the shell's keychain and reach the core over the channel (plan §6, §7).
  *
  * An unknown key is refused rather than ignored, so a setting misspelled by

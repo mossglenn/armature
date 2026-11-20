@@ -29,13 +29,13 @@ import { issuerMetadata, revokeRefreshToken, signIn, type FetchLike } from './si
  * What it adds to `server.ts`: settings from a file in the data folder the
  * shell names (./settings.ts) rather than the environment; the sign-in and
  * the credential behind `hub.remoteToken` (./signIn.ts, ./credential.ts);
- * the local token kept by the shell's keychain across starts, drawn here only
+ * the pairing key kept by the shell's keychain across starts, drawn here only
  * when none is kept (plan §7, ADR-0065 decision 7, note); and the program's
  * own actions, push, bring in and deliver.
  *
  * The actions run through a second Hono app over the same configuration with
  * `actionRoutes` on, never bound to a port, called with `app.request()` as the
- * owner with the local token (decided 2026-11-07, Amos, over calling the
+ * owner with the pairing key (decided 2026-11-07, Amos, over calling the
  * modules and repeating the routes' checks): the replies are the routes' own
  * by construction, the owner check is the route's, and the hub served on the
  * port keeps `actionRoutes` off, so its `GET /discover` says
@@ -120,7 +120,7 @@ export function runCore(options: CoreOptions): Core {
   let settings: DesktopSettings | undefined;
   /** The instance by the name it gave and the person confirmed, as a message names it; the general word before one is connected. */
   const instance = (): string => settings?.instance?.name ?? YOUR_INSTANCE;
-  /** The local token: the keychain's, sent at start, or drawn here; one per program, not per start (plan §7). */
+  /** The pairing key: the keychain's, sent at start, or drawn here; one per program, not per start (plan §7). */
   let localToken: string | undefined;
   /** The refresh token the keychain kept, until the credential is made from it on first use. */
   let keptRefresh: string | undefined;
@@ -243,7 +243,7 @@ export function runCore(options: CoreOptions): Core {
   };
 
   /**
-   * `carried`: whether the `start` request brought the keychain's local token. When it did not, the
+   * `carried`: whether the `start` request brought the keychain's pairing key. When it did not, the
    * token in force is reported in the reply, whether it was drawn now or by an earlier start that
    * failed after drawing it (a port in use): the hub enforces it either way, and a shell that never
    * saw it has nothing to show on the pairing page or to keep (the 2026-11-09 review's C8).
@@ -615,7 +615,7 @@ export function runCore(options: CoreOptions): Core {
       return ok({ localToken });
     },
 
-    // What a paired tool sends as Armature-User beside the pairing value, for the pairing page: the
+    // What a paired tool sends as Armature-User beside the pairing key, for the pairing page: the
     // identifier under header, the remote's externalId for the signed-in person under oidc, which is
     // the provider's sub and found nowhere else a person looks (the Keycloak rehearsal, 2026-11-08).
     toolIdentity: async () => ok({ user: await owner() }),

@@ -2,9 +2,9 @@
 //! 4): Node as the sidecar `armature-node` with the core's bundle as its one argument, spoken to in
 //! JSON lines over its standard input and output.
 //!
-//! The shell starts the hub itself: `start` with the data folder and the local token the keychain
+//! The shell starts the hub itself: `start` with the data folder and the pairing key the keychain
 //! kept, then, when the remote signs people in, `credential` with the refresh token the keychain
-//! keeps for that remote. A local token the core drew comes back in the reply and goes to the
+//! keeps for that remote. A pairing key the core drew comes back in the reply and goes to the
 //! keychain; a rotated refresh token comes as an event and goes there too. The pages ask through
 //! `core_request` (lib.rs), which forwards only what `relay::allowed_from_webview` allows.
 //!
@@ -168,7 +168,7 @@ pub struct Core {
     logs: Mutex<Option<LogFiles>>,
     /// The latest log lines, as the page receives them, for a log page opened after them.
     recent: Mutex<VecDeque<Value>>,
-    /// The pairing value in force: the keychain's, or the one the core drew or reset to, kept here
+    /// The pairing key in force: the keychain's, or the one the core drew or reset to, kept here
     /// too so the pairing page works when the keychain cannot be written.
     local_token: Mutex<Option<String>>,
     quitting: AtomicBool,
@@ -492,9 +492,9 @@ pub async fn stop_hub(app: &AppHandle) -> Result<(), String> {
 }
 
 /// What the shell does after the core answers a page's request: the keychain follows the remote,
-/// a sign-out and a new pairing value. A keychain that refuses is returned as a sentence for the
+/// a sign-out and a new pairing key. A keychain that refuses is returned as a sentence for the
 /// page, which the reply then carries as `keychain`: the page said "signed out" or showed a new
-/// pairing value, and the person must know when the keychain still holds the old one (the
+/// pairing key, and the person must know when the keychain still holds the old one (the
 /// review's S4 and S5).
 pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) -> Option<String> {
     if reply["status"] != 200 {
