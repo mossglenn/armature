@@ -6,6 +6,53 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-19 (the vocabulary package built and carried to Armature's pages; ADR-0072 accepted; the desktop app's 0.1.5 released; PRs #180 to #184)
+
+**Where things stood at the close.** **Phase 8, 2026-11-19; `main` at `f0fe560`, client revision 2026-11-16.** `@armature/vocabulary` is built (ADR-0073; PR #180) and Armature's own surfaces are carried to it: the desktop app's pages and tray, the desktop core's messages, the viewer's pages, the guide and the hub's workspace-route refusals (PRs #182 and #183), 264 avoided words to none, with `check:vocabulary` failing on any that return. ADR-0072 is accepted, its five questions decided by Amos as recommended (PR #181), not built. `desktop-v0.1.5`, the first release with the new names, was tagged at `f0fe560` and published 01:59 UTC on 2026-11-20 (PR #184); the channel names it, and neither machine has installed it: the Mac has 0.1.4 in `/Applications` and ran the debug bundle, the Windows PC runs 0.1.4 and never fetched the debug installer, so the release was rehearsed on the Mac only. **Next: both machines take 0.1.5, then its documents pull request; then Quiver adopts the package (item 17).**
+
+### Done
+
+- **PR #180** (`phase-8/vocabulary-package`, four commits, on `main` as `f94f6f2`, `918f1a6`, `6fefdbe`, `e122220`): `packages/vocabulary/` (`vocabulary.json` with 194 terms, every one `chosen`, 34 reserved words and 66 avoided words; `vocabulary.schema.json`; `src/index.ts` with the typed data, `terms` by id, `findAvoided` and `isReserved`; `CHANGES.md`; a README), no dependencies and no build. `scripts/check_vocabulary.js` (`npm run check:vocabulary`) holds the file to `docs/naming-vocabulary.md` and reports the avoided words on Armature's pages. The package's tests run under Node's own runner (38 then, 39 now). CI's first job runs the check and the tests; the install check packs and installs the package under `tsc`, Vitest, `tsx` and a Next build. The seed was written by a one-time script in the session's scratchpad, not kept.
+- **PR #181** (`docs/adr-0072-accepted`, three commits): ADR-0072 accepted. Amos decided its five open questions one by one, each as recommended: a request for every merge from a workspace and every merge into `main` (decision 5); a merge request is infrastructure; no review required; the program writes records for the workspaces it already holds (decision 7); the link's label empty unless the owner names the computer (decision 2). "Unlink from the other computer" replaced "Unlink from elsewhere". Dated notes on ADR-0025, ADR-0059, ADR-0065, ADR-0068 and ADR-0070.
+- **PR #182** (`phase-8/carry-the-names`, six commits): the desktop app's pages and components (158 findings to none), the core's messages (81) and the viewer's pages (25) reworded; `desktop/src/lib/instance.tsx`, a context for the instance's own name, which the core's `start` reply already carried in its settings; the tray; the shell depends on `@armature/vocabulary` and takes the words for four refusal codes from it (`RefusalNotice.tsx`); the guide rewritten, with a table of the labels 0.1.4 still shows and its account of the Workspaces list corrected; `BROUGHT` holds the three folders. CI's first run failed twice in suites that need the store: `core.test.ts` waited for the log line "has revoked the kept sign-in", and `app/e2e/connect.spec.ts` looked for "Get the program"; both expectations followed in the sixth commit.
+- **PR #183** (`phase-8/hub-workspace-messages`, four commits): the refusals of `app/lib/api/workspace/` and `routes/workspace.ts` a person meets on a page ("The instance refused", "commits not pushed", "update from main", "merge"); the default message of an update is "Update from main"; the check reads those modules as a fourth surface for the report only (27 words remain, the hub's messages about itself).
+- **PR #184** (`phase-8/desktop-0.1.5`, two commits, `279e104` and `f0fe560`): the shell's diagnostic lines say "the app"; the window's title and the release's title are "Armature Desktop", the bundle still `Armature.app`; version 0.1.5. **The release:** `desktop-v0.1.5` tagged at `f0fe560` and pushed by Claude on Amos's "push the new tag"; four builds; the signing job approved and the release published by Amos at 01:59 UTC on 2026-11-20; `latest.json` on the channel names 0.1.5 for all four platforms.
+- **Quiver and CoQui:** one bullet in each `CLAUDE.md` pointing at the package, committed and pushed on `docs/armature-vocabulary` (`084383f` and `503f528`); no pull request opened, since both forbid commits on `main` and CoQui asks before one.
+
+### Session notes
+
+- Amos asked whether the package was ready for tools and tools for it. Claude installed it by git reference into a scratch project (it works) and ran it over both tools: Quiver 102 findings in 10 of 24 files (save 35, draft 30), CoQui 68 in 15 of 49 (note 35, which looks like CoQui's own review concept). The answer: the package is ready, the tools are not, and the order is Armature's pages and a release, then Quiver, then a per-tool exemption, then CoQui when its study allows.
+- Amos's proposed sequence put CoQui before Quiver; Claude recommended Quiver first, since its buttons open the desktop app and the two share words in one sitting.
+- For ADR-0072 Amos chose "one by one" over accepting the five recommendations together, then chose the recommendation each time.
+- Claude said after PR #182 that the hub's workspace-route messages were the most visible gap, and Amos asked for them next.
+- The release went out rehearsed on the Mac only. Claude served the Windows debug installer on the tailnet and found afterwards, from the server's log, that the PC had never fetched it; it said so before recording anything. The documents pull request for 0.1.5 is held until both machines have taken the release.
+
+### Facts from 2026-11-19 worth keeping
+
+- **How a term meets its row** is in the header of `scripts/check_vocabulary.js`: the name whole in the Chosen cell, nothing left but the script's `QUALIFIERS`; `also`, `row.in: "recommended"` and a name equal to the Concept cell are the three allowances. A new connecting word in a Chosen cell fails the check until it is a term or joins the list.
+- **The document's §2 has a table with a `Concept` column too** (the choice of metaphor); the parser takes a table of names only when it has `Recommended` and `Chosen` as well. A test holds it.
+- **Before rewording a message, grep the suites that need the store** for the old words: with Docker not running, the contract suite, `core.test.ts` and `app/e2e/` run only in CI. Home: this entry.
+- **A JSX comment cannot be the first of two children inside `cond && ( … )`**; a `//` comment line does. The vocabulary check's parse tolerates the syntax error, so `tsc` and lint are what catch it.
+- **`sentence()` capitalizes only the general word**: an instance's own name is written as it gave it, a host name too (`hub.example.test`, the fake's).
+- `git add -p` fed its answers by a here-document staged one hunk of `tauri.conf.json`, the title without the version.
+- The Windows PC took about fifteen seconds to answer its first SSH connection of the evening, then answered at once.
+- Twelve terms carry `until` for ADR-0072; it clears when ADR-0072 is built, not when it was accepted.
+
+### Decisions taken
+
+- ADR-0072's five open questions (Amos): its decisions 2, 5 and 7, and its Open questions section.
+- Claude's, open to overrule, in ADR-0073's notes of 2026-11-19: six fields beyond the tables of decisions 2 to 4; `proposal`, `Revert` and `level` as terms; the row-matching rule; `isReserved` answering a list or null; `findAvoided` leaving a word inside a term's own name; the desktop shell depending on the package; the hub's messages saying "the instance"; the workspace routes read for the report only.
+- Claude's, in ADR-0072's Open questions: the code 409 `request_required`.
+- Claude's, in `docs/demo-coverage.md`: an empty row for the shared vocabulary, the totals over 27 capabilities.
+- The term ids' scheme (bare nouns; `action.`, `state.`, `refusal.<code>`, `heading.`, `option.`, `label.`, `conflict.`, `author.`, `time.`): `packages/vocabulary/vocabulary.json`; never renamed.
+
+### Moved from SESSION.md
+
+- Item 45's build order (the package; `check:vocabulary`; the report; the install check, `CHANGES.md`, CLAUDE.md's map; the banner; one line in Quiver's and CoQui's `CLAUDE.md`): all done, the last committed on a branch in each tool's repository.
+- Item 46 as it stood: the desktop app's pages, tray and the core's refusal messages, each page added to the check's failing list as reworded, then a 0.1.5 after a debug-build rehearsal; the guide, whose § "Your workspaces" wrongly said the list shows whether `main` moved. Done but for what the item now lists.
+- The "First" note as it stood: item 45, then item 46, then Quiver; Amos's calls on ADR-0072 and a 0.1.5. All four done.
+- From Blockers, for the budget, each already in Claude's memory for this project (`one-session-per-checkout`, `github-actions-prequeue-stuck`, `stage-by-path-never-add-all`), whose index every session loads: Two sessions in one checkout and numbers claimed by two sessions at once: Claude's memory `one-session-per-checkout`, and HISTORY.md, 2026-11-16, "Moved from SESSION.md". Runs left `queued` with no jobs by an Actions outage (2026-11-11): Claude's memory, `github-actions-prequeue-stuck`. Stage by path and read `git status --short` first (`git add -A` swept `brand/` into a pushed commit on 2026-11-12; HISTORY.md, that entry).
+
 ## 2026-11-18, evening (the vocabulary reviewed and decided; ADR-0073, a shared vocabulary in the toolkit; PRs #178 and #179)
 
 **Where things stood at the close.** **Phase 8, 2026-11-18 evening; `main` at `f18207f`, client revision 2026-11-16.** PRs #178 and #179 put documents only on `main`: `docs/naming-vocabulary.md` reviewed against the code and the documents, eleven of its recommendations revised, and then decided by Amos, every name as recommended, its Chosen column filled; ADR-0073 accepted (a third toolkit package, `@armature/vocabulary`: terms, reserved words and avoided words in one JSON file, held to the working document by `check:vocabulary`), not built; ADR-0072 still Proposed with its five open questions. Nothing is built, and the installed program is still 0.1.4. **Next: build ADR-0073's package (item 45), then carry the chosen names to the program, the guide and Quiver (item 46); Amos's calls on ADR-0072 (item 44).**
