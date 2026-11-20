@@ -142,6 +142,8 @@ describe('over the file-backed store in memory', () => {
     it("brings in main after it moved: the remote's merge, read back as one local commit the table maps", async () => {
       const theirs = await onMain.documents.put('LearningNeed', THEIRS, { message: 'Work on main', document: { label: 'theirs', rationale: 'base' } });
       expect(theirs.data.commit).toBeTruthy();
+      // The status says the parent has something to bring, and that it would merge, before anyone asks for it.
+      expect((await json(await on('GET', `/workspace/${WS}/status`))).body.remote.parent).toEqual({ branch: 'main', behind: true, documents: 1, conflicts: 0 });
       const res = await json(await on('POST', `/workspace/${WS}/bring-in`, { message: 'Catch up with main' }));
       expect(res.status).toBe(200);
       expect(res.body.upToDate).toBe(false);
@@ -153,7 +155,7 @@ describe('over the file-backed store in memory', () => {
       expect(local.status).toBe(200);
       expect(local.body.rationale).toBe('base');
       const status = (await json(await on('GET', `/workspace/${WS}/status`))).body;
-      expect(status).toMatchObject({ localCommits: 2, pushed: 2, unpushed: 0, remote: { head: mergeCommit, moved: false } });
+      expect(status).toMatchObject({ localCommits: 2, pushed: 2, unpushed: 0, remote: { head: mergeCommit, moved: false, parent: { branch: 'main', behind: false } } });
       const table = await config.workspaces!.getPush(WS);
       expect(table!.commits.at(-1)).toMatchObject({ remote: mergeCommit, parts: 0, broughtIn: true });
     });
@@ -612,18 +614,24 @@ describe('over the file-backed store in memory', () => {
       expect((await on('POST', `/workspace/${branch}/push`)).status).toBe(200);
       // The owner, at another computer or in any client, takes this one for lost.
       expect((await onMain.workspaces.unlink(branch)).data.unlinked).toBe(true);
+      // With nothing to push, nothing would reach the remote for it to refuse: this hub refuses its own actions
+      // (the rehearsal of 2026-11-20, where a push of nothing and a merge of the open request both went through).
+      for (const [action, body] of [['push', undefined], ['bring-in', undefined], ['merge-request', { message: 'Send it on' }], ['merge-request/merge', undefined], ['merge-request/close', undefined]] as const) {
+        const quiet = await json(await on('POST', `/workspace/${branch}/${action}`, body));
+        expect(quiet.status, action).toBe(409);
+        expect(quiet.body, action).toMatchObject({ error: 'not_linked', workspace: branch });
+      }
       expect((await write(branch, `lost-unpushed-${stamp}`)).status).toBe(200);
       const refused = await json(await on('POST', `/workspace/${branch}/push`));
       expect(refused.status).toBe(409);
-      expect(refused.body).toMatchObject({ error: 'not_linked', remote: true, workspace: branch, pushed: [] });
+      expect(refused.body).toMatchObject({ error: 'not_linked', workspace: branch });
       expect((await json(await on('GET', `/workspace/${branch}/status`))).body).toMatchObject({ unpushed: 1, remote: { link: 'unlinked' } });
       // Linked to another computer since, it says where; and nothing here takes it back.
       await createClient({ baseUrl: remote.url, user: DESIGNER }).workspaces.link(branch, { link: OTHER_COMPUTER, linkLabel: 'Laptop' });
       expect((await json(await on('GET', `/workspace/${branch}/status`))).body.remote).toMatchObject({ link: 'elsewhere', linkLabel: 'Laptop', linkedAt: expect.any(String) });
-      expect((await json(await on('POST', `/workspace/${branch}/push`))).body).toMatchObject({ error: 'held_elsewhere', remote: true, linkLabel: 'Laptop' });
-      for (const action of ['bring-in', 'unlink']) {
-        expect((await json(await on('POST', `/workspace/${branch}/${action}`))).body.error, action).toBe('unpushed_commits');
-      }
+      expect((await json(await on('POST', `/workspace/${branch}/push`))).body).toMatchObject({ error: 'held_elsewhere', linkLabel: 'Laptop', linkedAt: expect.any(String) });
+      expect((await json(await on('POST', `/workspace/${branch}/bring-in`))).body.error).toBe('held_elsewhere');
+      expect((await json(await on('POST', `/workspace/${branch}/unlink`))).body.error).toBe('unpushed_commits');
       // The discard gives up the one commit and leaves the other computer's link alone.
       const discarded = await json(await on('DELETE', `/workspace/${branch}?discard=1`));
       expect(discarded.status, JSON.stringify(discarded.body)).toBe(200);

@@ -439,7 +439,11 @@ export async function mergeBranches(c: Context, who: ResolvedUser, opts: MergeOp
     }
   }
   if (dryRun) {
-    return { etag: targetHead.id, body: { ...sides, upToDate: false, dryRun: true, conflicts, violations, ...(required.length ? { checks: verdicts(), bringInFirst } : {}) } };
+    // What the merge would bring, counted without the records kept on `main` alone: a branch that is behind its
+    // parent only by those (a grant, a workspace's record, a merge request) has nothing of the design to take,
+    // and a client says so rather than offering an update that changes nothing a person works on (2026-11-20).
+    const brings = changesOf(await target.diff(base, sourceHead.id)).filter((change) => !livesOnMain(change.id.split('/')[0])).length;
+    return { etag: targetHead.id, body: { ...sides, upToDate: false, dryRun: true, brings, conflicts, violations, ...(required.length ? { checks: verdicts(), bringInFirst } : {}) } };
   }
   if (conflicts.length) {
     throw new ApiError(409, 'merge_conflict', `Merging ${sourceName} into ${targetName} conflicts on ${conflicts.length} field(s)`, { ...sides, conflicts });

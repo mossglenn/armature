@@ -16,9 +16,9 @@ const WORKSPACE_NAME = /^[A-Za-z0-9._-]{1,99}$/;
 import { cloneBranch, mirrorMain, type Owner } from '../workspace/clone';
 import { MIRROR_BRANCH } from '../role';
 import { bringIn, removeWorkspace, unlinkHere } from '../workspace/bringIn';
-import { adoptHeld, elsewhere, linkOf, linkState, type LinkState } from '../workspace/links';
+import { adoptHeld, elsewhere, linkOf, linkState, requireLinkedHere, type LinkState } from '../workspace/links';
 import { localCommitsSince, pushWorkspace } from '../workspace/push';
-import { PERSONAL_CHECKS, type WorkspaceRecord, type WorkspaceRecords } from '../workspace/records';
+import { PERSONAL_CHECKS, parentOf, type WorkspaceRecord, type WorkspaceRecords } from '../workspace/records';
 import { fromRemote, remoteClient, requireRemoteIdentity } from '../workspace/remote';
 import { closeRequest, mergeRequest, openRequest, requestState } from '../workspace/requests';
 import { ensureSnapshots, fetchRemoteLog, isSnapshotBranch, resolvableCommitsOf } from '../workspace/snapshots';
@@ -272,6 +272,38 @@ async function recordOf(c: Context, name: string): Promise<WorkspaceRecord> {
   return record;
 }
 
+/** Where the workspace stands against its parent on the remote: whether an update from the parent would bring anything, and whether it would merge. */
+interface ParentState {
+  branch: string;
+  /** True when the parent holds commits the workspace's branch on the remote does not. */
+  behind: boolean;
+  /** When behind: how many documents an update would bring, where the remote says. */
+  documents?: number;
+  /** When behind: how many records an update would be refused for, zero when it would merge. */
+  conflicts?: number;
+}
+
+/**
+ * The remote's own answer, a dry run of the merge an update makes (the parent
+ * into the workspace's branch), which the remote keeps by the two heads, so
+ * asking again costs a read. Absent when the remote would not say (the parent
+ * is gone, an older remote): the status is what is known, and a page then
+ * leaves the action open. Answers issue #170's question for a tool: has the
+ * parent moved?
+ */
+async function parentState(hub: HubConfig, client: ReturnType<typeof remoteClient>, record: WorkspaceRecord): Promise<ParentState | undefined> {
+  const parent = parentOf(record);
+  try {
+    const dry = (await fromRemote(hub, () => client.branches.merge(record.branch, { from: parent, message: `Update from ${parent}`, dryRun: true }))).data;
+    // Behind only by records kept on `main` alone (a grant, a merge request) is not behind: nothing of the design waits.
+    if (dry.upToDate || dry.brings === 0) return { branch: parent, behind: false };
+    return { branch: parent, behind: true, ...(dry.brings !== undefined ? { documents: dry.brings } : {}), conflicts: dry.conflicts?.length ?? 0 };
+  } catch (err) {
+    if (err instanceof ApiError && err.code !== 'remote_unreachable') return undefined;
+    throw err;
+  }
+}
+
 workspace.get('/:name/status', async (c) => {
   const { name } = c.req.param();
   const hub = hubOf(c);
@@ -284,7 +316,7 @@ workspace.get('/:name/status', async (c) => {
   const lastKnown = table?.commits.at(-1)?.remote ?? record.base;
   const snapshots = (await recordsOf(c).getSnapshots(record.branch))?.commits ?? [];
 
-  let remote: { head: string; moved: boolean; link: LinkState; linkLabel?: string; linkedAt?: string } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
+  let remote: { head: string; moved: boolean; link: LinkState; linkLabel?: string; linkedAt?: string; parent?: ParentState } | { reachable: false; reason?: 'signed_out' | 'issuer_unreachable' | 'other_remote' };
   try {
     // A workspace cloned from another remote than this hub's has no remote to ask here (requireItsRemote).
     if (record.remote !== (hub.remote ?? '')) throw new ApiError(409, 'other_remote', `${record.branch} was created from the instance at ${record.remote}`);
@@ -297,7 +329,8 @@ workspace.get('/:name/status', async (c) => {
     // before workspaces were linked, not yet recorded on the remote.
     const linked = await linkState(hub, client, record.branch);
     const where = linked.state === 'elsewhere' ? { ...(linked.record?.linkLabel ? { linkLabel: linked.record.linkLabel } : {}), ...(linked.record?.linkedAt ? { linkedAt: linked.record.linkedAt } : {}) } : {};
-    remote = { head: remoteHead, moved: remoteHead !== lastKnown, link: linked.state, ...where };
+    const parent = await parentState(hub, client, record);
+    remote = { head: remoteHead, moved: remoteHead !== lastKnown, link: linked.state, ...where, ...(parent ? { parent } : {}) };
   } catch (err) {
     // The status is what this hub knows of the workspace, and it knows it offline: a remote that cannot be
     // asked is said as such, never a failure of the read. That holds for the credential too: under oidc a
@@ -353,6 +386,7 @@ workspace.post('/:name/push', async (c) => {
   requireActionRoutes(c, 'push');
   const record = await adoptFirst(c, await ownedWorkspace(c, 'push'));
   requireItsRemote(hubOf(c), record, 'push');
+  await requireHere(c, record, 'push');
   // `overrides` sets the owner's personal requirements aside for this push, each with a reason (ADR-0070 decision 8).
   const overrides = parseOverrides((await optionalJson(c)).overrides);
   return c.json(await pushWorkspace(hubOf(c), recordsOf(c), record, { runs: runsOf(c), overrides }));
@@ -362,6 +396,7 @@ workspace.post('/:name/bring-in', async (c) => {
   requireActionRoutes(c, 'bring-in');
   const record = await adoptFirst(c, await ownedWorkspace(c, 'bring-in'));
   requireItsRemote(hubOf(c), record, 'update');
+  await requireHere(c, record, 'update it');
   // The body is optional: a bare POST brings main in with the default message.
   const body = await optionalJson(c);
   if (body.message !== undefined && typeof body.message !== 'string') throw new ApiError(400, 'bad_request', 'message must be a string');
@@ -377,6 +412,12 @@ async function adoptFirst(c: Context, record: WorkspaceRecord): Promise<Workspac
   return (await recordsOf(c).get(record.branch)) ?? record;
 }
 
+/** An action of this computer's needs the workspace linked to it, or not yet recorded on the remote (`requireLinkedHere`). */
+async function requireHere(c: Context, record: WorkspaceRecord, doing: string): Promise<void> {
+  const hub = hubOf(c);
+  await requireLinkedHere(hub, remoteClient(hub, record.ownerExternalId), record.branch, doing);
+}
+
 // A read of the remote as the owner, like the status: a tool may ask, to show where the work is.
 workspace.get('/:name/merge-request', async (c) => {
   const record = await recordOf(c, c.req.param('name'));
@@ -388,6 +429,7 @@ workspace.post('/:name/merge-request', async (c) => {
   requireActionRoutes(c, 'merge-request');
   const record = await adoptFirst(c, await ownedWorkspace(c, 'merge-request'));
   requireItsRemote(hubOf(c), record, 'open a merge request for');
+  await requireHere(c, record, 'open its merge request');
   const body = await readJson(c);
   if (typeof body.message !== 'string' || !body.message.trim()) throw new ApiError(400, 'message_required', 'A merge request needs a message saying what it holds and why; it becomes the merge commit\'s (ADR-0025)');
   refuseReservedTrailers(body.message);
@@ -398,6 +440,7 @@ workspace.post('/:name/merge-request/merge', async (c) => {
   requireActionRoutes(c, 'merge-request');
   const record = await ownedWorkspace(c, 'merge-request');
   requireItsRemote(hubOf(c), record, 'merge');
+  await requireHere(c, record, 'merge its request');
   const body = await optionalJson(c);
   if (body.deleteWorkspace !== undefined && typeof body.deleteWorkspace !== 'boolean') throw new ApiError(400, 'bad_request', 'deleteWorkspace must be a boolean');
   // The remote's gate is the remote's to judge: the overrides are checked for shape here and passed on.
@@ -409,6 +452,7 @@ workspace.post('/:name/merge-request/close', async (c) => {
   requireActionRoutes(c, 'merge-request');
   const record = await ownedWorkspace(c, 'merge-request');
   requireItsRemote(hubOf(c), record, 'close the merge request of');
+  await requireHere(c, record, 'close its merge request');
   return c.json(await closeRequest(hubOf(c), record));
 });
 
