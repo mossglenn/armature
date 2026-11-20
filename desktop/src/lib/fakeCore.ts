@@ -26,7 +26,7 @@ import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, Settings,
  * `?slow` makes each long action (push, bring in, deliver, create, clone, remove) take a moment and
  * show in the state as the shell shows it, so a page's holding of the install button meanwhile can be
  * seen; `?login=fails` makes the system refuse the start-at-login entry, as the shell reports it;
- * `?keychain=fails` makes the keychain refuse to forget a sign-in or keep a new pairing value;
+ * `?keychain=fails` makes the keychain refuse to forget a sign-in or keep a new pairing key;
  * `?start=slow` holds the core in `starting` for a moment, as a cold launch does; `?port=busy` starts
  * with the hub failed on a port in use, until the port is changed; `?signin=waits` leaves a sign-in
  * waiting on the browser until it is cancelled.

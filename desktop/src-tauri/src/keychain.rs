@@ -4,7 +4,7 @@
 //!
 //!   the refresh token, under the remote's address, its identity provider and the program's
 //!     client there, the only durable credential for the remote
-//!   the local token, under `local-token`, which every tool on the machine pairs with
+//!   the pairing key, under `local-token`, which every tool on the machine pairs with
 //!
 //! The refresh token is bound to the provider that issued it, not to the remote's address alone
 //! (the code review of 2026-11-09, C6): the settings are a plain file, and a remote may change the
@@ -15,7 +15,7 @@
 //!
 //! Neither is ever written to a file or the log. A keychain the system cannot open (a Linux
 //! session without a Secret Service) is not fatal: the program then signs in at each start and
-//! draws a new local token, and says so in the log.
+//! draws a new pairing key, and says so in the log.
 
 use keyring::Entry;
 

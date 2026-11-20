@@ -4,7 +4,7 @@ import { hubOf } from './config';
 import { ApiError } from './errors';
 
 /**
- * The per-launch secret of a workspace hub (ADR-0065 decision 7, note of
+ * The pairing key of a workspace hub (ADR-0065 decision 7, note of
  * 2026-10-30; ADR-0067 decision 7, note; docs/workspace-hub-plan.md §7).
  *
  * The desktop program keeps a random value in the system's keychain across
@@ -56,14 +56,14 @@ export function tokenMatches(sent: string | undefined, expected: string | undefi
  * Refuses a write to a workspace hub that does not carry the hub's local
  * token. Runs after the loopback boundary and the version negotiation and
  * before identity, so a refused request reaches no route; a remote hub has no
- * local token and passes every request through.
+ * pairing key and passes every request through.
  */
 export const requireLocalToken: MiddlewareHandler = async (c, next) => {
   const hub = hubOf(c);
   if (hub.role !== 'workspace' || READ_METHODS.has(c.req.method)) return next();
   const sent = c.req.header(LOCAL_TOKEN_HEADER)?.trim();
   if (!hub.localToken) {
-    throw new ApiError(403, 'forbidden', 'This workspace hub was given no local token, so it accepts no write; its host draws one at start or takes ARMATURE_LOCAL_TOKEN (ADR-0065 decision 7)', {
+    throw new ApiError(403, 'forbidden', 'This workspace hub was given no pairing key, so it accepts no write; its host draws one at start or takes ARMATURE_LOCAL_TOKEN (ADR-0065 decision 7)', {
       reason: 'local_token',
     });
   }
@@ -71,12 +71,12 @@ export const requireLocalToken: MiddlewareHandler = async (c, next) => {
     throw new ApiError(
       403,
       'forbidden',
-      `A write to a workspace hub carries its local token as ${LOCAL_TOKEN_HEADER}: a tool the program launched has it as ARMATURE_LOCAL_TOKEN, another pairs by pasting the value the program shows (ADR-0065 decision 7)`,
+      `A write to a workspace hub carries its pairing key as ${LOCAL_TOKEN_HEADER}: a tool Armature Desktop launched has it as ARMATURE_LOCAL_TOKEN, another pairs by pasting the key the app shows on its Pairing page (ADR-0065 decision 7)`,
       { reason: 'local_token' }
     );
   }
   if (!tokenMatches(sent, hub.localToken)) {
-    throw new ApiError(403, 'forbidden', `${LOCAL_TOKEN_HEADER} is not this hub's local token; the program shows the current value, drawn at its start`, {
+    throw new ApiError(403, 'forbidden', `${LOCAL_TOKEN_HEADER} is not this hub's pairing key; its host shows the current one (Armature Desktop on its Pairing page)`, {
       reason: 'local_token',
     });
   }

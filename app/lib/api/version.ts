@@ -95,7 +95,7 @@ export const capabilitiesOf = (role: HubRole): [string, Capability][] =>
  * and the branches it serves only for reading (`readOnlyBranches`); both empty
  * on a remote hub. A workspace hub also lists `armature/workspace`, its
  * routes for creating, listing and reading the status of workspaces, with
- * `localToken: required` (every write carries the per-launch secret) and
+ * `localToken: required` (every write carries the pairing key) and
  * `actions`, whether push, bring in and deliver are served as routes
  * (`routes`) or are the program's own (`program`); ./localToken.ts.
  *

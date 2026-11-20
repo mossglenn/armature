@@ -51,7 +51,7 @@
  *                                                            variable is read then
  *   ARMATURE_SNAPSHOTS                                       how many older remote commits a workspace holds
  *                                                            as snapshots, 20 by default (plan §8)
- *   ARMATURE_LOCAL_TOKEN                                     a workspace hub's per-launch secret, which every
+ *   ARMATURE_LOCAL_TOKEN                                     a workspace hub's pairing key, which every
  *                                                            write to it carries as Armature-Local-Token (ADR-0065
  *                                                            decision 7; lib/api/localToken.ts); the desktop program
  *                                                            sets it for the tools it launches; drawn and printed
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
   const dir = config.workspaceDir;
   const unlock = dir ? await lockFolder(dir) : undefined;
   const files = dir ? openFileStore(folderFiles(dir)) : undefined;
-  // A workspace hub's per-launch secret (ADR-0065 decision 7): the program's when it set
+  // A workspace hub's pairing key (ADR-0065 decision 7): the program's when it set
   // ARMATURE_LOCAL_TOKEN, else drawn here and shown once, so the hub is never open.
   const drawn = config.role === 'workspace' && !config.localToken ? drawLocalToken() : undefined;
   const hub = await startHub({
@@ -125,8 +125,8 @@ async function main(): Promise<void> {
     console.log(`  role: workspace, of the remote at ${config.remote}; records in ${config.workspaceDir}`);
     console.log(`  remote identity: ${config.remoteToken ? 'the bearer token in ARMATURE_REMOTE_TOKEN (a remote under oidc)' : "the owner's identifier in Armature-User (a remote under header)"}`);
     console.log(`  actions: push, bring in and deliver ${config.actionRoutes ? 'served as routes (ARMATURE_WORKSPACE_ACTIONS=routes)' : "are the program's own; the routes are refused"}`);
-    if (drawn) console.log(`  local token: ${drawn}\n  (drawn at this start; every write carries it as Armature-Local-Token. Set ARMATURE_LOCAL_TOKEN to choose it)`);
-    else console.log('  local token: from ARMATURE_LOCAL_TOKEN; every write carries it as Armature-Local-Token');
+    if (drawn) console.log(`  pairing key: ${drawn}\n  (drawn at this start; every write carries it as Armature-Local-Token. Set ARMATURE_LOCAL_TOKEN to choose it)`);
+    else console.log('  pairing key: from ARMATURE_LOCAL_TOKEN; every write carries it as Armature-Local-Token');
   }
   if (files) console.log(`  store: the file-backed store in ${dir}`);
   else console.log(`  store: ${process.env.TERMINUS_URL ?? '(TERMINUS_URL is not set)'} database ${process.env.TERMINUS_DB ?? '(TERMINUS_DB is not set)'}`);

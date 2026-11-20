@@ -1,5 +1,5 @@
 /**
- * A workspace hub's per-launch secret and the program's own actions
+ * A workspace hub's pairing key and the program's own actions
  * (ADR-0065 decision 7, note of 2026-10-30; ./localToken.ts): every write
  * carries `Armature-Local-Token`, a write without it or with another value is
  * 403 `forbidden` (`reason: local_token`), reads stay open, a hub given no
@@ -45,7 +45,7 @@ describe('the token itself', () => {
     expect(configFromEnv({ ...ws, ARMATURE_LOCAL_TOKEN: '' }).localToken).toBeUndefined();
     expect(configFromEnv({ ...ws, ARMATURE_WORKSPACE_ACTIONS: 'routes' }).actionRoutes).toBe(true);
     expect(() => configFromEnv({ ...ws, ARMATURE_WORKSPACE_ACTIONS: 'yes' })).toThrow(/not a setting/);
-    // A remote hub has no local token and serves no action routes, whatever the environment says.
+    // A remote hub has no pairing key and serves no action routes, whatever the environment says.
     expect(configFromEnv({ ARMATURE_LOCAL_TOKEN: 'abc', ARMATURE_WORKSPACE_ACTIONS: 'routes' })).toMatchObject({ role: 'remote', actionRoutes: false });
     expect(configFromEnv({ ARMATURE_LOCAL_TOKEN: 'abc' }).localToken).toBeUndefined();
   });

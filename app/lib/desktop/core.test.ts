@@ -209,7 +209,7 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('settings', { set: { user: DESIGNER, port: await freePort() } })).toMatchObject({ status: 200, body: { settings: { user: DESIGNER } } });
   });
 
-  it('reports the local token it drew at a start that then failed, at the start that succeeds (the 2026-11-09 review’s C8)', async () => {
+  it('reports the pairing key it drew at a start that then failed, at the start that succeeds (the 2026-11-09 review’s C8)', async () => {
     // The first launch finds the port taken: the token is drawn, the hub does not start, and the reply is a refusal.
     const port = ((await driver.ask('settings')).body!.settings as { port: number }).port;
     const squatter = createServer();
@@ -236,7 +236,7 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect((await driver.ask('stop')).status).toBe(200);
   });
 
-  it('starts the hub, drawing a local token the shell keeps, with the action routes refused to tools', async () => {
+  it('starts the hub, drawing a pairing key the shell keeps, with the action routes refused to tools', async () => {
     expect(await driver.ask('push', { workspace: WS })).toMatchObject({ status: 409, body: { error: 'not_started' } });
     const started = await driver.ask('start', { dataDir });
     expect(started).toMatchObject({ status: 200, body: { started: true, resolver: 'header', user: DESIGNER } });
@@ -265,7 +265,7 @@ describe('the cycle through the protocol, against a remote under header', () => 
     expect(await driver.ask('whoAmI')).toMatchObject({ status: 200, body: { person: { externalId: DESIGNER } } });
   });
 
-  it('creates a workspace, which a tool writes to through the hub with the local token', async () => {
+  it('creates a workspace, which a tool writes to through the hub with the pairing key', async () => {
     const created = await driver.ask('create', { name: NAME });
     expect(created).toMatchObject({ status: 201, body: { branch: WS, ownerExternalId: DESIGNER, remote: headerRemote.url } });
     expect((await driver.ask('workspaces')).body).toEqual([expect.objectContaining({ branch: WS })]);
@@ -312,7 +312,7 @@ describe('the cycle through the protocol, against a remote under header', () => 
       const pushed = await driver.ask('push', { workspace: WS, overrides: [{ check: 'lint/mine', reason: 'Known and harmless' }] });
       expect(pushed.status, JSON.stringify(pushed.body)).toBe(200);
       expect((pushed.body!.checks as Array<{ overridden?: { reason: string } }>)[0].overridden).toEqual({ reason: 'Known and harmless' });
-      // No route writes the file: a tool with the pairing value cannot relax the gate.
+      // No route writes the file: a tool with the pairing key cannot relax the gate.
       expect((await tool('PUT', '/workspace/checks', { requirements: [] })).status).toBe(404);
     } finally {
       await rm(checks, { force: true });

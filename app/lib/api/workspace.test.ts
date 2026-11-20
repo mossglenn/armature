@@ -35,7 +35,7 @@ describe('over the file-backed store in memory', () => {
   const AS_OPERATOR = { as: 'demo-designer@example.edu' };
   const stamp = Date.now().toString(36);
   const USER = 'demo-designer@example.edu';
-  /** The hub's per-launch secret, which every write carries (ADR-0065 decision 7; ../localToken.ts). */
+  /** The hub's pairing key, which every write carries (ADR-0065 decision 7; ../localToken.ts). */
   const TOKEN = `ws-token-${stamp}`;
   const HEADERS = { 'Content-Type': 'application/json', 'Armature-User': USER, 'Armature-Local-Token': TOKEN };
 

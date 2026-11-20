@@ -20,7 +20,7 @@
  * on every request, and the discovery and schema routes. Phase 8 adds the
  * loopback boundary (ADR-0067 decision 7): `boundary` refuses a request from a
  * host or a web origin the hub does not serve, before anything else runs, and
- * since 2026-11-03 a workspace hub's per-launch secret on every write
+ * since 2026-11-03 a workspace hub's pairing key on every write
  * (`requireLocalToken`, ADR-0065 decision 7), and since 2026-11-05 the `oidc`
  * resolver, under which every request but `GET /discover` carries a verified
  * token (`requireIdentity`, ADR-0067 decision 1). Since the workspace hub plan's step 2 the app is made by `createApp` from a
@@ -79,7 +79,7 @@ export function createApp(config: () => HubConfig = configFromEnv): Hono {
   // web origin the hub does not serve is refused before anything else reads it.
   app.use('*', boundary);
   app.use('*', negotiate);
-  // Then a workspace hub's per-launch secret on every write (ADR-0065 decision 7,
+  // Then a workspace hub's pairing key on every write (ADR-0065 decision 7,
   // note; ./localToken.ts), before identity: "are you a tool I started".
   app.use('*', requireLocalToken);
   // Then, under `oidc`, the token on every request but GET /discover (ADR-0067
