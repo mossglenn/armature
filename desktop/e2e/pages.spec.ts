@@ -273,6 +273,8 @@ test.describe('the workspaces', () => {
     await expect(alert).toContainText('1 conflict: open the tool you edit these records in');
     await expect(alert).toContainText('AssessmentItem/item-4 · stem');
     await expect(alert).toContainText('Which of these biases…');
+    // The status lists the same conflicts (issue #169), but the notice already does: they are shown once.
+    await expect(page.getByRole('region', { name: 'What an update from main would meet' })).toHaveCount(0);
   });
 
   test('push is offered only with something to push, and the update only when the parent has something new, which the page hears of', async ({ page }) => {
@@ -293,6 +295,14 @@ test.describe('the workspaces', () => {
     // Main moves on the instance: nobody asks, and the page says so and offers the update.
     await page.evaluate(() => (window as unknown as { __fakeCore: { conflictOn: (b: string) => void } }).__fakeCore.conflictOn('demo-designer_glossary'));
     await expect(page.getByText('Main has 3 records this workspace does not; 1 would conflict.')).toBeVisible();
+    // Which records, field by field, before the update is tried (issue #169): the starting point, this workspace's value and main's.
+    const meet = page.getByRole('region', { name: 'What an update from main would meet' });
+    await expect(meet).toContainText('An update from main would conflict on 1 field');
+    await expect(meet).toContainText('AssessmentItem/item-4 · stem');
+    await expect(meet).toContainText('Starting point');
+    await expect(meet).toContainText('Which bias…');
+    await expect(meet).toContainText('Which of these biases…');
+    await expect(meet).toContainText('Which kind of bias…');
     await expect(update).toBeEnabled();
   });
 

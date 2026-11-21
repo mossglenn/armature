@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckVerdicts, type Override } from '@/components/CheckVerdicts';
+import { ConflictList } from '@/components/ConflictList';
 import { PageHeader } from '@/components/PageHeader';
 import { RefusalNotice } from '@/components/RefusalNotice';
 import { Button } from '@/components/ui/button';
@@ -245,6 +246,9 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
   // Where the workspace stands against its parent, when the instance said: absent offline or from an older instance, and the update then stays open.
   const parentState = status && !('reachable' in status.remote) ? status.remote.parent : undefined;
   const upToDate = parentState?.behind === false;
+  // What an update would meet, as the instance computes it on each read (issue #169), shown before anyone tries it; not
+  // while a refused update's notice lists the same conflicts.
+  const conflicting = parentState?.conflicting?.length && refusal?.refusal.error !== 'merge_conflict' ? parentState.conflicting : [];
   return (
     <section>
       <Button variant="link" className="mb-2 px-0" onClick={() => back()}>
@@ -320,6 +324,15 @@ export function Workspace({ backend, branch, back }: { backend: Backend; branch:
             busy={busy !== undefined}
             onOverride={(overrides) => void (gate.action === 'push' ? act<PushResult>('push', { overrides }, pushedSentence) : merge({ overrides }))}
           />
+        </div>
+      )}
+
+      {conflicting.length > 0 && (
+        <div className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="region" aria-label={`What an update from ${parent} would meet`}>
+          <p className="font-medium">
+            An update from {parent} would conflict on {conflicting.length} field{conflicting.length === 1 ? '' : 's'}: open the tool you edit these records in to review and resolve them, push, then update from {parent}.
+          </p>
+          <ConflictList conflicts={conflicting} sides={{ target: 'Your workspace', source: parent }} />
         </div>
       )}
 

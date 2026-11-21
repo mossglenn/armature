@@ -329,6 +329,8 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
         : {}),
     };
   };
+  /** The one conflict the fake instance knows: both sides changed item 4's stem. */
+  const ITEM_4_CONFLICT = { id: 'AssessmentItem/item-4', field: 'stem', base: 'Which bias…', target: 'Which of these biases…', source: 'Which kind of bias…' };
   const statusOf = (branch: string): WorkspaceStatus => {
     const w = model.workspaces.get(branch)!;
     return {
@@ -338,7 +340,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       pushed: w.pushed,
       unpushed: w.commits.length - w.pushed,
       snapshots: { budget: model.settings.snapshots, held: [], declined: [] },
-      remote: remoteDown ? { reachable: false } : { head: commitId(), moved: w.remoteMoved, link: w.link?.state ?? 'here', parent: w.remoteMoved || w.conflict ? { branch: parentOf(w), behind: true, documents: 3, conflicts: w.conflict ? 1 : 0 } : { branch: parentOf(w), behind: false }, ...(w.link?.state === 'elsewhere' ? { ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}), linkedAt: w.link.linkedAt } : {}) },
+      remote: remoteDown ? { reachable: false } : { head: commitId(), moved: w.remoteMoved, link: w.link?.state ?? 'here', parent: w.remoteMoved || w.conflict ? { branch: parentOf(w), head: 'cmainhead0fake', base: w.record.base, behind: true, documents: 3, conflicts: w.conflict ? 1 : 0, conflicting: w.conflict ? [ITEM_4_CONFLICT] : [] } : { branch: parentOf(w), head: 'cmainhead0fake', base: w.record.base, behind: false }, ...(w.link?.state === 'elsewhere' ? { ...(w.link.linkLabel ? { linkLabel: w.link.linkLabel } : {}), linkedAt: w.link.linkedAt } : {}) },
     };
   };
   const parentOf = (w: Held): string => w.record.from ?? 'main';
@@ -359,7 +361,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
   const healthOf = (w: Held): RequestHealth => {
     const head = w.commits[0]?.commit ?? w.record.local;
     const upToDate = w.commits.length === (w.mergedAt ?? 0);
-    const conflicts = w.conflict ? [{ id: 'AssessmentItem/item-4', field: 'stem', base: 'Which bias…', target: 'Which of these biases…', source: 'Which kind of bias…' }] : [];
+    const conflicts = w.conflict ? [ITEM_4_CONFLICT] : [];
     const required = parentOf(w) === 'main' ? model.remoteRequirements : [];
     const checks = verdictsFor(required.map((r) => ({ check: r.check, level: 'Required' as const, locked: r.locked, id: `CheckRequirement/${r.check}`, reporter: 'User/lint-service' })), model.remoteRuns, w.record.branch, head, new Map());
     return {
@@ -678,7 +680,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       if (w.conflict) {
         return refuse(409, 'merge_conflict', 'The instance refused: the merge has conflicts', {
           remote: true,
-          conflicts: [{ id: 'AssessmentItem/item-4', field: 'stem', base: 'Which bias…', target: 'Which of these biases…', source: 'Which kind of bias…' }],
+          conflicts: [ITEM_4_CONFLICT],
         });
       }
       if (!w.remoteMoved) return ok({ workspace: w.record, remoteHead: commitId(), upToDate: true });
