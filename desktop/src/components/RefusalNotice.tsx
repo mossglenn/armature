@@ -1,18 +1,8 @@
 import { Badge } from '@/components/ui/badge';
+import { ConflictList, type Conflict } from '@/components/ConflictList';
 import { terms } from '@armature/vocabulary';
 import { GENERAL, sentence, useInstance } from '@/lib/instance';
 import type { Refusal } from '@/lib/types';
-
-interface Conflict {
-  id: string;
-  field?: string;
-  op?: string;
-  base?: unknown;
-  target?: unknown;
-  source?: unknown;
-}
-
-const shown = (value: unknown) => (value === undefined ? '(absent)' : typeof value === 'string' ? value : JSON.stringify(value));
 
 interface Violation {
   code?: string;
@@ -166,28 +156,7 @@ export function RefusalNotice({ refusal, status, parent = 'main', direction = 'u
           <p className="font-medium">
             {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}: open the tool you edit these records in to review and resolve them, push, then update from {parent} again.
           </p>
-          <ul className="mt-2 space-y-2">
-            {conflicts.map((conflict, i) => (
-              <li key={`${conflict.id}-${conflict.field ?? conflict.op}-${i}`} className="rounded border p-2 text-xs">
-                <p className="font-mono">
-                  {conflict.id}
-                  {conflict.field ? ` · ${conflict.field}` : ''}
-                </p>
-                {conflict.op === 'InsertConflict' ? (
-                  <p className="text-muted-foreground">Created in both places, differently.</p>
-                ) : (
-                  <dl className="mt-1 grid grid-cols-[8rem_1fr] gap-x-2">
-                    <dt className="text-muted-foreground">Starting point</dt>
-                    <dd>{shown(conflict.base)}</dd>
-                    <dt className="text-muted-foreground">{sides.target}</dt>
-                    <dd>{shown(conflict.target)}</dd>
-                    <dt className="text-muted-foreground">{sides.source}</dt>
-                    <dd>{shown(conflict.source)}</dd>
-                  </dl>
-                )}
-              </li>
-            ))}
-          </ul>
+          <ConflictList conflicts={conflicts} sides={sides} />
         </div>
       )}
     </div>
