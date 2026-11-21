@@ -63,6 +63,10 @@ The Focus page with a stepper: the trace walked one hop at a time with the camer
 
 Not a page: a state of any of the three, entered from "Export figure". Light theme regardless of the viewer's, white ground, no grid, controls and minimap hidden, labels one size larger, an optional legend tile, and a stamp in a corner: `Armature · main @ n1is93e9 · /graph?select=… · 2026-10-22`. Exported as PNG at 2× or 3× device pixels through `html-to-image` (React Flow's documented path). A vector export is §11's later work.
 
+
+### 3.5 History (`/history`)
+
+*Added 2026-11-21, for the ICICLE demonstration (`docs/icicle-demo-script.md`), outside this plan's five pull requests.* A branch's commits, newest first, from `GET /branches/:name/log` (its first page): each commit's first line and body in the writer's words, who made it by name from the registry on `main`, an agent marked as one with the person it acted for (the `Armature-On-Behalf-Of` trailer), a merge's source commit, and what the store's own user wrote outside the hub (the schema's load, a seed) shown as setting up. Each commit opens the Design Graph at that commit (`?ref=`) or the changes lens since it. It is the record's History tab for a whole branch: the design process as the record holds it, who designed, who reviewed and what an agent proposed. The parsing is `lib/graph/history.ts`, pure and tested; the page is in the navigation.
 ---
 
 ## 4. Visual language
