@@ -209,7 +209,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 
 - ● **Read any record at a commit.** Every drawing is at a named commit, and exported figures carry it.
 - ○ **Branches.** The branch picker; opens CoQui's round branch with the attestations lens.
-- ● **History and changes since.** The History tab, and 'then and now' from the changes read.
+- ● **History and changes since.** The History tab, the History page (a branch's commits by person and agent, since 2026-11-21), and 'then and now' from the changes read.
 - ○ **Findings and notes, by fragment.** Notes and findings drawn as dashed annotations.
 - ● **Attestations that go stale.** The attestations lens: Current, Stale, FragmentRemoved.
 - ● **Coverage at any ref.** The Coverage View and the coverage lens.

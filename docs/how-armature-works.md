@@ -1404,7 +1404,7 @@ A second survey on 20 October 2026 (`docs/research/schema-precedents-and-plugin-
 | **Seed** | The demonstration course loaded by `scripts/seed_data.js` |
 | **SME (subject-matter expert)** | A content expert who reviews items |
 | **TerminusDB** | The open-source graph and document database with built-in version control that Armature uses; one TerminusDB process holds the stores |
-| **Viewer** | Armature's own pages, the module index, the Coverage View, the Design Graph with its Focus page and Walkthrough, and the `/connect` page that links to the desktop app: a client of a hub that only reads |
+| **Viewer** | Armature's own pages, the module index, the Coverage View, the Design Graph with its Focus page and Walkthrough, a branch's History, and the `/connect` page that links to the desktop app: a client of a hub that only reads |
 | **Two-client test** | A capability enters the hub only if at least two reference clients would need it, in the generic form they share |
 | **TypeScript** | The programming language the API is written in |
 | **WOQL (Web Object Query Language)** | TerminusDB's query language, not yet used by the API |

@@ -65,7 +65,7 @@ app/server.ts              # The hub's entry (.env.local, PORT, HOST loopback by
 app/operator.ts            # The operator tools' command line: check, delete, put (ADR-0062); bundled, shipped in the hub image
 app/desktop.ts             # The desktop program's core (ADR-0069): a workspace hub's host driven by JSON lines on stdin and stdout; build:desktop; its own command-line driver
 desktop/                   # The shell (Tauri 2; ADR-0069), outside the npm workspace with its own lockfile: src-tauri/ (Rust: core.rs the sidecar's life, relay.rs what a page may ask, keychain.rs, tray.rs), src/ (the seven pages, through lib/backend.ts, a fake core in a browser), e2e/ (Playwright against the fake core), desktop.yml in CI, desktop-release.yml on a `desktop-v*` tag; desktop/README.md
-app/app/                   # The viewer: page.tsx (modules), coverage/[moduleId], graph/ (the Design Graph, Focus page, Walkthrough; docs/graph-view-plan.md), connect/ (the desktop program's link), layout.tsx
+app/app/                   # The viewer: page.tsx (modules), coverage/[moduleId], graph/ (the Design Graph, Focus page, Walkthrough; docs/graph-view-plan.md), history/, connect/ (the desktop program's link), layout.tsx
 app/e2e/                   # The browser smoke tests (Playwright): graph.spec.ts, connect.spec.ts; CI's viewer job
 app/lib/viewer.ts          # The viewer's client of the hub (ARMATURE_HUB_URL; viewerToken.ts its credential under oidc); hub.ts starts the API on a port; envLocal.ts reads .env.local; workspaceFolder.ts is the host side of a workspace hub's folder (records, store files, the lock)
 app/lib/graph/             # The Design Graph's pure modules (no React, no DOM), each tested; stages.ts is the visual language as data
