@@ -20,6 +20,8 @@ The demo runs on a dedicated instance seeded with `scripts/seed_icicle_demo.js`.
 4. **Record each beat as its own clip.** Narrate over the clips live, and keep the live system open in another window in case someone asks to see something.
 5. **Reset again after each rehearsal.** The record IDs stay the same after a reset, but the commit IDs change.
 
+**Practicing on this machine.** `npm run demo:reset`, from the repository root, recreates the database `armature_icicle` on the local store and seeds it, in a few seconds, and prints how to start a hub and the viewer over it. It never touches `armature`, the development database on the same store (the compose commands above would replace it, since the compose file's store is the same one). Reset before every full take: beat 1 needs `main` as the seed left it, and the branches beats 3 and 4 create add commits to `main` and are not deleted.
+
 - [ ] The MCP server is built and attached (`docs/mcp-server-plan.md`; not built as of 2026-11-21), writes are on, and `propose_finding` appears in the agent's tool list
 - [ ] The tool you'll use to edit the objective is confirmed. The fallback call is in the Rehearsal reference section.
 - [ ] Slide 5's figure names the objective as the seed does: *Check a website with lateral reading*
