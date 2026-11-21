@@ -6,6 +6,43 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-20, late (Quiver's handoff taken up; issues #169 to #176 retitled; item 35 closed in PR #194, open at the close; PRs #192 to #194)
+
+**Where things stood at the close.** **Phase 8, 2026-11-20, late; `main` at `09ccbb1`, client revision 2026-11-20.** Armature Desktop 0.2.0 is released (ADR-0072; HISTORY.md, 2026-11-20) and officepi serves revision 2026-11-20; the Mac has 0.2.0, the Windows PC still the rehearsal build. Quiver resumed on the app on 2026-11-17 and runs beside 0.2.0 (its PRs #22 and #23). Its handoff back is kept (`docs/waiting-on-armature-handoff-from-quiver.md`) and carried by `docs/workspace-hub-plan.md` §11, §12 and §12.1, the working list of its asks, with two more from its own notes (PRs #192 and #193); issues #169 to #176 are retitled in today's names. PR #194 (`phase-8/remote-revision`), open at the close with CI running, closes item 35: a desktop hub declares `REMOTE_REVISION` to its instance, so a revision only the desktop hub needs no longer forces an instance update. **Next: merge #194 when green; then #169 and #170 on their own branch, as decided (Active Decisions).**
+
+### Done
+
+- **PR #192** (merged, `f515119` to `9230f76`, six commits): Quiver's handoff kept with a status banner, its body unchanged. `docs/workspace-hub-plan.md` gained §12.1, the working list of what Quiver asks of the desktop hub and the app (issues #169 to #176 in today's names, #169 in full, the unfiled gap of an unlinked computer still taking commits), four rows in §12 (both contents on an `InsertConflict`, `@armature/rules`, `createdBy` on a replace, a note on the authoring slice; each verdict "not yet tested"), and Quiver's return in §11 and §14 step 7. A dated note on ADR-0072 (decision 13 refuses the desktop hub's actions on an unlinked workspace, not a tool's writes; nothing decided). The desktop plan's status line, §7 ("Launched tools": #175, #176) and §14 step 6. Quiver's status, still "paused" in Armature's documents, corrected in the README, `docs/development-plan.md` §2, `docs/demo-coverage.md` (three cells reworded, no mark changed, totals unchanged) and the explainer's Sections 24.5 and 29. SESSION.md items 12, 17 and 48.
+- **Issues #169 to #176 retitled** in today's names, each title checked with `@armature/vocabulary`'s `findAvoided` for people; #169 and #176 carry a comment on what 0.2.0 changed (the count in `remote.parent`, `health.conflicts` only while a request is open; the hand-off's actions now Push, Update from <parent> and Open merge request into <parent>).
+- **PR #193** (merged, `09ccbb1`): two items from Quiver's own notes the handoff left out: `asks.md` §1's related finding (constraint 10 lets an `Approved` placement stand over a `Retired` item; a question for Armature) as a §12 row, and `program-notes.md` entry 7 (the app not knowing that a tool holds unsaved edits when the person updates from the parent) on #176's row.
+- **PR #194** (open at the close; `96fb1dc`, `4176ad5`, `3fec296`): `REMOTE_REVISION` (2026-11-20) in `app/lib/api/workspace/remote.ts`, sent as `Armature-Version` by `remoteClient` and by the desktop core's four calls to the instance (sign-in, discovery, who-am-I, the event feed). `version.test.ts` holds it to a served revision no newer than the hub's own and reads every module under `app/lib/api/` and `app/lib/desktop/` for `version: REMOTE_REVISION` on each `createClient`; `workspace.test.ts` records the header a desktop hub sends. ADR-0065 decision 5's note, `docs/api.md`, `docs/deployment.md` (a paragraph, no step changed, so no rehearsal), the desktop plan's release record, SESSION.md item 35. Run locally against `armature_test`: the version, workspace, cycle, workspaces, workspace-token and desktop core suites, 212 tests; type-check, lint and both bundles clean.
+
+### Session notes
+
+- Started from SESSION.md's "First": the Mac was found at 0.2.0, Quiver's pin already moved, and an untracked handoff from Quiver in `docs/`.
+- Amos asked for all of the handoff in the documents, then whether everything was captured; checking against the sources the handoff cites (`quiver/docs/asks.md`, `program-notes.md`), not the handoff alone, found the two items PR #193 added.
+- Amos asked for every issue off the current vocabulary to be retitled. The finder missed "brought up to date" (not a listed form of "bring in") and flagged "clone" in the use the vocabulary allows; my first title for #170 used "head", which the recheck caught.
+- On starting Quiver's asks, three decisions went to Amos as options and each was taken as recommended (Decisions taken). Item 35 was built first, as PR #194; #169 and #170 wait for the next session at Amos's request.
+- `workspace.test.ts`'s recording test cannot yet tell the old behavior from the new, since both revisions are 2026-11-20; the module-reading test in `version.test.ts` was confirmed to fail with the constant removed from `remoteClient`.
+
+### Facts from 2026-11-20, late, worth keeping
+
+- The status's `parentState` (`app/lib/api/routes/workspace.ts`) already makes the dry run of the update on every read and keeps only the count of its conflicts; the list #169 asks for is in that answer, with `source` (the parent's latest commit, #170) and `base`.
+- An instance refuses a write naming a newer `Armature-Version` and serves reads (ADR-0059 decision 3). Five places build a client for the instance: `remoteClient` and four in the desktop core; all declare `REMOTE_REVISION` once PR #194 merges.
+- `findAvoided(text, audience)` takes the audience as a string; passing an object returns no findings, silently. It matches the listed forms only.
+- Quiver resumed on 2026-11-17, three days before Armature's documents said so; Quiver's own plan's status line is where its state is current.
+- The repository has eight issues in all, #169 to #176, all open.
+
+### Decisions taken
+
+- **#169 (Amos, as recommended):** the conflict list of an update from the parent served live in the status's `remote.parent`, from the dry run the status already makes, rather than the last refusal kept; not yet built, so in SESSION.md's Active Decisions.
+- **#170 rides with #169 (Amos, as recommended):** the parent's latest commit in the same change; Active Decisions.
+- **What a desktop hub declares to its instance is separated from what it serves, before #169 (Amos, as recommended):** built in PR #194. Chosen in building, open to overrule: a constant the code declares, not the instance's newest revision from its discovery (ADR-0065 decision 5, note of 2026-11-20, later).
+- **Issue titles use the names for people**, "clone" kept as the vocabulary's allowed use (workspace hub plan §12.1, PR #192's last commit).
+- **The two-client verdicts of Quiver's older asks stay "not yet tested"** in §12 until Amos takes each (PRs #192, #193).
+
+---
+
 ## 2026-11-20 (ADR-0072 built, rehearsed on two computers and released as Armature Desktop 0.2.0; item 46 closed; PRs #185 to #191)
 
 **Where things stood at the close.** **Phase 8, 2026-11-20; `main` at `b1457fd`, client revision 2026-11-20.** ADR-0072 is built whole (PR #188): a `Workspace` record on `main` links each workspace to one installation of the desktop app, a write to its branch carries `Armature-Workspace-Link`, and every merge from a workspace or into `main` is a `MergeRequest`'s, its health a read. It was rehearsed on the Mac and the Windows PC against the Raspberry Pi's instance, which found that a computer a workspace had been unlinked from still offered its actions; fixed in PR #189 (the desktop hub refuses them, and an action is offered only when it has something to do). Released as **Armature Desktop 0.2.0** (`desktop-v0.2.0` at `598c83b`, published 22:54 UTC; PR #190), the documents after it in PR #191. officepi serves revision 2026-11-20. Both machines run the rehearsal build (`desktop-rehearsal-4`'s, which says 0.1.5 and reads the rehearsal channel), so neither will be offered 0.2.0. Item 46 is closed (PRs #185 to #187). **Next: each machine takes 0.2.0 by hand; then Quiver moves its pin, from the handoff note in its `docs/`.**
