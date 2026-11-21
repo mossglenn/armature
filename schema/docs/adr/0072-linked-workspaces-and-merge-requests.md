@@ -105,6 +105,18 @@ the record. Not built.
 >     of a change on the instance through the wait of item 11, now kept whether or not a request is
 >     open, so an update that became possible is offered without being asked for. This answers
 >     the first half of issue #170 for a tool.
+>
+> **Note (2026-11-20, later, from Quiver's handoff; nothing decided):** decision 13 refuses the
+> desktop hub's own actions on a workspace not linked to it, not a tool's writes to it. A computer
+> a workspace was unlinked from and linked elsewhere keeps its copy, and its desktop hub still
+> takes commits there, since they are local; none can ever be pushed, and the way on is the
+> discard of decision 4. Quiver's milestone 13 stops committing to such a workspace from the
+> status's `link`, and keeps the last link it was told so that this holds offline. Two gaps only
+> the hub can close remain: a commit made before Quiver next asks the status is still taken, and
+> another tool on the computer is not stopped. Quiver met it in its milestone 12 and did not file
+> it, since use has not yet shown whether it matters (`docs/waiting-on-armature-handoff-from-quiver.md`
+> §5; Quiver's `docs/program-notes.md` entry 10). The change, if use shows the need: the desktop
+> hub refusing a write to a workspace it knows is linked elsewhere, which would stop every tool.
 
 It changes the schema, adding two classes and two enums, so when it is built `schema.json`, the
 generated types and the appendix go in one commit (CLAUDE.md, "After schema changes"). It relies on no store behavior beyond what grants already rely on, so no platform check
