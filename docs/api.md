@@ -14,6 +14,7 @@ Within the prefix the contract has dated **revisions** (ADR-0059): each dated en
 - **`Armature-Version: <revision>`** (response, always) says which revision served the answer, beside `ETag`, on errors too.
 - **`Armature-Capabilities: <id>, <id>`** (request, optional) declares the hub features the client is about to rely on, by identifier (`armature/documents`, `armature/intelligence.coverage`, …; a feature someone else defines carries a reverse domain name, `edu.example/…`). One the hub lacks: **400** `unsupported_capability`, with `unsupported` and `supported`. Every capability the hub defines is `reject`: it is never silently served under core behavior.
 - **`GET /discover`** answers the same questions in one call for a client that wants to know before its first write; see [Discovery](#discovery). The `@armature/client` package sends `Armature-Version` on every call and returns the response header as `version`.
+- **A workspace hub declares to its remote the revision of the remote's contract it relies on** (since 2026-11-20, later; ADR-0065 decision 5, note), not the revision it serves its own tools, so a revision that changes only what a workspace hub serves needs no remote updated before its pushes are taken. The value moves when a workspace hub begins to rely on something a remote gained; 2026-11-20 since ADR-0072.
 
 ### Reading at a ref
 

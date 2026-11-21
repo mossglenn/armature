@@ -302,6 +302,22 @@ Three facts constrain the answer:
    > answered under the identifier asked for, and `If-Match` may name the remote identifier of
    > the head's counterpart. The clone's snapshots, the kept log and forwarding are plan §8's note.
 
+   > **Note (2026-11-20, later; SESSION.md item 35; Amos):** a workspace hub's calls to its remote
+   > declare the revision of the remote's contract they rely on (`REMOTE_REVISION`,
+   > `app/lib/api/workspace/remote.ts`), not the revision the hub serves its own tools, which
+   > `@armature/client` sent until then. A remote refuses a write from a revision newer than its
+   > own (ADR-0059 decision 3), so each revision a workspace hub served for its tools alone made
+   > every push refused by a remote not yet updated: the removal of 2026-11-07, and the status
+   > fields of 2026-11-15 and 2026-11-16, each needed officepi updated before the program could
+   > push. The constant moves when a workspace hub begins to rely on something a remote gained
+   > (2026-11-20: ADR-0072's records, links and merge requests); a revision that changes only what
+   > a workspace hub serves leaves it, and needs no remote updated. The desktop program's own
+   > calls to the remote (sign-in, discovery, the event feed) declare the same. Chosen in
+   > building, open to overrule: a constant the code declares rather than the newest revision the
+   > remote serves, read from its discovery, which would send a remote a revision whose rules the
+   > hub's calls may not keep; `version.test.ts` reads the modules for every client built for a
+   > remote and holds the constant to a revision served.
+
 6. **Delivery is the remote's merge, driven from the workspace hub.** With nothing left to push,
    the workspace hub asks the remote to merge `main` into the workspace (`POST /branches/<ws>/
    merge` with `from: main`), presents any conflict for review, writes the resolution as local

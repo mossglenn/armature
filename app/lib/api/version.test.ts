@@ -4,11 +4,12 @@
  * routes, and the two guards the ADR's consequences ask for: the revision list
  * agrees with docs/client-changes.md, and every route sits under a capability.
  */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { app } from './app';
 import { CAPABILITIES, capabilitiesOf, CURRENT_REVISION, REVISIONS } from './version';
+import { REMOTE_REVISION } from './workspace/remote';
 
 import { deleteScratchBranch } from '../operator/repair';
 
@@ -69,6 +70,31 @@ describe('Armature-Version (ADR-0059 decision 3)', () => {
     const dated = [...new Set(changes.match(/^## (\d{4}-\d{2}-\d{2})/gm)?.map((h) => h.slice(3)) ?? [])];
     expect([...REVISIONS]).toEqual(dated);
     expect([...REVISIONS]).toEqual([...REVISIONS].sort().reverse());
+  });
+
+  it("a workspace hub declares to its remote a revision this code serves, never newer than the one it serves its tools (REMOTE_REVISION)", () => {
+    expect(REVISIONS as readonly string[]).toContain(REMOTE_REVISION);
+    expect(REMOTE_REVISION <= CURRENT_REVISION).toBe(true);
+  });
+
+  it('every client the hub and the desktop core build for a remote declares REMOTE_REVISION (the modules read for it)', () => {
+    // A client built without it sends the client package's own revision, which moves with every
+    // revision: the case REMOTE_REVISION exists to end. The viewer's client (lib/viewer.ts) talks to its own hub.
+    const files = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? files(join(dir, entry.name)) : entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [join(dir, entry.name)] : []
+      );
+    const unpinned: string[] = [];
+    let built = 0;
+    for (const file of [...files(resolve(__dirname, '.')), ...files(resolve(__dirname, '../desktop'))]) {
+      const source = readFileSync(file, 'utf8');
+      const clients = source.match(/\bcreateClient\(/g)?.length ?? 0;
+      const pinned = source.match(/\bversion: REMOTE_REVISION\b/g)?.length ?? 0;
+      built += clients;
+      if (clients !== pinned) unpinned.push(`${file}: ${clients} createClient, ${pinned} version: REMOTE_REVISION`);
+    }
+    expect(unpinned).toEqual([]);
+    expect(built).toBeGreaterThanOrEqual(5);
   });
 });
 
