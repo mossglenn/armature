@@ -15,6 +15,35 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-21 · A workspace's status lists what an update from its parent would meet, and names the parent's latest commit
+
+Issues #169 and #170, on the desktop hub only. `remote.parent` in `GET /workspace/:name/status`
+gains three fields, all from the dry run of the update that the status already asks the remote
+for:
+
+- **`head`**: the parent's latest commit on the remote. A tool can say "main has moved" against
+  a commit it saw before, and read the parent at that commit (a read at a commit the desktop hub
+  lacks is forwarded to the remote).
+- **`base`**: the starting point, the latest commit the parent and the workspace's branch on the
+  remote share, which is the `base` of each conflict.
+- **`conflicting`**, when `behind`: what the update would be refused for, the same list its
+  **409** `merge_conflict` gives (each field with its `base`, `target`, the workspace's value, and
+  `source`, the parent's, or `{ id, op: "InsertConflict" }`); empty when it would merge.
+
+The list is computed on every read and never kept. It is what an update would meet **now**,
+whether or not anyone has tried the update, and whether or not the tool was open when someone
+did, so nothing clears it and it is never stale. Offline there is no `parent`, so no list. The
+count `conflicts` now counts records, as documented on 2026-11-20; it counted fields, so a record
+conflicting on two fields counted two. Nothing changes on a remote hub: the desktop hub still
+declares revision 2026-11-20 to its instance, and no instance needs updating.
+
+**What a tool does differently.** Set aside, or "shelve", the records `conflicting` names, by
+their `id`, without asking the person to carry the list over by eye, and write the fields back to
+their `base` values (`docs/workspace-hub-plan.md` §6). The list is the remote's, so it shrinks
+once those commits are pushed, not before.
+
+**CoQui:** nothing to do; CoQui is not a desktop hub's tool today.
+
 ## 2026-11-20 · Workspaces linked to one computer, and merge requests
 
 [ADR-0072](../schema/docs/adr/0072-linked-workspaces-and-merge-requests.md), built. Two records on

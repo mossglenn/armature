@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import type { InstanceProfile } from '@armature/client';
+import type { InstanceProfile, MergeConflict } from '@armature/client';
 import { parseOverrides, runsOf } from '../checks';
 import { hubOf, storeFor, type HubConfig } from '../config';
 import { ApiError } from '../errors';
@@ -275,29 +275,46 @@ async function recordOf(c: Context, name: string): Promise<WorkspaceRecord> {
 /** Where the workspace stands against its parent on the remote: whether an update from the parent would bring anything, and whether it would merge. */
 interface ParentState {
   branch: string;
+  /** The parent's latest commit on the remote (since 2026-11-21, issue #170). */
+  head: string;
+  /** The starting point: the latest commit the parent and the workspace's branch on the remote share (since 2026-11-21, issue #169). */
+  base: string;
   /** True when the parent holds commits the workspace's branch on the remote does not. */
   behind: boolean;
   /** When behind: how many documents an update would bring, where the remote says. */
   documents?: number;
   /** When behind: how many records an update would be refused for, zero when it would merge. */
   conflicts?: number;
+  /** When behind: what the update would be refused for, each field with its three values, as the update's own 409 would list them; empty when it would merge (since 2026-11-21, issue #169). */
+  conflicting?: MergeConflict[];
 }
 
 /**
  * The remote's own answer, a dry run of the merge an update makes (the parent
- * into the workspace's branch), which the remote keeps by the two heads, so
+ * into the workspace's branch), which the remote keeps by the three commits, so
  * asking again costs a read. Absent when the remote would not say (the parent
  * is gone, an older remote): the status is what is known, and a page then
- * leaves the action open. Answers issue #170's question for a tool: has the
- * parent moved?
+ * leaves the action open. Answers issues #169 and #170 for a tool: where the
+ * parent is, whether it has moved, and what an update from it would meet.
+ *
+ * The conflicts are served from this read and never kept (decided 2026-11-20,
+ * against #169's proposal of the last refusal kept until an update goes
+ * through): they are what an update would meet now, so they cannot go stale,
+ * nothing clears them, and a tool reads them whether or not anyone tried the
+ * update, or whether the tool was open when someone did. Offline there is no
+ * list, as there is no `parent`; the update cannot be made offline either.
  */
 async function parentState(hub: HubConfig, client: ReturnType<typeof remoteClient>, record: WorkspaceRecord): Promise<ParentState | undefined> {
   const parent = parentOf(record);
   try {
     const dry = (await fromRemote(hub, () => client.branches.merge(record.branch, { from: parent, message: `Update from ${parent}`, dryRun: true }))).data;
+    // The dry run's sides: `source` is the parent's head, `base` the commit the two share.
+    const where = { branch: parent, head: dry.source, base: dry.base };
     // Behind only by records kept on `main` alone (a grant, a merge request) is not behind: nothing of the design waits.
-    if (dry.upToDate || dry.brings === 0) return { branch: parent, behind: false };
-    return { branch: parent, behind: true, ...(dry.brings !== undefined ? { documents: dry.brings } : {}), conflicts: dry.conflicts?.length ?? 0 };
+    if (dry.upToDate || dry.brings === 0) return { ...where, behind: false };
+    const conflicting = dry.conflicts ?? [];
+    // A conflict is one field, and a record can conflict on several: the count is of records, as documented since 2026-11-20.
+    return { ...where, behind: true, ...(dry.brings !== undefined ? { documents: dry.brings } : {}), conflicts: new Set(conflicting.map((c) => c.id)).size, conflicting };
   } catch (err) {
     if (err instanceof ApiError && err.code !== 'remote_unreachable') return undefined;
     throw err;

@@ -28,7 +28,7 @@
 import type { CheckRequirement, ClassMap, ClassName, Grant, MergeRequest, TerminusDocument, User, Workspace } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-20';
+export const CLIENT_REVISION = '2026-11-21';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -645,15 +645,27 @@ export interface WorkspaceStatus {
   snapshots?: { budget: number; held: string[]; declined: unknown[] };
 }
 
-/** Where a workspace stands against its parent on the remote (2026-11-20): the remote's dry run of the merge an update makes. */
+/**
+ * Where a workspace stands against its parent on the remote (2026-11-20): the remote's dry run of the merge an update makes,
+ * read each time and never kept, so it is what an update would meet now, whether or not anyone has tried it.
+ */
 export interface ParentState {
   branch: string;
+  /** The parent's latest commit on the remote (since 2026-11-21); absent from an older hub. */
+  head?: string;
+  /** The starting point (since 2026-11-21): the latest commit the parent and the workspace's branch on the remote share, the `base` of each conflict; absent from an older hub. */
+  base?: string;
   /** True when the parent holds commits the workspace's branch on the remote does not. */
   behind: boolean;
   /** When behind: how many documents an update would bring, records kept on `main` alone not counted. */
   documents?: number;
   /** When behind: how many records an update would be refused for; zero when it would merge. */
   conflicts?: number;
+  /**
+   * When behind (since 2026-11-21): what an update would be refused for, as its 409 `merge_conflict` would list it, each field with its
+   * `base`, `target` (the workspace's) and `source` (the parent's) value, or a record created on both sides; empty when it would merge.
+   */
+  conflicting?: MergeConflict[];
 }
 
 /** One local commit replayed on the remote by a push (ADR-0065 decision 5; 2026-11-01). */
