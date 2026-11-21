@@ -94,7 +94,7 @@ The agent opens a proposal branch and files a finding on the **prerequisite rela
 
 > *Module 2 depends on the quick check this change removes.* Lateral reading is now an Evaluate objective, taught as slow, deliberate weighing. Module 2 tracing chains several quick checks at about two minutes per hop and does not reteach the check, so its prerequisite no longer holds. Consider splitting the objective: keep a quick lateral check at Apply for Module 2, and add the Evaluate objective beside it.
 
-**Show it on the record:** switch the viewer to the proposal branch. The finding is drawn on the prerequisite as a dashed annotation, and the History page shows the commit by *Design assistant (AI)*, marked as an agent, *for Demo Designer*: the hub wrote that last part itself, from the request, not from anything the agent said.
+**Show it on the record:** switch the viewer to the proposal branch. The finding appears in the Design Graph's *Notes and findings* column, its line running to the prerequisite between the two objectives (select it to read it; its subject is that relationship), and the History page shows the commit by *Design assistant (AI)*, marked as an agent, *for Demo Designer*: the hub wrote that last part itself, from the request, not from anything the agent said.
 
 **Say:** *"Notice it didn't change anything. Its tools only file notes and findings. Splitting the objective is my call. Keep the quick check for Module 2, add the Evaluate objective beside it."*
 
@@ -156,4 +156,4 @@ GET  /intelligence/impact/LearningObjective/lateral-reading-check?branch=demo-ch
 
 - The MCP server, which is not built yet: how the agent words its answers and which tools it chooses. Rehearse the three questions exactly as written once it is.
 - Where the server's writes go. Its plan (`docs/mcp-server-plan.md` §7) has an agent write on a workspace hub and keeps its remote mode read-only. Beat 4 writes on the instance, which the hub accepts under `header` identity from an agent acting for a person; the plan needs that case decided before the server is built for this demo.
-- The viewer's alignment lens and dashed finding on this seed's branches, by eye.
+- *Checked by eye on 2026-11-21, from screenshots of the viewer over the TerminusDB copy:* the History page on `main` and on the proposal branch, the alignment lens on `demo-change` (both items ringed, the raised objective outlined as having no item at its level), and the finding in the Notes and findings column. Creating the branches adds an "Owner grant" commit to `main` for each, so record beat 1 straight after a reset.
