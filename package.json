@@ -15,6 +15,7 @@
     "generate:types": "node scripts/generate-types.js",
     "check:types": "node scripts/generate-types.js --check",
     "check:context": "node scripts/check_context_size.js",
-    "check:vocabulary": "node scripts/check_vocabulary.js"
+    "check:vocabulary": "node scripts/check_vocabulary.js",
+    "demo:reset": "node scripts/demo_reset.js"
   }
 }
