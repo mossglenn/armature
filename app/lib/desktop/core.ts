@@ -11,6 +11,7 @@ import { ApiError } from '../api/errors';
 import { openFileStore } from '../api/filestore/store';
 import { drawLocalToken, LOCAL_TOKEN_HEADER } from '../api/localToken';
 import { parentOf } from '../api/workspace/records';
+import { REMOTE_REVISION } from '../api/workspace/remote';
 import { CURRENT_REVISION } from '../api/version';
 import { startHub, type RunningHub } from '../hub';
 import { folderFiles, folderRecords, lockFolder } from '../workspaceFolder';
@@ -196,7 +197,7 @@ export function runCore(options: CoreOptions): Core {
     if (me) return me;
     const { settings: current } = opened();
     const remote = current.remote!;
-    const person = (await fromRemote(remote, instance(), () => createClient({ baseUrl: remote, token: remoteToken, timeout: REMOTE_CALL_MS }).users.me())).data;
+    const person = (await fromRemote(remote, instance(), () => createClient({ baseUrl: remote, token: remoteToken, version: REMOTE_REVISION, timeout: REMOTE_CALL_MS }).users.me())).data;
     me = { id: person['@id'], externalId: person.externalId, ...(person.displayName ? { displayName: person.displayName } : {}) };
     return me;
   };
@@ -369,7 +370,7 @@ export function runCore(options: CoreOptions): Core {
   const readProfile = async (given: unknown) => {
     const { remote } = parseSettings({ remote: given });
     const address = remote!;
-    const discovery: Discovery = (await fromRemote(address, undefined, () => createClient({ baseUrl: address, timeout: REMOTE_CALL_MS }).discover())).data;
+    const discovery: Discovery = (await fromRemote(address, undefined, () => createClient({ baseUrl: address, version: REMOTE_REVISION, timeout: REMOTE_CALL_MS }).discover())).data;
     if (discovery.role !== 'remote') throw new ApiError(400, 'not_a_remote', `${address} is a desktop hub, not an instance; connect to the instance's own address`, { remote: address });
     const { resolver, issuer, clientId } = discovery.identity;
     let identity: RemoteIdentity;
@@ -663,7 +664,7 @@ export function runCore(options: CoreOptions): Core {
         if (!remote || !current.identity) throw new ApiError(409, 'not_connected', 'The app is not connected to an instance; connect first');
         const user = current.user;
         if (!user) throw new ApiError(409, 'no_user', `${sentence(instance())} has no sign-in; set your ID on it in the settings (user)`);
-        const person = (await fromRemote(remote, instance(), () => createClient({ baseUrl: remote, user, timeout: REMOTE_CALL_MS }).users.me())).data;
+        const person = (await fromRemote(remote, instance(), () => createClient({ baseUrl: remote, user, version: REMOTE_REVISION, timeout: REMOTE_CALL_MS }).users.me())).data;
         return ok({ person: { id: person['@id'], externalId: person.externalId, ...(person.displayName ? { displayName: person.displayName } : {}) } });
       }
       return ok({ signedIn: true, person: await whoAmI(), ...(staysSignedIn !== undefined ? { staysSignedIn } : { staysSignedIn: keptRefresh !== undefined }) });
@@ -739,6 +740,7 @@ export function runCore(options: CoreOptions): Core {
         const client = createClient({
           baseUrl: remote,
           ...(current.identity?.resolver === 'oidc' ? { token: remoteToken } : { user: await owner() }),
+          version: REMOTE_REVISION,
           timeout: CHANGE_CALL_MS,
           signal: wait.signal,
         });

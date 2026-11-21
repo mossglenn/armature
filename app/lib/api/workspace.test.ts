@@ -22,7 +22,7 @@ import { createOperatorStore } from './store';
 import { cloneBranch } from './workspace/clone';
 import { pushWorkspace } from './workspace/push';
 import { memoryRecords, type WorkspaceRecord } from './workspace/records';
-import { remoteCommitOf } from './workspace/remote';
+import { REMOTE_REVISION, remoteCommitOf } from './workspace/remote';
 import { asOfCommitsOf, fetchRemoteLog } from './workspace/snapshots';
 import { trailerValue } from './trailers';
 
@@ -316,6 +316,27 @@ describe('over the file-backed store in memory', () => {
       } finally {
         await new Promise((resolve) => moved.close(resolve));
         await new Promise((resolve) => target.close(resolve));
+      }
+    });
+
+    it("declares to the remote the revision of the remote's contract it relies on, not the one it serves its tools (REMOTE_REVISION)", async () => {
+      // A remote refuses a write from a revision newer than its own (ADR-0059 decision 3); a revision that
+      // changes only what a workspace hub serves must not make its pushes refused by a remote not yet updated.
+      const versions: Array<string | undefined> = [];
+      const recording = createServer((req, res) => {
+        versions.push(req.headers['armature-version'] as string | undefined);
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unavailable', message: 'recording only' }));
+      });
+      await new Promise<void>((resolve) => recording.listen(0, '127.0.0.1', resolve));
+      try {
+        const address = `http://127.0.0.1:${(recording.address() as AddressInfo).port}`;
+        const hub = createApp(() => ({ ...config, remote: address }));
+        await on(hub, 'POST', '/workspace', { name: `ws-version-${stamp}` });
+        expect(versions.length).toBeGreaterThan(0);
+        expect(new Set(versions)).toEqual(new Set([REMOTE_REVISION]));
+      } finally {
+        await new Promise((resolve) => recording.close(resolve));
       }
     });
 

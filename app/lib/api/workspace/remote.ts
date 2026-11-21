@@ -30,6 +30,22 @@ import { ApiError } from '../errors';
 export const REMOTE_TIMEOUT_MS = 60_000;
 
 /**
+ * The revision of the remote's contract that this hub's calls to its remote rely on, sent as their
+ * `Armature-Version` (since 2026-11-20, later; ADR-0065 decision 5, note of that day). It is not
+ * `CURRENT_REVISION`, what this hub serves its own tools. A remote refuses a write from a revision
+ * newer than its own (ADR-0059 decision 3), so until then each revision a workspace hub served for its
+ * tools alone made every push refused by a remote not yet updated: the removal of 2026-11-07, and the
+ * status of 2026-11-15 and 2026-11-16, each needed officepi updated before the program could push
+ * (SESSION.md item 35).
+ *
+ * It moves when a workspace hub begins to rely on something a remote gained: a route, a field, a rule
+ * or a refusal that its calls to the remote use or read. A revision that changes only what a workspace
+ * hub serves leaves it where it is. 2026-11-20: the workspace records, links and merge requests of
+ * ADR-0072, and the dry run's `brings`. version.test.ts holds it to a revision this code serves.
+ */
+export const REMOTE_REVISION = '2026-11-20';
+
+/**
  * A client of this hub's remote, acting as `externalId` under `header`, or as
  * the token's subject under `oidc`; with `agent`, as that agent acting for
  * them (ADR-0067 decision 3).
@@ -43,6 +59,7 @@ export function remoteClient(hub: HubConfig, externalId?: string, agent?: string
     ...(hub.remoteToken ? { token: hub.remoteToken } : { user: externalId }),
     ...(agent ? { agent } : {}),
     ...(hub.installation ? { workspaceLink: hub.installation.id } : {}),
+    version: REMOTE_REVISION,
     timeout: REMOTE_TIMEOUT_MS,
     fetch: (input, init) => withFreshToken(hub, (headers) => withoutRedirect(remote, input, { ...init, headers }), init?.headers),
   });
