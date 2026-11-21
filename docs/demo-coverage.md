@@ -1,6 +1,6 @@
 # Demo coverage
 
-**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built), Ledger and the totals recounted 2026-11-12, reacting to changes built in the hub 2026-11-15 (no cell changed), the shared vocabulary's row added 2026-11-19 · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
+**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built), Ledger and the totals recounted 2026-11-12, reacting to changes built in the hub 2026-11-15 (no cell changed), the shared vocabulary's row added 2026-11-19, Quiver resumed 2026-11-20 (from its handoff; no mark changed) · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
 
 **How to read it.** Capabilities run down the side and tools across the top, grouped by who is in the loop (interactive, agent, batch, gate; § Kinds of plugin). ● means the tool's demo *shows* the capability; ○ means the tool *uses* it without making it the point. Each row gets the hub's own coverage verdict (ADR-0029's default thresholds), counting only ● for the tools in scope: Uncovered is 0, Partially is 1, Fully is 2 to 4, Over is 5 or more. Three verdict columns give the three scopes: built tools only, built and planned, and everything including the proposed tools. *Partial* marks a hub capability that is not finished.
 
@@ -14,7 +14,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 |---|---|---|
 | CoQui | Built | SME review of assessment items in rounds |
 | Viewer | Built | The Coverage View and the Design Graph |
-| Quiver | Built (paused 2026-10-30; the workspace hub's first real test, ADR-0065) | Local-first item manager, and the first client that must merge |
+| Quiver | Built (paused 2026-10-30; resumed 2026-11-17 as the workspace hub's first real test, ADR-0065, on Armature Desktop 0.2.0 since 2026-11-20) | Local-first item manager, and the first client that must merge |
 | MCP server | Proposed | Any agent asks design questions through the intelligence reads |
 | Storyline bridge | Proposed | Stamps published Storyline packages and joins their results to the graph |
 | DataShop bridge | Proposed | Tests the design's alignment against learner data as a DataShop knowledge-component model |
@@ -52,7 +52,7 @@ No single division of plugins holds: designer against administrator, or who inst
 |---|---|---|---|
 | CoQui | Interactive | The person: designer or SME | Beside the hub |
 | Viewer | Interactive | Nobody | Beside the hub, its pages public |
-| Quiver | Interactive | The person | The designer's machine, through a workspace hub (ADR-0065) |
+| Quiver | Interactive | The person | The designer's machine, through Armature Desktop's workspace hub (ADR-0065, ADR-0069) |
 | Ripple | Interactive | The person | Beside the hub |
 | Crosswalk | Interactive | The person: mapper or SME | Beside the hub |
 | Whyfinder | Interactive | Nobody | The reader's browser |
@@ -224,13 +224,13 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **Typed client.** The Next.js app reaches the hub only through @armature/client.
 - ○ **Loopback boundary.** In the compose file it reads the hub as `hub`, the name listed in `ARMATURE_ALLOWED_HOSTS`.
 
-### Quiver (built, paused)
+### Quiver (built; resumed 2026-11-17)
 
 - ○ **Read any record at a commit.** Refreshes records at a ref.
 - ● **Branches.** One branch per workspace, `<user>_<name>`, since branch names allow no slash.
 - ● **History and changes since.** changes?since= refreshes a workspace.
-- ○ **Reacting to changes.** Learns that `main` moved by polling, before it offers to bring it in.
-- ● **Three-way merge with conflicts.** Updating from `main` and merging into it are merges, reviewed fragment by fragment. Scenarios 7 and 8 showed the route skipped the invariants; since 2026-11-01 the remote checks a merge before it commits, and update from `main` and merge into `main` are the workspace hub's.
+- ○ **Reacting to changes.** Follows the event feed (`GET /events`) for local commits since its milestone 13 (2026-11-20), which covers an update from the parent; for a push or a merge it asks the status every 30 seconds until a tool is told of them (issue #171). That the parent moved it reads from the status's `remote.parent` since 0.2.0.
+- ● **Three-way merge with conflicts.** Updating from `main` and merging into it are merges, reviewed fragment by fragment. Scenarios 7 and 8 showed the route skipped the invariants; since 2026-11-01 the remote checks a merge before it commits, and update from `main` and merge into `main` are the workspace hub's. Since 0.2.0 the merge is the workspace's merge request, pressed in the app; a conflict on the update reaches Quiver only as a count, so the person carries the records across by eye until a tool can read the report (issue #169).
 - ● **One write path with invariants.** Local commits with reasons, pushed through the one write path.
 - ● **Batch writes with If-Match.** Push is a batch write with If-Match.
 - ● **Identity on every write.** Two users in two workspaces, built; a push from a second machine waits for the workspace hub's sign-in to a remote under the `oidc` resolver (ADR-0067 decision 2; the resolver itself built 2026-11-05).
@@ -240,7 +240,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ○ **Ordered module content.** Formative use in activities; may create a Module when an assessment has none.
 - ● **Export profiles and slices.** A workspace is cloned from GET /export; asks for an authoring slice. The text2qti exporter is milestone 4.
 - ● **Typed client.** First consumer of the client package.
-- ○ **Agent provenance.** AI drafting is built (`agent:quiver/drafter`, `agent:quiver/lint-1`); ADR-0067 decision 3's `Armature-Agent` form, built 2026-11-01, when Quiver resumes.
+- ○ **Agent provenance.** AI drafting is built (`agent:quiver/drafter`, `agent:quiver/lint-1`) in ADR-0067 decision 3's `Armature-Agent` form, built 2026-11-01. Where the instance does not know `agent:quiver/drafter`, a kept proposal is the person's own commit with the model named in its note, until a tool can register its agent from a desktop hub (issue #172), which its lint's check runs need too.
 - ● **Authorization.** A workspace's owner is whoever created it on the remote; a push to a branch the owner may not write meets 403 `forbidden`, and the workspace hub warns at creation (ADR-0068 decision 9; push built 2026-11-01, so the demo shows it).
 - ○ **Loopback boundary.** Its desktop shell sends `Origin: tauri://localhost`, a non-web origin the hub serves.
 
