@@ -61,6 +61,7 @@ export default async function RootLayout({
           <Link href="/" className="font-semibold tracking-tight">Armature</Link>
           <Link href="/graph" className="text-zinc-600 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-100">Design Graph</Link>
           <Link href="/" className="text-zinc-600 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-100">Modules</Link>
+          <Link href="/history" className="text-zinc-600 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-100">History</Link>
           <Link href="/connect" className="text-zinc-600 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-zinc-100">Your own computer</Link>
           {branches.length > 0 && (
             <Suspense fallback={null}>

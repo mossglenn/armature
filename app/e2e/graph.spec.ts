@@ -276,6 +276,22 @@ test('the branch picker names the branch on every page, with its head', async ({
   await expect(page.getByLabel('Branch')).toHaveValue('main');
 });
 
+test("the History page lists the branch's commits in their own words, each opening the graph as it stood then", async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Armature' }).getByRole('link', { name: 'History' }).click();
+  await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
+  const list = page.getByRole('list', { name: 'History of main' });
+  // The seed's commits, oldest of them its first; the seed is written outside the hub, by the store's own user.
+  const attested = list.getByRole('listitem').filter({ hasText: 'Seed demo data: an expert affirms the key of the bias item' });
+  await expect(attested).toContainText('Set up outside the hub');
+  await expect(list).toContainText('Seed demo data: Introduction to AI for Instructional Designers');
+  await attested.getByRole('link', { name: 'Design Graph at this commit' }).click();
+  await expect(page).toHaveURL(/\/graph\?ref=[a-z0-9]+$/);
+  await expect(page.getByLabel('Branch')).toHaveValue('');
+  expect(errors).toEqual([]);
+});
+
 test('moving around (§5.2): hover keeps a neighborhood and recedes the rest, a hovered edge shows its label, arrows pan, z frames the selection', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/graph');
