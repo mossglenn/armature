@@ -164,7 +164,9 @@ describe('over the file-backed store in memory', () => {
       expect(status.body.head).toBe(write.headers.get('etag')?.replace(/"/g, ''));
       expect(status.body.localCommits).toBe(1);
       // Main has moved since by the workspace's own records, which is not being behind it.
-      expect(status.body.remote).toEqual({ head: record.base, moved: false, link: 'here', parent: { branch: 'main', behind: false } });
+      // The parent's latest commit is main's on the remote, and the starting point the commit the workspace was cloned at.
+      const mainHead = (await json(await on(app, 'GET', '/branches/main'))).body.head.commit;
+      expect(status.body.remote).toEqual({ head: record.base, moved: false, link: 'here', parent: { branch: 'main', head: mainHead, base: record.base, behind: false } });
     });
 
     it('@armature/client reads the same status through its workspace functions', async () => {

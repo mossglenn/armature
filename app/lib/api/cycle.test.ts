@@ -119,6 +119,8 @@ describe('over the file-backed store in memory', () => {
 
   describe('the cycle: create, write, push, update, resolve, open a merge request, merge', () => {
     let mergeCommit: string;
+    /** Main's commit the first update brought in: the starting point of the next update. */
+    let mainAtUpdate: string;
 
     it('creates the workspace and pushes a local commit', async () => {
       const made = await json(await on('POST', '/workspace', { name: NAME }));
@@ -142,8 +144,18 @@ describe('over the file-backed store in memory', () => {
     it("brings in main after it moved: the remote's merge, read back as one local commit the table maps", async () => {
       const theirs = await onMain.documents.put('LearningNeed', THEIRS, { message: 'Work on main', document: { label: 'theirs', rationale: 'base' } });
       expect(theirs.data.commit).toBeTruthy();
+      mainAtUpdate = theirs.data.commit;
       // The status says the parent has something to bring, and that it would merge, before anyone asks for it.
-      expect((await json(await on('GET', `/workspace/${WS}/status`))).body.remote.parent).toEqual({ branch: 'main', behind: true, documents: 1, conflicts: 0 });
+      expect((await json(await on('GET', `/workspace/${WS}/status`))).body.remote.parent).toEqual({
+        branch: 'main',
+        head: theirs.data.commit,
+        // Where the workspace was cloned from main, which the push since did not change.
+        base: (await config.workspaces!.get(WS))!.base,
+        behind: true,
+        documents: 1,
+        conflicts: 0,
+        conflicting: [],
+      });
       const res = await json(await on('POST', `/workspace/${WS}/bring-in`, { message: 'Catch up with main' }));
       expect(res.status).toBe(200);
       expect(res.body.upToDate).toBe(false);
@@ -172,17 +184,36 @@ describe('over the file-backed store in memory', () => {
     });
 
     it("a conflict comes back as the remote's; restoring the base locally, pushing and bringing in again clears it (check Z)", async () => {
-      expect((await onMain.documents.put('LearningNeed', THEIRS, { message: 'Theirs', document: { label: 'theirs', rationale: 'their edit' } })).data.commit).toBeTruthy();
-      expect((await on('PUT', `/documents/${THEIRS}?branch=${WS}`, need('theirs', 'my edit'))).status).toBe(200);
+      // Both sides change two fields of one record: two conflicts, one record.
+      const mainHead = (await onMain.documents.put('LearningNeed', THEIRS, { message: 'Theirs', document: { label: 'their label', rationale: 'their edit' } })).data.commit;
+      expect(mainHead).toBeTruthy();
+      expect((await on('PUT', `/documents/${THEIRS}?branch=${WS}`, { message: 'Mine', document: { label: 'my label', rationale: 'my edit' } })).status).toBe(200);
       expect((await on('POST', `/workspace/${WS}/push`)).status).toBe(200);
+      const expected = [
+        { id: THEIRS, field: 'label', base: 'theirs', target: 'my label', source: 'their label' },
+        { id: THEIRS, field: 'rationale', base: 'base', target: 'my edit', source: 'their edit' },
+      ];
+      const byField = (list: Array<{ field?: string }>) => [...list].sort((a, b) => String(a.field).localeCompare(String(b.field)));
+
+      // Issue #169: the status lists what the update would meet before anyone asks for it, with the starting point and the parent's
+      // latest commit (#170), and counts the record once.
+      const before = (await json(await on('GET', `/workspace/${WS}/status`))).body.remote.parent;
+      expect(before).toMatchObject({ branch: 'main', head: mainHead, base: mainAtUpdate, behind: true, conflicts: 1 });
+      expect(byField(before.conflicting)).toEqual(expected);
+
       const conflicted = await json(await on('POST', `/workspace/${WS}/bring-in`));
       expect(conflicted.status).toBe(409);
-      expect(conflicted.body).toMatchObject({ error: 'merge_conflict', remote: true });
-      expect(conflicted.body.conflicts).toEqual([{ id: THEIRS, field: 'rationale', base: 'base', target: 'my edit', source: 'their edit' }]);
+      expect(conflicted.body).toMatchObject({ error: 'merge_conflict', remote: true, base: mainAtUpdate });
+      expect(byField(conflicted.body.conflicts)).toEqual(expected);
+      // The refusal changed nothing, so the status still says the same: nothing was kept from it, and nothing needs clearing.
+      expect((await json(await on('GET', `/workspace/${WS}/status`))).body.remote.parent).toEqual(before);
 
       // The resolution (plan §6): restore the base, push, bring in clean, then write the resolution.
       expect((await on('PUT', `/documents/${THEIRS}?branch=${WS}`, need('theirs', 'base'))).status).toBe(200);
+      // Restored here and not yet pushed: the list is the remote's, so it still stands.
+      expect((await json(await on('GET', `/workspace/${WS}/status`))).body.remote.parent.conflicts).toBe(1);
       expect((await on('POST', `/workspace/${WS}/push`)).status).toBe(200);
+      expect((await json(await on('GET', `/workspace/${WS}/status`))).body.remote.parent).toMatchObject({ head: mainHead, behind: true, conflicts: 0, conflicting: [] });
       const clean = await json(await on('POST', `/workspace/${WS}/bring-in`));
       expect(clean.status).toBe(200);
       expect(clean.body.broughtIn.documents).toBe(1);
