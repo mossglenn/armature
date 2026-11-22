@@ -80,6 +80,7 @@ All four beats. The MCP server's tools each beat uses are named in the beat. Its
 ### Before recording
 
 - [ ] `npm run demo:reset`, then `npm run demo:start`; the History page shows three commits by Former Designer and Demo Reviewer, with the schema's load faded below them
+- [ ] The browser tab reads *Example University · Information Literacy*, the instance's name, which the assistant's `describe_hub` also gives (`DEMO_INSTANCE_NAME` names another; without one, a hub calls itself `localhost`)
 - [ ] Claude Desktop has the Armature MCP server attached as in § Once, step 5, and `propose_finding` appears in its tools menu
 - [ ] A new conversation in Claude Desktop, opened after `demo:start` answered
 - [ ] A terminal is ready for `npm run demo:change` (decided 2026-11-21: the change is made on camera with it)
