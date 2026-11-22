@@ -26,7 +26,7 @@ Three commands, from the repository root: `npm run demo:reset` seeds the demo's 
 
 ### What works today
 
-Beats 1 and 3 in full. Beats 2 and 4 need the MCP server, which is being built (M0, M1 and M4; `docs/mcp-server-plan.md`). Until then, rehearse their timing with what the agent would read, in the viewer: select the .org item and read its annotations in the panel (beat 2), and select the prerequisite edge, whose rationale and History tab carry beat 3's hidden ripple.
+Beats 1 and 3 in full. Beats 2 and 4 need the MCP server, which is being built in its own repository, `mossglenn/armature-mcp` (M0 done 2026-11-21; M1 and M4 next; its plan is that repository's `docs/plan.md`). Until then, rehearse their timing with what the agent would read, in the viewer: select the .org item and read its annotations in the panel (beat 2), and select the prerequisite edge, whose rationale and History tab carry beat 3's hidden ripple.
 
 ### Troubleshooting
 
@@ -185,6 +185,6 @@ GET  /intelligence/impact/LearningObjective/lateral-reading-check?branch=demo-ch
 
 ### Not verified here
 
-- The MCP server, which is not built yet: how the agent words its answers and which tools it chooses. Rehearse the three questions exactly as written once it is.
-- Where the server's writes go. Its plan (`docs/mcp-server-plan.md` §7) has an agent write on a workspace hub and keeps its remote mode read-only. Beat 4 writes on the instance, which the hub accepts under `header` identity from an agent acting for a person; the plan needs that case decided before the server is built for this demo.
+- The MCP server, at M0 on 2026-11-21 (two tools; the demo's need M1 and M4): how the agent words its answers and which tools it chooses. Rehearse the three questions exactly as written once it is.
+- Where the server's writes go. *Decided 2026-11-21 (the server's plan, question 14):* both, a workspace hub and a loopback hub under `header` identity, the demonstration recorded on the second.
 - *Checked by eye on 2026-11-21, from screenshots of the viewer over the TerminusDB copy:* the History page on `main` and on the proposal branch, the alignment lens on `demo-change` (both items ringed, the raised objective outlined as having no item at its level), and the finding in the Notes and findings column. Creating the branches adds an "Owner grant" commit to `main` for each, so record beat 1 straight after a reset.
