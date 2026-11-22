@@ -15,6 +15,12 @@
  *   TERMINUS_URL, TERMINUS_USER, TERMINUS_PASS   the store, as the other scripts
  *   TERMINUS_DB                                  default armature_icicle, never armature
  *   DEMO_HUB_PORT, DEMO_VIEWER_PORT              default 3100 and 3000
+ *   DEMO_INSTANCE_NAME                           the instance's name, which the viewer's
+ *                                                tab, its Connect page and the assistant
+ *                                                show; default "Example University ·
+ *                                                Information Literacy", the seed's
+ *                                                institution (unset, a hub names itself
+ *                                                by its host name, localhost)
  */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -31,6 +37,7 @@ const TERMINUS_PASS = process.env.TERMINUS_PASS || "admin";
 const DB = process.env.TERMINUS_DB || "armature_icicle";
 const HUB_PORT = Number(process.env.DEMO_HUB_PORT || 3100);
 const VIEWER_PORT = Number(process.env.DEMO_VIEWER_PORT || 3000);
+const INSTANCE_NAME = process.env.DEMO_INSTANCE_NAME || "Example University · Information Literacy";
 const rebuildViewer = process.argv.includes("--build");
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 
@@ -118,7 +125,7 @@ const ready = async (url, label) => {
   stop(1);
 };
 
-start("hub", process.execPath, ["dist/server.mjs"], { TERMINUS_DB: DB, PORT: String(HUB_PORT), HOST: "127.0.0.1" });
+start("hub", process.execPath, ["dist/server.mjs"], { TERMINUS_DB: DB, PORT: String(HUB_PORT), HOST: "127.0.0.1", ARMATURE_INSTANCE_NAME: INSTANCE_NAME });
 await ready(`http://localhost:${HUB_PORT}/api/v1/health/ready`, "hub");
 start("viewer", process.execPath, [join(root, "node_modules", "next", "dist", "bin", "next"), "start", "-p", String(VIEWER_PORT)], { ARMATURE_HUB_URL: `http://localhost:${HUB_PORT}` });
 await ready(`http://localhost:${VIEWER_PORT}/`, "viewer");
