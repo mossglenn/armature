@@ -15,7 +15,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 | CoQui | Built | SME review of assessment items in rounds |
 | Viewer | Built | The Coverage View and the Design Graph |
 | Quiver | Built (paused 2026-10-30; resumed 2026-11-17 as the workspace hub's first real test, ADR-0065, on Armature Desktop 0.2.0 since 2026-11-20) | Local-first item manager, and the first client that must merge |
-| MCP server | Being built (M0, 2026-11-21; `mossglenn/armature-mcp`) | Any agent asks design questions through the intelligence reads |
+| MCP server | Built: reads and proposals (M1 and M4, 2026-11-21; `mossglenn/armature-mcp`); export, resources and prompts planned | Any agent asks design questions through the intelligence reads |
 | Storyline bridge | Proposed | Stamps published Storyline packages and joins their results to the graph |
 | DataShop bridge | Proposed | Tests the design's alignment against learner data as a DataShop knowledge-component model |
 | Q-matrix exporter | Proposed | The alignment at a commit as a Q-matrix for DataShop, knowledge tracing, IRT and diagnosis models |
@@ -244,7 +244,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ● **Authorization.** A workspace's owner is whoever created it on the remote; a push to a branch the owner may not write meets 403 `forbidden`, and the workspace hub warns at creation (ADR-0068 decision 9; push built 2026-11-01, so the demo shows it).
 - ○ **Loopback boundary.** Its desktop shell sends `Origin: tauri://localhost`, a non-web origin the hub serves.
 
-### MCP server (being built; M0 on 2026-11-21)
+### MCP server (reads and proposals built, M1 and M4 on 2026-11-21; the ICICLE demonstration is its demo)
 
 - ● **Read any record at a commit.** Every tool takes a ref, and every answer names its commit.
 - ○ **Branches.** Summarizes what a branch changed.

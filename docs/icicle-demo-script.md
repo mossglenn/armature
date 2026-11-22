@@ -1,6 +1,6 @@
 # Demo script: the inherited module
 
-Nov 20, 2026 · Amos Glenn · *revised 2026-11-21: a runbook for this Mac (`demo:reset`, `demo:start`, `demo:change`); verified against TerminusDB; the desktop app taken out of beat 1, which now uses the viewer's History page; the agent seeded rather than registered; beat 4's close in the viewer*
+Nov 20, 2026 · Amos Glenn · *revised 2026-11-21: a runbook for this Mac (`demo:reset`, `demo:start`, `demo:change`); verified against TerminusDB; the desktop app taken out of beat 1, which now uses the viewer's History page; the agent seeded rather than registered; beat 4's close in the viewer; later the same day, the assistant set up, with the MCP server built (its M1 and M4), and each beat's tools named*
 
 Five minutes, four beats, recorded ahead and narrated live, for the ICICLE Design SIG. You inherit a course, ask why an item exists, raise one objective, and the system turns up the Module 2 design that the change quietly breaks.
 
@@ -8,25 +8,55 @@ The seed is `scripts/seed_icicle_demo.js` (the course "First-Year Information Li
 
 ## Running it on this Mac
 
-Three commands, from the repository root: `npm run demo:reset` seeds the demo's own database, `npm run demo:start` runs a hub and the viewer over it, and `npm run demo:change` makes beat 3's change. The demo has a database of its own, `armature_icicle`, on the same local store as development; none of the three touches `armature`, the development database.
+Three commands, from the repository root: `npm run demo:reset` seeds the demo's own database, `npm run demo:start` runs a hub and the viewer over it, and `npm run demo:change` makes beat 3's change. The demo has a database of its own, `armature_icicle`, on the same local store as development; none of the three touches `armature`, the development database. The assistant in beats 2 to 4 is Claude Desktop with the Armature MCP server attached; the server is built in its own repository, [`mossglenn/armature-mcp`](https://github.com/mossglenn/armature-mcp).
 
 ### Once
 
 1. **Docker Desktop**, installed and running.
 2. **The store**: `cd docker && docker compose up -d`, which starts TerminusDB on `localhost:6363` and nothing else. `docker compose ps` should show `terminusdb` running.
 3. **Dependencies**: `npm install` at the repository root, and `npm install` in `scripts/`.
+4. **The MCP server**, beside this repository:
+
+   ```sh
+   cd ~/Dev && git clone https://github.com/mossglenn/armature-mcp.git && cd armature-mcp
+   corepack enable          # gives pnpm, once per machine
+   pnpm install && pnpm run build   # → dist/armature-mcp.mjs
+   ```
+
+   After a `git pull` there, run `pnpm install && pnpm run build` again.
+5. **Attach it to Claude Desktop.** Settings → Developer → Edit Config opens `claude_desktop_config.json`. Add the server, with two absolute paths: Node's, from `which node` (Claude Desktop does not read your shell's `PATH`, so a bare `node` may not be found, or may be an older one), and the built server's:
+
+   ```json
+   {
+     "mcpServers": {
+       "armature": {
+         "command": "/absolute/path/from/which/node",
+         "args": ["/Users/<you>/Dev/armature-mcp/dist/armature-mcp.mjs"],
+         "env": {
+           "ARMATURE_HUB_URL": "http://localhost:3100",
+           "ARMATURE_USER": "demo-designer@example.edu",
+           "ARMATURE_AGENT": "agent:armature-mcp",
+           "ARMATURE_WRITES": "on"
+         }
+       }
+     }
+   }
+   ```
+
+   The assistant reads as the demo's designer and writes as the seed's agent, *Design assistant (AI)*, acting for them; nothing needs registering. Quit and reopen Claude Desktop. In a new conversation, the tools menu lists `armature` with 20 tools, `propose_finding` among them.
 
 ### Each time you practice or record
 
 1. **`npm run demo:reset`**: deletes `armature_icicle` and seeds it again, in a second or two. 50 records, three commits.
 2. **`npm run demo:start`**: checks the store, the database and the ports, builds the hub, builds the viewer the first time (about half a minute; `npm run demo:start -- --build` rebuilds it after you pull changes to the viewer), and starts both. Leave it running; it prints the addresses when they answer. Ctrl-C stops both.
 3. **Open `http://localhost:3000/history`** in the browser you record with. That is beat 1.
-4. **Beat 3**: in a second terminal, `npm run demo:change`. It prints the commit and its message. In the viewer, reload, choose `demo-change` in the branch picker, open the Design Graph and choose the Alignment lens.
-5. **Between takes**: `npm run demo:reset` (`demo:start` can keep running), then reload the browser. Beat 1 needs `main` as the seed left it, and a branch from an earlier take is never deleted.
+4. **Open Claude Desktop after `demo:start` answers**, and start a new conversation for each take, so nothing from an earlier take is in its context. (The server asks the hub what it serves when Claude Desktop starts it; if the hub was not up yet, it offers every tool anyway, and they work once the hub is.)
+5. **Beat 3**: in a second terminal, `npm run demo:change`. It prints the commit and its message. In the viewer, reload, choose `demo-change` in the branch picker, open the Design Graph and choose the Alignment lens.
+6. **Between takes**: `npm run demo:reset` (`demo:start` can keep running), then reload the browser and start a new conversation. Beat 1 needs `main` as the seed left it, and a branch from an earlier take is never deleted.
 
 ### What works today
 
-Beats 1 and 3 in full. Beats 2 and 4 need the MCP server, which is being built in its own repository, `mossglenn/armature-mcp` (M0 done 2026-11-21; M1 and M4 next; its plan is that repository's `docs/plan.md`). Until then, rehearse their timing with what the agent would read, in the viewer: select the .org item and read its annotations in the panel (beat 2), and select the prerequisite edge, whose rationale and History tab carry beat 3's hidden ripple.
+All four beats. The MCP server's tools each beat uses are named in the beat. Its contract suite runs beats 2 to 4 against this seed in its CI, every read and the finding, so the hub's side is checked; how Claude words the answers and which tools it picks is what rehearsal is for (§ "Not verified here").
 
 ### Troubleshooting
 
@@ -41,11 +71,17 @@ Beats 1 and 3 in full. Beats 2 and 4 need the MCP server, which is being built i
 | *Owner grant for branch …* commits at the top of the History page | Branches from an earlier take | `npm run demo:reset`, reload |
 | `demo:change` says the branch already exists | The change was made in an earlier take | `npm run demo:reset`, then again |
 | `demo:change` says no hub answers | `demo:start` isn't running, or runs on another port | Start it; `DEMO_HUB_URL` names another address |
+| Claude Desktop lists no `armature` tools | The config's paths are wrong, the server isn't built, or Claude Desktop wasn't reopened | Settings → Developer shows the server's state and its log. Check both absolute paths, `pnpm run build` in `armature-mcp`, quit and reopen |
+| The server's log says `ARMATURE_WRITES=on needs …` and it exits | Writes are on without `ARMATURE_USER` or `ARMATURE_AGENT` | Set both, as in the config above |
+| `armature` is listed but `propose_finding` is not | `ARMATURE_WRITES` isn't `on` | Set it, quit and reopen |
+| Every tool answers *The hub could not be reached* | `demo:start` isn't running, or the hub is on another port | Start it, or set `ARMATURE_HUB_URL` to its address; no restart is needed |
+| The assistant answers beat 3 about the old objective (Apply) | It read `main`, as it does unless told: the change is on `demo-change` | Ask as the beat writes it, naming the branch |
 
 ### Before recording
 
 - [ ] `npm run demo:reset`, then `npm run demo:start`; the History page shows three commits by Former Designer and Demo Reviewer, with the schema's load faded below them
-- [ ] The AI client has the Armature MCP server attached: `ARMATURE_HUB_URL=http://localhost:3100`, `ARMATURE_USER=demo-designer@example.edu`, `ARMATURE_AGENT=agent:armature-mcp`, `ARMATURE_WRITES=on`. The agent is in the seed (*Design assistant (AI)*), so nothing needs registering. `propose_finding` appears in its tool list
+- [ ] Claude Desktop has the Armature MCP server attached as in § Once, step 5, and `propose_finding` appears in its tools menu
+- [ ] A new conversation in Claude Desktop, opened after `demo:start` answered
 - [ ] A terminal is ready for `npm run demo:change` (decided 2026-11-21: the change is made on camera with it)
 - [ ] Slide 5's figure names the objective as the seed does: *Check a website with lateral reading*
 - [ ] **Record each beat as its own clip**, and narrate over the clips live; keep the live system open in another window in case someone asks to see something
@@ -74,11 +110,12 @@ In this beat the agent answers the opening question the room couldn't, by readin
 
 **Ask the agent:** *"What does the .org item measure, and why is C the key?"*
 
-**What it reads** (each of these was verified against the hub):
+**What it reads** (each of these was verified against the hub; the tool is in brackets):
 
-1. The item's record. It assesses *Check a website with lateral reading* (Apply).
-2. The item's trace. It carries a note labeled *Why C is the key of the .org item*, the SME's attestation, and the objective's own note, *Apply, not Evaluate, on purpose*.
-3. The note's record, for its rationale. The trace gives only the label, so the agent needs this one extra read to quote the reason.
+1. The item's record (`get_record`, or `find_records` to find it). It assesses *Check a website with lateral reading* (Apply).
+2. The item's trace (`trace_record`). It carries a note labeled *Why C is the key of the .org item*, the SME's attestation, and the objective's own note, *Apply, not Evaluate, on purpose*.
+3. The note's record, for its rationale (`get_record` on `DesignNote/org-item-key-rationale`). The trace gives only the label, so the agent needs this one extra read to quote the reason.
+4. Possibly the item's attestations (`attestation_status`): one, Current.
 
 **The answer should say:**
 
@@ -105,10 +142,10 @@ This is the moment people remember. You make one change in Module 1, and the sys
 
 **The visible ripple:** in the viewer, choose the branch in the branch picker and turn on the alignment lens. It rings two items as below their objective's level: the .org item, and *Before reading a post that cites an unknown institute*. **Say:** *"Those two I'd have caught myself."*
 
-**The hidden ripple:** ask the agent *"What else does this change touch?"*
+**The hidden ripple:** ask the agent *"I've raised it on the demo-change branch. What else does this change touch?"* Name the branch: the assistant reads `main` unless told, and on `main` the objective is still the old one.
 
-1. It asks what references the objective and gets six records back: the two items, the lateral-reading activity, the Module 1 declaration, the former designer's level note, and **a prerequisite from Module 2's objective *Trace a viral claim to its source*.**
-2. It opens the prerequisite and reads its rationale: *Tracing chains several quick lateral checks in a row. Module 2 allows about two minutes per hop and does not reteach the check.*
+1. It asks what references the objective (`what_references`, on `demo-change`) and gets six records back: the two items, the lateral-reading activity, the Module 1 declaration, the former designer's level note, and **a prerequisite from Module 2's objective *Trace a viral claim to its source*.**
+2. It opens the prerequisite (`get_record`) and reads its rationale: *Tracing chains several quick lateral checks in a row. Module 2 allows about two minutes per hop and does not reteach the check.*
 3. It names the conflict: the objective now teaches slow, deliberate weighing, while Module 2 was built on a two-minute check it never reteaches. The *Claim tracing sprint* activity is designed around that same assumption.
 
 **Pause, then say:** *"This one isn't even in my module. Module 2 was built on the quick check, and the relationship between them says so in its own words. I'd never have found it."*
@@ -121,11 +158,11 @@ In this beat the AI annotates and you decide. Both end up on the record.
 
 **Ask the agent:** *"File that as a finding for me."*
 
-The agent opens a proposal branch and files a finding on the **prerequisite relationship itself**, not on either objective. Expected wording:
+The agent opens a proposal branch from `demo-change` (`start_proposal_branch`; it names it `agent-<topic>`, such as `agent-split-objective`) and files a finding on the **prerequisite relationship itself**, not on either objective (`propose_finding`, with `regarding` the raised objective). Claude Desktop asks you to allow each of the two writes; allow them. Expected wording:
 
 > *Module 2 depends on the quick check this change removes.* Lateral reading is now an Evaluate objective, taught as slow, deliberate weighing. Module 2 tracing chains several quick checks at about two minutes per hop and does not reteach the check, so its prerequisite no longer holds. Consider splitting the objective: keep a quick lateral check at Apply for Module 2, and add the Evaluate objective beside it.
 
-**Show it on the record:** switch the viewer to the proposal branch. The finding appears in the Design Graph's *Notes and findings* column, its line running to the prerequisite between the two objectives (select it to read it; its subject is that relationship), and the History page shows the commit by *Design assistant (AI)*, marked as an agent, *for Demo Designer*: the hub wrote that last part itself, from the request, not from anything the agent said.
+**Show it on the record:** reload the viewer and switch it to the proposal branch. The finding appears in the Design Graph's *Notes and findings* column, its line running to the prerequisite between the two objectives (select it to read it; its subject is that relationship), and the History page shows the commit by *Design assistant (AI)*, marked as an agent, *for Demo Designer*: the hub wrote that last part itself, from the request, not from anything the agent said. (`main`'s History gains one commit too, the proposal branch's owner grant, by the same agent for you: who opened the branch, not a design change.)
 
 **Say:** *"Notice it didn't change anything. Its tools only file notes and findings. Splitting the objective is my call. Keep the quick check for Module 2, add the Evaluate objective beside it."*
 
@@ -145,7 +182,9 @@ Every beat has a fallback that keeps the point intact. The recording is the firs
 | 2 | The agent quotes the note's label but not its reason | Ask *"What's the rationale in that note?"* It will open the note. |
 | 3 | `demo:change` refuses (the branch exists) | A take was already made: `npm run demo:reset`, reload, and start the take again. |
 | 3 | The alignment lens doesn't show on the branch | Ask the agent *"Any alignment gaps in Module 1 now?"* The read returns the same two items. |
+| 3 | The agent describes the objective as it was (Apply) | It read `main`. Say *"On the demo-change branch."* |
 | 3 | The agent stops at the items and the activity | Ask *"Does anything in another module depend on this objective?"* That points it at the prerequisite without naming it. |
+| 4 | The agent files on `demo-change` or `main` | It can't: the server refuses any branch but a proposal branch, and says to open one. Let it; it opens one and files there. |
 | 4 | Writes are off, or `propose_finding` is missing | The agent states the finding in chat. Say *"In my setup it would file this on a branch; here it just tells me."* The point holds either way. |
 | Any | The live system is down | Play the recording and narrate. Don't apologize for it. |
 
@@ -185,6 +224,6 @@ GET  /intelligence/impact/LearningObjective/lateral-reading-check?branch=demo-ch
 
 ### Not verified here
 
-- The MCP server, at M0 on 2026-11-21 (two tools; the demo's need M1 and M4): how the agent words its answers and which tools it chooses. Rehearse the three questions exactly as written once it is.
+- How Claude words its answers and which tools it chooses. The MCP server is built (M1 and M4, 2026-11-21), and its contract suite calls every tool the beats need against this seed in CI: the .org item's trace and the note's rationale, the six references and the prerequisite's two-minute assumption on the branch, and the finding filed on the prerequisite by the agent for the designer, `main`'s design unchanged. Rehearse the three questions exactly as written.
 - Where the server's writes go. *Decided 2026-11-21 (the server's plan, question 14):* both, a workspace hub and a loopback hub under `header` identity, the demonstration recorded on the second.
 - *Checked by eye on 2026-11-21, from screenshots of the viewer over the TerminusDB copy:* the History page on `main` and on the proposal branch, the alignment lens on `demo-change` (both items ringed, the raised objective outlined as having no item at its level), and the finding in the Notes and findings column. Creating the branches adds an "Owner grant" commit to `main` for each, so record beat 1 straight after a reset.
