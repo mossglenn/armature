@@ -1,30 +1,59 @@
 # Demo script: the inherited module
 
-Nov 20, 2026 · Amos Glenn · *revised 2026-11-21: verified against TerminusDB; the desktop app taken out of beat 1, which now uses the viewer's History page; the agent seeded rather than registered; beat 4's close in the viewer*
+Nov 20, 2026 · Amos Glenn · *revised 2026-11-21: a runbook for this Mac (`demo:reset`, `demo:start`, `demo:change`); verified against TerminusDB; the desktop app taken out of beat 1, which now uses the viewer's History page; the agent seeded rather than registered; beat 4's close in the viewer*
 
 Five minutes, four beats, recorded ahead and narrated live, for the ICICLE Design SIG. You inherit a course, ask why an item exists, raise one objective, and the system turns up the Module 2 design that the change quietly breaks.
 
 The seed is `scripts/seed_icicle_demo.js` (the course "First-Year Information Literacy", sample data); `app/lib/api/icicleDemo.test.ts` holds it to every read this script relies on, and runs in CI.
 
-## Setup before the talk
+## Running it on this Mac
 
-The demo runs on a dedicated instance seeded with `scripts/seed_icicle_demo.js`. Like `seed_data.js`, that script replaces every record in the database, so never point it at an instance that holds real work. The instance runs under the default `header` identity, so it stays on loopback (`docs/deployment.md`).
+Three commands, from the repository root: `npm run demo:reset` seeds the demo's own database, `npm run demo:start` runs a hub and the viewer over it, and `npm run demo:change` makes beat 3's change. The demo has a database of its own, `armature_icicle`, on the same local store as development; none of the three touches `armature`, the development database.
 
-1. **Reset and seed** (in `docker/`):
-   - `docker compose run --rm operator node load_schema.js --recreate`
-   - `docker compose run --rm operator node seed_icicle_demo.js`
-2. **Check:** `docker compose exec hub node operator.mjs check`. It should report no violations across the 50 records.
-3. **Have open, in this order:**
-   - the viewer on `main`, on the History page, with the Design Graph one click away;
-   - an AI client with the Armature MCP server attached: `ARMATURE_USER=demo-designer@example.edu`, `ARMATURE_AGENT=agent:armature-mcp`, `ARMATURE_WRITES=on`. The agent is in the seed (*Design assistant (AI)*), so nothing needs registering.
-4. **Record each beat as its own clip.** Narrate over the clips live, and keep the live system open in another window in case someone asks to see something.
-5. **Reset again after each rehearsal.** The record IDs stay the same after a reset, but the commit IDs change.
+### Once
 
-**Practicing on this machine.** `npm run demo:reset`, from the repository root, recreates the database `armature_icicle` on the local store and seeds it, in a few seconds, and prints how to start a hub and the viewer over it. It never touches `armature`, the development database on the same store (the compose commands above would replace it, since the compose file's store is the same one). Reset before every full take: beat 1 needs `main` as the seed left it, and the branches beats 3 and 4 create add commits to `main` and are not deleted.
+1. **Docker Desktop**, installed and running.
+2. **The store**: `cd docker && docker compose up -d`, which starts TerminusDB on `localhost:6363` and nothing else. `docker compose ps` should show `terminusdb` running.
+3. **Dependencies**: `npm install` at the repository root, and `npm install` in `scripts/`.
 
-- [ ] The MCP server is built and attached (`docs/mcp-server-plan.md`; not built as of 2026-11-21), writes are on, and `propose_finding` appears in the agent's tool list
-- [ ] The tool you'll use to edit the objective is confirmed. The fallback call is in the Rehearsal reference section.
+### Each time you practice or record
+
+1. **`npm run demo:reset`**: deletes `armature_icicle` and seeds it again, in a second or two. 50 records, three commits.
+2. **`npm run demo:start`**: checks the store, the database and the ports, builds the hub, builds the viewer the first time (about half a minute; `npm run demo:start -- --build` rebuilds it after you pull changes to the viewer), and starts both. Leave it running; it prints the addresses when they answer. Ctrl-C stops both.
+3. **Open `http://localhost:3000/history`** in the browser you record with. That is beat 1.
+4. **Beat 3**: in a second terminal, `npm run demo:change`. It prints the commit and its message. In the viewer, reload, choose `demo-change` in the branch picker, open the Design Graph and choose the Alignment lens.
+5. **Between takes**: `npm run demo:reset` (`demo:start` can keep running), then reload the browser. Beat 1 needs `main` as the seed left it, and a branch from an earlier take is never deleted.
+
+### What works today
+
+Beats 1 and 3 in full. Beats 2 and 4 need the MCP server, which is being built (M0, M1 and M4; `docs/mcp-server-plan.md`). Until then, rehearse their timing with what the agent would read, in the viewer: select the .org item and read its annotations in the panel (beat 2), and select the prerequisite edge, whose rationale and History tab carry beat 3's hidden ripple.
+
+### Troubleshooting
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| `demo:start` says the store does not answer | Docker Desktop or the store container isn't running | Start Docker Desktop, then `cd docker && docker compose up -d` |
+| `demo:start` says there is no database `armature_icicle` | Not seeded yet on this store | `npm run demo:reset` |
+| `demo:start` says port 3100 or 3000 is taken | A hub or viewer from an earlier run, in another terminal or left behind, or another program | `lsof -nP -iTCP:3100 -sTCP:LISTEN` names it; stop it. Or set `DEMO_HUB_PORT` and `DEMO_VIEWER_PORT` |
+| The viewer shows *Introduction to AI for Instructional Designers* | The viewer is reading another hub: `npm run start:hub` without `TERMINUS_DB` reads `armature`, and the compose profile's hub does too | Stop that hub and the viewer, then `npm run demo:start` |
+| There is no History link in the navigation | An older viewer build, or the compose profile's viewer image | `npm run demo:start -- --build` |
+| The branch picker has no `demo-change` | The page was loaded before the branch existed | Reload |
+| *Owner grant for branch …* commits at the top of the History page | Branches from an earlier take | `npm run demo:reset`, reload |
+| `demo:change` says the branch already exists | The change was made in an earlier take | `npm run demo:reset`, then again |
+| `demo:change` says no hub answers | `demo:start` isn't running, or runs on another port | Start it; `DEMO_HUB_URL` names another address |
+
+### Before recording
+
+- [ ] `npm run demo:reset`, then `npm run demo:start`; the History page shows three commits by Former Designer and Demo Reviewer, with the schema's load faded below them
+- [ ] The AI client has the Armature MCP server attached: `ARMATURE_HUB_URL=http://localhost:3100`, `ARMATURE_USER=demo-designer@example.edu`, `ARMATURE_AGENT=agent:armature-mcp`, `ARMATURE_WRITES=on`. The agent is in the seed (*Design assistant (AI)*), so nothing needs registering. `propose_finding` appears in its tool list
+- [ ] A terminal is ready for `npm run demo:change` (decided 2026-11-21: the change is made on camera with it)
 - [ ] Slide 5's figure names the objective as the seed does: *Check a website with lateral reading*
+- [ ] **Record each beat as its own clip**, and narrate over the clips live; keep the live system open in another window in case someone asks to see something
+
+### On a deployed demonstration instance
+
+The Docker Compose route (`docs/deployment.md`) is for a demonstration instance on a server, not for practice here. Its store is this machine's store when run here, and its hub reads the database `docker/.env` names, `armature` unless you change it. On a server: set `TERMINUS_DB` in `docker/.env` to a database for the demo, build the images from this commit (`docker compose --profile hub up -d --build`, so the viewer has the History page), then `docker compose run --rm operator node load_schema.js --recreate`, `docker compose run --rm operator node seed_icicle_demo.js`, and `docker compose exec hub node operator.mjs check` (50 records, no violations). Under `header` identity it stays on loopback.
+
 
 ## Beat 1 · Inherit (0:45)
 
@@ -67,7 +96,7 @@ This is the moment people remember. You make one change in Module 1, and the sys
 
 **Say:** *"The library liaison asked us to go past the quick check: first-years need to weigh what they find. So I'll raise this objective."*
 
-**Do:** on a branch, revise the lateral-reading objective.
+**Do:** in the terminal, `npm run demo:change`. It opens the branch `demo-change` and revises the lateral-reading objective, printing the commit:
 
 |  | Label | Description | Bloom |
 | --- | --- | --- | --- |
@@ -114,7 +143,7 @@ Every beat has a fallback that keeps the point intact. The recording is the firs
 | --- | --- | --- |
 | 1 | The History page is slow or empty | Open the Design Graph on `main` and select any Module 1 record: its History tab names the former designer. |
 | 2 | The agent quotes the note's label but not its reason | Ask *"What's the rationale in that note?"* It will open the note. |
-| 3 | No tool at hand to edit the objective | Use the PUT call in the Rehearsal reference section, run before recording. |
+| 3 | `demo:change` refuses (the branch exists) | A take was already made: `npm run demo:reset`, reload, and start the take again. |
 | 3 | The alignment lens doesn't show on the branch | Ask the agent *"Any alignment gaps in Module 1 now?"* The read returns the same two items. |
 | 3 | The agent stops at the items and the activity | Ask *"Does anything in another module depend on this objective?"* That points it at the prerequisite without naming it. |
 | 4 | Writes are off, or `propose_finding` is missing | The agent states the finding in chat. Say *"In my setup it would file this on a branch; here it just tells me."* The point holds either way. |
@@ -140,7 +169,7 @@ Verified on 2026-11-21 two ways: the seed's own commits loaded into the hub's in
 | Impact on the tracing objective | Includes *Claim tracing sprint* |
 | A finding on the PrerequisiteRecord, by the agent acting for you, on a proposal branch | Accepted; the commit's author and the finding's `createdBy` are the agent, the hub adds `Armature-On-Behalf-Of: demo-designer@example.edu`, and the operator check stays clean |
 
-### The calls, if you drive beat 3 without a tool
+### The calls `npm run demo:change` makes
 
 Use the hub on loopback (`http://localhost:3100/api/v1`), with `Armature-User: demo-designer@example.edu` on every request.
 
