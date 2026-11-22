@@ -6,6 +6,44 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-21 (#169 and #170 built; the ICICLE demonstration end to end; the MCP server's M0, M1 and M4 in its own repository; PRs #194 to #199, armature-mcp #1 and #2)
+
+**Where things stood at the close.** **Phase 8, 2026-11-21; `main` at `e7116a5`, client revision 2026-11-21.** Issues #169 and #170 are built (PR #195): the workspace status's `remote.parent` carries the conflicts an update from the parent would meet, its latest commit and the merge base, and the app's workspace page lists them, on `main` but in no release yet (0.2.0 is on both computers). The ICICLE demonstration runs end to end on this Mac (PRs #196 to #199): its own seed and database, the viewer's History page, `npm run demo:reset`, `demo:start` and `demo:change`, the script in `docs/icicle-demo-script.md`, the instance named "Example University · Information Literacy". The MCP server is built to M4 in `mossglenn/armature-mcp` (public): seventeen read tools and three proposal tools, its CI running beats 2 to 4 against the seed. **Next: rehearse a full take with Claude Desktop, the one part not yet tried; then M2 and M3 there, and 0.2.1 when wanted.**
+
+### Done
+
+- **PR #194** (merged; `64cf0ef`, `e5e668c`): `REMOTE_REVISION`, item 35 (the previous entry).
+- **PR #195** (merged; `0989ca2` to `d36db47`): issues #169 and #170, as decided 2026-11-20 late. `ParentState` gained `head`, `base` and `conflicting` (`MergeConflict[]`) from the dry run `parentState` already made, `conflicts` now the count of distinct documents; revision 2026-11-21 (`REVISIONS`, `CLIENT_REVISION`, `docs/client-changes.md`); the app's `ConflictList` in `RefusalNotice.tsx` and the workspace page's "What an update from {parent} would meet", hidden when the refusal itself is `merge_conflict`; `cycle.test.ts`, `events.test.ts` and the app's end-to-end test. Comments left on #169 and #170 after 0.2.0 reached the Windows PC.
+- **PR #196** (merged; `bbdf26b` to `7a8e48c`): the ICICLE demonstration's seed (`scripts/seed_icicle_demo.js`, "First-Year Information Literacy", 50 records in three commits by their own authors, the agent `User/design-assistant` with `agent:armature-mcp`), held to the hub by `app/lib/api/icicleDemo.test.ts` (10 tests over the file-backed store); the viewer's History page (`/history?branch=`, `app/lib/graph/history.ts`, agents and `Armature-On-Behalf-Of` shown) with its browser test; `npm run demo:reset` (`armature_icicle`, refuses `armature`); the script, verified against TerminusDB 12.0.7 and by eye.
+- **PR #197** (merged; `9dcee42`, `90ff616`, `6295425`): `npm run demo:start` (checks the store, the database and the ports; rebuilds the hub each time and the viewer when needed) and `demo:change`, the runbook; the MCP server plan's decisions of 2026-11-21 (its questions 14 to 17); the plan moved to `mossglenn/armature-mcp` as `docs/plan.md`, `docs/mcp-server-plan.md` a pointer with the commit holding the full text.
+- **`mossglenn/armature-mcp`** (created private, made public by Amos): M0 (`e255108`, `5c7f49f`, pushed to its `main`: pnpm, esbuild, `HUB_REVISION` 2026-11-20, CI with a seeded hub); **its PR #1**, M1: seventeen read tools offered from `/discover`, every answer naming its full commit, a 40,000-character budget, refusals with what they mean; **its PR #2**, M4: `start_proposal_branch`, `propose_note`, `propose_finding` under `ARMATURE_WRITES=on`. 57 tests, the contract job running all of them against a freshly seeded hub.
+- **PR #198** (merged; `fd50d45`): the script with the assistant set up (the server built, Claude Desktop's config with Node by absolute path), each beat's tools, beat 3's question naming `demo-change`, troubleshooting and fallbacks for the assistant; the server's status in the README, the development plan and demo coverage.
+- **PR #199** (merged; `e7116a5`): `demo:start` passes `ARMATURE_INSTANCE_NAME`, "Example University · Information Literacy" (`DEMO_INSTANCE_NAME` names another), where the hub had called itself `localhost`.
+
+### Session notes
+
+- Amos asked what of Armature would show in a demonstration to learning engineers, then brought a draft seed, test and script. Comparing them with the hub found the seed authored every commit as admin and the script's beat 1 relying on a History view that did not exist; both were fixed, the second by building the page.
+- Amos could not get the demo running from the first runbook; the steps worked here, so `demo:start` and `demo:change` were written to check what had gone wrong before (store down, wrong folder, stale builds, the compose profile seeding `armature`) and say what to do.
+- Partway through M1 I ran `demo:reset` on `armature_icicle` while Amos was practicing on it (a `demo-change` branch appeared a minute later) and a contract run then wrote a branch there, `mcp-contract-1795316040639`. From then on the contract tests ran on their own database, `armature_mcp_contract`, and a hub on port 3199.
+- Auto mode refused a push and pull request after Amos said only "commit"; the commit was made alone and the push waited for his word.
+
+### Facts from 2026-11-21 worth keeping
+
+- npm ignores `&path:` in a git dependency, so a package from Armature's workspace installs by git reference only with pnpm (`armature-mcp`'s `package.json`; CoQui and the install check do the same); with Bundler resolution and esbuild the packages' TypeScript sources bundle as they are.
+- Opening any branch writes its Owner grant on `main`, by whoever opened it; an agent opening one is recorded as the agent for the person. A test or a demonstration that reads `main`'s head must come before any branch is made (the ICICLE script records beat 1 straight after a reset; `armature-mcp`'s contract suite makes its branches last).
+- The schema documents no field of `PrerequisiteRecord` itself, only the three it inherits; what `rationale` means is in the class comment (`describe_schema` returns both).
+- Claude Desktop does not read the shell's `PATH`; with nvm, a server's `command` is Node's absolute path (`docs/icicle-demo-script.md`, § Once).
+- The trace read carries a note's label, not its rationale: beat 2 needs `get_record` as a second read.
+
+### Decisions taken
+
+- The MCP server plan's questions 14 to 17 (Amos, as recommended): writes against both a workspace hub and a loopback hub under `header`, the demonstration recorded on the second; the ICICLE seed carries the agent; the ICICLE script is the server's demo; M3 follows the recording. In `armature-mcp`'s `docs/plan.md` §10, §12 and §13.
+- M1's and M4's building choices, as dated notes in that plan (§4, §4.5, §5, §12): `type` from the pinned `@armature/types` less its subdocument classes; `outputSchema` deferred to M3; every tool offered when the hub cannot be asked at start; the budget a server option; branches `agent-<topic>`; `basedOn` as the `If-Match` head, nothing remembered; only `agent-` branches on a shared hub; writes need `ARMATURE_USER` and `ARMATURE_AGENT`. Open to overrule.
+- The demo instance's name, "Example University · Information Literacy", a middle dot since `describe_hub` puts a colon after the name (PR #199). Open to overrule.
+- #169 and #170's change rode with the app's workspace page as its second client (PR #195), settling what the decision of 2026-11-20 late left to building.
+
+---
+
 ## 2026-11-20, late (Quiver's handoff taken up; issues #169 to #176 retitled; item 35 closed in PR #194, open at the close; PRs #192 to #194)
 
 **Where things stood at the close.** **Phase 8, 2026-11-20, late; `main` at `09ccbb1`, client revision 2026-11-20.** Armature Desktop 0.2.0 is released (ADR-0072; HISTORY.md, 2026-11-20) and officepi serves revision 2026-11-20; the Mac has 0.2.0, the Windows PC still the rehearsal build. Quiver resumed on the app on 2026-11-17 and runs beside 0.2.0 (its PRs #22 and #23). Its handoff back is kept (`docs/waiting-on-armature-handoff-from-quiver.md`) and carried by `docs/workspace-hub-plan.md` §11, §12 and §12.1, the working list of its asks, with two more from its own notes (PRs #192 and #193); issues #169 to #176 are retitled in today's names. PR #194 (`phase-8/remote-revision`), open at the close with CI running, closes item 35: a desktop hub declares `REMOTE_REVISION` to its instance, so a revision only the desktop hub needs no longer forces an instance update. **Next: merge #194 when green; then #169 and #170 on their own branch, as decided (Active Decisions).**
