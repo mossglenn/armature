@@ -1,6 +1,6 @@
 # The Armature MCP server: plan
 
-*Status: draft 2026-10-27, for review; the questions in §13 are open, each with a recommendation the plan is written to, except questions 5 and 13, decided 2026-10-30 with ADR-0067: the agent writes acting for the person, on a workspace hub, and remote mode is read-only (§3, §7). A plan for a client of the hub, built outside this repository. When the server exists, this document becomes its description here and its own repository carries the code.*
+*Status: draft 2026-10-27; **decided 2026-11-21**: every question in §13 as recommended (Amos, on a decision page), with four more the ICICLE demonstration raised (questions 14 to 17); questions 5 and 13 were decided 2026-10-30 with ADR-0067: the agent writes acting for the person, on a workspace hub, and remote mode is read-only (§3, §7). Building starts with M0 in `armature-mcp`, where this plan then moves (question 12); the order before the demonstration's recording is M0, M1, M4 (question 15). A plan for a client of the hub, built outside this repository. When the server exists, this document becomes its description here and its own repository carries the code.*
 
 Abbreviations: ADR (Architecture Decision Record, `schema/docs/adr/`), API (application programming interface), CI (continuous integration), HTTP (Hypertext Transfer Protocol), JSON (JavaScript Object Notation), MCP (Model Context Protocol), OAuth (Open Authorization), OIDC (OpenID Connect), REST (Representational State Transfer), SDK (software development kit), URI (Uniform Resource Identifier).
 
@@ -195,16 +195,11 @@ This makes the server the first client to build its surface from discovery, whic
 
 ## 10. The demo
 
-Five minutes, Claude Desktop with the server attached, the seed loaded, the viewer open beside it.
+*Since 2026-11-21 (question 16)* the server's demonstration is the ICICLE script, `docs/icicle-demo-script.md`, on its own seed, `scripts/seed_icicle_demo.js`: an inherited course, a question about why an item exists (beat 2: `get_record`, `trace_record`), a change to one objective whose consequence lies in another module (beat 3: `what_references`, `alignment_gaps`), and a finding the agent files for the presenter on a proposal branch (beat 4: `start_proposal_branch`, `propose_finding`). The script holds the beats, the fallbacks and what the hub answers; `npm run demo:reset`, `demo:start` and `demo:change` run it on one machine.
 
-1. **"What is in this design?"** `list_modules`, `describe_hub`. The assistant names the modules and the commit.
-2. **"Is this module's assessment adequate?"** `module_coverage`, `alignment_gaps`. Each declared objective's verdict, the items behind it, the Bloom's gaps; the commit named.
-3. **"The cohort struggled on the bias item. What does that mean for the design?"** `trace_record` from the metric, `module_coverage` at the dataset's `asOf` and now: "Distinguish Bias Types" was partially assessed when the cohort met it and is fully assessed now, after the design's response. Narrative 1 as a conversation, ending where the viewer's Walkthrough ends.
-4. **"If I change that objective's verb to *evaluate*, what is affected?"** `what_references`, `attestation_status`, `alignment_gaps`. The items whose Bloom's level is below the new one, the attestations that a change would leave stale.
-5. **"Which reviewer declines the most items?"** `find_records` with `attestedBy`. The hub refuses with `person_filter_refused`; the assistant explains why Armature will not answer that, from the refusal's own text.
-6. **"Record that gap as a finding for the team."** With writes on: `start_proposal_branch`, `propose_finding`. Switch the viewer to the branch: the finding is there, by the agent, with the reason; `main` is untouched.
+**The spare beat**, from the first draft's six, kept for the questions afterwards: *"Which reviewer declines the most items?"* `find_records` over `Attestation` with `attestedBy`. The hub refuses with `person_filter_refused` (ADR-0021), and the assistant explains from the refusal's own text why Armature will not answer that. It works on the ICICLE seed, which has a reviewer's attestation.
 
-Beat 5 is the one no other demo can show, and the one most likely to stay with an audience.
+The first draft's beats (Narrative 1 as a conversation over the main seed: modules, coverage, the cohort's struggle traced, a verb changed, the refusal, a finding filed) are in this file's history.
 
 ---
 
@@ -231,9 +226,9 @@ Milestones in the server's repository, each a pull request with its tests; Armat
 
 **M2 · Export, resources, prompts.** §4.4 and §6. Acceptance: the three prompts run end to end on the seed.
 
-**M3 · Evaluation and the demo.** The twelve-question set, its runner, the descriptions revised until it passes; the §10 script rehearsed and recorded. Acceptance: eleven of twelve questions pass on two runs.
+**M3 · Evaluation and the demo.** The twelve-question set, its runner, the descriptions revised until it passes; the §10 script rehearsed and recorded. *Since 2026-11-21: the set is drawn from the ICICLE script's questions and its seed (question 16), and M3 follows the recording, which needs M0, M1 and M4 only (question 15).* Acceptance: eleven of twelve questions pass on two runs.
 
-**M4 · Proposals.** §4.5 behind `ARMATURE_WRITES=on`, the agent `User` registered through `POST /api/v1/users` by the seed's designer in the test and demo setup (so Armature's seed is unchanged), refusal tests. Acceptance: beat 6 of the demo; the finding's author is the agent; `main` unchanged. *Since 2026-10-30:* against a workspace hub when one exists (the writes land in the person's workspace; `start_proposal_branch` becomes "the current workspace", since `POST /branches` is `remote_only` there); until then against a local hub under `header`, as the contract suite runs.
+**M4 · Proposals.** §4.5 behind `ARMATURE_WRITES=on`, the agent `User` registered through `POST /api/v1/users` by the seed's designer in the test and demo setup (so Armature's seed is unchanged), refusal tests. Acceptance: beat 6 of the demo; the finding's author is the agent; `main` unchanged. *Since 2026-10-30:* against a workspace hub when one exists (the writes land in the person's workspace; `start_proposal_branch` becomes "the current workspace", since `POST /branches` is `remote_only` there); until then against a local hub under `header`, as the contract suite runs. *Decided 2026-11-21 (question 14): both, a workspace hub and a loopback hub under `header`, the demonstration recorded on the second; the ICICLE seed carries the agent `User` (`agent:armature-mcp`, `User/design-assistant`), so the demonstration registers nothing.*
 
 **M5 · Remote, read-only** (when the hub has OIDC). Streamable HTTP with the protocol's authorization, the hub's `oidc` resolver as the authority, the server's own credential (ADR-0067 decision 4). *Decided 2026-10-30:* no writes in this mode (ADR-0067 decision 10; §7, §13 question 13). Not scheduled.
 
@@ -250,26 +245,26 @@ Each with the options and the recommendation the plan above is written to.
    - (b) A `packages/mcp` workspace in this repository.
    - (c) A second endpoint inside the hub's process.
 
-   *Recommendation: (a).* It is a client, and installing the client from another repository is what the client-install CI job already tests for CoQui. (b) would get the contract tests for free but blur P2's line between hub and plugin. (c) puts a tool in the hub, which P2 rules out.
+   *Recommendation: (a).* It is a client, and installing the client from another repository is what the client-install CI job already tests for CoQui. (b) would get the contract tests for free but blur P2's line between hub and plugin. (c) puts a tool in the hub, which P2 rules out. *Decided 2026-11-21, as recommended.*
 
 2. **SDK line.**
    - (a) v2, `@modelcontextprotocol/server`, implementing 2026-07-28, with its default of answering 2025-era clients statelessly.
    - (b) v1, `@modelcontextprotocol/sdk`, maintained for about six months after v2's release.
 
-   *Recommendation: (a).* It matches the hub's versioning model and its Zod major, and its default keeps older assistants working.
+   *Recommendation: (a).* It matches the hub's versioning model and its Zod major, and its default keeps older assistants working. *Decided 2026-11-21, as recommended.*
 
 3. **Transport first.**
    - (a) stdio, configured from the environment.
    - (b) Streamable HTTP with the specification's OAuth 2.1 authorization.
 
-   *Recommendation: (a), with (b) as M5.* The specification says stdio servers take credentials from the environment rather than follow the authorization flow, which matches the hub's `header` resolver and its loopback-only rule. HTTP needs the hub's `oidc` resolver first. It also needs a credential of the server's own for the hub, because the specification forbids passing the assistant's token through to another service ([authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)); ADR-0067 decision 4's client-credentials grant is that credential, and since 2026-10-30 it grants reads only (question 13).
+   *Recommendation: (a), with (b) as M5.* The specification says stdio servers take credentials from the environment rather than follow the authorization flow, which matches the hub's `header` resolver and its loopback-only rule. HTTP needs the hub's `oidc` resolver first. It also needs a credential of the server's own for the hub, because the specification forbids passing the assistant's token through to another service ([authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)); ADR-0067 decision 4's client-credentials grant is that credential, and since 2026-10-30 it grants reads only (question 13). *Decided 2026-11-21, as recommended.*
 
 4. **Writes in scope.**
    - (a) Read-only.
    - (b) Notes and findings on non-`main` branches, behind a switch.
    - (c) Artifacts on branches too.
 
-   *Recommendation: (b), as M4.* It shows agent provenance and review by merge without the server deciding what the design is. (c) waits for the delegation decision and a reason to let an agent edit objectives.
+   *Recommendation: (b), as M4.* It shows agent provenance and review by merge without the server deciding what the design is. (c) waits for the delegation decision and a reason to let an agent edit objectives. *Decided 2026-11-21, as recommended.*
 
 5. **Whose identity writes.**
    - (a) An agent `User`.
@@ -282,43 +277,43 @@ Each with the options and the recommendation the plan above is written to.
    - (a) The host's own approval of each tool call, with precise descriptions and `destructiveHint: false`.
    - (b) An elicitation form asking the person to confirm the proposal's text before it is written.
 
-   *Recommendation: (a).* Elicitation is active in the 2026-07-28 revision, but client support is uneven, and a branch that only a person can merge is the real safeguard.
+   *Recommendation: (a).* Elicitation is active in the 2026-07-28 revision, but client support is uneven, and a branch that only a person can merge is the real safeguard. *Decided 2026-11-21, as recommended.*
 
 7. **Consistent reads across a conversation.**
    - (a) Every tool takes `branch` or `ref`, and the descriptions tell the model to pass the first answer's commit forward.
    - (b) The server pins one commit for its lifetime.
    - (c) A `pin_ref` tool that returns a handle.
 
-   *Recommendation: (a).* It is the specification's handle pattern with the commit as the handle. (b) is wrong for a server that runs for days. (c) adds a tool for what an argument already does.
+   *Recommendation: (a).* It is the specification's handle pattern with the commit as the handle. (b) is wrong for a server that runs for days. (c) adds a tool for what an argument already does. *Decided 2026-11-21, as recommended.*
 
 8. **Tool granularity.**
    - (a) One tool per read, named for its question.
    - (b) A few grouped tools with a `kind` argument.
 
-   *Recommendation: (a).* Names and descriptions are how the model chooses, and a `kind` argument hides the choice inside a parameter. Registration is grouped by capability (§8), so a deployment can still run a smaller set.
+   *Recommendation: (a).* Names and descriptions are how the model chooses, and a `kind` argument hides the choice inside a parameter. Registration is grouped by capability (§8), so a deployment can still run a smaller set. *Decided 2026-11-21, as recommended.*
 
 9. **Answer form.**
    - (a) The hub's JSON as it is.
    - (b) A server-written summary, then the JSON, within a size budget.
    - (c) The summary alone.
 
-   *Recommendation: (b).* The numbers come from code, the model explains them, and a client that reads structured content gets the full answer.
+   *Recommendation: (b).* The numbers come from code, the model explains them, and a client that reads structured content gets the full answer. *Decided 2026-11-21, as recommended.*
 
 10. **Resources and prompts.**
     - (a) Build them in M2.
     - (b) Leave them out.
 
-    *Recommendation: (a), small.* They help in the clients that support them and cost little. Nothing in the demo depends on them.
+    *Recommendation: (a), small.* They help in the clients that support them and cost little. Nothing in the demo depends on them. *Decided 2026-11-21, as recommended.*
 
 11. **Names.** Repository `armature-mcp`, package `@armature/mcp` (the scope the client and types use), server name `armature`, tool names without a prefix since clients namespace by server.
 
-    *Recommendation:* as stated. The alternative, an `armature_` prefix on every tool, only repeats what the client already shows.
+    *Recommendation:* as stated. The alternative, an `armature_` prefix on every tool, only repeats what the client already shows. *Decided 2026-11-21, as recommended.*
 
 12. **Where this plan lives.**
     - (a) Here until M0, then `armature-mcp/docs/plan.md`, with a pointer from `development-plan.md` §2's reference clients.
     - (b) Here for good, as the Design Graph plan is.
 
-    *Recommendation: (a).* This follows Quiver, the other client in its own repository. The hub-facing parts (discovery's first client, the evidence for delegation) are noted in plan §6 when they happen.
+    *Recommendation: (a).* This follows Quiver, the other client in its own repository. The hub-facing parts (discovery's first client, the evidence for delegation) are noted in plan §6 when they happen. *Decided 2026-11-21, as recommended.*
 
 13. **Writes in remote mode, and whom the agent works for** (raised by the alignment review of 2026-10-30). A server away from the person's machine holds its own credential and cannot carry the person's, so the hub cannot write `Armature-On-Behalf-Of`; a `Relay` grant (ADR-0067 decision 5) would write the person as author, the wrong record for an agent's proposal.
     - (a) Remote mode reads only; every write goes through the person's workspace hub, where the person is present and recorded.
@@ -326,3 +321,32 @@ Each with the options and the recommendation the plan above is written to.
     - (c) A new grant or token form that lets the hub verify whom a hosted agent works for.
 
     *Decided 2026-10-30: (a)* (ADR-0067 decision 10). (b) would put work in shared history that no one is answerable for, and give an agent a path one grant from `main`. (c) is what would reopen the decision: a client with a demonstrated need, and a verified claim (OAuth token exchange, RFC 8693, or a grant from the person naming the agent); the two-client test applies.
+
+*Questions 14 to 17 were raised by the ICICLE demonstration (`docs/icicle-demo-script.md`, its seed `scripts/seed_icicle_demo.js`) and decided 2026-11-21 with the rest, each as recommended.*
+
+14. **Where the demonstration's write goes.** Beat 4 has the agent file a finding on a proposal branch. Question 13 keeps a server away from the person's machine read-only; M4 wrote against "a local hub under `header`" until a workspace hub existed, and workspace hubs exist since 2026-11-01. The demonstration instance is a hub under `header` identity on loopback, on the presenter's own machine, and the hub accepts the agent's write there acting for the person, with the hub-written `Armature-On-Behalf-Of` trailer (verified 2026-11-21, `app/lib/api/icicleDemo.test.ts`).
+    - (a) Keep M4's interim: a loopback hub under `header` identity counts as local, and the server writes on its branches.
+    - (b) Only through the desktop app: the server writes into the person's workspace, and the person pushes.
+    - (c) Both, the demonstration recorded with (a).
+
+    *Decided 2026-11-21: (c).* M4 works against a workspace hub, the home question 13 gives an agent's writes, and against a loopback hub under `header`, which is what the contract tests and the demonstration run. The narration says the instance is a demonstration on the presenter's laptop. Nothing changes for a deployed instance: under `oidc` the server is remote (question 13), and a `header` hub is loopback-only by its own rule.
+
+15. **What is built before the recording.**
+    - (a) M0, the demonstration's tools from M1, and M4 (about three sessions).
+    - (b) M0, all of M1, and M4; M2 and M3 after the recording (about four to five).
+    - (c) M0 to M4 in order (about six to seven).
+
+    *Decided 2026-11-21: (b).* Every read tool with its contract tests and refusals before writes; resources, prompts and the evaluation set after.
+
+16. **Which demonstration §10 describes.**
+    - (a) The ICICLE script, with the first draft's refusal beat kept as a spare.
+    - (b) Both.
+
+    *Decided 2026-11-21: (a).* One demonstration to keep current; M3's evaluation set is built from it (§10).
+
+17. **How beat 3's change is made on camera.** The agent's tools file only notes and findings (question 4), and the viewer only reads.
+    - (a) One terminal command, `npm run demo:change`, through the API any tool uses.
+    - (b) Made off camera and cut in.
+    - (c) The agent makes it, with writes widened for the demonstration.
+
+    *Decided 2026-11-21: (a).* Built the same day in Armature (`scripts/demo_change.js`); (c) would undo question 4's line between annotating and designing, which beat 4's closing line depends on.
