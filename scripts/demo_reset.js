@@ -39,7 +39,4 @@ run("load_schema.js", ["--recreate"]);
 run("seed_icicle_demo.js");
 
 console.log(`
-Ready. To practice against it, in app/ (after npm run build:hub and npm run build):
-  TERMINUS_DB=${db} PORT=3100 npm run start:hub
-  ARMATURE_HUB_URL=http://localhost:3100 npx next start -p 3000
-and, to check it, TERMINUS_DB=${db} npm run operator -- check (50 records, no violations).`);
+Ready: ${db} holds the seed. Start the demo with npm run demo:start (or reload the browser if it is running).`);
