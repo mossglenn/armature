@@ -6,6 +6,41 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-22, night (the A4L bridge: the plan, its decisions, its repository; PRs #204, #205; `mossglenn/armature-a4l`)
+
+**Where things stood at the close.** **Phase 8, 2026-11-22, night; `main` at `b41f89e`, client revision 2026-11-21.** The A4L bridge is planned and accepted: `docs/a4l-bridge-plan.md` (PR #204) joins Armature to A4L, Georgia Tech's Architecture for AI-Augmented Learning, with no hub change; its repository `mossglenn/armature-a4l` holds the manifest's columns. PR #205 (the acceptance and the documents its §14 names) is open, CI green, waiting for "confirm and merge" (item 52). Lint L1 and the ICICLE setup stand as the entry below left them. **Next: Amos's call between the ICICLE take, Lint's L2 and sending the note to the A4L team (M0).**
+
+### Done
+
+- **PR #204, merged** (`b41f89e`): `docs/a4l-bridge-plan.md`, from Goel & Thajchayapong, "On why learning engineering needs data architecture" (JoLE 1(1), 27–41, 2026, doi:10.68597/a.143023) and the two arXiv papers behind it (2511.11877, 2505.06314), checked against Caliper 1.2. Design out as a *manifest* (one row per runtime identifier and objective: `runtime_system`, `runtime_id`, `record`, `record_type`, `objective`, `module`, `module_role`, `commit`, `instance`) joined in an A4L analysis payload; evidence back as a `LearningDataset` at the commit a cohort met with `LearningMetric`s and `DesignFinding`s (`pull`); `compare` across two commits; an AI learning tool as one `LearningActivity` per tool per module; groups of 10 or more, no learner data; asks of Armature (§14), M0 to M5 (§16), thirteen questions (§17). The README's table row and listing
+- **The decision page "A4L Bridge Decisions"** (an Artifact, db-backed as on 2026-11-18): Amos accepted all thirteen recommendations; §17 records each as "Decided as recommended"
+- **`mossglenn/armature-a4l`, created public (MIT)**: `ddf9d31` (package `@armature/a4l`, pnpm 10, Node 22, TypeScript NodeNext, Vitest, CI), `54c79a7` (`src/manifest.ts`: `MANIFEST_COLUMNS`, `ManifestRow`, `manifestToCsv` with RFC 4180 quoting; four tests), `a999d06` (README, `docs/plan.md`: milestones, the decisions, the building choices). CI green on its first push
+- **PR #205, open** (`6329ff9`, `36bdd17`, `b3efb57`; CI green): the plan's status accepted and §14 item 5 done; the README; `docs/demo-coverage.md` (the A4L bridge's column, profile row and section after Torus; verdicts recounted: everything at Uncovered 3, Partially 0, Fully 9, Over 16, attachments moved from Fully to Over; the built and planned scopes unchanged); the explainer's §1.3; the research path's §2; the outcomes importer's row in `docs/development-plan.md` and `PROJECT_CONTEXT.md`. `check:context` and `check:vocabulary` pass
+- **A draft note to the A4L team** (Dr. Thajchayapong, Dr. Goel) with M0's four questions, in the session's scratchpad; not sent
+
+### Session notes
+
+- Amos opened the session on the JoLE paper. Its page refused the web-fetch tool (403); `curl` with a browser user agent reached the PDF galley.
+- The plan is a client, not a pipeline in Armature: A4L holds learner data and Armature holds none (the explainer's §1 and §2), so only a manifest goes out and only aggregates come back.
+- Amos then asked for a decision page, accepted every recommendation, had the plan merged, accepted it, and had the repository created with the plan's starting files.
+
+### Facts from 2026-11-22, night, worth keeping
+
+- **A4L in these papers is Georgia Tech's architecture (AI-ALOE), not 1EdTech's Access 4 Learning.** The plan's preamble and §2 say so.
+- **Caliper 1.2's `DigitalResource`** (and so `AssessmentItem`, through `AssignableDigitalResource`) already carries `learningObjectives`, `version` and `isPartOf`; `extensions` exists on every Event and Entity; a `LearningObjective` needs only `id` and `type`. Whether A4L's validation keeps them is M0's third question.
+- **None of the three papers links code, documents the payload schema, or describes a way for results to leave A4L.** M0 asks.
+- **SAMI and VERA:** the 2025 Evolution paper says their dashboards were filled by hand; the JoLE paper, eleven months on, reports all three tools ingested through Caliper. The plan follows JoLE and M0 checks it.
+- **The papers' "AI agents" collide with *agent*, a chosen term in `@armature/vocabulary`**; the plan calls them *AI learning tools*.
+- **`pdftotext` and `pdftoppm` are not installed on this Mac; PyMuPDF (`fitz`) is**, and extracts a PDF's text.
+
+### Decisions taken
+
+- **The thirteen questions of the plan's §17, all as recommended** (Amos, on the decision page; the plan's §17, armature-a4l's `docs/plan.md` §2).
+- **The plan accepted; the repository `mossglenn/armature-a4l`, public, MIT** (Amos; the plan's status line in PR #205).
+- **Chosen in building, open to overrule** (armature-a4l's `docs/plan.md` §3, PR #205): the design stays in Armature and the repository holds its own state, as Lint's; the manifest as CSV with RFC 4180 quoting and CRLF; one row per identifier and objective; the client pinned at `b41f89e`; Lint's tooling; each dot of the A4L column in `demo-coverage.md` judged from what the bridge's demo shows or uses.
+
+---
+
 ## 2026-11-22, late (Lint's step L1 in `mossglenn/armature-lint`; armature-lint PR #1, PR #203)
 
 **Where things stood at the close.** **Phase 8, 2026-11-22, late; `main` at `ab86b31`, client revision 2026-11-21.** Lint's step L1 is built in its own public repository, `mossglenn/armature-lint` (its PR #1, `02a2277`): the rule engine `@armature/lint` with ten of the Lint plan's §13 rules, and `armature-lint run | rules`, reading a hub at one commit; it posts no check run yet, so no tool posts a verdict through ADR-0070 (item 51). The 2026-11-09 code review is closed but Q2, which waits for TerminusDB 12.1.0 with item 34. The ICICLE take is still set up on this Mac (item 49). **Next: Amos's call between the ICICLE take with Claude Desktop (Notes, "First") and Lint's L2.**
