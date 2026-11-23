@@ -30,7 +30,7 @@ async fn core_request(app: AppHandle, request: Value) -> Result<Value, String> {
     let mut reply = core::ask(&app, request).await?;
     // A keychain that refused what the reply implies (the sign-in removed, the new pairing key
     // kept) is said in the reply, so the page tells the person rather than only the log.
-    if let Some(problem) = core::after_reply(&app, &request_type, &reply) {
+    if let Some(problem) = core::after_reply(&app, &request_type, &reply).await {
         if let Some(body) = reply["body"].as_object_mut() {
             body.insert("keychain".to_string(), json!(problem));
         }
