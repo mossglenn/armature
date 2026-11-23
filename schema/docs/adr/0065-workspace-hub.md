@@ -578,6 +578,17 @@ Three facts constrain the answer:
 - **A full peer hub with no restrictions.** Rejected: two places where shared history is made,
   so merges and `User` registrations on a laptop would need reconciling with the remote's.
 
+> **Note (2026-11-22):** two alternatives were weighed when this was decided and are recorded only
+> elsewhere until now. **Peer sync between workspace hubs**, one laptop to another without the
+> remote: declined, since it would rebuild between laptops the authority the remote gives (who may
+> merge, which `User` is which, the one history every reader reads); two people share work by
+> pushing to the remote and bringing it in. **A CRDT sync engine** (Automerge, Loro, Yjs,
+> ElectricSQL, PowerSync): declined, since a CRDT merges silently exactly where Armature records a
+> person's decision, a merge with its author and reason, and a merge that converges is not thereby
+> valid, which the invariants engine judges on the merged state (ADR-0025 decision 5, note). The
+> CRDT decline was written in Quiver's plan (`docs/plan.md` §2, "Local-first", and §10) when it
+> was made.
+
 ## Verification
 
 None yet. The design relies on behaviors already verified for ADR-0025 (a batch write is one
