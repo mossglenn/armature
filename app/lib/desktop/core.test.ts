@@ -12,7 +12,7 @@
  * afterwards. The core runs in-process over a pair of streams, as the shell
  * would speak to it; the bundle's own life over real pipes is bundle.test.ts.
  */
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
@@ -516,6 +516,36 @@ describe("a faulty settings file does not keep the program from starting (the 20
   });
 });
 
+describe('a workspaces folder another hub holds is refused, and taken once it is let go (the 2026-11-09 review’s T5)', () => {
+  it('answers folder_locked naming the folder, starts nothing, and starts once the lock is gone', async () => {
+    const driver = drive();
+    const dataDir = await dataFolder();
+    try {
+      expect((await driver.ask('start', { dataDir })).body).toMatchObject({ needs: 'connect' });
+      const profile = await driver.ask('profile', { remote: headerRemote.url });
+      expect((await driver.ask('connect', { remote: headerRemote.url, identity: profile.body!.identity, instance: profile.body!.instance })).status).toBe(200);
+      expect((await driver.ask('settings', { set: { user: DESIGNER, port: await freePort() } })).status).toBe(200);
+      // The lock as another program's hub leaves it: a live process that is not this one (this suite's parent).
+      const folder = join(dataDir, 'workspaces');
+      await mkdir(folder, { recursive: true });
+      await writeFile(join(folder, 'lock'), `${JSON.stringify({ pid: process.ppid, since: new Date().toISOString() })}\n`);
+      const refused = await driver.ask('start', { dataDir });
+      expect(refused).toMatchObject({ status: 409, body: { error: 'folder_locked', folder } });
+      expect(refused.body!.message).toContain(String(process.ppid));
+      expect(driver.events.some((m) => m.event === 'hub' && m.state === 'running')).toBe(false);
+      // The other hub stops and lets the folder go.
+      await rm(join(folder, 'lock'));
+      expect(await driver.ask('start', { dataDir })).toMatchObject({ status: 200, body: { started: true, folder } });
+      expect(JSON.parse(await readFile(join(folder, 'lock'), 'utf8'))).toMatchObject({ pid: process.pid });
+      expect((await driver.ask('stop')).status).toBe(200);
+      expect(existsSync(join(folder, 'lock'))).toBe(false);
+    } finally {
+      driver.end();
+      await driver.core.closed;
+    }
+  });
+});
+
 describe('a hub’s account of itself is checked against the address dialed (the 2026-11-09 review’s C1 and C2)', () => {
   const RELEASES = 'https://github.com/mossglenn/armature/releases';
   const declares = (identity: Record<string, unknown>, instance: Record<string, unknown>) => ({ role: 'remote', versions: [CURRENT_REVISION], identity, instance, capabilities: {}, schema: {} });
@@ -553,6 +583,42 @@ describe('a hub’s account of itself is checked against the address dialed (the
   it('refuses a profile the program cannot use, naming what is wrong', async () => {
     const broken = await hub([declares(OIDC_IDENTITY, { name: 'Broken', api: 'not an address', program: { releases: RELEASES } })]);
     expect(await driver.ask('profile', { remote: broken })).toMatchObject({ status: 400, body: { error: 'bad_profile', field: 'instance.api', remote: broken } });
+  });
+
+  it('refuses a hub it cannot connect to: a desktop hub, a signing-in remote with no client id, a resolver it does not know (the 2026-11-09 review’s T5)', async () => {
+    const instance = { name: 'Elsewhere', program: { releases: RELEASES } };
+    const desktop = await hub([{ ...declares({ resolver: 'header' }, instance), role: 'workspace' }]);
+    expect(await driver.ask('profile', { remote: desktop })).toMatchObject({ status: 400, body: { error: 'not_a_remote', remote: desktop } });
+    const noClient = await hub([declares({ resolver: 'oidc', issuer: ISSUER }, instance)]);
+    expect(await driver.ask('profile', { remote: noClient })).toMatchObject({ status: 400, body: { error: 'no_client_id', remote: noClient } });
+    const noIssuer = await hub([declares({ resolver: 'oidc', clientId: CLIENT_ID }, instance)]);
+    expect(await driver.ask('profile', { remote: noIssuer })).toMatchObject({ status: 400, body: { error: 'no_client_id', remote: noIssuer } });
+    const kerberos = await hub([declares({ resolver: 'kerberos' }, instance)]);
+    const unknown = await driver.ask('profile', { remote: kerberos });
+    expect(unknown).toMatchObject({ status: 400, body: { error: 'unknown_resolver', remote: kerberos } });
+    expect(unknown.body!.message).toContain('kerberos');
+  });
+
+  it('refuses a signing-in remote over plain http off this machine, and takes the same hub over loopback (the 2026-11-09 review’s T5)', async () => {
+    // A reserved name that is not loopback, carried to the impostor by the test's own fetch: the rule is read off the address dialed, never off where it resolved.
+    const target = await hub([declares(OIDC_IDENTITY, { name: 'Armature at Example University', program: { releases: RELEASES } })]);
+    const real = globalThis.fetch;
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      return url.hostname === 'instance.example.test' ? real(`${target}${url.pathname}${url.search}`, init) : real(input, init);
+    });
+    try {
+      const remote = 'http://instance.example.test';
+      const refused = await driver.ask('profile', { remote });
+      expect(refused).toMatchObject({ status: 400, body: { error: 'insecure_remote', remote } });
+      expect(refused.body!.message).toContain('https');
+      expect(spy.mock.calls.some(([input]) => String(input instanceof Request ? input.url : input).startsWith(`${remote}/api/v1/discover`))).toBe(true);
+      // Nothing was kept: the refusal leaves the program unconnected.
+      expect((await driver.ask('settings')).body!.settings).not.toHaveProperty('remote', remote);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await driver.ask('profile', { remote: target })).toMatchObject({ status: 200, body: { remote: target, identity: OIDC_IDENTITY } });
   });
 
   it('connects only to the profile confirmed: a hub that answers the second read differently is refused and nothing is kept', async () => {
