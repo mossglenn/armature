@@ -6,6 +6,45 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-22, later (the code review's last findings, S9, S10 and V1 with its rehearsal; ADR-0065's alternatives; the viewer's favicon; PRs #201 and #202)
+
+**Where things stood at the close.** **Phase 8, 2026-11-22; `main` at `eafcc84`, client revision 2026-11-21.** The 2026-11-09 code review is closed but Q2, which waits for TerminusDB 12.1.0 with item 34: S10 and S9 by PR #201, V1's main fix by PR #202 after its rehearsal under `oidc` on a fresh Lima VM. Issues #169 and #170 and now S10 are on `main` in no release (0.2.0 on both computers; item 50). The ICICLE demonstration is still set up for its take (item 49). **Next: the take with Claude Desktop (Notes, "First").**
+
+### Done
+
+- **PR #201** (merged; `48f488f` to `4a2e6f2`, five commits): **S10**, every keychain call on one thread in the order asked (`keychain::Line` in `desktop/src-tauri/src/keychain.rs`): the reader of the core's output queues a rotated token's write and reads on, a sign-out's removal queued after it still runs last, `after_reply` async, the program's four ends waiting up to `KEYCHAIN_WAIT` (5 s); two unit tests, clippy clean, 30 Rust tests. **S9**, traced in `tauri-plugin-single-instance` 2.5.5 and tried on the Mac: `docs/desktop-program.md` § "In the background", a note in `docs/desktop-program-plan.md` §5. **ADR-0065**'s note on peer sync and CRDT sync engines (item 22). The desktop's `icon.ico` as `app/app/favicon.ico` (item 40). The review's banner for S9, S10, V1 and Q2
+- **PR #202** (merged; `57dff71`, `eafcc84`): **V1's main fix** in `app/lib/viewerToken.ts`: the issuer from the viewer's own `ARMATURE_OIDC_ISSUER`, required with the client credentials unless the endpoint is given; `/discover` a consistency check (a hub under `header` or naming another issuer refused with both names, before the metadata); the `https` rule for the issuer, the metadata's token endpoint and `ARMATURE_HUB_TOKEN_ENDPOINT`, plain `http` on loopback or under `ARMATURE_REHEARSAL=1`; `docker-compose.yml` passing both variables to the viewer; ADR-0067's note of 2026-11-22, `app/README.md`, `docs/deployment.md`, the explainer; two new tests (10 of 10)
+- **The rehearsal** (`armature-viewer-issuer`, stopped): the guide's settings (agent unregistered 500, registered 200 on four pages; without `ARMATURE_REHEARSAL` 500 naming the endpoint) and the issuer by Keycloak's service name (200; another realm, no issuer and no rehearsal each 500 naming the setting); recorded in `docs/deployment.md`, "Rehearsed 2026-11-22", and on PR #202
+- `main`'s session-close commit `3a48a30` pushed; CI on `main` 9 of 9 after the merges
+
+### Session notes
+
+- Amos asked what could be worked on besides the demo, then for the code review's leftovers and the small cleanups, then "follow all recommendations".
+- S10 had been set aside because a write spawned off the reader could land after a sign-out's removal; one thread taking jobs in order removes that race, so the fix the review asked for was built after all.
+- S9 was overstated by the review: another account's default socket refuses the connection, and the plugin then starts the program without the check; only a socket made writable by everyone keeps it from starting.
+- The guide's Keycloak settings hand the viewer the token endpoint, so a rehearsal by them alone never runs the viewer's issuer path; the second configuration did.
+- The main seed's per-commit authors (item 49) were not built: the browser test holds its commits as "Set up outside the hub" on purpose, and the change alters Narrative 1's History page.
+
+### Facts from 2026-11-22, later, worth keeping
+
+- macOS refuses `connect` to a Unix socket without write permission (`EACCES`), even for its owner; the single-instance plugin's macOS socket is `/tmp/<identifier>_si.sock`, no user in the name (the plan's §5 note).
+- To run the viewer's issuer path in a rehearsal: `KEYCLOAK_HOSTNAME=http://keycloak:8080`, the issuer at that name, no `ARMATURE_OIDC_JWKS_URL` and no `ARMATURE_HUB_TOKEN_ENDPOINT` (`docs/deployment.md`, "Rehearsed 2026-11-22").
+- A viewer refusal is a 500 page with its reason only in the container's log, as an unregistered agent's always was.
+- TerminusDB: terminusdb/terminusdb#2637 closed 2026-11-09; 12.1.0 at rc4 (2026-11-21), 12.0.9 the latest release (item 34).
+- The local `armature` database lacks ADR-0072's classes, so Vitest's global warm-up fails there (`QueryTypeNotFound` for `Workspace`); suites that touch no store still pass (item 20).
+- A Unix socket bound under the scratchpad's absolute path is too long for `AF_UNIX`; bind a relative name from inside it.
+
+### Decisions taken
+
+- S10 built as one ordered keychain thread, not a write spawned on its own (the review's banner, 2026-11-22 later; `keychain.rs`'s header). Open to overrule.
+- V1: no fallback to the hub's issuer; `/discover` kept as a check; the hub's own `https` rule (ADR-0067, note of 2026-11-22). Open to overrule.
+- V1 in its own pull request so the rest merged without waiting on its rehearsal.
+- The main seed's commits stay authored by the store's user (item 49). Amos's call.
+- The S9 issue for `tauri-apps/plugins-workspace` drafted, not filed: it posts publicly under Amos's account and waits on "file it".
+- The viewer's favicon is the desktop program's `icon.ico`, all eight sizes.
+
+---
+
 ## 2026-11-22 (the ICICLE demonstration prepared and walked dry through the MCP server; the code review's T5 to T8; PR #200)
 
 **Where things stood at the close.** **Phase 8, 2026-11-22; `main` at `afbfc20`, client revision 2026-11-21.** The code review's test gaps T5 to T8 are closed (PR #200): the core's refusals, the bundle as `build:desktop` makes it and on the Node the program ships, and the pages' remaining paths with the shell's names held to the Rust. The ICICLE demonstration is set up for a take on this Mac: `armature_icicle` reset, `armature-mcp` rebuilt with M4 and attached to Claude Desktop, and all four beats walked through the built server over stdio; the hub's side of each beat answers as the script expects. **Next: the take with Claude Desktop (item 49), watching beat 3 for a read pinned to `main`'s commit.**
