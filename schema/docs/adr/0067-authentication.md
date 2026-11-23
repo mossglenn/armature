@@ -636,6 +636,17 @@ how an instance runs.
 > changes `docker/docker-compose.yml` (the variable and `ARMATURE_REHEARSAL` passed to the
 > viewer), which needs its rehearsal under `oidc` before it merges.
 
+> **Note (2026-11-22), on decision 4** (the code review of 2026-11-09, V1's main fix): the viewer
+> asks for its token only at the issuer its own `ARMATURE_OIDC_ISSUER` names, the hub's setting,
+> which the compose file now passes to it with `ARMATURE_REHEARSAL`; with the client credentials
+> and no endpoint given, a viewer without it refuses before reading anything. It still reads
+> `GET /discover` once, as a consistency check: a hub under `header`, or one naming another issuer,
+> is refused with both names before the metadata is read, so a hub can stop the viewer but no
+> longer chooses where its client secret goes. The issuer, the token endpoint its metadata names
+> and `ARMATURE_HUB_TOKEN_ENDPOINT` are `https`, or plain `http` on loopback or under
+> `ARMATURE_REHEARSAL=1`, the hub's own rule for its issuer, and an `https` issuer may not name an
+> `http` token endpoint (`app/lib/viewerToken.ts`).
+
 > **Note (2026-11-05):** the signing-key tests are `app/lib/api/oidc.test.ts`, over a scratch
 > database since first encounters register on `main`: a valid token registers an admitted person
 > with the issuer and resolves them by `(issuer, sub)` after; a token not admitted is 403
