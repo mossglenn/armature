@@ -42,15 +42,19 @@ import type { CheckVerdict, CommitEntry, PersonalRequirement, Profile, RemoteWor
  * parent, so someone else decides), `mergedElsewhere` and `parentMoves` (a maintainer merges the request
  * on the instance; the parent moves against it), each of which the wait for a change then reports.
  *
- * Three remotes answer `profile`: https://api.armature.example.edu (oidc),
- * http://hub.example.test:3100 (header), and https://api.armature-x.example.net, a
+ * Four remotes answer `profile`: https://api.armature.example.edu (oidc),
+ * http://hub.example.test:3100 (header), https://api.armature-x.example.net, a
  * hub that declares the first one's name and address as its own (the
- * 2026-11-09 review's C1); any other address is unreachable.
+ * 2026-11-09 review's C1), and https://old.example.test, an instance serving only
+ * revisions older than the program's; any other address is unreachable.
+ *
+ * `window.__fakeCore.requests(type)` counts the requests of a type the pages sent, for what a page must send once.
  */
 
 const OIDC_REMOTE = 'https://api.armature.example.edu';
 const HEADER_REMOTE = 'http://hub.example.test:3100';
 const HOSTILE_REMOTE = 'https://api.armature-x.example.net';
+const OLD_REMOTE = 'https://old.example.test';
 const HUB_URL = 'http://127.0.0.1:3101';
 const REVISION = '2026-11-20';
 /** This installation, as the core draws one at its first start. */
@@ -86,6 +90,15 @@ const profiles: Record<string, Profile> = {
     revision: REVISION,
     compatible: true,
     warning: `The hub at ${HOSTILE_REMOTE} says its address is ${OIDC_REMOTE}. Connect only if ${HOSTILE_REMOTE} is the address your administrator gave you.`,
+  },
+  // As the core answers an instance that does not serve the revision this program's hub speaks (plan §8).
+  [OLD_REMOTE]: {
+    remote: OLD_REMOTE,
+    instance: { name: 'Armature at Old College', program: { releases: 'https://github.com/mossglenn/armature/releases' } },
+    identity: { resolver: 'oidc', issuer: ISSUER, clientId: 'armature-desktop' },
+    versions: ['2026-10-30', '2026-10-22'],
+    revision: REVISION,
+    compatible: false,
   },
 };
 
@@ -645,6 +658,8 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
           return refuse(409, 'checks_pending', `Pushing ${branch} waits for ${pending.join(', ')} to report on ${head}, by your own requirement; nothing was pushed`, { commit: head, pending, checks });
         }
       }
+      // As the core, past the person's own gate: an instance it cannot reach is said, and nothing is pushed.
+      if (remoteDown) return refuse(502, 'remote_unreachable', `${Instance()} cannot be reached (${model.settings.remote})`, { remote: true });
       // As the route, past the person's own gate: the instance refuses the first commit of a workspace it links elsewhere or nowhere (ADR-0072 decision 3).
       // As the route: the remote's 412 when the branch moved under the push, with what landed before it, where it stopped and what changed there.
       if (pushMeetsAMove && unpushed.length > 1) {
@@ -670,6 +685,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
       const unpushed = w.commits.length - w.pushed;
       const parent = parentOf(w);
       if (unpushed > 0) return refuse(409, 'unpushed_commits', `${unpushed} commit(s) of ${w.record.branch} are not pushed; push before updating from ${parent}`, { unpushed: w.commits.slice(0, unpushed).map((c) => c.commit) });
+      if (remoteDown) return refuse(502, 'remote_unreachable', `${Instance()} cannot be reached (${model.settings.remote})`, { remote: true });
       if (bringInBreaksARule) {
         bringInBreaksARule = false;
         return refuse(422, 'invariant_violation', 'The instance refused: the merged state breaks 1 rule; nothing was merged', {
@@ -830,8 +846,11 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
     const w = model.workspaces.get(branch);
     if (w) w.commits.unshift({ commit: commitId(), author: w.record.owner, message, timestamp: Date.now() / 1000 });
   };
+  /** How many requests of each type the pages sent. */
+  const sent = new Map<string, number>();
   const testHooks = {
     writeAsTool,
+    requests: (type: string) => sent.get(type) ?? 0,
     // The parent moves against the workspace: a commit on the instance, which a page waiting on it hears of.
     conflictOn: (branch: string) => {
       const w = model.workspaces.get(branch);
@@ -892,6 +911,7 @@ export function fakeCore(scenario = 'header', update?: string, options: { slow?:
   return {
     kind: 'browser',
     request: async <T>(type: string, fields: Record<string, unknown> = {}) => {
+      sent.set(type, (sent.get(type) ?? 0) + 1);
       const handler = handlers[type];
       if (!handler) return refuse(400, 'unknown_request', `The core answers no request of type ${type}`) as CoreReply<T>;
       // As the shell: an action is in the state while it runs, and the state is announced at both ends.
