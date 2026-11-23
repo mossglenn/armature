@@ -1,6 +1,6 @@
 # Demo coverage
 
-**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built), Ledger and the totals recounted 2026-11-12, reacting to changes built in the hub 2026-11-15 (no cell changed), the shared vocabulary's row added 2026-11-19, Quiver resumed 2026-11-20 (from its handoff; no mark changed) · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
+**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built), Ledger and the totals recounted 2026-11-12, reacting to changes built in the hub 2026-11-15 (no cell changed), the shared vocabulary's row added 2026-11-19, Quiver resumed 2026-11-20 (from its handoff; no mark changed), the A4L bridge added 2026-11-22 (its plan accepted; the totals recounted) · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
 
 **How to read it.** Capabilities run down the side and tools across the top, grouped by who is in the loop (interactive, agent, batch, gate; § Kinds of plugin). ● means the tool's demo *shows* the capability; ○ means the tool *uses* it without making it the point. Each row gets the hub's own coverage verdict (ADR-0029's default thresholds), counting only ● for the tools in scope: Uncovered is 0, Partially is 1, Fully is 2 to 4, Over is 5 or more. Three verdict columns give the three scopes: built tools only, built and planned, and everything including the proposed tools. *Partial* marks a hub capability that is not finished.
 
@@ -21,6 +21,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 | Q-matrix exporter | Proposed | The alignment at a commit as a Q-matrix for DataShop, knowledge tracing, IRT and diagnosis models |
 | Experiment bridge | Proposed | Conditions as branches, delivered through UpGrade or Terracotta, with results per condition |
 | Torus bridge | Proposed | Objectives and activities linked with OLI Torus; results arrive through DataShop |
+| A4L bridge | Proposed; plan accepted 2026-11-22 (`docs/a4l-bridge-plan.md`; `mossglenn/armature-a4l`), nothing built | The design at a commit as a manifest A4L, Georgia Tech's learning data architecture, joins to its events; its aggregate results back as metrics and findings at the commit a cohort met |
 | Ledger | Proposed (`docs/ledger-plan.md`, draft 2026-11-12) | LEED tracker decision logs imported into the graph, decisions captured at the moment they are made, and a revisit queue when a decision's subjects change or outcome data reaches them |
 | Formalizer | Proposed | Proposes structure from the free-text rationale it finds |
 | Ripple | Proposed | Edit on a branch, see everything the change touches, every intelligence read compared with `main` |
@@ -63,6 +64,7 @@ No single division of plugins holds: designer against administrator, or who inst
 | Q-matrix exporter | Batch | Nobody | Anywhere the export reaches |
 | Experiment bridge | Batch | The person setting up conditions | Beside the hub |
 | Torus bridge | Batch | A service `User` | Beside the hub |
+| A4L bridge | Batch | The person running it | The person's machine, through a workspace hub, or as the CLI against any hub (its plan's §12) |
 | Ledger | Batch (import); interactive (capture) | The person importing or capturing; an agent `User` for decisions an assistant proposes through the MCP server | The designer's machine (through a workspace hub, ADR-0065, accepted 2026-10-30) |
 | Drift | Batch | A service `User` | Beside the hub |
 | Projection | Batch | Nobody | Anywhere the export reaches |
@@ -73,45 +75,45 @@ No single division of plugins holds: designer against administrator, or who inst
 
 ## The matrix
 
-| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | Ripple | Crosswalk | Whyfinder | MCP server | Formalizer | Storyline bridge | DataShop bridge | Q-matrix exporter | Experiment bridge | Torus bridge | Ledger | Drift | Projection | Process miner | Response tracker | Structure analyzer | Lint |
-|---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| *In the loop* |  |  |  | *Interactive* |  |  |  |  |  | *Agent* |  | *Batch* |  |  |  |  |  |  |  |  |  |  | *Gate* |
-| **Version control** | | | | | | | | | | | | | | | | | | | | | | | |
-| Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 14 | ● | ● | ○ | ● | ○ | ● | ● | ○ | ● | ● | ● | ● | ● | ○ | ● | ● | ● | ● | ○ | ○ |
-| Branches<br>`POST /branches` | Fully 2 | Fully 2 | Over 6 | ● | ○ | ● | ● | ○ |  | ○ |  | ○ | ○ |  | ● | ○ | ● |  |  | ○ |  |  | ● |
-| History and changes since<br>`history · changes?since=` | Fully 2 | Fully 2 | Over 10 | ○ | ● | ● | ○ |  |  | ● | ○ | ● | ○ | ○ | ● | ● | ● | ● | ○ | ● | ● |  |  |
-| Reacting to changes<br>`GET /events · check runs · required checks gate a merge or a push` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  |  |  |  |  |  |  |  | ● | ○ | ○ |  | ○ |  | ● |
-| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Partially 1 | Partially 1 | Fully 3 | ○ |  | ● | ○ |  |  |  |  |  |  |  | ● | ○ | ○ |  |  | ○ |  |  | ● |
-| Merge requests and linked workspaces<br>`/merge-requests · /workspaces · ADR-0072, built 2026-11-20` | Uncovered 0 | Uncovered 0 | Uncovered 0 | | | | | | | | | | | | | | | | | | | | |
-| **Writes** | | | | | | | | | | | | | | | | | | | | | | | |
-| One write path with invariants<br>`generic writes · ADR-0024` | Fully 2 | Fully 2 | Over 8 | ● |  | ● | ● | ● |  | ○ | ○ | ● | ● |  | ○ | ● | ● |  |  |  |  |  |  |
-| Batch writes with If-Match<br>`batch · optimistic concurrency` | Partially 1 | Partially 1 | Fully 3 | ○ |  | ● |  |  |  |  |  | ○ | ○ |  |  | ● | ● |  |  |  |  |  |  |
-| Identity on every write *(Partial)*<br>`Armature-User · Armature-Agent · the oidc resolver built 2026-11-05, not yet published; ADR-0067` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  | ○ |  |  | ○ | ○ | ○ |  |  | ○ |  |  |  |
-| **Review** | | | | | | | | | | | | | | | | | | | | | | | |
-| Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 10 | ● | ○ | ○ | ● |  | ○ | ○ | ● | ● | ● |  | ● | ● | ● | ● |  | ○ | ○ | ○ | ● |
-| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Over 5 | ● | ● |  | ● | ● | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ● |  | ○ | ○ |  |  | ○ |
-| **Design intelligence** | | | | | | | | | | | | | | | | | | | | | | | |
-| Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 10 | ● | ● | ○ | ● | ● |  | ● |  | ○ | ● | ○ | ● | ● |  |  | ○ |  | ○ | ● | ● |
-| Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 6 | ● | ● | ○ | ● |  |  | ● |  |  | ○ | ● |  | ○ |  |  |  |  |  | ○ | ● |
-| Trace<br>`/intelligence/trace` | Partially 1 | Partially 1 | Over 8 |  | ● |  | ○ | ○ | ● | ● |  | ● | ● |  | ○ | ● | ● |  | ● |  | ○ | ○ |  |
-| Impact<br>`/intelligence/impact` | Uncovered 0 | Uncovered 0 | Over 5 |  | ○ |  | ● |  |  | ● |  | ● |  |  | ○ | ● |  | ○ |  |  |  | ● | ○ |
-| Ordered module content<br>`/intelligence/module-content · ADR-0005` | Partially 1 | Partially 1 | Fully 4 |  | ● | ○ | ○ |  | ○ | ○ |  | ○ |  |  | ○ | ● |  |  | ● |  |  | ○ | ● |
-| Item statistics<br>`/intelligence/item-statistics · ADR-0058` | Partially 1 | Partially 1 | Over 5 |  | ● |  |  |  |  | ○ |  | ● | ● |  | ● | ○ |  |  |  |  | ● |  |  |
-| **Ecosystem** | | | | | | | | | | | | | | | | | | | | | | | |
-| External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Over 8 |  |  |  |  | ● | ● |  |  | ● | ● | ○ | ● | ● | ● | ● | ○ |  |  |  |  |
-| Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Fully 4 |  |  |  |  |  |  |  |  | ● | ● |  |  | ○ | ● | ● |  |  |  |  |  |
-| Export profiles and slices<br>`GET /export · ADR-0031` | Fully 2 | Fully 2 | Over 8 |  | ● | ● |  | ○ |  | ○ | ● | ○ | ● | ● | ○ | ○ |  | ○ | ● | ● |  | ● |  |
-| Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Over 6 |  | ● |  |  | ○ |  |  |  | ● | ● |  | ● | ○ |  | ● |  |  | ● |  |  |
-| **Toolkit and guards** | | | | | | | | | | | | | | | | | | | | | | | |
-| Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  |  |  |  | ● | ● |  |  | ● |  |  |  |  |  |  |  |  | ○ |
-| Typed client<br>`@armature/client` | Fully 2 | Fully 2 | Over 11 | ○ | ● | ● | ○ |  | ● | ● |  | ● | ● | ● | ● | ● | ● |  |  | ○ | ○ | ○ | ● |
-| Shared vocabulary<br>`@armature/vocabulary · ADR-0073, built 2026-11-19` | Uncovered 0 | Uncovered 0 | Uncovered 0 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Agent provenance<br>`agent User · Armature-On-Behalf-Of · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  | ● | ● |  |  |  |  |  |  |  |  |  |  |  |  |
-| No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  |  |  |  | ● | ● |  |  |  |  |  | ○ |  |  | ● |  |  | ○ |
-| Loopback boundary<br>`host_not_allowed · origin_not_allowed · ADR-0067 decision 7, built 2026-10-30` | Uncovered 0 | Uncovered 0 | Uncovered 0 | ○ | ○ | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Authorization<br>`Grant · 403 forbidden · ADR-0068, built 2026-11-01` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Capability | Built | + Planned | All | CoQui | Viewer | Quiver | Ripple | Crosswalk | Whyfinder | MCP server | Formalizer | Storyline bridge | DataShop bridge | Q-matrix exporter | Experiment bridge | Torus bridge | A4L bridge | Ledger | Drift | Projection | Process miner | Response tracker | Structure analyzer | Lint |
+|---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| *In the loop* |  |  |  | *Interactive* |  |  |  |  |  | *Agent* |  | *Batch* |  |  |  |  |  |  |  |  |  |  |  | *Gate* |
+| **Version control** | | | | | | | | | | | | | | | | |  | | | | | | | |
+| Read any record at a commit<br>`?ref= on every read` | Fully 2 | Fully 2 | Over 15 | ● | ● | ○ | ● | ○ | ● | ● | ○ | ● | ● | ● | ● | ● | ● | ○ | ● | ● | ● | ● | ○ | ○ |
+| Branches<br>`POST /branches` | Fully 2 | Fully 2 | Over 6 | ● | ○ | ● | ● | ○ |  | ○ |  | ○ | ○ |  | ● | ○ | ○ | ● |  |  | ○ |  |  | ● |
+| History and changes since<br>`history · changes?since=` | Fully 2 | Fully 2 | Over 11 | ○ | ● | ● | ○ |  |  | ● | ○ | ● | ○ | ○ | ● | ● | ● | ● | ● | ○ | ● | ● |  |  |
+| Reacting to changes<br>`GET /events · check runs · required checks gate a merge or a push` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  | ● | ○ | ○ |  | ○ |  | ● |
+| Three-way merge with conflicts *(Partial)*<br>`merge route · policy open (§6)` | Partially 1 | Partially 1 | Fully 3 | ○ |  | ● | ○ |  |  |  |  |  |  |  | ● | ○ |  | ○ |  |  | ○ |  |  | ● |
+| Merge requests and linked workspaces<br>`/merge-requests · /workspaces · ADR-0072, built 2026-11-20` | Uncovered 0 | Uncovered 0 | Uncovered 0 | | | | | | | | | | | | | |  | | | | | | | |
+| **Writes** | | | | | | | | | | | | | | | | |  | | | | | | | |
+| One write path with invariants<br>`generic writes · ADR-0024` | Fully 2 | Fully 2 | Over 9 | ● |  | ● | ● | ● |  | ○ | ○ | ● | ● |  | ○ | ● | ● | ● |  |  |  |  |  |  |
+| Batch writes with If-Match<br>`batch · optimistic concurrency` | Partially 1 | Partially 1 | Fully 3 | ○ |  | ● |  |  |  |  |  | ○ | ○ |  |  | ● | ○ | ● |  |  |  |  |  |  |
+| Identity on every write *(Partial)*<br>`Armature-User · Armature-Agent · the oidc resolver built 2026-11-05, not yet published; ADR-0067` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  | ○ |  |  | ○ | ○ | ○ | ○ |  |  | ○ |  |  |  |
+| **Review** | | | | | | | | | | | | | | | | |  | | | | | | | |
+| Findings and notes, by fragment<br>`ADR-0020 · ADR-0023` | Partially 1 | Partially 1 | Over 11 | ● | ○ | ○ | ● |  | ○ | ○ | ● | ● | ● |  | ● | ● | ● | ● | ● |  | ○ | ○ | ○ | ● |
+| Attestations that go stale<br>`ADR-0028` | Fully 2 | Fully 2 | Over 5 | ● | ● |  | ● | ● | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |  | ● |  | ○ | ○ |  |  | ○ |
+| **Design intelligence** | | | | | | | | | | | | | | | | |  | | | | | | | |
+| Coverage at any ref<br>`/intelligence/coverage · ADR-0029` | Fully 2 | Fully 2 | Over 10 | ● | ● | ○ | ● | ● |  | ● |  | ○ | ● | ○ | ● | ● |  |  |  | ○ |  | ○ | ● | ● |
+| Alignment<br>`/intelligence/alignment` | Fully 2 | Fully 2 | Over 6 | ● | ● | ○ | ● |  |  | ● |  |  | ○ | ● |  | ○ | ○ |  |  |  |  |  | ○ | ● |
+| Trace<br>`/intelligence/trace` | Partially 1 | Partially 1 | Over 8 |  | ● |  | ○ | ○ | ● | ● |  | ● | ● |  | ○ | ● |  | ● |  | ● |  | ○ | ○ |  |
+| Impact<br>`/intelligence/impact` | Uncovered 0 | Uncovered 0 | Over 5 |  | ○ |  | ● |  |  | ● |  | ● |  |  | ○ | ● |  |  | ○ |  |  |  | ● | ○ |
+| Ordered module content<br>`/intelligence/module-content · ADR-0005` | Partially 1 | Partially 1 | Fully 4 |  | ● | ○ | ○ |  | ○ | ○ |  | ○ |  |  | ○ | ● | ○ |  |  | ● |  |  | ○ | ● |
+| Item statistics<br>`/intelligence/item-statistics · ADR-0058` | Partially 1 | Partially 1 | Over 5 |  | ● |  |  |  |  | ○ |  | ● | ● |  | ● | ○ | ○ |  |  |  |  | ● |  |  |
+| **Ecosystem** | | | | | | | | | | | | | | | | |  | | | | | | | |
+| External references<br>`ExternalRef · ADR-0030` | Uncovered 0 | Uncovered 0 | Over 9 |  |  |  |  | ● | ● |  |  | ● | ● | ○ | ● | ● | ● | ● | ● | ○ |  |  |  |  |
+| Attachments *(Partial)*<br>`tool-managed only · hub endpoints deferred` | Uncovered 0 | Uncovered 0 | Over 5 |  |  |  |  |  |  |  |  | ● | ● |  |  | ○ | ● | ● | ● |  |  |  |  |  |
+| Export profiles and slices<br>`GET /export · ADR-0031` | Fully 2 | Fully 2 | Over 8 |  | ● | ● |  | ○ |  | ○ | ● | ○ | ● | ● | ○ | ○ | ○ |  | ○ | ● | ● |  | ● |  |
+| Outcome records at asOf<br>`datasets, metrics · ADR-0057, ADR-0063` | Partially 1 | Partially 1 | Over 7 |  | ● |  |  | ○ |  |  |  | ● | ● |  | ● | ○ | ● |  | ● |  |  | ● |  |  |
+| **Toolkit and guards** | | | | | | | | | | | | | | | | |  | | | | | | | |
+| Discovery and capabilities<br>`/discover · ADR-0059` | Uncovered 0 | Uncovered 0 | Fully 3 |  | ○ |  |  |  |  | ● | ● |  |  | ● |  |  | ○ |  |  |  |  |  |  | ○ |
+| Typed client<br>`@armature/client` | Fully 2 | Fully 2 | Over 12 | ○ | ● | ● | ○ |  | ● | ● |  | ● | ● | ● | ● | ● | ● | ● |  |  | ○ | ○ | ○ | ● |
+| Shared vocabulary<br>`@armature/vocabulary · ADR-0073, built 2026-11-19` | Uncovered 0 | Uncovered 0 | Uncovered 0 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Agent provenance<br>`agent User · Armature-On-Behalf-Of · endorsements` | Uncovered 0 | Uncovered 0 | Fully 2 |  |  | ○ |  |  |  | ● | ● |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| No per-person aggregates<br>`person_filter_refused · ADR-0021` | Uncovered 0 | Uncovered 0 | Fully 3 |  |  |  |  |  |  | ● | ● |  |  |  |  |  |  | ○ |  |  | ● |  |  | ○ |
+| Loopback boundary<br>`host_not_allowed · origin_not_allowed · ADR-0067 decision 7, built 2026-10-30` | Uncovered 0 | Uncovered 0 | Uncovered 0 | ○ | ○ | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Authorization<br>`Grant · 403 forbidden · ADR-0068, built 2026-11-01` | Fully 2 | Fully 2 | Fully 2 | ● |  | ● |  |  |  | ○ |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 
-Totals over 28 capabilities (Quiver counted as built since 2026-10-30, so no planned tool remains and the first two scopes agree): built tools, Uncovered 10, Partially 7, Fully 11, Over 0; built and planned, Uncovered 10, Partially 7, Fully 11, Over 0; everything, Uncovered 3, Partially 0, Fully 10, Over 15. *The twenty-eighth is merge requests and linked workspaces (ADR-0072, 2026-11-20): the desktop app shows both and is no column here, and no demo tool does yet, so its row is empty until Quiver's strip shows a request's health or CoQui opens one for a round.* *The twenty-seventh is the shared vocabulary (2026-11-19), a package of the toolkit and not a capability of the hub; no tool uses it yet, so its row is empty until Quiver, CoQui or the desktop app takes its words from it.* *Recounted 2026-11-12 from the rows, with Ledger's revisit queue and reaffirmations (`docs/ledger-plan.md`): before that change the line already disagreed with the rows, reading Partially 8, Fully 10 for the first two scopes (the rows gave 7 and 11) and Partially 2, Fully 9, Over 14 for everything (the rows gave 1, 10 and 14).*
+Totals over 28 capabilities (Quiver counted as built since 2026-10-30, so no planned tool remains and the first two scopes agree): built tools, Uncovered 10, Partially 7, Fully 11, Over 0; built and planned, Uncovered 10, Partially 7, Fully 11, Over 0; everything, Uncovered 3, Partially 0, Fully 9, Over 16 (the A4L bridge, 2026-11-22, moved attachments from Fully to Over). *The twenty-eighth is merge requests and linked workspaces (ADR-0072, 2026-11-20): the desktop app shows both and is no column here, and no demo tool does yet, so its row is empty until Quiver's strip shows a request's health or CoQui opens one for a round.* *The twenty-seventh is the shared vocabulary (2026-11-19), a package of the toolkit and not a capability of the hub; no tool uses it yet, so its row is empty until Quiver, CoQui or the desktop app takes its words from it.* *Recounted 2026-11-12 from the rows, with Ledger's revisit queue and reaffirmations (`docs/ledger-plan.md`): before that change the line already disagreed with the rows, reading Partially 8, Fully 10 for the first two scopes (the rows gave 7 and 11) and Partially 2, Fully 9, Over 14 for everything (the rows gave 1, 10 and 14).*
 
 ## Gaps, and which proposed tool closes them
 
@@ -124,6 +126,7 @@ With the built and planned tools, 10 capabilities have no demo that shows them: 
 | Formalizer | 3 | Discovery and capabilities; Agent provenance; No per-person aggregates |
 | Ledger | 3 | Reacting to changes; External references; Attachments |
 | DataShop bridge | 2 | External references; Attachments |
+| A4L bridge | 2 | External references; Attachments |
 | Torus bridge | 2 | Impact; External references |
 | Drift | 2 | External references; Attachments |
 | Lint | 1 | Reacting to changes |
@@ -359,6 +362,25 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ○ **Attachments.** A Torus publication referenced as a revision.
 - ○ **Export profiles and slices.** Reads the design at a ref to compare with the course.
 - ○ **Outcome records at asOf.** Through the DataShop bridge.
+- ● **Typed client.** Built on @armature/client.
+
+### A4L bridge (proposed; plan accepted 2026-11-22, `docs/a4l-bridge-plan.md`)
+
+- ● **Read any record at a commit.** The manifest is the design at a named commit, in the identifiers A4L already holds.
+- ○ **Branches.** A finding the data supports is answered on a branch that changes the design.
+- ● **History and changes since.** `compare` sets one measure from cohorts at two commits beside the design changes between them.
+- ● **One write path with invariants.** `pull` writes the dataset, its metrics and its findings in one commit; an `asOf` at which a subject did not exist is refused (constraint 13).
+- ○ **Batch writes with If-Match.** One pull is one batch.
+- ○ **Identity on every write.** Writes as the person running it.
+- ● **Findings and notes, by fragment.** Help-seeking far above the module's median on one objective, or an AI learning tool little used, becomes a finding on the objective or the activity.
+- ○ **Alignment.** The manifest carries what each record targets or assesses.
+- ○ **Ordered module content.** The manifest names the module that places each record.
+- ○ **Item statistics.** Where A4L's results include assessment events, as metrics about the item (ADR-0058).
+- ● **External references.** LTI resource links and LMS identifiers on activities and items are how runtime identifiers map to records; the dataset names its A4L source.
+- ● **Attachments.** The manifest A4L joined, the analysis payload and the results as pulled, each by hash. None holds learner data.
+- ○ **Export profiles and slices.** The pseudonymous export, for a study that asks for more than the manifest.
+- ● **Outcome records at asOf.** A LearningDataset per A4L results table at the commit the cohort met, with metrics about objectives, activities, items and modules.
+- ○ **Discovery and capabilities.** The manifest carries the hub's instance name and address from `GET /discover`.
 - ● **Typed client.** Built on @armature/client.
 
 ### Ledger (proposed; was the LEED importer, renamed 2026-11-12 with `docs/ledger-plan.md`)
