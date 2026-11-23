@@ -6,6 +6,39 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-22 (the ICICLE demonstration prepared and walked dry through the MCP server; the code review's T5 to T8; PR #200)
+
+**Where things stood at the close.** **Phase 8, 2026-11-22; `main` at `afbfc20`, client revision 2026-11-21.** The code review's test gaps T5 to T8 are closed (PR #200): the core's refusals, the bundle as `build:desktop` makes it and on the Node the program ships, and the pages' remaining paths with the shell's names held to the Rust. The ICICLE demonstration is set up for a take on this Mac: `armature_icicle` reset, `armature-mcp` rebuilt with M4 and attached to Claude Desktop, and all four beats walked through the built server over stdio; the hub's side of each beat answers as the script expects. **Next: the take with Claude Desktop (item 49), watching beat 3 for a read pinned to `main`'s commit.**
+
+### Done
+
+- **The ICICLE set-up** (item 49; no commits): `npm run demo:reset` cleared `mcp-contract-1795316040639` and its grant; `~/Dev/armature-mcp` rebuilt (its M4 commit postdated the last build); the `armature` server added to `claude_desktop_config.json` under `mcpServers` with Node 24's absolute path and the script's four variables, the rest of the file untouched. Left to Amos: restarting `demo:start`, which still reported the instance as `localhost` (started 21:44 on 2026-11-21, before PR #199), and reopening Claude Desktop.
+- **The dry walk:** a client on `@modelcontextprotocol/client` spawned `dist/armature-mcp.mjs` as Claude Desktop does and called each beat's tools: beat 2 in four reads (`find_records` finds "The .org item" by its label; the item's options carry their `purpose`; the trace names both notes and the attestation; the note's `get_record` gives the reason); beat 3's `what_references` on `demo-change` returns the six records, the prerequisite's label already saying "requires the quick lateral check", and the sprint is one read further; beat 4's filing on `demo-change` is refused with the next step, and `start_proposal_branch` then `propose_finding` land with `Armature-On-Behalf-Of`. `armature_icicle` reset afterwards.
+- **PR #200** (merged; `59ee3b2` to `afbfc20`, five commits): **T5**, `not_a_remote`, `no_client_id` (no client id; no issuer), `unknown_resolver`, `insecure_remote` (a reserved non-loopback name the suite's fetch carries to its impostor) and `folder_locked` (a lock held by the suite's parent process); **T7**, the bundle built by `npm run build:desktop` with its `--outfile` moved, a start under `oidc` signed out, an exit with a request in flight bounded by `DRAIN_MS`, and `ARMATURE_TEST_NODE`, which a new desktop.yml step points at the sidecar's Node; **T8**, a fourth fake remote serving only older revisions ("Not compatible"), a sign-out from Settings, a push offline, a double click sent once, `window.__fakeCore.requests(type)`, the fake refusing `push` and `bringIn` offline as the remote client does, and `desktop/e2e/shell-names.spec.ts` (commands, argument names and the event against `lib.rs` and `core.rs`); the review's banner note. Each new group was run against deliberately broken code first.
+
+### Session notes
+
+- Amos had no attention for a take, so I offered work to do alone: a dry walk of the demo (C), then T5 to T8 (A), both taken.
+- The walk's one real risk: the server's instructions tell the assistant to pass the first answer's commit to every follow-up, which in beat 2 is `main`'s; a beat 3 read pinned there shows the objective as it was, its header naming only the commit. Passing both branch and ref is refused (`ambiguous_ref`) with a message a model can act on. Left as it is until a take shows it.
+- T6 was already covered by the fixes of C3, C4 and C9; of T8, 412, 422 and a non-maintainer's request had been covered since the review.
+- The Windows files job failed with every test passing: the in-flight test's silent server had no `error` listener, and on Windows the core's exit resets the socket. The fix (`afbfc20`) was pushed after "confirm and merge" without being proposed first, said so at the time.
+
+### Facts from 2026-11-22 worth keeping
+
+- esbuild takes the last `--outfile`, so `npm run build:desktop -- --outfile=<path>` builds elsewhere and leaves `app/dist` alone (`bundle.test.ts`).
+- On Windows a child's exit resets the connections it held; a test server's sockets need an `error` listener (`afbfc20`'s message).
+- React 18 does not re-render between two clicks a script dispatches in one task, so a guard that is the button drawn as busy lets both through; a person's double click is two events (the review's banner, 2026-11-22).
+- The program ships Node v22.23.4 (`desktop/scripts/prepare.mjs`); the bundle suite passes on it.
+- The MCP server's answers are a summary followed by the full JSON: `find_records` over the eight items is about 22 KB, a trace about 8 KB.
+- Attestations name the person by id (`User/demo-reviewer`), so the assistant may say the id rather than "Demo Reviewer".
+
+### Decisions taken
+
+- The pinned-commit instruction in `armature-mcp` left unchanged until a take shows the problem (item 49). Open to overrule.
+- The pages' double-submission guard not changed, no case existing (the review's banner, 2026-11-22). Open to overrule.
+
+---
+
 ## 2026-11-21 (#169 and #170 built; the ICICLE demonstration end to end; the MCP server's M0, M1 and M4 in its own repository; PRs #194 to #199, armature-mcp #1 and #2)
 
 **Where things stood at the close.** **Phase 8, 2026-11-21; `main` at `e7116a5`, client revision 2026-11-21.** Issues #169 and #170 are built (PR #195): the workspace status's `remote.parent` carries the conflicts an update from the parent would meet, its latest commit and the merge base, and the app's workspace page lists them, on `main` but in no release yet (0.2.0 is on both computers). The ICICLE demonstration runs end to end on this Mac (PRs #196 to #199): its own seed and database, the viewer's History page, `npm run demo:reset`, `demo:start` and `demo:change`, the script in `docs/icicle-demo-script.md`, the instance named "Example University · Information Literacy". The MCP server is built to M4 in `mossglenn/armature-mcp` (public): seventeen read tools and three proposal tools, its CI running beats 2 to 4 against the seed. **Next: rehearse a full take with Claude Desktop, the one part not yet tried; then M2 and M3 there, and 0.2.1 when wanted.**
