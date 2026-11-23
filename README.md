@@ -87,7 +87,7 @@ As of 20 November 2026, Phases 0 to 7 of the [development plan](docs/development
 | Import LEED tracker logs and capture design decisions as they are made (proposed) | [Ledger](docs/ledger-plan.md) |
 | Gate a merge or a push on a plugin's checks, with the hub running no design rules (ADR-0070, accepted 2026-11-12, built by 2026-11-15, the desktop app's pages for it released in its 0.1.3 on 2026-11-16); Lint as its first plugin (proposed; its rule engine and command line built 2026-11-22 in `mossglenn/armature-lint`) | [ADR-0070](schema/docs/adr/0070-checks-hooks-and-gates-for-plugins.md); the [API reference](docs/api.md)'s Checks and Events sections; the [schema guide](docs/schema-guide.md) §13.5; [the Lint plan](docs/lint-plan.md) |
 | Map objectives to a standards framework, affirmed by a subject-matter expert (proposed) | [Crosswalk](docs/crosswalk-plan.md); [ADR-0071](schema/docs/adr/0071-external-alignment.md) |
-| Join the design to A4L, Georgia Tech's learning data architecture, so its analytics group by objective and design version and its results come back as metrics (proposed) | [The A4L bridge](docs/a4l-bridge-plan.md) |
+| Join the design to A4L, Georgia Tech's learning data architecture, so its analytics group by objective and design version and its results come back as metrics (plan accepted 2026-11-22; nothing built yet) | [The A4L bridge](docs/a4l-bridge-plan.md); [`mossglenn/armature-a4l`](https://github.com/mossglenn/armature-a4l), its own repository |
 | See the standards precedents and literature | [docs/research/](docs/research/) |
 | Work on the code (including with an AI assistant) | [.claude/CLAUDE.md](.claude/CLAUDE.md), [.claude/SESSION.md](.claude/SESSION.md) |
 
@@ -210,7 +210,7 @@ docs/
   knowledge-components-plan.md  Knowledge components and alignment models (draft 2026-11-11, nothing decided): the staged tests, studies and decisions toward a designer's knowledge-component model as design data
   lint-plan.md                Checks and the Lint plugin (draft 2026-11-12, its decisions taken the same day): the hub's event feed, check runs and required checks (ADR-0070), and Lint as a remote service and a local runner; Lint's step L1, its rule engine and command line, built 2026-11-22 in `mossglenn/armature-lint`
   crosswalk-plan.md           Crosswalk (draft 2026-11-12, nothing decided): a client that maps objectives to a standards framework as ExternalAlignment records (ADR-0071, proposed), with SME affirmation and evidence per standard
-  a4l-bridge-plan.md          The A4L bridge (draft 2026-11-22, its questions decided the same day): a client that gives A4L (the Architecture for AI-Augmented Learning) a manifest of the design at a commit and brings its aggregate results back as metrics and findings at the commit a cohort met
+  a4l-bridge-plan.md          The A4L bridge (accepted 2026-11-22; its repository mossglenn/armature-a4l): a client that gives A4L (the Architecture for AI-Augmented Learning) a manifest of the design at a commit and brings its aggregate results back as metrics and findings at the commit a cohort met
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
   research/                   Standards-precedents survey, candidate ADRs, reading list (2026-10-06); schema-precedents and plugin-candidates survey (2026-10-20); client mappings; tutor-fixtures/, tutor and adaptive content copied from its sources for the knowledge components plan's mapping study (2026-11-11)
