@@ -313,6 +313,8 @@ Per rule and event the action is `off`, `inform`, `warn` or `require`. The run's
 | `review.agent-unattested` | document | A record created by an agent `User` with no Affirmed attestation by a person | attestations, `the agent: prefix on externalId` | inform / warn / warn |
 | `orphan.unreferenced` | graph | A record nothing references | impact read | off / inform / inform |
 
+*As built in L1 (2026-11-22):* the ten rules without "path read" are in `mossglenn/armature-lint` with the defaults above. `order.assessed-before-practiced` checks formative uses only (an item used in an activity earlier than every activity targeting its objective), since an `Assessment` has no place in a module's teaching order; the other rules read as written. That repository's `docs/plan.md` §3 lists every such choice.
+
 Two notes on specific rules:
 
 - **`review.agent-unattested` is the brand rule.** "AI-created content goes through the same review process as human-created content" becomes a check an instance can require at merge. It filters on whether the author is an agent, which ADR-0068's 2026-11-05 change already treats as open (`GET /users?kind=agent`): agents are tools, not people.
@@ -349,7 +351,7 @@ CoQui also exposes a gap in the requirement record: its check should bind merges
 >
 > **Status (2026-11-22).** **L1** is built in `mossglenn/armature-lint` (public, MIT): `@armature/lint` and `armature-lint run` and `rules`, policy from a local file whose shape is the future requirement `params`, every read pinned to the commit the export was served from. Three decisions taken that day (Amos): the repository's name and visibility; ten rules, the three prerequisite rules waiting for the path read (SESSION.md item 18) so that Lint stays a client that read is tested against; and "rule" kept for Lint's catalog, the collision with the naming vocabulary's row "A rule" accepted and noted there. Where the build reads this plan more narrowly, recorded in that repository's `docs/plan.md` §3 and open to overrule: `order.assessed-before-practiced` checks formative uses only, since an `Assessment` has no place in a module's teaching order; an attestation on one part counts as one of the record. Its exit, the seed's results reviewed, is that plan's §5: at a merge, 8 warnings and 7 for information, every one a gap the seed holds on purpose. **L2, L3 and P1** are not started.
 
-**Two tracks that meet at step 6: Lint starts now with no hub change, and the hub builds its four primitives in the order each becomes useful.** Hub steps are PRs in `mossglenn/armature`; Lint steps are in a new `mossglenn/armature-lint` (or a name of its own, given the plugin-branding decision).
+**Two tracks that meet at step 6: Lint starts now with no hub change, and the hub builds its four primitives in the order each becomes useful.** Hub steps are PRs in `mossglenn/armature`; Lint steps are in a new `mossglenn/armature-lint` (or a name of its own, given the plugin-branding decision). *That name was chosen 2026-11-22, the repository public; L1 is built there.*
 
 1. **Lint L1: engine and CLI, no hub change.** `@armature/lint` with the ten rules that need no path read, over `GET /export` and the intelligence reads; `armature-lint run --hub --ref`; policy from a local file.
    - *Exit:* a failing and passing fixture per rule; a snapshot of the seed's results reviewed so defaults aren't noisy.
