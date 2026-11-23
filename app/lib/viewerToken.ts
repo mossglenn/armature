@@ -15,15 +15,28 @@
  *   ARMATURE_HUB_CLIENT_ID, _CLIENT_SECRET  the viewer asks the issuer for a token itself,
  *                                           at the token endpoint the issuer's metadata
  *                                           names, and asks again shortly before it expires
+ *   ARMATURE_OIDC_ISSUER                    the issuer, the hub's own setting, read from the
+ *                                           same docker/.env or .env.local; required with
+ *                                           the client credentials unless the endpoint is given
  *   ARMATURE_HUB_TOKEN_ENDPOINT             optional: the token endpoint itself, when the
  *                                           issuer's public name is not one the viewer's
  *                                           container can reach (a rehearsal), as the hub's
  *                                           ARMATURE_OIDC_JWKS_URL is for its keys
+ *   ARMATURE_REHEARSAL                      `1` lets those addresses be plain http off
+ *                                           loopback, as it does the hub's
  *
- * The issuer is the one the hub names in `GET /discover` (`identity.issuer`),
- * read once; a hub under `header` names none, and the viewer then sends no
- * token, as it never did. Nothing here imports the API: the viewer is a
- * client of the hub over HTTP like any plugin (ADR-0054).
+ * The client secret goes only where the viewer's own settings point (the
+ * 2026-11-09 review's V1, built 2026-11-22). Until then the issuer was the one
+ * the hub named in `GET /discover`, so a hub that was not the instance's, or
+ * the instance's own hub misconfigured, chose where the secret was sent. The
+ * viewer still reads `/discover` once, to refuse a hub under `header` or
+ * one naming another issuer, saying both names; the hub can stop the viewer,
+ * as it always could, but not redirect its secret. Every address the secret
+ * or a token travels to is `https`, or plain `http` on loopback or under
+ * ARMATURE_REHEARSAL=1, the rule the hub applies to its own issuer
+ * (lib/api/config.ts, the review's A5), and an `https` issuer names no `http`
+ * token endpoint. Nothing here imports the API: the viewer is a client of the
+ * hub over HTTP like any plugin (ADR-0054).
  */
 
 /** How the viewer reaches the hub and the issuer; replaceable for a test, and the shape @armature/client takes. */
@@ -48,6 +61,34 @@ const REFRESH_MARGIN_SECONDS = 30;
  * request stalled every page for the runtime's own five minutes.
  */
 export const ISSUER_TIMEOUT_MS = 15_000;
+
+/** A loopback name as a URL gives it, as the hub's own rule reads it (lib/api/config.ts). */
+const isLoopbackHost = (hostname: string): boolean =>
+  hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127(\.\d{1,3}){3}$/.test(hostname);
+
+/** ARMATURE_REHEARSAL: `1`, or unset; anything else is refused, so a misspelled value never passes for either. */
+function rehearsal(raw: string | undefined): boolean {
+  const value = raw?.trim();
+  if (!value) return false;
+  if (value === '1') return true;
+  throw new Error(`ARMATURE_REHEARSAL=${value} is not a setting (1, or unset)`);
+}
+
+/** The address as given when it is https, or plain http on loopback or in a rehearsal; throws naming `what` otherwise. */
+function secureUrl(what: string, raw: string, rehearsed: boolean): string {
+  const value = raw.trim();
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${what} ${value} is not a URL`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`${what} ${value} is not an http or https address`);
+  if (url.protocol === 'http:' && !rehearsed && !isLoopbackHost(url.hostname)) {
+    throw new Error(`${what} ${value} is plain http on a host that is not loopback, and the viewer sends its client secret or its token there; use https, or set ARMATURE_REHEARSAL=1 for a rehearsal that is never a deployment`);
+  }
+  return value;
+}
 
 /**
  * The current token on each call. `forget` drops the held token so the next
@@ -80,27 +121,43 @@ export function tokenSource(options: TokenSourceOptions): TokenSource | undefine
   if (!clientId || !clientSecret) return undefined;
 
   const fixedEndpoint = env.ARMATURE_HUB_TOKEN_ENDPOINT?.trim();
-  let tokenEndpoint: Promise<string> | undefined = fixedEndpoint ? Promise.resolve(fixedEndpoint) : undefined;
+  const configuredIssuer = env.ARMATURE_OIDC_ISSUER?.trim();
+  // Checked when a token is first asked for, so a page says what is wrong rather than the viewer failing to load.
+  let tokenEndpoint: Promise<string> | undefined = fixedEndpoint
+    ? Promise.resolve().then(() => secureUrl('ARMATURE_HUB_TOKEN_ENDPOINT', fixedEndpoint, rehearsal(env.ARMATURE_REHEARSAL)))
+    : undefined;
   let held: { token: string; expiresAt: number } | undefined;
   let pending: Promise<string> | undefined;
 
   const endpoint = (): Promise<string> => {
     tokenEndpoint ??= (async () => {
+      const rehearsed = rehearsal(env.ARMATURE_REHEARSAL);
+      if (!configuredIssuer) {
+        throw new Error(
+          'The viewer holds a client credential (ARMATURE_HUB_CLIENT_ID) but no ARMATURE_OIDC_ISSUER: it asks only the issuer its own settings name for a token, never the one a hub names, so set the hub’s ARMATURE_OIDC_ISSUER for the viewer too',
+        );
+      }
+      const expected = secureUrl('ARMATURE_OIDC_ISSUER', configuredIssuer, rehearsed).replace(/\/+$/, '');
       const discover = await fetchFn(`${options.hubUrl}/api/v1/discover`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(ISSUER_TIMEOUT_MS) });
-      if (!discover.ok) throw new Error(`GET /discover answered ${discover.status}; the viewer cannot learn the hub's issuer`);
+      if (!discover.ok) throw new Error(`GET /discover answered ${discover.status}; the viewer cannot tell whether the hub takes its issuer's tokens`);
       const identity = ((await discover.json()) as { identity?: { resolver?: string; issuer?: string } }).identity;
       if (identity?.resolver !== 'oidc' || !identity.issuer) {
         throw new Error(`The hub runs under ${identity?.resolver ?? 'an unknown resolver'}, not oidc, yet the viewer holds a client credential (ARMATURE_HUB_CLIENT_ID)`);
       }
-      const address = `${identity.issuer.replace(/\/+$/, '')}/.well-known/openid-configuration`;
+      // A consistency check, nothing more: what the hub says is not where the secret goes.
+      if (identity.issuer.replace(/\/+$/, '') !== expected) {
+        throw new Error(`The hub takes tokens from ${identity.issuer}, but the viewer's ARMATURE_OIDC_ISSUER is ${expected}; the two settings name one issuer`);
+      }
+      const address = `${expected}/.well-known/openid-configuration`;
       const metadata = await fetchFn(address, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(ISSUER_TIMEOUT_MS) });
       if (!metadata.ok) throw new Error(`${address} answered ${metadata.status}`);
       const { issuer, token_endpoint } = (await metadata.json()) as { issuer?: unknown; token_endpoint?: unknown };
       // OpenID Connect Discovery §4.3, as the hub reads its keys (lib/api/oidc.ts): the metadata's issuer is the one
       // asked for, or the document is someone else's and its token endpoint not where the client secret goes.
-      if (issuer !== identity.issuer) throw new Error(`${address} describes issuer ${String(issuer)}, not ${identity.issuer}`);
+      if (typeof issuer !== 'string' || issuer.replace(/\/+$/, '') !== expected) throw new Error(`${address} describes issuer ${String(issuer)}, not ${expected}`);
       if (typeof token_endpoint !== 'string' || !token_endpoint) throw new Error(`${address} names no token_endpoint`);
-      return token_endpoint;
+      if (expected.startsWith('https://') && !token_endpoint.startsWith('https://')) throw new Error(`${address} names a token_endpoint that is not https: ${token_endpoint}`);
+      return secureUrl(`The token endpoint ${address} names,`, token_endpoint, rehearsed);
     })();
     tokenEndpoint.catch(() => (tokenEndpoint = undefined));
     return tokenEndpoint;

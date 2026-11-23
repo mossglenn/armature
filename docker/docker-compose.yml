@@ -151,6 +151,12 @@ services:
       - ARMATURE_HUB_CLIENT_ID=${ARMATURE_HUB_CLIENT_ID:-}
       - ARMATURE_HUB_CLIENT_SECRET=${ARMATURE_HUB_CLIENT_SECRET:-}
       - ARMATURE_HUB_TOKEN_ENDPOINT=${ARMATURE_HUB_TOKEN_ENDPOINT:-}
+      # The issuer the client secret goes to, the hub's own setting, so the hub
+      # is not the one that says where (the 2026-11-09 review's V1; since
+      # 2026-11-22); and the rehearsal setting, under which these addresses may
+      # be plain http off loopback, as the hub's may.
+      - ARMATURE_OIDC_ISSUER=${ARMATURE_OIDC_ISSUER:-}
+      - ARMATURE_REHEARSAL=${ARMATURE_REHEARSAL:-}
     depends_on:
       - hub
 
