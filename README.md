@@ -207,7 +207,7 @@ docs/
   datashop-bridge-plan.md     The DataShop bridge (draft 2026-11-09): a client that sends the alignment at a commit to DataShop as a knowledge-component model and brings the evidence back as metrics and findings
   ledger-plan.md              Ledger (draft 2026-11-12): a client that imports LEED tracker decision logs, captures decisions at the moment they are made, and lists decisions to revisit when their subjects change or outcome data reaches them
   knowledge-components-plan.md  Knowledge components and alignment models (draft 2026-11-11, nothing decided): the staged tests, studies and decisions toward a designer's knowledge-component model as design data
-  lint-plan.md                Checks and the Lint plugin (draft 2026-11-12, its decisions taken the same day): the hub's event feed, check runs and required checks (ADR-0070), and Lint as a remote service and a local runner
+  lint-plan.md                Checks and the Lint plugin (draft 2026-11-12, its decisions taken the same day): the hub's event feed, check runs and required checks (ADR-0070), and Lint as a remote service and a local runner; Lint's step L1, its rule engine and command line, built 2026-11-22 in `mossglenn/armature-lint`
   crosswalk-plan.md           Crosswalk (draft 2026-11-12, nothing decided): a client that maps objectives to a standards framework as ExternalAlignment records (ADR-0071, proposed), with SME affirmation and evidence per standard
   demo-api.md                 The retired demo-era API (historical)
   positionpaper/              The position paper (March 2026)
