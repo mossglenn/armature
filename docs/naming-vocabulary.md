@@ -358,7 +358,7 @@ Gathered on 2026-11-17 from vendor documentation by two research passes, with Fi
 
 | Concept | What it is | Names in use now (where) | Notes | Recommended | Chosen |
 |---|---|---|---|---|---|
-| A rule | A condition every write must meet, beyond what the store enforces | "rules" (guide, Quiver "the whole rules engine"); "invariants", numbered "constraints" (CLAUDE.md, code); "lint" (lint plan, for advisory ones) | Collision 19 | **rule** for people; "invariant" and "constraint" in developer documents. An advisory finding from a check is a check's result, not a rule | rule |
+| A rule | A condition every write must meet, beyond what the store enforces | "rules" (guide, Quiver "the whole rules engine"); "invariants", numbered "constraints" (CLAUDE.md, code); "lint" (lint plan, for advisory ones) | Collision 19. *2026-11-22 (Amos):* Lint, a tool outside the hub, keeps "rule" for the advisory conditions its catalog holds (`coverage.uncovered`); in what it prints they are a check's rules, never the hub's, and a broken one is a hit, not a broken rule | **rule** for people; "invariant" and "constraint" in developer documents. An advisory finding from a check is a check's result, not a rule | rule |
 | A broken rule | A write or merge that fails a rule | "Broken rules" (page); "violations" (API); `invariant_violation` (code) | | **Broken rules**, kept | Broken rules |
 | Rule numbers | Constraint 0 to 24 | "rule 9", "constraint 19" (Quiver, CLAUDE.md) | Do people ever see a number? | Not shown; a broken rule is described in words ("An item needs a correct option") | not shown |
 
