@@ -171,7 +171,11 @@ describe('the core’s bundle, run as the shell runs it', () => {
   it('exits when its input ends with a request still in flight, within its drain bound, and releases the lock (T7)', async () => {
     // A remote that takes the connection and never answers: the profile read would wait its own fifteen seconds.
     const held: Socket[] = [];
-    const silent = createServer((socket) => void held.push(socket));
+    // The core's exit resets its end on Windows (ECONNRESET here), which is the point, not a failure.
+    const silent = createServer((socket) => {
+      socket.on('error', () => undefined);
+      held.push(socket);
+    });
     await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
     const remote = `http://127.0.0.1:${(silent.address() as { port: number }).port}`;
     try {
