@@ -106,6 +106,22 @@ test.describe('connecting', () => {
     await expect(page.getByRole('alert')).toContainText("The instance's details changed since you looked them up");
   });
 
+  test('an instance that serves only older revisions is shown as not compatible, with where to get the app that matches, and cannot be connected (the 2026-11-09 review’s T8)', async ({ page }) => {
+    await open(page, 'fresh');
+    await page.getByLabel("The instance's address").fill('https://old.example.test');
+    await page.getByRole('button', { name: 'Look up' }).click();
+    const instance = page.getByLabel('Instance details', { exact: true });
+    await expect(instance).toContainText('Armature at Old College');
+    await expect(instance).toContainText('Not compatible');
+    await expect(instance).toContainText('the instance serves 2026-10-30, 2026-10-22');
+    await expect(instance).toContainText('https://github.com/mossglenn/armature/releases');
+    await expect(instance).not.toContainText(/^Compatible/);
+    await expect(page.getByRole('button', { name: 'Connect to Armature at Old College' })).toBeDisabled();
+    // Another instance is still looked up from here.
+    await page.getByRole('button', { name: 'Not this one' }).click();
+    await expect(page.getByText('Not connected')).toBeVisible();
+  });
+
   test('a link fills the address and connects nothing until the person reads and confirms', async ({ page }) => {
     await open(page, 'header');
     await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
@@ -209,6 +225,21 @@ test.describe('signing in', () => {
     await page.getByRole('textbox', { name: 'Name' }).fill('unit-5');
     await page.getByRole('button', { name: 'Create workspace' }).click();
     await expect(page.getByRole('list', { name: 'Your workspaces' })).toContainText('someone_unit-5');
+  });
+
+  test('signing out from Settings goes back to the sign-in page, says nothing is wrong, and the instance’s actions ask for a sign-in again (the 2026-11-09 review’s T8)', async ({ page }) => {
+    await open(page, 'oidc');
+    await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Signed in' })).toBeVisible();
+    await nav(page, 'Settings').click();
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    // A keychain that did what it was asked: no warning beside the sign-out.
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await nav(page, 'Workspaces').click();
+    await page.getByRole('textbox', { name: 'Name' }).fill('unit-6');
+    await page.getByRole('button', { name: 'Create workspace' }).click();
+    await expect(page.getByRole('alert')).toContainText('401 signed_out');
   });
 });
 
@@ -362,6 +393,31 @@ test.describe('the workspaces', () => {
     await expect(page.getByRole('alert')).toContainText('500 store_unreadable');
     await expect(page.getByLabel('Commits to push')).toContainText('what is waiting to be pushed is not known');
     await expect(page.getByLabel('Commits to push')).not.toContainText('Everything here is on hub.example.test');
+  });
+
+  test('with the instance out of reach, a push is refused as such and its commits stay waiting to be pushed (the 2026-11-09 review’s T8)', async ({ page }) => {
+    await open(page, 'header');
+    await page.evaluate(() => (window as unknown as { __fakeCore: { remoteUnreachable: () => void } }).__fakeCore.remoteUnreachable());
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_unit-3/ }).click();
+    await expect(page.getByLabel('Commits to push')).toContainText('2 commits to push');
+    await page.getByRole('button', { name: 'Push', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('cannot be reached');
+    await expect(page.getByRole('alert')).toContainText('502 remote_unreachable');
+    await expect(page.getByLabel('Commits to push')).toContainText('2 commits to push');
+    await expect(page.getByRole('button', { name: 'Push', exact: true })).toBeEnabled();
+  });
+
+  test('a push clicked twice while it runs is sent once (the 2026-11-09 review’s T8)', async ({ page }) => {
+    await page.goto('/?scenario=header&slow');
+    await page.getByRole('list', { name: 'Your workspaces' }).getByRole('button', { name: /demo-designer_unit-3/ }).click();
+    const push = page.getByRole('button', { name: 'Push', exact: true });
+    await expect(push).toBeEnabled();
+    // A double click: two clicks as the browser delivers them, each its own event. The guard is the button
+    // drawn as busy, so two clicks dispatched in one task by a script would both send (found writing this test).
+    await push.dblclick();
+    await expect(page.getByRole('button', { name: 'Pushing…' })).toBeVisible();
+    await expect(page.getByText('Nothing to push.')).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { __fakeCore: { requests: (type: string) => number } }).__fakeCore.requests('push'))).toBe(1);
   });
 
   test('a workspace is made from a branch; one of yours linked to no computer is linked here; one linked to another is unlinked from it first, its cost said', async ({ page }) => {
