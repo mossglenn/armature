@@ -92,6 +92,10 @@ jobs:
       - name: Prepare the sidecar and the core's bundle
         run: npm run sidecar
         working-directory: desktop
+      # The core's bundle on the Node the program ships, not the runner's (the 2026-11-09 review's T7).
+      - name: The core's bundle on the shipped Node
+        run: ARMATURE_TEST_NODE="$GITHUB_WORKSPACE/desktop/src-tauri/binaries/armature-node-x86_64-unknown-linux-gnu" npx vitest run --config vitest.files.config.mts lib/desktop/bundle.test.ts
+        working-directory: app
       - name: Clippy, warnings as errors
         run: cargo clippy --all-targets -- -D warnings
         working-directory: desktop/src-tauri
