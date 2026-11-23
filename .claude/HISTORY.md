@@ -6,6 +6,39 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-22, late (Lint's step L1 in `mossglenn/armature-lint`; armature-lint PR #1, PR #203)
+
+**Where things stood at the close.** **Phase 8, 2026-11-22, late; `main` at `ab86b31`, client revision 2026-11-21.** Lint's step L1 is built in its own public repository, `mossglenn/armature-lint` (its PR #1, `02a2277`): the rule engine `@armature/lint` with ten of the Lint plan's §13 rules, and `armature-lint run | rules`, reading a hub at one commit; it posts no check run yet, so no tool posts a verdict through ADR-0070 (item 51). The 2026-11-09 code review is closed but Q2, which waits for TerminusDB 12.1.0 with item 34. The ICICLE take is still set up on this Mac (item 49). **Next: Amos's call between the ICICLE take with Claude Desktop (Notes, "First") and Lint's L2.**
+
+### Done
+
+- **`mossglenn/armature-lint`, created public (MIT) and merged as its PR #1** (`716398f` the scaffold on `main`, then five commits, `02a2277` at the close; CI green on `main`, both jobs). `src/engine.ts` (pure: every rule over a snapshot, under a policy, for an event `commit`, `push` or `merge`; `fail` when a hit resolves to `require`; `counts` and `summary` as a check run will carry them), `src/policy.ts` (`{ rules: { <id>: action | { commit?, push?, merge? } } }`, zod-validated, the shape a `CheckRequirement.params` will carry in L3; an unknown rule id a warning, an unknown action or event an error), `src/rules/` (coverage: `uncovered`, `over-assessed`, `regressed`; alignment: `bloom-gap`, `untargeted-objective`, `triangle-incomplete`; `order.assessed-before-practiced`; review: `self-attested-only`, `agent-unattested`; `orphan.unreferenced`), `src/graph.ts` (indexes; reference fields from `CLASS_FIELDS`), `src/load.ts` (the one module with I/O: the export under `full` first, then every read at its commit: course coverage, alignment, module content per module, attestations per agent-created record, coverage at `--base`), `src/cli.ts` and `src/bin.ts` (exit 0 pass, 1 fail, 2 could not run; `HUB_REVISION` 2026-11-20). 51 tests: a failing and a passing case per rule, the engine, the policy, the command line against a fake hub that checks every read after the export named its commit, and `test/seed.test.ts` against a real hub with a reviewed snapshot. CI: `check`, and `contract` (TerminusDB, Armature at the pinned commit, its main seed, its hub), as `armature-mcp`'s. Its `docs/plan.md` holds the decisions (§2), the building choices (§3) and the seed reviewed (§5); its README the use.
+- **PR #203** (three commits, `3828a9c` to `ab86b31`): the Lint plan's status line, §13's "as built" note, §15's status note of 2026-11-22 and the repository's name marked chosen; the README's Next, its table row and its listing; demo coverage's Lint row and heading (still Proposed, the matrix unchanged) and its gate paragraph, which had said the desktop app's checks pages were unbuilt since 2026-11-16; the explainer's Section 14.10; a dated note on the naming vocabulary's row "A rule". `check:vocabulary` and `check:context` pass; CI on `main` green.
+- **A database `armature_lint`** on the local store, a fresh main seed (71 documents), served by a hub on port 3198, left running; Lint only reads, so it does not drift.
+
+### Session notes
+
+- Amos opened the session on Lint rather than the ICICLE take SESSION.md named first. Nothing of Lint existed; the hub's half (ADR-0070) and the program's checks pages were built, so L1 needed no hub change.
+- Three questions before scaffolding, answered as recommended but the third: the repository public, ten rules, and "rule" kept over "guideline".
+- Building showed `order.assessed-before-practiced` cannot be read as the plan states it: an `Assessment` names its module and has no place in teaching order, so the rule checks formative uses against the activities targeting the objective (open to overrule).
+- The seed at a merge: 8 warnings and 7 for information, pass, every hit a gap the seed holds on purpose; the triangle rule repeats `untargeted-objective` and `coverage.uncovered` per module, left for Amos's review. Amos then asked that all of the Lint documentation be brought up to date, which found demo coverage's stale paragraph and the plan's repository name and §13.
+
+### Facts from 2026-11-22, late, worth keeping
+
+- **An `Assessment` has no place in a module's teaching order** (it names `module` and nothing more; the module-content read holds activities and lessons only), so no rule can say a summative placement comes before an activity until assessments join that read (item 11, carried). In armature-lint's `docs/plan.md` §3.
+- **The coverage read treats a declaration's `role` alike**: a `Prerequisite` declaration is counted as a `Primary` one is (`coverage.ts` reads no role). Lint follows the read.
+- **Demo coverage's Built column does not count the MCP server's dots** though its status says Built since 2026-11-21 (item 13).
+- **How to run Lint against a seed:** Claude's memory, `armature-lint-repo`.
+
+### Decisions taken
+
+- **The repository: `mossglenn/armature-lint`, public, MIT** (Amos; armature-lint's `docs/plan.md` §2, the Lint plan's §15 note).
+- **Ten rules in L1, the prerequisite rules waiting for the path read** (Amos; the same, and its `src/rules/index.ts`).
+- **"Rule" kept for Lint's catalog, the vocabulary collision accepted** (Amos; the dated note on `docs/naming-vocabulary.md`'s row "A rule").
+- **Chosen in building, open to overrule** (armature-lint's `docs/plan.md` §3): every read at the export's commit; the hub's derivations reused, never recomputed; the order rule on formative uses only; an attestation on one part counts as one of the record; a stale affirmation does not count for `agent-unattested`; `orphan.unreferenced` counting every reference field and leaving out `Course`, `DesignNote`, `DesignFinding` and `LearningMetric`; OverAssessed ranked with FullyAssessed; the policy file as the future `params`; `HUB_REVISION` 2026-11-20; the export under `full`.
+
+---
+
 ## 2026-11-22, later (the code review's last findings, S9, S10 and V1 with its rehearsal; ADR-0065's alternatives; the viewer's favicon; PRs #201 and #202)
 
 **Where things stood at the close.** **Phase 8, 2026-11-22; `main` at `eafcc84`, client revision 2026-11-21.** The 2026-11-09 code review is closed but Q2, which waits for TerminusDB 12.1.0 with item 34: S10 and S9 by PR #201, V1's main fix by PR #202 after its rehearsal under `oidc` on a fresh Lima VM. Issues #169 and #170 and now S10 are on `main` in no release (0.2.0 on both computers; item 50). The ICICLE demonstration is still set up for its take (item 49). **Next: the take with Claude Desktop (Notes, "First").**
