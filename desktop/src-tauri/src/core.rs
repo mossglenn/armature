@@ -56,6 +56,30 @@ pub const STOP_WAIT: Duration = Duration::from_secs(5);
 /// How long quitting, and an update about to end the core, wait for an action in flight to finish.
 pub const ACTION_WAIT: Duration = Duration::from_secs(30);
 
+/// How long ending the program waits for the keychain calls still queued (keychain.rs), a rotated
+/// refresh token's write among them, which would otherwise be lost and the person asked to sign in.
+pub const KEYCHAIN_WAIT: Duration = Duration::from_secs(5);
+
+const KEYCHAIN_LEFT: &str = "The program ends with a keychain call still waiting (a system prompt unanswered?); if a sign-in was not kept, the app asks for one at its next start";
+
+/// Waits on this thread, up to `KEYCHAIN_WAIT`, for the queued keychain calls; whether they finished.
+fn keychain_settled_here() -> bool {
+    let deadline = Instant::now() + KEYCHAIN_WAIT;
+    while keychain::waiting() > 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    keychain::waiting() == 0
+}
+
+/// `keychain_settled_here` for a task on the runtime.
+async fn keychain_settled() -> bool {
+    let deadline = tokio::time::Instant::now() + KEYCHAIN_WAIT;
+    while keychain::waiting() > 0 && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    keychain::waiting() == 0
+}
+
 /// The requests that change a workspace or its remote, the core's long actions
 /// (app/lib/desktop/core.ts): the hub is not stopped under one, and the pages hold the install
 /// button while one runs (the module's header).
@@ -408,7 +432,7 @@ pub async fn start_hub(app: &AppHandle) {
     });
     let mut request = json!({ "type": "start", "dataDir": data_dir.display().to_string() });
     core.keychain_unreadable.store(false, SeqCst);
-    match keychain::local_token() {
+    match keychain::local_token().await {
         Ok(Some(token)) => {
             *core.local_token.lock().unwrap() = Some(token.clone());
             request["localToken"] = json!(token);
@@ -435,7 +459,7 @@ pub async fn start_hub(app: &AppHandle) {
     if let Some(token) = body["localToken"].as_str() {
         *core.local_token.lock().unwrap() = Some(token.to_string());
         if !core.keychain_unreadable.load(SeqCst) {
-            if let Err(err) = keychain::keep_local_token(token) {
+            if let Err(err) = keychain::keep_local_token(token.to_string()).await {
                 say(app, "warn", &format!("The pairing key could not be kept in the keychain ({err}); a new one is made at the next start"));
             }
         }
@@ -462,9 +486,9 @@ pub async fn start_hub(app: &AppHandle) {
 /// with the provider and the client it was kept under, which the core holds against its settings.
 /// An entry of the earlier form, under the remote's address alone, is removed and not sent.
 async fn send_credential(app: &AppHandle, binding: &Binding) {
-    let _ = keychain::forget_refresh_token(&keychain::legacy_refresh_account(&binding.remote));
+    let _ = keychain::forget_refresh_token(keychain::legacy_refresh_account(&binding.remote)).await;
     let request = |token: String| json!({ "type": "credential", "remote": binding.remote, "issuer": binding.issuer, "clientId": binding.client_id, "refreshToken": token });
-    match keychain::refresh_token(&binding.account()) {
+    match keychain::refresh_token(binding.account()).await {
         Ok(Some(token)) => match ask(app, request(token)).await {
             Ok(reply) if reply["status"] == 200 => set_state(app, |s| {
                 if let Some(started) = s.started.as_mut() {
@@ -498,8 +522,9 @@ pub async fn stop_hub(app: &AppHandle) -> Result<(), String> {
 /// a sign-out and a new pairing key. A keychain that refuses is returned as a sentence for the
 /// page, which the reply then carries as `keychain`: the page said "signed out" or showed a new
 /// pairing key, and the person must know when the keychain still holds the old one (the
-/// review's S4 and S5).
-pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) -> Option<String> {
+/// review's S4 and S5). Each keychain call waits behind those already queued (keychain.rs), so a
+/// sign-out's removal follows any rotated token the core told of before it.
+pub async fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) -> Option<String> {
     if reply["status"] != 200 {
         return None;
     }
@@ -514,7 +539,7 @@ pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) -> Option
             let before = std::mem::replace(&mut *core.binding.lock().unwrap(), next.clone());
             // The remote or its provider changed: the credential for what was left is no longer wanted.
             match before {
-                Some(before) if Some(&before) != next.as_ref() => match keychain::forget_refresh_token(&before.account()) {
+                Some(before) if Some(&before) != next.as_ref() => match keychain::forget_refresh_token(before.account()).await {
                     Ok(()) => None,
                     Err(err) => told(format!("The sign-in kept for {} could not be removed from the keychain ({err}); remove it there yourself", before.remote)),
                 },
@@ -525,14 +550,21 @@ pub fn after_reply(app: &AppHandle, request_type: &str, reply: &Value) -> Option
             crate::login::follow(app, &reply["body"]["settings"]);
             None
         }
-        "signOut" => match core.binding.lock().unwrap().clone().map(|binding| keychain::forget_refresh_token(&binding.account())) {
-            Some(Err(err)) => told(format!("You are signed out for now, but the sign-in kept in the keychain could not be removed ({err}), so the app will be signed in again at its next start; remove it in the keychain, or sign out again")),
-            _ => None,
-        },
+        "signOut" => {
+            // Cloned on its own line, so the lock is not held across the wait for the keychain.
+            let binding = core.binding.lock().unwrap().clone();
+            match binding {
+                Some(binding) => match keychain::forget_refresh_token(binding.account()).await {
+                    Err(err) => told(format!("You are signed out for now, but the sign-in kept in the keychain could not be removed ({err}), so the app will be signed in again at its next start; remove it in the keychain, or sign out again")),
+                    Ok(()) => None,
+                },
+                None => None,
+            }
+        }
         "resetPairing" => {
             let token = reply["body"]["localToken"].as_str()?;
             *core.local_token.lock().unwrap() = Some(token.to_string());
-            match keychain::keep_local_token(token) {
+            match keychain::keep_local_token(token.to_string()).await {
                 Ok(()) => None,
                 Err(err) => told(format!("The new pairing key is in use now, but it could not be kept in the keychain ({err}), so the old key returns at the app's next start; make a new one again once the keychain can be written")),
             }
@@ -572,11 +604,17 @@ fn on_line(app: &AppHandle, line: &str) {
         return;
     }
     match relay::classify(&message) {
+        // Queued, not waited for: a keychain prompt holds the write, not this reader and every reply
+        // behind it (the 2026-11-09 review's S10; keychain.rs).
         EventAction::KeepCredential(token) => {
             let binding = core.binding.lock().unwrap().clone();
-            match binding.map(|binding| keychain::keep_refresh_token(&binding.account(), &token)) {
-                Some(Ok(())) => {}
-                Some(Err(err)) => say(app, "warn", &format!("The credential could not be kept in the keychain ({err}); sign in again at the next start")),
+            match binding {
+                Some(binding) => {
+                    let handle = app.clone();
+                    keychain::keep_refresh_token(binding.account(), token, move |err| {
+                        say(&handle, "warn", &format!("The credential could not be kept in the keychain ({err}); sign in again at the next start"));
+                    });
+                }
                 None => say(app, "warn", "A sign-in arrived before the instance was known; it is not kept"),
             }
         }
@@ -588,7 +626,7 @@ fn on_line(app: &AppHandle, line: &str) {
         }
         EventAction::ForgetCredentialAndForward => {
             if let Some(binding) = core.binding.lock().unwrap().clone() {
-                let _ = keychain::forget_refresh_token(&binding.account());
+                keychain::forget_refresh_token_later(binding.account());
             }
             let _ = app.emit("core-event", message);
         }
@@ -623,6 +661,12 @@ fn on_terminated(app: &AppHandle, code: Option<i32>) {
     }
     if core.quitting.load(SeqCst) {
         core.exiting.store(true, SeqCst);
+        // The last of its lines are read: a rotated token they told of is kept before the end.
+        if !keychain_settled_here() {
+            if let Some(logs) = core.logs.lock().unwrap().as_mut() {
+                logs.write("warn", KEYCHAIN_LEFT);
+            }
+        }
         return app.exit(0);
     }
     // The system ending the session takes the core before the shell, which follows at once: that is
@@ -697,6 +741,9 @@ pub fn stop_before_exit(app: &AppHandle) {
         let _ = child.kill();
     }
     wait_while(&|| !core.core_exited.load(SeqCst), Duration::from_secs(1));
+    if !keychain_settled_here() {
+        log("warn", KEYCHAIN_LEFT);
+    }
 }
 
 /// Quits: an action in flight finishes first (`ACTION_WAIT`), then `stop`, up to five seconds,
@@ -720,6 +767,11 @@ pub fn quit(app: &AppHandle) {
         if let Some(child) = core.child.lock().unwrap().take() {
             let _ = child.kill();
         }
+        if !keychain_settled().await {
+            if let Some(logs) = core.logs.lock().unwrap().as_mut() {
+                logs.write("warn", KEYCHAIN_LEFT);
+            }
+        }
         handle.exit(0);
     });
 }
@@ -740,6 +792,10 @@ pub async fn end_for_update(app: &AppHandle) {
     let deadline = tokio::time::Instant::now() + STOP_WAIT;
     while !core.core_exited.load(SeqCst) && tokio::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    // The installer ends the program next.
+    if !keychain_settled().await {
+        say(app, "warn", KEYCHAIN_LEFT);
     }
 }
 

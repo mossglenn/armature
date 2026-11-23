@@ -51,7 +51,7 @@ To start from nothing, quit the program, remove the data folder, and remove the 
 | `npm run typecheck` | The pages |
 | `npm run test:e2e` | The pages in Chromium against the fake core (`e2e/`; `npx playwright install chromium` once) |
 | `cargo clippy --all-targets -- -D warnings` (in `src-tauri/`) | The Rust side, warnings as errors |
-| `cargo test` (in `src-tauri/`) | The relay's rules, the link, the keychain's naming, the log files, the update check's timing, the start at login's argument and its entry's state, the actions a stop waits for, the sidecar's arguments |
+| `cargo test` (in `src-tauri/`) | The relay's rules, the link, the keychain's naming and the order of its calls, the log files, the update check's timing, the start at login's argument and its entry's state, the actions a stop waits for, the sidecar's arguments |
 | `npm run tauri build -- --debug` | A debug bundle |
 
 CI runs all five on Ubuntu (`../.github/workflows/desktop.yml`) when the shell or the core changes; the core's own suites run in `ci.yml`. A Windows debug installer (NSIS, per user) is built only when the workflow is started by hand, `gh workflow run desktop.yml --ref <branch>`, and kept as the run's artifact `armature-desktop-debug-windows` for a week.
