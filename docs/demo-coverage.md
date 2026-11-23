@@ -24,7 +24,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 | Ledger | Proposed (`docs/ledger-plan.md`, draft 2026-11-12) | LEED tracker decision logs imported into the graph, decisions captured at the moment they are made, and a revisit queue when a decision's subjects change or outcome data reaches them |
 | Formalizer | Proposed | Proposes structure from the free-text rationale it finds |
 | Ripple | Proposed | Edit on a branch, see everything the change touches, every intelligence read compared with `main` |
-| Lint | Proposed | Soft design rules, run before and after a merge, including graph patterns: alignment triangles and prerequisite order |
+| Lint | Proposed; its rule engine and command line built (L1, 2026-11-22; `mossglenn/armature-lint`), posting no check runs yet | Soft design rules, run before and after a merge, including graph patterns: alignment triangles and prerequisite order |
 | Drift | Proposed | The delivered course compared with the design it came from |
 | Crosswalk | Proposed | Objectives mapped to a standards framework, affirmed by an SME, and where else each standard is taught |
 | Whyfinder | Proposed | Why is this here, answered on the live course page as a chain of reasons with its weakest evidence |
@@ -407,7 +407,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ○ **Ordered module content.** An activity that loses its only target, or moves out of teaching order.
 - ○ **Typed client.** Built on the client package.
 
-### Lint (proposed)
+### Lint (proposed; L1 built 2026-11-22: ten rules run once from a command line, no check run posted, so no dot below counts as built)
 
 - ○ **Read any record at a commit.** Checks a branch at its head.
 - ● **Branches.** Runs on a branch before it merges.
