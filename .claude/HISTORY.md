@@ -6,6 +6,39 @@ The log of AI-assisted sessions, one entry per session, newest first. `SESSION.m
 
 ---
 
+## 2026-11-25 (Lint's step L2; the event feed tells a change to `checks.json`; PRs #206, #207; armature-lint PRs #2, #3)
+
+**Where things stood at the close.** **Phase 8, 2026-11-25; `main` at `90c4002`, client revision 2026-11-25.** Lint is built through its step L2 in `mossglenn/armature-lint` (its PRs #2 and #3, `main` at `38008f7`): `armature-lint watch` beside a workspace hub and `armature-lint serve` beside a remote post the check runs the push and merge gates read (item 51), and Armature's documents follow (PR #206). On a workspace hub the event feed now tells a change to `checks.json` as `requirement.changed` with `personal` (PR #207; revision 2026-11-25, workspace hubs only; ADR-0070's note of that day), so `watch` no longer polls a hub that serves it. The ICICLE demonstration's take is done (item 49). Issues #169 and #170, S10 and the core's wake for `checks.json` are on `main` in no release yet (item 50). **Next: Amos's call between P1, the desktop program's Tools list that starts `watch` (item 18); Lint's L3 (item 51); Armature Desktop 0.2.1 (item 50); and the note to the A4L team (M0, item 52).**
+
+### Done
+
+- **The ICICLE take** (item 49), run by Amos with Claude Desktop before the session; it went well. Nothing from it was brought to this session for item 13's evaluation set.
+- **Lint's L2** (armature-lint PR #2): `src/follow.ts` (the loop over `GET /events`), `src/modes.ts` (what `serve` and `watch` check), `src/report.ts` (a commit linted once per job and posted), `watch` and `serve` in `src/cli.ts`, `src/bin.ts` (standard input and signals); `test/hub.ts`, a fake hub that remembers, and `test/follow.test.ts`; `test/serve.contract.test.ts` in CI's contract job; the seed test now reads at the seed's last commit. 71 tests.
+- **The rehearsal** against hubs built from `main` (a remote on 3198 over a fresh `armature_lint`, a workspace hub on 3197 cloned from it): a local commit's run 535 ms after the write; the push gate 422 `checks_failed` on Lint's run, then 200 once `checks.json` was relaxed; `watch` ended 9 ms after its standard input closed. Recorded in that repository's `docs/plan.md` §6.
+- **Armature's documents for L2** (PR #206): the Lint plan's status and §15 note, a note under §9's `checks.json` example, `docs/api.md`'s feed limits, the README, the explainer's §14, the coverage map (status only, no mark changed), the desktop plan's "Launching tools".
+- **The personal event** (PR #207): `personalDigest` and the cursor's `personal` in `events.ts`, the route passing `getChecks` on a workspace hub, `changed` in `notifier.ts` called by the core after `writeChecks`; revision 2026-11-25 in `version.ts` and `CLIENT_REVISION`, its `client-changes.md` entry; tests in `events.test.ts`, `cycle.test.ts` and `core.test.ts`; ADR-0070's dated note, the reference, the schema guide, the explainer, the Lint and desktop plans. The full local suite passed on `armature_test` (55 files, 820 tests); CI green on the pull request and on `main`.
+- **Lint's follow-up** (armature-lint PR #3): `watch` reads `GET /discover`'s `versions` and stops sweeping after quiet answers against a hub at 2026-11-25 (`PERSONAL_EVENTS_REVISION`), keeping its 10 s hold; rehearsed, a hand edit's run 8.5 s later and nothing during 12 quiet seconds.
+
+### Session notes
+
+- Amos asked for L2 straight after hearing the ICICLE take had gone well; four choices were put to him before building and decided as recommended, the first in his words ("if someone has a Lint tool installed, but has no rules set up, the Lint should run").
+- The rehearsal found what the fake hub could not: an edit of `checks.json` makes no commit, so the feed told nothing and a push stayed `checks_pending`. Lint got a poll that day and, at Amos's request, the hub got the event the same afternoon, with three more choices decided as recommended.
+- Rereading `report.ts` against the gate found that a passing hub failure would have posted an `error` run that stands as a failed check and that the sweep never retries; fixed before the first commit (a 5xx or no answer is retried, only a 4xx gets an `error` run).
+- Merged in order: PR #206 after armature-lint #2, then PR #207 before armature-lint #3, each on "confirm and merge" with CI green before and after.
+
+### Facts from 2026-11-25 worth keeping
+
+- `checks.json` as the hub takes it has no `on` field; its fields are a `CheckRequirement`'s without `reporter` (`docs/api.md`, The push gate; the Lint plan's §9 note).
+- A workspace hub requires an identity on reads such as `GET /checks` (401 `identity_required` without `Armature-User`); the first rehearsal script's empty answers were that.
+- A test hub from the L1 session (2026-11-22) was still listening on 3198 over `armature_lint`; check the port before starting one (Claude's memory, `armature-lint-repo`).
+- The local `armature_test` ran the whole suite without being recreated (item 20).
+
+### Decisions taken
+
+- Lint L2's four (Amos): `watch` posts `lint` with the defaults when no personal Lint requirement applies; a static `ARMATURE_TOKEN` for `serve` under `oidc`, the client credentials grant when it is deployed on such an instance; no `detailsUrl` pages yet; a sweep instead of a stored cursor. In armature-lint's `docs/plan.md` §2 and the Lint plan's §15 note of 2026-11-25. The building choices, open to overrule, are that plan's §3.
+- The personal event's three (Amos, as recommended): `requirement.changed` with `personal` rather than a new type; which requirements changed rather than only that the file did; the core's write as the only wake, no file watcher. ADR-0070's note of 2026-11-25.
+- Left to Amos: whether the coverage map's Built column is recounted for Lint and the MCP server, judging each dot of a partly built tool (item 13).
+
 ## 2026-11-22, night (the A4L bridge: the plan, its decisions, its repository; PRs #204, #205; `mossglenn/armature-a4l`)
 
 **Where things stood at the close.** **Phase 8, 2026-11-22, night; `main` at `b41f89e`, client revision 2026-11-21.** The A4L bridge is planned and accepted: `docs/a4l-bridge-plan.md` (PR #204) joins Armature to A4L, Georgia Tech's Architecture for AI-Augmented Learning, with no hub change; its repository `mossglenn/armature-a4l` holds the manifest's columns. PR #205 (the acceptance and the documents its §14 names) is open, CI green, waiting for "confirm and merge" (item 52). Lint L1 and the ICICLE setup stand as the entry below left them. **Next: Amos's call between the ICICLE take, Lint's L2 and sending the note to the A4L team (M0).**
