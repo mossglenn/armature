@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Context } from 'hono';
+import { paramsHash, parsePersonalChecks } from './checks';
 import { ApiError } from './errors';
 import { CommitMemo } from './memo';
 import { changesOf, isRecord, isUnknownRef, mergeSourceOf, type Commit, type Store } from './store';
@@ -26,7 +27,16 @@ import { trailerValue, WORKSPACE_COMMIT_TRAILER } from './trailers';
  *   `requirement.changed`, naming the records;
  * - a cursor minted by another life of the hub is answered `hub.started`
  *   first: the check runs, held in memory, are gone, and plugins report again
- *   on the heads they care about (decision 3).
+ *   on the heads they care about (decision 3);
+ * - on a workspace hub, a change to the owner's personal requirements
+ *   (`checks.json`, decision 8) is `requirement.changed` with `personal`, no
+ *   commit and no branch, naming the requirements added, changed or removed as
+ *   the push gate names them (`checks.json#<check>`), or `invalid` when the
+ *   file can no longer be read as requirements (since 2026-11-25). The file
+ *   changes without a commit, so the cursor holds a short hash of each
+ *   requirement in it, and a request compares them with the file as it is.
+ *   The desktop program's core wakes held requests when it writes the file
+ *   (`../desktop/core.ts`); a hand edit is told at the next answer.
  *
  * Within a branch the events follow its log. Across branches they are ordered
  * by the commits' timestamps, which is advisory: the file-backed store stamps
@@ -64,10 +74,10 @@ const LOG_PAGE = 100;
 
 export interface FeedEvent {
   type: EventType;
-  /** The branch the event is about; absent on `hub.started`. `main` on `requirement.changed`, where the records live. */
+  /** The branch the event is about; absent on `hub.started` and a `personal` `requirement.changed`, `main` on any other, where the records live. */
   branch?: string;
   /**
-   * `commit`, `merge`, `requirement.changed`: the commit. `branch.created`: the commit the branch started from, absent
+   * `commit`, `merge`, `requirement.changed` but a `personal` one: the commit. `branch.created`: the commit the branch started from, absent
    * when it started from nothing. `branch.deleted`: the last commit of the branch this client was told about.
    */
   commit?: string;
@@ -82,8 +92,15 @@ export interface FeedEvent {
   workspaceCommit?: string;
   /** How many documents the commit changed, by class. Absent on a branch's first commit. */
   changed?: Record<string, number>;
-  /** On `requirement.changed`: the ids of the `CheckRequirement`s the commit wrote or deleted. */
+  /**
+   * On `requirement.changed`: the ids of the `CheckRequirement`s the commit wrote or deleted; with `personal`, the
+   * personal requirements added, changed or removed in `checks.json`, as `checks.json#<check>`.
+   */
   requirements?: string[];
+  /** On `requirement.changed`: the change is to the owner's personal requirements in `checks.json`, on a workspace hub; no commit. */
+  personal?: true;
+  /** With `personal`: the file can no longer be read as requirements, so every push is refused until it is put right. */
+  invalid?: true;
   /** On `hub.started`: when this life of the hub began, ISO 8601. */
   startedAt?: string;
 }
@@ -115,14 +132,58 @@ export function feedOf(c: Context): EventFeed {
 /**
  * What a client has been told: the hub's life that said it, the newest stamp
  * among the commits it holds, and for each branch the commit told up to (an
- * empty string for a branch told of before its first commit). Opaque to
- * clients, who pass back the text they were given.
+ * empty string for a branch told of before its first commit). On a workspace
+ * hub also the personal requirements as told: a short hash of each, by what
+ * makes it one (its check, workspace and prefix), or `invalid` for a file
+ * that could not be read as requirements; absent in a cursor from a hub older
+ * than 2026-11-25, which is taken as told up to now. Opaque to clients, who
+ * pass back the text they were given.
  */
 export interface Cursor {
   v: 1;
   hub: string;
   t: number;
   heads: Record<string, string>;
+  personal?: PersonalDigest;
+}
+
+/** The personal requirements as a cursor holds them. */
+export type PersonalDigest = Record<string, string> | 'invalid';
+
+/**
+ * The digest of `checks.json`'s text: each requirement's hash (12 hexadecimal digits of the canonical form's
+ * SHA-256, enough to tell one state of a requirement from the next) under the key that makes it one, as the
+ * desktop program's editor does (`../desktop/checks.ts`); a key repeated in a file written by hand keeps both
+ * states in one hash.
+ */
+export function personalDigest(text: string | undefined): PersonalDigest {
+  let requirements;
+  try {
+    requirements = parsePersonalChecks(text);
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'personal_checks_invalid') return 'invalid';
+    throw err;
+  }
+  const grouped = new Map<string, unknown[]>();
+  for (const r of requirements) {
+    const key = JSON.stringify([r.check, r.branch ?? null, r.fromPrefix ?? null]);
+    grouped.set(key, [...(grouped.get(key) ?? []), r]);
+  }
+  return Object.fromEntries([...grouped].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([key, states]) => [key, paramsHash(states).slice(7, 19)]));
+}
+
+function sameDigest(a: PersonalDigest, b: PersonalDigest): boolean {
+  if (a === 'invalid' || b === 'invalid') return a === b;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
+}
+
+/** The ids the push gate gives the personal requirements a change touched: `checks.json#<check>`, each once, sorted. */
+function personalChanges(before: Record<string, string>, after: Record<string, string>): string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const checks = new Set<string>();
+  for (const key of keys) if (before[key] !== after[key]) checks.add(`checks.json#${(JSON.parse(key) as [string])[0]}`);
+  return [...checks].sort();
 }
 
 export const encodeCursor = (cursor: Cursor): string => Buffer.from(JSON.stringify(cursor)).toString('base64url');
@@ -137,7 +198,15 @@ export function decodeCursor(text: string): Cursor {
   }
   if (!isRecord(value) || value.v !== 1 || typeof value.hub !== 'string' || typeof value.t !== 'number' || !isRecord(value.heads)) throw bad();
   if (!Object.values(value.heads).every((id) => typeof id === 'string')) throw bad();
-  return { v: 1, hub: value.hub, t: value.t, heads: { ...(value.heads as Record<string, string>) } };
+  const personal = value.personal;
+  if (personal !== undefined && personal !== 'invalid' && !(isRecord(personal) && Object.values(personal).every((hash) => typeof hash === 'string'))) throw bad();
+  return {
+    v: 1,
+    hub: value.hub,
+    t: value.t,
+    heads: { ...(value.heads as Record<string, string>) },
+    ...(personal !== undefined ? { personal: personal === 'invalid' ? 'invalid' : { ...(personal as Record<string, string>) } } : {}),
+  };
 }
 
 /**
@@ -153,6 +222,8 @@ export interface FeedOptions {
   types?: ReadonlySet<EventType>;
   branch?: string;
   limit?: number;
+  /** On a workspace hub: reads the text of `checks.json`, undefined when there is none, so that a change to it is told. */
+  personal?: () => Promise<string | undefined>;
 }
 
 const tooOld = (branch: string) =>
@@ -228,15 +299,17 @@ export async function eventsSince(store: Store, feed: EventFeed, since: Cursor |
     const head = read[i];
     if (head) heads.set(name, head);
   });
+  const personal = opts.personal ? personalDigest(await opts.personal()) : undefined;
   const present = (): Cursor => ({
     v: 1,
     hub: feed.id,
     t: Math.max(since?.t ?? 0, ...[...heads.values()].map((head) => head.timestamp)),
     heads: Object.fromEntries([...heads].map(([name, head]) => [name, head.id])),
+    ...(personal !== undefined ? { personal } : {}),
   });
   if (!since) return { events: [], cursor: present() };
 
-  const cursor: Cursor = { v: 1, hub: since.hub, t: since.t, heads: { ...since.heads } };
+  const cursor: Cursor = { v: 1, hub: since.hub, t: since.t, heads: { ...since.heads }, ...(personal !== undefined ? { personal } : {}) };
   const events: FeedEvent[] = [];
   const wanted = (type: EventType, branch?: string): boolean =>
     (!opts.types || opts.types.has(type)) && (opts.branch === undefined || !BRANCH_SCOPED.has(type) || branch === opts.branch);
@@ -247,6 +320,14 @@ export async function eventsSince(store: Store, feed: EventFeed, since: Cursor |
   if (since.hub !== feed.id) {
     emit({ type: 'hub.started', startedAt: feed.startedAt });
     cursor.hub = feed.id;
+  }
+
+  // The owner's personal requirements, which change without a commit: told before the commits, since they bind what
+  // a plugin runs at every head. A cursor that holds none (an older hub's) takes the file as told.
+  const toldPersonal = since.personal;
+  if (personal !== undefined && toldPersonal !== undefined && !sameDigest(toldPersonal, personal)) {
+    const requirements = personalChanges(toldPersonal === 'invalid' ? {} : toldPersonal, personal === 'invalid' ? {} : personal);
+    emit({ type: 'requirement.changed', personal: true, requirements, ...(personal === 'invalid' ? { invalid: true as const } : {}) });
   }
 
   // The branches the cursor knows, each read back to the commit it holds for them.

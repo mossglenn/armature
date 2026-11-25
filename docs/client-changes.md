@@ -15,6 +15,37 @@ them in full. It is updated whenever a change reaches `main` that a client would
 
 ---
 
+## 2026-11-25 · The event feed tells a change to a person's own required checks
+
+On the desktop hub only. A person's own required checks live in `checks.json` in the hub's
+folder (2026-11-15, the push gate), which the desktop app's Settings page writes without a
+commit, so until now the event feed said nothing when they changed: a tool running a check on the
+machine kept running it under the old settings, and a push waited as **409** `checks_pending`
+until the next commit (found on 2026-11-25 by Lint's step L2). `GET /events` now tells it as
+`requirement.changed` with three differences from the remote's:
+
+- **`personal: true`**, and **no `commit` and no `branch`**: nothing was committed.
+- **`requirements`** names the personal requirements added, changed or removed, as the push gate
+  names them, `checks.json#<check>` (each check once).
+- **`invalid: true`** when the file can no longer be read as requirements, so every push is
+  refused (**422** `personal_checks_invalid`) until it is put right; `requirements` then names
+  those the file held before.
+
+The app wakes a request the feed is holding when it saves the file, so a tool hears at once; a
+file edited by hand is told at the feed's next answer, at most one wait (30 seconds) later. The
+cursor carries the requirements as told; a cursor from before this revision takes the file as
+told, so the first change after an update is the first told. Nothing changes on a remote hub: the
+desktop hub still declares revision 2026-11-20 to its instance, and no instance needs updating.
+
+**What a tool does differently.** On a `personal` `requirement.changed`, read
+`GET /checks/requirements?target=<workspace>` again for the new `personal` list and each
+`paramsHash`, and run again at each workspace's head; a tool that already reacts to
+`requirement.changed` by looking again needs no change. Don't take `commit` or `branch` as
+present on every `requirement.changed`. A tool that polled for the file's changes can stop when
+the hub serves this revision (`GET /discover`'s `versions`).
+
+**CoQui:** nothing to do; CoQui is not a desktop hub's tool today.
+
 ## 2026-11-21 · A workspace's status lists what an update from its parent would meet, and names the parent's latest commit
 
 Issues #169 and #170, on the desktop hub only. `remote.parent` in `GET /workspace/:name/status`

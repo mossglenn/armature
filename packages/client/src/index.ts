@@ -28,7 +28,7 @@
 import type { CheckRequirement, ClassMap, ClassName, Grant, MergeRequest, TerminusDocument, User, Workspace } from '@armature/types';
 
 /** The contract revision this client was written against (a dated entry of docs/client-changes.md). */
-export const CLIENT_REVISION = '2026-11-21';
+export const CLIENT_REVISION = '2026-11-25';
 
 // ── Options and results ──────────────────────────────────────────────────────
 
@@ -387,9 +387,9 @@ export type EventType = 'commit' | 'merge' | 'branch.created' | 'branch.deleted'
  */
 export interface FeedEvent {
   type: EventType;
-  /** The branch the event is about; absent on `hub.started`, `main` on `requirement.changed`. */
+  /** The branch the event is about; absent on `hub.started` and on a `personal` `requirement.changed`, `main` on any other `requirement.changed`. */
   branch?: string;
-  /** `commit`, `merge`, `requirement.changed`: the commit. `branch.created`: the commit the branch started from. `branch.deleted`: the last commit of it this client was told about. */
+  /** `commit`, `merge`, `requirement.changed` (but a `personal` one): the commit. `branch.created`: the commit the branch started from. `branch.deleted`: the last commit of it this client was told about. */
   commit?: string;
   parent?: string;
   /** The commit's author, `User/<id>`, as the log gives it. */
@@ -402,8 +402,19 @@ export interface FeedEvent {
   workspaceCommit?: string;
   /** How many documents the commit changed, by class; absent on a branch's first commit. */
   changed?: Record<string, number>;
-  /** On `requirement.changed`: the ids of the `CheckRequirement`s the commit wrote or deleted. */
+  /**
+   * On `requirement.changed`: the ids of the `CheckRequirement`s the commit wrote or deleted; with `personal`, the
+   * owner's personal requirements in `checks.json` added, changed or removed, as `checks.json#<check>`.
+   */
   requirements?: string[];
+  /**
+   * On `requirement.changed`, on a workspace hub (since 2026-11-25): the change is to the owner's `checks.json`, which
+   * makes no commit, so the event has no `commit` and no `branch`. Read `checks.requirements()` again for the new
+   * `personal` list and its hashes.
+   */
+  personal?: true;
+  /** With `personal`: the file can no longer be read as requirements, and every push is refused until it is put right. */
+  invalid?: true;
   /** On `hub.started`: when this life of the hub began. The hub's check runs are gone: report again on the heads you care about. */
   startedAt?: string;
 }
