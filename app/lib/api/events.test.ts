@@ -15,7 +15,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app, createApp } from './app';
 import { configFromEnv } from './config';
-import { decodeCursor, encodeCursor, EventFeed, EVENT_TYPES, EVENTS_BACKLOG, EVENTS_PAGE, EVENTS_WAIT, eventsSince, isTransientBranch, type Cursor, type FeedEvent } from './events';
+import { decodeCursor, encodeCursor, EventFeed, EVENT_TYPES, EVENTS_BACKLOG, EVENTS_PAGE, EVENTS_WAIT, eventsSince, isTransientBranch, personalDigest, type Cursor, type FeedEvent, type PersonalDigest } from './events';
 import { memoryFiles } from './filestore/files';
 import { openFileStore } from './filestore/store';
 import { committed, generationNow, nextCommit, waitingCount } from './notifier';
@@ -36,6 +36,25 @@ describe('the cursor and the transient branches', () => {
     for (const text of ['not a cursor', encodeCursor({ ...cursor, v: 2 } as unknown as Cursor), Buffer.from('{"v":1,"hub":"x","t":0,"heads":{"main":1}}').toString('base64url')]) {
       expect(() => decodeCursor(text)).toThrowError(expect.objectContaining({ code: 'bad_cursor', status: 400 }));
     }
+    // A workspace hub's cursor also holds the personal requirements as told (since 2026-11-25).
+    for (const personal of [{ '["lint/a",null,null]': '0123456789ab' }, 'invalid', {}] as PersonalDigest[]) expect(decodeCursor(encodeCursor({ ...cursor, personal }))).toEqual({ ...cursor, personal });
+    for (const personal of ['valid', ['x'], { a: 1 }]) {
+      expect(() => decodeCursor(encodeCursor({ ...cursor, personal } as unknown as Cursor))).toThrowError(expect.objectContaining({ code: 'bad_cursor' }));
+    }
+  });
+
+  it("digests checks.json by requirement, so that a change to one is told by its name and a file it cannot read as 'invalid'", () => {
+    const file = (...requirements: unknown[]) => JSON.stringify({ requirements });
+    expect(personalDigest(undefined)).toEqual({});
+    expect(personalDigest('not json')).toBe('invalid');
+    const one = personalDigest(file({ check: 'lint/a', params: { strict: true } }));
+    expect(Object.keys(one)).toEqual(['["lint/a",null,null]']);
+    expect(Object.values(one)[0]).toMatch(/^[0-9a-f]{12}$/);
+    // The same requirement spelled out with its defaults, or with its params' keys in another order, is the same state.
+    expect(personalDigest(file({ check: 'lint/a', level: 'Required', status: 'Active', params: { strict: true } }))).toEqual(one);
+    expect(personalDigest(file({ check: 'lint/a', params: { strict: false } }))).not.toEqual(one);
+    // One check for two workspaces is two requirements.
+    expect(Object.keys(personalDigest(file({ check: 'lint/a', branch: 'x_one' }, { check: 'lint/a', branch: 'x_two' })))).toHaveLength(2);
   });
 
   it("leaves out a merge's check and an operator's repair, and nothing a person could name by accident", () => {
@@ -223,6 +242,65 @@ describe('the feed derived from the logs, on the file-backed store', () => {
     expect((await eventsSince(main, restarted, cursor, { branch: 'nowhere' })).events).toEqual([{ type: 'hub.started', startedAt: restarted.startedAt }]);
   });
 
+  describe("a workspace hub's checks.json, which changes without a commit (since 2026-11-25)", () => {
+    let text: string | undefined;
+    const personal = async () => text;
+    const file = (...requirements: unknown[]) => JSON.stringify({ requirements });
+    const told = (requirements: string[], extra: Partial<FeedEvent> = {}): FeedEvent => ({ type: 'requirement.changed', personal: true, requirements, ...extra });
+
+    it('tells each requirement added, changed, revoked or removed by its name, before the commits, and nothing when the file has not changed', async () => {
+      text = undefined;
+      const start = await since(undefined, { personal });
+      expect(start.cursor.personal).toEqual({});
+      expect((await since(start.cursor, { personal })).events).toEqual([]);
+
+      text = file({ check: 'lint/a', params: { strict: true } });
+      const m = await write('main', `personal-${Date.now()}`);
+      const added = await since(start.cursor, { personal });
+      expect(added.events[0]).toEqual(told(['checks.json#lint/a']));
+      expect(added.events.slice(1).map((e) => [e.type, e.commit])).toEqual([['commit', m]]);
+      expect((await since(added.cursor, { personal })).events).toEqual([]);
+
+      text = file({ check: 'lint/a', params: { strict: false } }, { check: 'style/b', level: 'Advisory' });
+      const changed = await since(added.cursor, { personal });
+      expect(changed.events).toEqual([told(['checks.json#lint/a', 'checks.json#style/b'])]);
+
+      text = file({ check: 'lint/a', params: { strict: false }, status: 'Revoked' });
+      expect((await since(changed.cursor, { personal })).events).toEqual([told(['checks.json#lint/a', 'checks.json#style/b'])]);
+    });
+
+    it("tells a file it can no longer read as 'invalid', naming what it held, and what it holds once put right", async () => {
+      text = file({ check: 'lint/a' });
+      const { cursor } = await since(undefined, { personal });
+      text = '{ "requirements": [ { "check": 7 } ] }';
+      const broken = await since(cursor, { personal });
+      expect(broken.events).toEqual([told(['checks.json#lint/a'], { invalid: true })]);
+      text = 'still not right';
+      expect((await since(broken.cursor, { personal })).events).toEqual([]);
+      text = file({ check: 'lint/c' });
+      expect((await since(broken.cursor, { personal })).events).toEqual([told(['checks.json#lint/c'])]);
+    });
+
+    it("takes a cursor from before the revision as told, keeps the event through a branch filter and drops it with the type, the cursor moving on", async () => {
+      text = file({ check: 'lint/a' });
+      const { cursor } = await since(undefined, { personal });
+      const older: Cursor = { ...cursor };
+      delete older.personal;
+      text = file({ check: 'lint/b' });
+      const adopted = await since(older, { personal });
+      expect(adopted.events).toEqual([]);
+      expect(adopted.cursor.personal).toEqual(personalDigest(text));
+
+      text = file({ check: 'lint/c' });
+      expect((await since(adopted.cursor, { personal, branch: 'nowhere' })).events).toEqual([told(['checks.json#lint/b', 'checks.json#lint/c'])]);
+      const filtered = await since(adopted.cursor, { personal, types: new Set(['commit'] as const) });
+      expect(filtered.events).toEqual([]);
+      expect((await since(filtered.cursor, { personal })).events).toEqual([]);
+      // A remote hub reads no file, and its cursor holds none.
+      expect((await since(undefined)).cursor).not.toHaveProperty('personal');
+    });
+  });
+
   it(`refuses a cursor more than ${EVENTS_BACKLOG} commits behind on a branch (400 cursor_too_old)`, async () => {
     const { cursor } = await since(undefined);
     await main.createBranch('long', { branch: 'main' });
@@ -354,6 +432,6 @@ describe('GET /events on the seeded store', () => {
   it('is discovered under armature/checks with its types, its page, its wait and its backlog', async () => {
     const discover = (await json(await app.request('/api/v1/discover'))).body;
     expect(discover.capabilities['armature/checks']).toMatchObject({ events: [...EVENT_TYPES], eventsPage: EVENTS_PAGE, eventsWait: EVENTS_WAIT, eventsBacklog: EVENTS_BACKLOG });
-    expect(discover.versions[0]).toBe('2026-11-21');
+    expect(discover.versions[0]).toBe('2026-11-25');
   });
 });
