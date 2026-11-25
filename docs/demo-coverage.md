@@ -1,6 +1,6 @@
 # Demo coverage
 
-**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built), Ledger and the totals recounted 2026-11-12, reacting to changes built in the hub 2026-11-15 (no cell changed), the shared vocabulary's row added 2026-11-19, Quiver resumed 2026-11-20 (from its handoff; no mark changed), the A4L bridge added 2026-11-22 (its plan accepted; the totals recounted) · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
+**Date:** 2026-10-27, graph-native tools added 2026-10-28, Quiver's status 2026-10-30, authorization recounted 2026-11-01 (push built), Ledger and the totals recounted 2026-11-12, reacting to changes built in the hub 2026-11-15 (no cell changed), the shared vocabulary's row added 2026-11-19, Quiver resumed 2026-11-20 (from its handoff; no mark changed), the A4L bridge added 2026-11-22 (its plan accepted; the totals recounted), Lint's L2 built 2026-11-25 (no mark changed; its dots not yet counted as built) · **Status:** Working document. It places the built, planned and proposed client tools against the hub's capabilities, so that the next demo tool is chosen for what no demo shows yet. Read against `docs/development-plan.md` and `.claude/SESSION.md` as of 2026-10-26; update it when a tool changes status or the hub gains a capability.
 
 **How to read it.** Capabilities run down the side and tools across the top, grouped by who is in the loop (interactive, agent, batch, gate; § Kinds of plugin). ● means the tool's demo *shows* the capability; ○ means the tool *uses* it without making it the point. Each row gets the hub's own coverage verdict (ADR-0029's default thresholds), counting only ● for the tools in scope: Uncovered is 0, Partially is 1, Fully is 2 to 4, Over is 5 or more. Three verdict columns give the three scopes: built tools only, built and planned, and everything including the proposed tools. *Partial* marks a hub capability that is not finished.
 
@@ -25,7 +25,7 @@ Abbreviations: ADR (Architecture Decision Record), MCP (Model Context Protocol),
 | Ledger | Proposed (`docs/ledger-plan.md`, draft 2026-11-12) | LEED tracker decision logs imported into the graph, decisions captured at the moment they are made, and a revisit queue when a decision's subjects change or outcome data reaches them |
 | Formalizer | Proposed | Proposes structure from the free-text rationale it finds |
 | Ripple | Proposed | Edit on a branch, see everything the change touches, every intelligence read compared with `main` |
-| Lint | Proposed; its rule engine and command line built (L1, 2026-11-22; `mossglenn/armature-lint`), posting no check runs yet | Soft design rules, run before and after a merge, including graph patterns: alignment triangles and prerequisite order |
+| Lint | Proposed, built in part: its rule engine and command line (L1, 2026-11-22) and its check runs, `watch` beside a desktop hub and `serve` beside a remote (L2, 2026-11-25; `mossglenn/armature-lint`); keeping a hit as a finding and layered policies planned (L3); the Built column does not count its dots yet | Soft design rules, run before and after a merge, including graph patterns: alignment triangles and prerequisite order |
 | Drift | Proposed | The delivered course compared with the design it came from |
 | Crosswalk | Proposed | Objectives mapped to a standards framework, affirmed by an SME, and where else each standard is taught |
 | Whyfinder | Proposed | Why is this here, answered on the live course page as a chain of reasons with its weakest evidence |
@@ -429,7 +429,7 @@ Amos asked what plugins could do by leaning into the data being a graph, with re
 - ○ **Ordered module content.** An activity that loses its only target, or moves out of teaching order.
 - ○ **Typed client.** Built on the client package.
 
-### Lint (proposed; L1 built 2026-11-22: ten rules run once from a command line, no check run posted, so no dot below counts as built)
+### Lint (proposed; L1 built 2026-11-22, ten rules run once from a command line; L2 built 2026-11-25, check runs posted from the event feed on both roles. What L2 shows: branches, reacting to changes, the verdict at a head that a gated merge relies on, coverage, alignment, ordered module content, the typed client. Keeping a violation as a finding is L3. The Built column is not yet recounted for it, as for the MCP server)
 
 - ○ **Read any record at a commit.** Checks a branch at its head.
 - ● **Branches.** Runs on a branch before it merges.

@@ -240,7 +240,7 @@ Plan §16 question 12's recommendation, written down as a hub change and a viewe
 ## 13. What this plan declines to do
 
 - **A local merge preview** and the merge engine scoped to the changed documents: deferred with their triggers (SESSION.md item 17; a cost shown in use, a large branch).
-- **Launching tools** from the program (§7): with the first tool that asks to be launched rather than paired.
+- **Launching tools** from the program (§7): with the first tool that asks to be launched rather than paired. *Note (2026-11-25):* that tool exists. Lint's `armature-lint watch` (its step L2, `mossglenn/armature-lint`) reads `ARMATURE_HUB_URL`, `ARMATURE_USER` and `ARMATURE_LOCAL_TOKEN` and ends when its standard input closes, what the Tools list of `docs/lint-plan.md` §10 (step 1, decided 2026-11-12) gives and asks of a launched command; building that list is the lint plan's §15 step P1.
 - **Scoped pairing keys** with expiry, per tool: with a tool that needs a narrower grant than the owner's own (ADR-0065 decision 7, note).
 - **Several remotes** in one program: with a person who has two instances (plan §16 question 5).
 - **A pseudonymous clone** (plan §16 question 8): with a study.
