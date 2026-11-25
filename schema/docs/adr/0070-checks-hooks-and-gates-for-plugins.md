@@ -266,6 +266,25 @@ the hub". It does not touch item 18's first half, the path read.
 > branch writes those, so they can neither conflict with one nor change what a check judged at its
 > head. Design on the target that the source lacks is refused as before (`designMoved` in
 > `routes/branches.ts`; `workspaces.test.ts` holds both).
+>
+> **Note (2026-11-25, Amos), built:** decision 2's feed now tells a change to decision 8's personal
+> requirements. `checks.json` is written by the host without a commit, so until now the feed said
+> nothing when it changed, and a plugin on the machine kept running under the old `paramsHash`: Lint's
+> step L2 found a push left `checks_pending` after the file changed, and its `watch` polled the file
+> through `GET /checks/requirements` after every quiet answer. On a workspace hub the change is now
+> `requirement.changed` with `personal: true`, no `commit` and no `branch`, `requirements` naming the
+> requirements added, changed or removed as the push gate names them (`checks.json#<check>`), and
+> `invalid: true` when the file can no longer be read as requirements. The feed still keeps no log: the
+> cursor carries a short hash of each personal requirement, and a request compares them with the file
+> as it stands, so "every event but `hub.started` is a commit" now has a second exception, this one,
+> derived like the rest. The desktop program's core, which writes the file and hosts the hub in one
+> process, wakes held requests after it writes (`changed` in `notifier.ts`); a hand edit is told at the
+> next answer, as another hub's commits are. Three choices, taken as recommended: the existing type
+> with `personal` rather than a new one, so that a plugin reacting to `requirement.changed` needs no
+> change and no type has to be negotiated; which requirements changed, rather than only that the file
+> did; the core's write as the only wake, a file watcher being unreliable in synced folders. Revision
+> 2026-11-25, served by a workspace hub only; `REMOTE_REVISION` stays 2026-11-20 (ADR-0065 decision
+> 5, note of 2026-11-20). `events.test.ts`, `cycle.test.ts` and the core's `core.test.ts` hold it.
 
 ## Context
 
