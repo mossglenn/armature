@@ -12,6 +12,12 @@
  * same store and the operator tools are not in this process and wake no one;
  * their commits are served at the next request, at most one wait later.
  *
+ * One change is not a commit: the owner's `checks.json` on a workspace hub,
+ * which the feed tells as `requirement.changed` with `personal` (since
+ * 2026-11-25). The desktop program's core, which writes the file and hosts the
+ * hub in the same process, calls `changed` after writing it; a hand edit wakes
+ * no one and is told at the next request.
+ *
  * `generation` closes the gap between a request's read and its wait: a
  * request notes the generation before it reads, and `nextCommit` returns at
  * once when the generation has moved since.
@@ -27,6 +33,9 @@ export function committed(): void {
   generation++;
   for (const wake of [...waiting]) wake();
 }
+
+/** Wakes every waiting request for a change the feed tells that is no commit: the host's write of `checks.json`. */
+export const changed = committed;
 
 /**
  * Resolves when something has committed since `since`, when `ms` have passed,

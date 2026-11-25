@@ -10,6 +10,7 @@ import type { HubConfig } from '../api/config';
 import { ApiError } from '../api/errors';
 import { openFileStore } from '../api/filestore/store';
 import { drawLocalToken, LOCAL_TOKEN_HEADER } from '../api/localToken';
+import { changed } from '../api/notifier';
 import { parentOf } from '../api/workspace/records';
 import { REMOTE_REVISION } from '../api/workspace/remote';
 import { CURRENT_REVISION } from '../api/version';
@@ -524,14 +525,18 @@ export function runCore(options: CoreOptions): Core {
     // The owner's own required checks, `checks.json` in the workspaces folder (ADR-0070 decision 8): read for
     // the Settings page, and with `set: { requirements }` written whole. The core writes the file because no
     // route may (./checks.ts); the hub reads it at each push, so a change needs no restart, and the folder is
-    // the one the settings name, whether or not the hub is running.
+    // the one the settings name, whether or not the hub is running. A write wakes the event feed's held
+    // requests, which tell it as requirement.changed with personal (since 2026-11-25), so a plugin on the
+    // machine runs under the new requirements at once.
     checks: async (request) => {
       const { dataDir: dir, settings: current } = opened();
       const folder = workspacesFolder(dir, current);
       const change = request.set;
       if (change === undefined) return ok(await readChecks(folder));
       if (typeof change !== 'object' || change === null || Array.isArray(change)) throw new ApiError(400, 'bad_request', 'checks takes set, an object with requirements', { field: 'set' });
-      return ok(await writeChecks(folder, (change as Record<string, unknown>).requirements));
+      const written = await writeChecks(folder, (change as Record<string, unknown>).requirements);
+      changed();
+      return ok(written);
     },
 
     signIn: async (request, context) => {

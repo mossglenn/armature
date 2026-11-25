@@ -24,7 +24,11 @@ import { isInternalBranch } from '../role';
  * through this hub (../notifier.ts). Every answer carries the cursor to ask
  * with next, also when it carries no event. `types` is a comma-separated list
  * of the event types wanted; `branch` keeps the events of one branch, with
- * `requirement.changed` and `hub.started`, which concern every branch.
+ * `requirement.changed` and `hub.started`, which concern every branch. On a
+ * workspace hub a change to the owner's `checks.json` is told too, as
+ * `requirement.changed` with `personal` (since 2026-11-25); the host wakes
+ * held requests when it writes the file, and a hand edit is told at the next
+ * answer.
  *
  * The feed is derived from the store's logs on every request (../events.ts),
  * so it reads at no one commit and carries no ETag. Any identity that may
@@ -46,12 +50,16 @@ events.get('/', async (c) => {
   if (limit < 1 || limit > EVENTS_PAGE) throw new ApiError(400, 'bad_query', `limit is between 1 and ${EVENTS_PAGE}`);
 
   const store = storeFor(c, { branch: REGISTRY_BRANCH });
-  const role = hubOf(c).role;
+  const hub = hubOf(c);
+  const role = hub.role;
+  const records = role === 'workspace' ? hub.workspaces : undefined;
   const options = {
     hidden: (name: string) => isInternalBranch(role, name),
     ...(named?.length ? { types: new Set(named as EventType[]) } : {}),
     ...(branch !== undefined ? { branch } : {}),
     limit,
+    // On a workspace hub, the owner's checks.json, whose changes are told as requirement.changed with personal (since 2026-11-25).
+    ...(records ? { personal: () => records.getChecks() } : {}),
   };
   const feed = feedOf(c);
   const signal = c.req.raw.signal;
