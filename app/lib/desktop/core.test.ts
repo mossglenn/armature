@@ -344,6 +344,22 @@ describe('the cycle through the protocol, against a remote under header', () => 
     }
   });
 
+  it("tells a tool following the served hub's feed when the Settings page saves checks.json, at once, though nothing is committed (since 2026-11-25)", async () => {
+    const file = join(dataDir, 'workspaces', 'checks.json');
+    try {
+      const { cursor } = (await (await tool('GET', '/events')).json()) as { cursor: string };
+      const started = Date.now();
+      const held = tool('GET', `/events?since=${cursor}&wait=20&types=requirement.changed`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(await driver.ask('checks', { set: { requirements: [{ check: 'lint/feed', params: { strict: true } }] } })).toMatchObject({ status: 200 });
+      const answer = (await (await held).json()) as { events: unknown[] };
+      expect(answer.events).toEqual([{ type: 'requirement.changed', personal: true, requirements: ['checks.json#lint/feed'] }]);
+      expect(Date.now() - started).toBeLessThan(5_000);
+    } finally {
+      await rm(file, { force: true });
+    }
+  });
+
   it("reads and writes the owner's checks.json for the Settings page, by the hub's own check of it, and the next push is gated by what was written", async () => {
     const file = join(dataDir, 'workspaces', 'checks.json');
     try {

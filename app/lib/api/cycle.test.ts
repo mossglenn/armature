@@ -16,6 +16,7 @@ import { startHub, type RunningHub } from '../hub';
 import { app, createApp } from './app';
 import { paramsHash } from './checks';
 import { configFromEnv, type HubConfig } from './config';
+import { changed } from './notifier';
 import { handleOf } from './routes/workspace';
 import { createOperatorStore, storeConfigFromEnv, type TerminusDocument } from './store';
 import { memoryRecords, type PushTable, type WorkspaceRecords } from './workspace/records';
@@ -842,6 +843,35 @@ describe('over the file-backed store in memory', () => {
       expect(pushed.status).toBe(200);
       expect(pushed.body.checks[0]).toMatchObject({ conclusion: 'pass', satisfied: true });
       expect(await remoteMessage()).not.toContain('Armature-Local-Check-Override');
+    });
+
+    it('the event feed tells a change to checks.json, which makes no commit, and the host wakes a request held for it (since 2026-11-25)', async () => {
+      const feed = async (query: string) => (await json(await on('GET', `/events${query}`))).body as { events: Array<Record<string, unknown>>; cursor: string };
+      const was = personalChecks;
+      const { cursor } = await feed('');
+      expect((await feed(`?since=${cursor}&wait=0`)).events).toEqual([]);
+
+      // Edited by hand: told at the next answer.
+      personalChecks = JSON.stringify({ requirements: [{ check: LINT, params: { strict: false } }] });
+      const told = await feed(`?since=${cursor}&wait=0`);
+      expect(told.events).toEqual([{ type: 'requirement.changed', personal: true, requirements: [`checks.json#${LINT}`] }]);
+
+      // Written by the host, which wakes the request the feed holds: back long before its wait.
+      const started = Date.now();
+      const held = feed(`?since=${told.cursor}&wait=20&types=requirement.changed`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      personalChecks = JSON.stringify({ requirements: [{ check: LINT, params: PARAMS }, { check: TEAM, level: 'Advisory' }] });
+      changed();
+      expect((await held).events).toEqual([{ type: 'requirement.changed', personal: true, requirements: [`checks.json#${LINT}`, `checks.json#${TEAM}`] }]);
+      expect(Date.now() - started).toBeLessThan(5_000);
+
+      // A file the gate cannot read is told as invalid, naming what it held.
+      const before = (await feed(`?since=${told.cursor}&wait=0`)).cursor;
+      personalChecks = 'not json';
+      expect((await feed(`?since=${before}&wait=0`)).events).toEqual([
+        { type: 'requirement.changed', personal: true, invalid: true, requirements: [`checks.json#${LINT}`, `checks.json#${TEAM}`] },
+      ]);
+      personalChecks = was;
     });
 
     it("the remote's requirements are mirrored for the tools here to read, and a merge request waits on the remote's check: its health and its refusal carry the remote's verdicts", async () => {
